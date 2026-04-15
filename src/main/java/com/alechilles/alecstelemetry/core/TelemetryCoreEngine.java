@@ -50,7 +50,7 @@ public final class TelemetryCoreEngine {
     private final TelemetryBreadcrumbBuffer breadcrumbs;
 
     private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
-    private volatile Thread.UncaughtExceptionHandler installedUncaughtHandler;
+    private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
     private volatile ScheduledFuture<?> periodicFlushFuture;
     private volatile String lastFlushResult = "No flush attempts yet.";
 
@@ -417,21 +417,7 @@ public final class TelemetryCoreEngine {
             return;
         }
         Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
-        Thread.UncaughtExceptionHandler handler = (thread, throwable) -> {
-            try {
-                captureAcrossProjects(SOURCE_UNCAUGHT_EXCEPTION, throwable, thread, null, null, null);
-            } catch (Exception captureFailure) {
-                logWarning("Crash telemetry uncaught handler capture failed.", captureFailure);
-            }
-
-            if (previous != null) {
-                try {
-                    previous.uncaughtException(thread, throwable);
-                } catch (Exception delegateFailure) {
-                    logWarning("Delegated uncaught exception handler failed.", delegateFailure);
-                }
-            }
-        };
+        TelemetryUncaughtExceptionHandler handler = new TelemetryUncaughtExceptionHandler(previous);
         previousUncaughtHandler = previous;
         installedUncaughtHandler = handler;
         Thread.setDefaultUncaughtExceptionHandler(handler);
@@ -442,11 +428,27 @@ public final class TelemetryCoreEngine {
             return;
         }
         Thread.UncaughtExceptionHandler current = Thread.getDefaultUncaughtExceptionHandler();
-        if (current == installedUncaughtHandler) {
-            Thread.setDefaultUncaughtExceptionHandler(previousUncaughtHandler);
+        TelemetryUncaughtExceptionHandler installed = installedUncaughtHandler;
+        if (installed != null && current == installed) {
+            Thread.setDefaultUncaughtExceptionHandler(skipStoppedTelemetryHandlers(previousUncaughtHandler));
         }
         installedUncaughtHandler = null;
         previousUncaughtHandler = null;
+    }
+
+    @Nullable
+    private Thread.UncaughtExceptionHandler skipStoppedTelemetryHandlers(
+            @Nullable Thread.UncaughtExceptionHandler candidate) {
+        Thread.UncaughtExceptionHandler current = candidate;
+        while (current instanceof TelemetryUncaughtExceptionHandler telemetryHandler
+                && !telemetryHandler.owner.isActiveInstalledHandler(telemetryHandler)) {
+            current = telemetryHandler.previous;
+        }
+        return current;
+    }
+
+    private boolean isActiveInstalledHandler(@Nonnull TelemetryUncaughtExceptionHandler handler) {
+        return uncaughtHandlerInstalled.get() && installedUncaughtHandler == handler;
     }
 
     private void updateFlushStatus(@Nonnull String reason,
@@ -477,5 +479,38 @@ public final class TelemetryCoreEngine {
      * One flush pass summary.
      */
     public record FlushSummary(int attempted, int uploaded, int pendingAfter, @Nullable String lastFailure) {
+    }
+
+    /**
+     * Chained uncaught handler that becomes a no-op once its owning engine is shut down.
+     */
+    private final class TelemetryUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+
+        private final Thread.UncaughtExceptionHandler previous;
+        private final TelemetryCoreEngine owner;
+
+        private TelemetryUncaughtExceptionHandler(@Nullable Thread.UncaughtExceptionHandler previous) {
+            this.previous = previous;
+            this.owner = TelemetryCoreEngine.this;
+        }
+
+        @Override
+        public void uncaughtException(@Nullable Thread thread, @Nonnull Throwable throwable) {
+            if (owner.isActiveInstalledHandler(this)) {
+                try {
+                    owner.captureAcrossProjects(SOURCE_UNCAUGHT_EXCEPTION, throwable, thread, null, null, null);
+                } catch (Exception captureFailure) {
+                    owner.logWarning("Crash telemetry uncaught handler capture failed.", captureFailure);
+                }
+            }
+
+            if (previous != null) {
+                try {
+                    previous.uncaughtException(thread, throwable);
+                } catch (Exception delegateFailure) {
+                    owner.logWarning("Delegated uncaught exception handler failed.", delegateFailure);
+                }
+            }
+        }
     }
 }

@@ -128,12 +128,25 @@ export class TelemetryIngestService {
     let alertDispatched = false
     let alertDetail = 'Duplicate alert suppressed.'
     if (!alertSuppressed) {
-      const routeResult = await this.router.routeCrashAlert({
-        project,
-        envelope,
-      })
-      alertDispatched = routeResult.dispatched
-      alertDetail = routeResult.detail
+      try {
+        const routeResult = await this.router.routeCrashAlert({
+          project,
+          envelope,
+        })
+        alertDispatched = routeResult.dispatched
+        alertDetail = routeResult.detail
+      } catch (error) {
+        this.logger.warn(
+          {
+            error,
+            projectId: project.projectId,
+            fingerprint: envelope.fingerprint,
+          },
+          'Crash alert routing failed after ingest acceptance.'
+        )
+        alertDispatched = false
+        alertDetail = 'Alert routing failed after ingest acceptance.'
+      }
     }
 
     this.logger.info(
