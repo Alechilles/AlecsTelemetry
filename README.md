@@ -1,12 +1,20 @@
 # Alec's Telemetry
 
-Standalone crash telemetry runtime mod for Hytale mods.
+Crash telemetry platform for Hytale mods with both standalone dependency mode and
+embedded library mode.
 
 ## Goal
 
 Make crash telemetry as plug-and-play as possible for mod authors.
 
-In the common case, a mod author should only need to:
+Two integration modes are supported:
+
+1. dependency mode
+   - install `Alec's Telemetry` as a standalone mod dependency
+2. embedded mode
+   - bundle the telemetry bootstrap inside the owning mod
+
+In the common dependency-mode case, a mod author should only need to:
 
 1. Add Alec's Telemetry as a dependency.
 2. Ship a small `telemetry/project.json` file.
@@ -24,6 +32,15 @@ The runtime will then:
 
 ## Quick Start
 
+### Pick a runtime mode
+
+`telemetry/project.json` supports:
+
+- `runtimeMode: "dependency"`
+- `runtimeMode: "embedded"`
+
+If omitted, the default is `dependency`.
+
 ### Minimal hosted descriptor
 
 If your mod manifest already has a correct `Main` class package, a minimal hosted
@@ -31,6 +48,7 @@ descriptor can be as small as:
 
 ```json
 {
+  "runtimeMode": "dependency",
   "hosted": {
     "projectKey": "your_public_project_key"
   }
@@ -41,6 +59,7 @@ descriptor can be as small as:
 
 ```json
 {
+  "runtimeMode": "dependency",
   "defaults": {
     "destinationMode": "custom"
   },
@@ -92,8 +111,12 @@ if (api != null) {
 See:
 
 - `docs/project-descriptor.md`
+- `docs/embedded-mode.md`
 - `docs/runtime-overrides.md`
+- `docs/hosted-ingest-contract.md`
+- `docs/embedded-mode-refactor-plan.md`
 - `examples/ExampleConsumerMod/`
+- `examples/EmbeddedConsumerMod/`
 
 ## Admin Commands
 
@@ -115,6 +138,36 @@ Settings/projects/<project-id>.json
 ```
 
 See `docs/runtime-overrides.md`.
+
+## Hosted Service
+
+This repo also contains the first hosted-service implementation under:
+
+```text
+hosted/
+```
+
+It currently provides:
+
+- hosted crash ingest endpoint
+- project-key validation
+- basic rate limiting and duplicate-alert suppression
+- Discord routing
+
+See:
+
+- `docs/hosted-ingest-contract.md`
+- `hosted/README.md`
+
+## Embedded Mode
+
+Embedded mode is implemented for modders who want a single bundled mod instead of a
+standalone dependency.
+
+See:
+
+- `docs/embedded-mode.md`
+- `docs/embedded-mode-refactor-plan.md`
 
 ## License
 

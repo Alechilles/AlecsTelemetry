@@ -1,0 +1,17 @@
+{
+  "projects": [
+    {
+      "projectId": "example-consumer-mod",
+      "displayName": "Example Consumer Mod",
+      "publicProjectKey": "replace_with_your_public_project_key",
+      "enabled": true,
+      "rateLimitPerMinute": 60,
+      "maxPayloadBytes": 262144,
+      "duplicateAlertWindowSeconds": 300,
+      "discord": {
+        "channelId": "replace_with_discord_channel_id",
+        "guildId": "replace_with_discord_guild_id"
+      }
+    }
+  ]
+}

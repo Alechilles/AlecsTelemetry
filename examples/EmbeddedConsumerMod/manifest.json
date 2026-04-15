@@ -1,0 +1,23 @@
+{
+  "Group": "Example",
+  "Name": "Embedded Consumer Mod",
+  "Version": "1.0.0",
+  "Description": "Example mod showing embedded Alec's Telemetry bootstrap.",
+  "Authors": [
+    {
+      "Name": "Example Author",
+      "Email": "",
+      "Url": "",
+      "Discord": ""
+    }
+  ],
+  "Website": "",
+  "Main": "com.example.embedded.EmbeddedConsumerMod",
+  "ServerVersion": "2026.03.26-89796e57b",
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "LoadBefore": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": false,
+  "SubPlugins": []
+}

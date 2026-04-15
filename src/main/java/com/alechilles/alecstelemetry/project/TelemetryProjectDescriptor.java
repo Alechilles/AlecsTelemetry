@@ -19,6 +19,7 @@ import java.util.Map;
 public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull String projectId,
                                          @Nonnull String displayName,
+                                         @Nonnull String runtimeMode,
                                          @Nonnull List<String> ownerPluginIdentifiers,
                                          @Nonnull List<String> packagePrefixes,
                                          @Nonnull CaptureOptions capture,
@@ -30,6 +31,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     private static final int CURRENT_SCHEMA_VERSION = 1;
     private static final String MODE_HOSTED = "hosted";
     private static final String MODE_CUSTOM = "custom";
+    public static final String RUNTIME_MODE_DEPENDENCY = "dependency";
+    public static final String RUNTIME_MODE_EMBEDDED = "embedded";
     public static final String PROJECT_KEY_HEADER = "X-Telemetry-Project-Key";
 
     @Nonnull
@@ -88,6 +91,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 safe.schemaVersion == null || safe.schemaVersion <= 0 ? CURRENT_SCHEMA_VERSION : safe.schemaVersion,
                 projectId,
                 displayName,
+                normalizeRuntimeMode(safe.runtimeMode),
                 ownerPluginIdentifiers,
                 packagePrefixes,
                 capture,
@@ -131,6 +135,17 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         }
         String lower = normalized.toLowerCase(Locale.ROOT);
         return MODE_CUSTOM.equals(lower) ? MODE_CUSTOM : MODE_HOSTED;
+    }
+
+    @Nonnull
+    private static String normalizeRuntimeMode(@Nullable String rawRuntimeMode) {
+        String normalized = normalizeNullable(rawRuntimeMode);
+        if (normalized == null) {
+            return RUNTIME_MODE_DEPENDENCY;
+        }
+        return RUNTIME_MODE_EMBEDDED.equalsIgnoreCase(normalized)
+                ? RUNTIME_MODE_EMBEDDED
+                : RUNTIME_MODE_DEPENDENCY;
     }
 
     @Nonnull
@@ -212,6 +227,14 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         return slug.isBlank() ? "unknown-project" : slug;
     }
 
+    public boolean isDependencyMode() {
+        return RUNTIME_MODE_DEPENDENCY.equals(runtimeMode);
+    }
+
+    public boolean isEmbeddedMode() {
+        return RUNTIME_MODE_EMBEDDED.equals(runtimeMode);
+    }
+
     /**
      * Capture settings for one project.
      */
@@ -264,6 +287,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private Integer schemaVersion;
         private String projectId;
         private String displayName;
+        private String runtimeMode;
         private List<String> ownerPluginIdentifiers;
         private List<String> packagePrefixes;
         private CaptureDocument capture;
