@@ -24,7 +24,7 @@ describe('hosted server', () => {
     servers.length = 0
   })
 
-  it('accepts POST /api/v1/ingest/crash with a valid project key', async () => {
+  it('accepts POST /ingest/crash with a valid project key', async () => {
     const project = {
       projectId: 'example-mod',
       displayName: 'Example Mod',
@@ -57,7 +57,7 @@ describe('hosted server', () => {
       throw new Error('Expected a bound TCP address.')
     }
 
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/v1/ingest/crash`, {
+    const response = await fetch(`http://127.0.0.1:${address.port}/ingest/crash`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

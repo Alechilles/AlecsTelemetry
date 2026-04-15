@@ -26,7 +26,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        @Nonnull String hostedIngestEndpoint) {
 
     public static final String DEFAULT_HOSTED_INGEST_ENDPOINT =
-            "https://telemetry.alecsmods.com/api/v1/ingest/crash";
+            "https://telemetry.alecsmods.com/ingest/crash";
 
     private static final int CURRENT_VERSION = 1;
     private static final boolean DEFAULT_ENABLED = true;
