@@ -22,7 +22,7 @@ be treated as the long-term production backend.
 ## Endpoint
 
 ```text
-POST /api/v1/ingest/crash
+POST /ingest/crash
 ```
 
 ## Required Headers

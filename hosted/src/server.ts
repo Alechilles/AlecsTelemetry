@@ -42,7 +42,7 @@ export function createHostedServer(options: {
       return
     }
 
-    if (request.method !== 'POST' || request.url !== '/api/v1/ingest/crash') {
+    if (request.method !== 'POST' || request.url !== '/ingest/crash') {
       writeJson(response, 404, { error: 'not_found' })
       return
     }
