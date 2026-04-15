@@ -1,0 +1,23 @@
+{
+  "Group": "Alechilles",
+  "Name": "Alec's Telemetry",
+  "Version": "${project.version}",
+  "Description": "Standalone crash telemetry runtime mod for Hytale mods.",
+  "Authors": [
+    {
+      "Name": "Alec (Alechilles)",
+      "Email": "",
+      "Url": "https://www.curseforge.com/members/alechilles/projects",
+      "Discord": "alechilles"
+    }
+  ],
+  "Website": "",
+  "Main": "com.alechilles.alecstelemetry.AlecsTelemetry",
+  "ServerVersion": "2026.03.26-89796e57b",
+  "Dependencies": {},
+  "OptionalDependencies": {},
+  "LoadBefore": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": false,
+  "SubPlugins": []
+}

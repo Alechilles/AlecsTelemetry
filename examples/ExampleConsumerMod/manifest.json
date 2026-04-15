@@ -1,0 +1,25 @@
+{
+  "Group": "Example",
+  "Name": "Example Consumer Mod",
+  "Version": "1.0.0",
+  "Description": "Example mod showing Alec's Telemetry integration.",
+  "Authors": [
+    {
+      "Name": "Example Author",
+      "Email": "",
+      "Url": "",
+      "Discord": ""
+    }
+  ],
+  "Website": "",
+  "Main": "com.example.consumer.ExampleConsumerMod",
+  "ServerVersion": "2026.03.26-89796e57b",
+  "Dependencies": {
+    "Alechilles:Alec's Telemetry": ">=0.1.0"
+  },
+  "OptionalDependencies": {},
+  "LoadBefore": {},
+  "DisabledByDefault": false,
+  "IncludesAssetPack": false,
+  "SubPlugins": []
+}
