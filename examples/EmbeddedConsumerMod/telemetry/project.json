@@ -1,5 +1,5 @@
 {
-  "runtimeMode": "dependency",
+  "runtimeMode": "embedded",
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }

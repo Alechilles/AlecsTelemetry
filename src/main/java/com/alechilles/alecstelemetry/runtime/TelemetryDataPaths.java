@@ -33,6 +33,21 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public static TelemetryDataPaths forEmbeddedOwner(@Nonnull JavaPlugin plugin) {
+        Path dataDirectory = plugin.getDataDirectory().toAbsolutePath().normalize();
+        Path telemetryRoot = dataDirectory.resolve("Telemetry");
+        Path settingsRoot = telemetryRoot.resolve("Settings");
+        return new TelemetryDataPaths(
+                telemetryRoot,
+                settingsRoot.resolve("runtime.json"),
+                settingsRoot.resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                null
+        );
+    }
+
+    @Nonnull
     public Path pendingDirectory(@Nonnull String projectId) {
         return crashReportsRoot.resolve(projectId).resolve("pending");
     }

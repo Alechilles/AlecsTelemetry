@@ -50,6 +50,19 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         return override != null && override.enabled() != null ? override.enabled() : descriptor.defaults().enabled();
     }
 
+    @Nonnull
+    public String runtimeMode() {
+        return descriptor.runtimeMode();
+    }
+
+    public boolean isEmbeddedMode() {
+        return descriptor.isEmbeddedMode();
+    }
+
+    public boolean isDependencyMode() {
+        return descriptor.isDependencyMode();
+    }
+
     public boolean hasOverride() {
         return override != null && override.hasAnyValue();
     }
