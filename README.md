@@ -141,18 +141,23 @@ See `docs/runtime-overrides.md`.
 
 ## Hosted Service
 
-This repo also contains the first hosted-service implementation under:
+This repo also contains a hosted-service prototype under:
 
 ```text
 hosted/
 ```
 
-It currently provides:
+It currently provides a local/dev reference implementation for:
 
 - hosted crash ingest endpoint
 - project-key validation
 - basic rate limiting and duplicate-alert suppression
 - Discord routing
+
+Production hosting recommendation:
+
+- use `HytaleModWikiBot` as the canonical hosted backend and Discord bot service
+- treat `AlecsTelemetry/hosted` as prototype/dev reference code, not the long-term production service
 
 See:
 

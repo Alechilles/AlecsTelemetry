@@ -11,6 +11,14 @@ standalone runtime, embedded bootstrap consumers, and the hosted service.
   the key hidden
 - key rotation is manual by updating hosted project config and the mod descriptor
 
+## Canonical Backend
+
+The payload contract in this document is intended to be implemented by the canonical
+hosted backend running with `HytaleModWikiBot` on the VPS.
+
+The `hosted/` package in this repo is a reference/dev implementation and should not
+be treated as the long-term production backend.
+
 ## Endpoint
 
 ```text

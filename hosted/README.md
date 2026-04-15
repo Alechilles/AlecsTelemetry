@@ -2,6 +2,14 @@
 
 This package contains the hosted ingest service for Alec's Telemetry.
 
+## Status
+
+This package should be treated as a local/dev prototype and reference implementation.
+
+The intended long-term production backend is the existing VPS service in
+`HytaleModWikiBot`, which already owns the running Discord bot, deployment flow,
+and database-backed crash routing behavior.
+
 ## Purpose
 
 It accepts crash telemetry uploads from the runtime mod, validates them against the
