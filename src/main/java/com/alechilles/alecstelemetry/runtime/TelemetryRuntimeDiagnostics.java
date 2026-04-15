@@ -30,6 +30,7 @@ public record TelemetryRuntimeDiagnostics(boolean enabled,
                                      @Nonnull String pluginIdentifier,
                                      @Nonnull String pluginVersion,
                                      @Nullable String sourcePath,
-                                     @Nonnull List<String> packagePrefixes) {
+                                     @Nonnull List<String> packagePrefixes,
+                                     @Nonnull String runtimeMode) {
     }
 }

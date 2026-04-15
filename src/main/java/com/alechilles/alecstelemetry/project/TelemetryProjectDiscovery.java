@@ -41,7 +41,7 @@ public final class TelemetryProjectDiscovery {
     @Nonnull
     public DiscoveryResult discover(@Nullable Path modsDirectory) {
         if (modsDirectory == null || !Files.isDirectory(modsDirectory)) {
-            return new DiscoveryResult(List.of(), List.of());
+            return new DiscoveryResult(List.of(), List.of(), List.of());
         }
 
         ArrayList<Path> entries = new ArrayList<>();
@@ -51,7 +51,7 @@ public final class TelemetryProjectDiscovery {
             }
         } catch (Exception ex) {
             warn("Failed to scan mods directory for telemetry descriptors: " + modsDirectory, ex);
-            return new DiscoveryResult(List.of(), List.of());
+            return new DiscoveryResult(List.of(), List.of(), List.of());
         }
 
         entries.sort(Comparator.comparing(path -> {
@@ -61,6 +61,7 @@ public final class TelemetryProjectDiscovery {
 
         LinkedHashMap<String, TelemetryProjectRegistration> registrations = new LinkedHashMap<>();
         LinkedHashMap<String, CrashReportEnvelope.LoadedModMetadata> loadedMods = new LinkedHashMap<>();
+        ArrayList<String> skippedRegistrationWarnings = new ArrayList<>();
         for (Path entry : entries) {
             try {
                 EntryData data = Files.isDirectory(entry) ? readFolderEntry(entry) : readArchiveEntry(entry);
@@ -75,6 +76,14 @@ public final class TelemetryProjectDiscovery {
                     );
                 }
                 if (data.registration() != null) {
+                    if (data.registration().isEmbeddedMode()) {
+                        skippedRegistrationWarnings.add(
+                                "Skipping telemetry project "
+                                        + data.registration().projectId()
+                                        + " because it declares runtimeMode=embedded."
+                        );
+                        continue;
+                    }
                     String projectIdKey = data.registration().projectId().toLowerCase(Locale.ROOT);
                     if (registrations.containsKey(projectIdKey)) {
                         warn(
@@ -92,7 +101,11 @@ public final class TelemetryProjectDiscovery {
             }
         }
 
-        return new DiscoveryResult(List.copyOf(registrations.values()), List.copyOf(loadedMods.values()));
+        return new DiscoveryResult(
+                List.copyOf(registrations.values()),
+                List.copyOf(loadedMods.values()),
+                List.copyOf(skippedRegistrationWarnings)
+        );
     }
 
     @Nullable
@@ -268,7 +281,8 @@ public final class TelemetryProjectDiscovery {
      * Descriptor discovery output.
      */
     public record DiscoveryResult(@Nonnull List<TelemetryProjectRegistration> projects,
-                                  @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods) {
+                                  @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                  @Nonnull List<String> skippedRegistrationWarnings) {
     }
 
     private record EntryData(@Nullable TelemetryProjectRegistration registration,

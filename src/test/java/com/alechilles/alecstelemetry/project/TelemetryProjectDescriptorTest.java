@@ -5,8 +5,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class TelemetryProjectDescriptorTest {
@@ -37,6 +39,8 @@ class TelemetryProjectDescriptorTest {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null);
         assertEquals("example-mod", descriptor.projectId());
         assertEquals("Example Mod", descriptor.displayName());
+        assertEquals(TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY, descriptor.runtimeMode());
+        assertTrue(descriptor.isDependencyMode());
         assertEquals("Example:Example Mod", descriptor.ownerPluginIdentifiers().getFirst());
         assertEquals("com.example.telemetry", descriptor.packagePrefixes().getFirst());
         assertEquals("hosted", descriptor.defaults().destinationMode());
@@ -69,5 +73,30 @@ class TelemetryProjectDescriptorTest {
         assertEquals("custom", descriptor.defaults().destinationMode());
         assertEquals("https://example.com/telemetry", descriptor.customEndpoint().url());
         assertEquals("Bearer token", descriptor.customEndpoint().headers().get("Authorization"));
+    }
+
+    @Test
+    void parsesExplicitEmbeddedRuntimeMode() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "hosted": {
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                new TelemetryProjectDescriptor.Fallbacks(
+                        "embedded-mod",
+                        "Embedded Mod",
+                        "Example:Embedded Mod",
+                        List.of("com.example.embedded")
+                )
+        );
+
+        assertEquals(TelemetryProjectDescriptor.RUNTIME_MODE_EMBEDDED, descriptor.runtimeMode());
+        assertTrue(descriptor.isEmbeddedMode());
     }
 }

@@ -57,6 +57,7 @@ public final class TelemetryProjectCommand extends AbstractPlayerCommand {
         TelemetryCommandSupport.send(
                 commandContext,
                 "enabled=" + diagnostics.enabled()
+                        + ", mode=" + diagnostics.runtimeMode()
                         + ", destination=" + diagnostics.destinationMode()
                         + ", endpoint=" + (diagnostics.endpoint() == null ? "<none>" : diagnostics.endpoint())
                         + ", pending=" + diagnostics.pendingReports()

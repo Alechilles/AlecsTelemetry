@@ -2,16 +2,14 @@ package com.alechilles.alecstelemetry.runtime;
 
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
-import com.alechilles.alecstelemetry.crash.CrashAttribution;
+import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
-import com.alechilles.alecstelemetry.crash.CrashReportStore;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -26,42 +24,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
- * Store-first crash telemetry runtime shared across registered projects.
+ * Standalone telemetry runtime mod orchestration built on the shared telemetry core engine.
  */
 public final class TelemetryRuntimeService {
 
-    private static final String SOURCE_UNCAUGHT_EXCEPTION = "uncaught_exception";
-    private static final String SOURCE_EXCEPTIONAL_WORLD_REMOVAL = "exceptional_world_removal";
-    private static final String SOURCE_SETUP_FAILURE = "plugin_setup_failure";
-    private static final String SOURCE_START_FAILURE = "plugin_start_failure";
-    private static final String SOURCE_MANUAL_TEST = "manual_test";
-
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
-    private final List<TelemetryProjectRegistration> projects;
-    private final List<CrashReportEnvelope.LoadedModMetadata> loadedMods;
     private final List<TelemetryProjectCollisionDetector.Collision> collisions;
-    private final CrashReportClient client;
-    private final HytaleLogger logger;
-    private final ScheduledExecutorService executor;
-    private final AtomicBoolean enabled;
-    private final AtomicBoolean started = new AtomicBoolean(false);
-    private final AtomicBoolean uncaughtHandlerInstalled = new AtomicBoolean(false);
-    private final AtomicBoolean flushInProgress = new AtomicBoolean(false);
-    private final LinkedHashMap<String, CrashReportStore> storesByProjectId = new LinkedHashMap<>();
-    private final TelemetryBreadcrumbBuffer breadcrumbs;
+    private final List<String> registrationWarnings;
     private final TelemetryRuntimeApi api;
-
-    private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
-    private volatile Thread.UncaughtExceptionHandler installedUncaughtHandler;
-    private volatile ScheduledFuture<?> periodicFlushFuture;
-    private volatile String lastFlushResult = "No flush attempts yet.";
+    private final TelemetryCoreEngine engine;
+    private final HytaleLogger logger;
 
     @Nonnull
     public static TelemetryRuntimeService create(@Nonnull JavaPlugin plugin) {
@@ -72,11 +48,16 @@ public final class TelemetryRuntimeService {
                 .discover(dataPaths.modsDirectory());
         Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
                 .loadAll(dataPaths.projectSettingsDirectory());
+        List<TelemetryProjectRegistration> resolvedProjects = applyOverrides(discoveryResult.projects(), overrides);
+        List<TelemetryProjectCollisionDetector.Collision> collisions = TelemetryProjectCollisionDetector.detect(resolvedProjects);
+        List<String> registrationWarnings = buildRegistrationWarnings(collisions, discoveryResult.skippedRegistrationWarnings());
         return new TelemetryRuntimeService(
                 settings,
                 dataPaths,
-                applyOverrides(discoveryResult.projects(), overrides),
+                resolvedProjects,
                 discoveryResult.loadedMods(),
+                collisions,
+                registrationWarnings,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR
@@ -90,56 +71,52 @@ public final class TelemetryRuntimeService {
                             @Nonnull CrashReportClient client,
                             @Nullable HytaleLogger logger,
                             @Nullable ScheduledExecutorService executor) {
+        this(
+                settings,
+                dataPaths,
+                projects,
+                loadedMods,
+                TelemetryProjectCollisionDetector.detect(projects),
+                buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
+                client,
+                logger,
+                executor
+        );
+    }
+
+    private TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
+                                    @Nonnull TelemetryDataPaths dataPaths,
+                                    @Nonnull List<TelemetryProjectRegistration> projects,
+                                    @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                    @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
+                                    @Nonnull List<String> registrationWarnings,
+                                    @Nonnull CrashReportClient client,
+                                    @Nullable HytaleLogger logger,
+                                    @Nullable ScheduledExecutorService executor) {
         this.settings = settings;
         this.dataPaths = dataPaths;
-        this.projects = List.copyOf(projects);
-        this.loadedMods = List.copyOf(loadedMods);
-        this.client = client;
+        this.collisions = List.copyOf(collisions);
+        this.registrationWarnings = List.copyOf(registrationWarnings);
         this.logger = logger;
-        this.executor = executor;
-        this.enabled = new AtomicBoolean(settings.enabled());
-        this.breadcrumbs = new TelemetryBreadcrumbBuffer(settings.maxBreadcrumbsPerProject());
-        this.collisions = TelemetryProjectCollisionDetector.detect(this.projects);
+        this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
         this.api = new TelemetryRuntimeApiImpl(this);
-        logCollisionWarnings();
+        logRegistrationWarnings();
     }
 
     public void start() {
-        if (!enabled.get() || projects.isEmpty()) {
-            lastFlushResult = projects.isEmpty() ? "No registered telemetry projects discovered." : "Runtime disabled by settings.";
-            return;
-        }
-        if (!started.compareAndSet(false, true)) {
-            return;
-        }
-        installUncaughtExceptionHandler();
-        requestFlushAsync("startup", null);
-        if (executor != null) {
-            periodicFlushFuture = executor.scheduleWithFixedDelay(
-                    () -> requestFlushAsync("periodic", null),
-                    settings.flushIntervalSeconds(),
-                    settings.flushIntervalSeconds(),
-                    TimeUnit.SECONDS
-            );
-        }
+        engine.start();
     }
 
     public void shutdown() {
-        ScheduledFuture<?> scheduledFuture = periodicFlushFuture;
-        periodicFlushFuture = null;
-        if (scheduledFuture != null) {
-            scheduledFuture.cancel(false);
-        }
-        uninstallUncaughtExceptionHandler();
-        started.set(false);
+        engine.shutdown();
     }
 
     public boolean isEnabled() {
-        return enabled.get();
+        return engine.isEnabled();
     }
 
     public int registeredProjectCount() {
-        return projects.size();
+        return engine.projects().size();
     }
 
     @Nonnull
@@ -149,7 +126,7 @@ public final class TelemetryRuntimeService {
 
     @Nonnull
     public List<TelemetryProjectRegistration> projects() {
-        return projects;
+        return engine.projects();
     }
 
     @Nonnull
@@ -158,91 +135,55 @@ public final class TelemetryRuntimeService {
     }
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
-        TelemetryProjectRegistration project = findProject(projectId);
-        return project != null && project.isEnabled();
+        return engine.isProjectEnabled(projectId);
     }
 
     public boolean triggerFlushAsync() {
-        return requestFlushAsync("manual", null);
+        return engine.triggerFlushAsync();
     }
 
     public boolean triggerFlushAsync(@Nullable String projectId) {
-        return requestFlushAsync("manual", projectId);
+        return engine.triggerFlushAsync(projectId);
     }
 
     public void recordBreadcrumb(@Nonnull String projectId,
                                  @Nonnull String category,
                                  @Nonnull String detail) {
-        if (!enabled.get()) {
-            return;
-        }
-        TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled()) {
-            return;
-        }
-        breadcrumbs.record(project.projectId(), category, detail);
+        engine.recordBreadcrumb(projectId, category, detail);
     }
 
     public void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
-        captureExplicitProject(projectId, SOURCE_SETUP_FAILURE, throwable);
+        engine.captureSetupFailure(projectId, throwable);
     }
 
     public void captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
-        captureExplicitProject(projectId, SOURCE_START_FAILURE, throwable);
+        engine.captureStartFailure(projectId, throwable);
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
-        TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled()) {
-            return false;
-        }
-        String suffix = detail == null || detail.isBlank() ? "" : ": " + detail.trim();
-        recordBreadcrumb(project.projectId(), "telemetry", "Manual test report requested" + suffix + ".");
-        captureExplicitProject(
-                project.projectId(),
-                SOURCE_MANUAL_TEST,
-                new RuntimeException("Manual telemetry test for " + project.displayName() + suffix)
-        );
-        return true;
+        return engine.captureTestReport(projectId, detail);
     }
 
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
-        if (!enabled.get()
-                || world == null
-                || removalReason != RemoveWorldEvent.RemovalReason.EXCEPTIONAL
-                || world.getFailureException() == null) {
-            return;
-        }
-        captureAcrossProjects(
-                SOURCE_EXCEPTIONAL_WORLD_REMOVAL,
-                world.getFailureException(),
-                Thread.currentThread(),
-                world.getName(),
-                removalReason.name(),
-                world.getPossibleFailureCause()
-        );
+        engine.captureExceptionalWorldRemoval(world, removalReason);
     }
 
     @Nonnull
     public TelemetryRuntimeDiagnostics diagnostics() {
-        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(projects.size());
-        for (TelemetryProjectRegistration project : projects) {
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(engine.projects().size());
+        for (TelemetryProjectRegistration project : engine.projects()) {
             projectDiagnostics.add(buildProjectDiagnostics(project));
         }
-        ArrayList<String> warnings = new ArrayList<>(collisions.size());
-        for (TelemetryProjectCollisionDetector.Collision collision : collisions) {
-            warnings.add(collision.format());
-        }
         return new TelemetryRuntimeDiagnostics(
-                enabled.get(),
-                projects.size(),
-                loadedMods.size(),
-                totalPendingCount(null),
-                flushInProgress.get(),
-                lastFlushResult,
+                engine.isEnabled(),
+                engine.projects().size(),
+                engine.loadedMods().size(),
+                engine.pendingReports(null),
+                engine.flushInProgress(),
+                engine.lastFlushResult(),
                 dataPaths.modsDirectory() == null ? null : dataPaths.modsDirectory().toString(),
-                List.copyOf(warnings),
+                registrationWarnings,
                 List.copyOf(projectDiagnostics)
         );
     }
@@ -254,80 +195,24 @@ public final class TelemetryRuntimeService {
     }
 
     public int pendingReports(@Nullable String projectId) {
-        return totalPendingCount(projectId);
+        return engine.pendingReports(projectId);
     }
 
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
-        for (TelemetryProjectRegistration project : projects) {
-            if (project.projectId().equalsIgnoreCase(projectId)) {
-                return project;
-            }
-        }
-        return null;
+        return engine.findProject(projectId);
     }
 
     @Nonnull
     FlushSummary flushPendingReportsNow(@Nonnull String reason) {
-        return flushPendingReportsNow(reason, null);
+        TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow(reason);
+        return new FlushSummary(summary.attempted(), summary.uploaded(), summary.pendingAfter(), summary.lastFailure());
     }
 
     @Nonnull
     FlushSummary flushPendingReportsNow(@Nonnull String reason, @Nullable String projectIdFilter) {
-        if (!enabled.get()) {
-            FlushSummary summary = new FlushSummary(0, 0, totalPendingCount(projectIdFilter), "disabled");
-            updateFlushStatus(reason, summary, null);
-            return summary;
-        }
-
-        int attempted = 0;
-        int uploaded = 0;
-        String lastFailure = null;
-        try {
-            for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
-                if (!project.isEnabled()) {
-                    continue;
-                }
-                CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
-                if (target == null || target.endpoint().isBlank()) {
-                    continue;
-                }
-                CrashReportStore store = storeFor(project);
-                for (CrashReportStore.PendingReport pending : store.listPendingReports(settings.maxUploadsPerFlush())) {
-                    attempted++;
-                    CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
-                    if (uploadResult.success()) {
-                        if (store.delete(pending.path())) {
-                            uploaded++;
-                        } else {
-                            lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
-                        }
-                    } else {
-                        lastFailure = uploadResult.detail() == null
-                                ? "HTTP status " + uploadResult.statusCode()
-                                : uploadResult.detail();
-                    }
-                }
-            }
-            FlushSummary summary = new FlushSummary(attempted, uploaded, totalPendingCount(projectIdFilter), lastFailure);
-            updateFlushStatus(reason, summary, lastFailure);
-            return summary;
-        } catch (Exception ex) {
-            FlushSummary summary = new FlushSummary(attempted, uploaded, totalPendingCount(projectIdFilter), ex.getMessage());
-            updateFlushStatus(reason, summary, ex.getMessage());
-            logWarning("Crash telemetry flush pass failed.", ex);
-            return summary;
-        }
-    }
-
-    private static List<TelemetryProjectRegistration> applyOverrides(
-            @Nonnull List<TelemetryProjectRegistration> projects,
-            @Nonnull Map<String, TelemetryProjectOverride> overrides) {
-        ArrayList<TelemetryProjectRegistration> resolved = new ArrayList<>(projects.size());
-        for (TelemetryProjectRegistration project : projects) {
-            resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
-        }
-        return List.copyOf(resolved);
+        TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow(reason, projectIdFilter);
+        return new FlushSummary(summary.attempted(), summary.uploaded(), summary.pendingAfter(), summary.lastFailure());
     }
 
     @Nonnull
@@ -341,235 +226,46 @@ public final class TelemetryRuntimeService {
                 project.hasOverride(),
                 project.destinationMode(),
                 target == null ? null : target.endpoint(),
-                storeFor(project).pendingCount(),
+                engine.pendingReports(project.projectId()),
                 project.pluginIdentifier(),
                 project.pluginVersion(),
                 project.sourcePath() == null ? null : project.sourcePath().toString(),
-                project.packagePrefixes()
+                project.packagePrefixes(),
+                project.runtimeMode()
         );
-    }
-
-    private void captureExplicitProject(@Nonnull String projectId,
-                                        @Nonnull String source,
-                                        @Nullable Throwable throwable) {
-        if (!enabled.get() || throwable == null) {
-            return;
-        }
-        TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled() || !project.capturesSource(source)) {
-            return;
-        }
-
-        try {
-            CrashAttribution.AttributionResult attribution = CrashAttribution.explicit(
-                    throwable,
-                    project.pluginIdentifier(),
-                    project.packagePrefixes()
-            );
-            persist(project, source, attribution, throwable, Thread.currentThread().getName(), null, null, null);
-            requestFlushAsync("capture", project.projectId());
-        } catch (Throwable captureFailure) {
-            logWarning("Explicit crash telemetry capture failed for project " + projectId + ".", captureFailure);
-        }
-    }
-
-    private void captureAcrossProjects(@Nonnull String source,
-                                       @Nullable Throwable throwable,
-                                       @Nullable Thread thread,
-                                       @Nullable String worldName,
-                                       @Nullable String worldRemovalReason,
-                                       @Nullable PluginIdentifier worldFailurePluginIdentifier) {
-        if (!enabled.get() || throwable == null) {
-            return;
-        }
-
-        boolean capturedAny = false;
-        String identifiedPluginHint = worldFailurePluginIdentifier == null ? null : worldFailurePluginIdentifier.toString();
-        String threadName = thread == null ? Thread.currentThread().getName() : thread.getName();
-        for (TelemetryProjectRegistration project : projects) {
-            if (!project.isEnabled() || !project.capturesSource(source)) {
-                continue;
-            }
-            try {
-                CrashAttribution.AttributionResult attribution = CrashAttribution.classify(
-                        throwable,
-                        project.ownerPluginIdentifiers(),
-                        project.packagePrefixes(),
-                        identifiedPluginHint
-                );
-                if (!attribution.attributed()) {
-                    continue;
-                }
-                persist(
-                        project,
-                        source,
-                        attribution,
-                        throwable,
-                        threadName,
-                        worldName,
-                        worldRemovalReason,
-                        identifiedPluginHint
-                );
-                capturedAny = true;
-            } catch (Throwable captureFailure) {
-                logWarning("Crash telemetry capture failed for project " + project.projectId() + ".", captureFailure);
-            }
-        }
-
-        if (capturedAny) {
-            requestFlushAsync("capture", null);
-        }
-    }
-
-    private void persist(@Nonnull TelemetryProjectRegistration project,
-                         @Nonnull String source,
-                         @Nonnull CrashAttribution.AttributionResult attribution,
-                         @Nonnull Throwable throwable,
-                         @Nonnull String threadName,
-                         @Nullable String worldName,
-                         @Nullable String worldRemovalReason,
-                         @Nullable String worldFailurePluginIdentifier) {
-        CrashReportEnvelope envelope = CrashReportEnvelope.create(
-                project.projectId(),
-                project.displayName(),
-                source,
-                attribution.fingerprint(),
-                project.pluginIdentifier(),
-                project.pluginVersion(),
-                threadName,
-                worldName,
-                worldRemovalReason,
-                worldFailurePluginIdentifier,
-                attribution,
-                breadcrumbs.snapshot(project.projectId()),
-                throwable,
-                CrashReportEnvelope.RuntimeMetadata.capture(loadedMods)
-        );
-        CrashReportStore.WriteResult result = storeFor(project).persist(envelope);
-        if (result == CrashReportStore.WriteResult.FAILED) {
-            logWarning("Failed to store crash telemetry report for project " + project.projectId() + ".", null);
-        }
-    }
-
-    private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {
-        if (!enabled.get() || executor == null || matchingProjects(projectIdFilter).isEmpty()) {
-            return false;
-        }
-        if (!flushInProgress.compareAndSet(false, true)) {
-            return false;
-        }
-        try {
-            executor.execute(() -> {
-                try {
-                    flushPendingReportsNow(reason, projectIdFilter);
-                } finally {
-                    flushInProgress.set(false);
-                }
-            });
-            return true;
-        } catch (Exception ex) {
-            flushInProgress.set(false);
-            logWarning("Crash telemetry flush scheduling failed.", ex);
-            return false;
-        }
     }
 
     @Nonnull
-    private List<TelemetryProjectRegistration> matchingProjects(@Nullable String projectIdFilter) {
-        if (projectIdFilter == null || projectIdFilter.isBlank()) {
-            return projects;
+    private static List<TelemetryProjectRegistration> applyOverrides(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull Map<String, TelemetryProjectOverride> overrides) {
+        ArrayList<TelemetryProjectRegistration> resolved = new ArrayList<>(projects.size());
+        for (TelemetryProjectRegistration project : projects) {
+            resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
         }
-        TelemetryProjectRegistration project = findProject(projectIdFilter);
-        return project == null ? List.of() : List.of(project);
+        return List.copyOf(resolved);
     }
 
-    private CrashReportStore storeFor(@Nonnull TelemetryProjectRegistration project) {
-        return storesByProjectId.computeIfAbsent(
-                project.projectId().toLowerCase(Locale.ROOT),
-                ignored -> new CrashReportStore(
-                        dataPaths.pendingDirectory(project.projectId()),
-                        settings.maxPendingReportsPerProject(),
-                        logger
-                )
-        );
-    }
-
-    private int totalPendingCount(@Nullable String projectIdFilter) {
-        int total = 0;
-        for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
-            total += storeFor(project).pendingCount();
-        }
-        return total;
-    }
-
-    private void installUncaughtExceptionHandler() {
-        if (!uncaughtHandlerInstalled.compareAndSet(false, true)) {
-            return;
-        }
-        Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
-        Thread.UncaughtExceptionHandler handler = (thread, throwable) -> {
-            try {
-                captureAcrossProjects(SOURCE_UNCAUGHT_EXCEPTION, throwable, thread, null, null, null);
-            } catch (Exception captureFailure) {
-                logWarning("Crash telemetry uncaught handler capture failed.", captureFailure);
-            }
-
-            if (previous != null) {
-                try {
-                    previous.uncaughtException(thread, throwable);
-                } catch (Exception delegateFailure) {
-                    logWarning("Delegated uncaught exception handler failed.", delegateFailure);
-                }
-            }
-        };
-        previousUncaughtHandler = previous;
-        installedUncaughtHandler = handler;
-        Thread.setDefaultUncaughtExceptionHandler(handler);
-    }
-
-    private void uninstallUncaughtExceptionHandler() {
-        if (!uncaughtHandlerInstalled.compareAndSet(true, false)) {
-            return;
-        }
-        Thread.UncaughtExceptionHandler current = Thread.getDefaultUncaughtExceptionHandler();
-        if (current == installedUncaughtHandler) {
-            Thread.setDefaultUncaughtExceptionHandler(previousUncaughtHandler);
-        }
-        installedUncaughtHandler = null;
-        previousUncaughtHandler = null;
-    }
-
-    private void updateFlushStatus(@Nonnull String reason,
-                                   @Nonnull FlushSummary summary,
-                                   @Nullable String detail) {
-        lastFlushResult = "reason=" + reason
-                + ", attempted=" + summary.attempted()
-                + ", uploaded=" + summary.uploaded()
-                + ", pending=" + summary.pendingAfter()
-                + (detail == null || detail.isBlank() ? "" : ", detail=" + detail);
-        if (logger != null) {
-            logger.at(Level.FINE).log("Crash telemetry flush: " + lastFlushResult);
-        }
-    }
-
-    private void logCollisionWarnings() {
-        if (logger == null || collisions.isEmpty()) {
-            return;
-        }
+    @Nonnull
+    private static List<String> buildRegistrationWarnings(
+            @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
+            @Nonnull List<String> skippedWarnings) {
+        ArrayList<String> warnings = new ArrayList<>(skippedWarnings.size() + collisions.size());
+        warnings.addAll(skippedWarnings);
         for (TelemetryProjectCollisionDetector.Collision collision : collisions) {
-            logger.at(Level.WARNING).log("Telemetry registration warning: " + collision.format());
+            warnings.add(collision.format());
         }
+        return List.copyOf(warnings);
     }
 
-    private void logWarning(@Nonnull String message, @Nullable Throwable throwable) {
-        if (logger == null) {
+    private void logRegistrationWarnings() {
+        if (logger == null || registrationWarnings.isEmpty()) {
             return;
         }
-        if (throwable == null) {
-            logger.at(Level.WARNING).log(message + " Last flush status: " + lastFlushResult);
-            return;
+        for (String warning : registrationWarnings) {
+            Level level = warning.contains("runtimeMode=embedded") ? Level.INFO : Level.WARNING;
+            logger.at(level).log("Telemetry registration note: " + warning);
         }
-        logger.at(Level.WARNING).withCause(throwable).log(message);
     }
 
     /**
