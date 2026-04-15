@@ -34,6 +34,6 @@ to Discord.
 ## Endpoints
 
 - `GET /healthz`
-- `POST /api/v1/ingest/crash`
+- `POST /ingest/crash`
 
 See `../docs/hosted-ingest-contract.md` for the exact contract.
