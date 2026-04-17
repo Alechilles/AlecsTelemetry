@@ -56,6 +56,26 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
+    public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable String detail) {
+        runtimeService.recordError(projectId, eventName, throwable, detail);
+    }
+
+    @Override
+    public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail) {
+        runtimeService.recordLifecycle(projectId, eventName, durationMs, success, detail);
+    }
+
+    @Override
+    public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable String detail) {
+        runtimeService.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
+    }
+
+    @Override
+    public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
+        runtimeService.recordUsage(projectId, eventName, detail);
+    }
+
+    @Override
     public boolean requestFlush() {
         return runtimeService.triggerFlushAsync(projectId);
     }

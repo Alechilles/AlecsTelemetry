@@ -4,6 +4,8 @@ import com.alechilles.alecstelemetry.crash.CrashAttribution;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.CrashReportStore;
+import com.alechilles.alecstelemetry.event.TelemetryEventEnvelope;
+import com.alechilles.alecstelemetry.event.TelemetryEventStore;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBuffer;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
@@ -18,6 +20,9 @@ import javax.annotation.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -47,7 +52,10 @@ public final class TelemetryCoreEngine {
     private final AtomicBoolean uncaughtHandlerInstalled = new AtomicBoolean(false);
     private final AtomicBoolean flushInProgress = new AtomicBoolean(false);
     private final LinkedHashMap<String, CrashReportStore> storesByProjectId = new LinkedHashMap<>();
+    private final LinkedHashMap<String, TelemetryEventStore> eventStoresByProjectId = new LinkedHashMap<>();
+    private final LinkedHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new LinkedHashMap<>();
     private final TelemetryBreadcrumbBuffer breadcrumbs;
+    private final String sessionId = UUID.randomUUID().toString();
 
     private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
     private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
@@ -159,6 +167,158 @@ public final class TelemetryCoreEngine {
         captureExplicitProject(projectId, SOURCE_START_FAILURE, throwable);
     }
 
+    public void recordError(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable Throwable throwable,
+                            @Nullable String detail) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+            return;
+        }
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        if (detail != null && !detail.isBlank()) {
+            attributes.put("detail", detail.trim());
+        }
+        if (throwable != null) {
+            attributes.put("throwableType", throwable.getClass().getName());
+            attributes.put("throwableMessage", throwable.getMessage() == null ? "<empty>" : throwable.getMessage());
+        }
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.error(
+                project.projectId(),
+                project.displayName(),
+                "runtime_api",
+                sessionId,
+                eventName,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                null,
+                throwable == null ? TelemetryEventEnvelope.SEVERITY_WARNING : TelemetryEventEnvelope.SEVERITY_ERROR,
+                environmentFor(project, runtimeMetadata),
+                attributes,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(project).persist(event)) {
+            logWarning("Failed to store telemetry error event for project " + project.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", project.projectId());
+    }
+
+    public void recordLifecycle(@Nonnull String projectId,
+                                @Nonnull String eventName,
+                                int durationMs,
+                                boolean success,
+                                @Nullable String detail) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+            return;
+        }
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        if (detail != null && !detail.isBlank()) {
+            attributes.put("detail", detail.trim());
+        }
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.lifecycle(
+                project.projectId(),
+                project.displayName(),
+                "runtime_api",
+                sessionId,
+                eventName,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                null,
+                success,
+                durationMs,
+                environmentFor(project, runtimeMetadata),
+                attributes,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(project).persist(event)) {
+            logWarning("Failed to store telemetry lifecycle event for project " + project.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", project.projectId());
+    }
+
+    public void recordPerformance(@Nonnull String projectId,
+                                  @Nonnull String eventName,
+                                  int durationMs,
+                                  @Nullable Double metricValue,
+                                  @Nullable String detail) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+            return;
+        }
+        if (!project.performance().enabled() || durationMs < project.performance().thresholdMs()) {
+            return;
+        }
+        if (project.performance().sampleRate() < 1.0d && ThreadLocalRandom.current().nextDouble() > project.performance().sampleRate()) {
+            return;
+        }
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        if (detail != null && !detail.isBlank()) {
+            attributes.put("detail", detail.trim());
+        }
+        attributes.put("thresholdMs", project.performance().thresholdMs());
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.performance(
+                project.projectId(),
+                project.displayName(),
+                "runtime_api",
+                sessionId,
+                eventName,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                null,
+                durationMs,
+                metricValue,
+                environmentFor(project, runtimeMetadata),
+                attributes,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(project).persist(event)) {
+            logWarning("Failed to store telemetry performance event for project " + project.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", project.projectId());
+    }
+
+    public void recordUsage(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable String detail) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+            return;
+        }
+        if (!project.usage().allows(eventName)) {
+            return;
+        }
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        if (detail != null && !detail.isBlank()) {
+            attributes.put("detail", detail.trim());
+        }
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.usage(
+                project.projectId(),
+                project.displayName(),
+                "runtime_api",
+                sessionId,
+                eventName,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                null,
+                environmentFor(project, runtimeMetadata),
+                attributes,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(project).persist(event)) {
+            logWarning("Failed to store telemetry usage event for project " + project.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", project.projectId());
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !project.isEnabled()) {
@@ -228,18 +388,38 @@ public final class TelemetryCoreEngine {
                     continue;
                 }
                 CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
-                if (target == null || target.endpoint().isBlank()) {
+                if (target != null && !target.endpoint().isBlank()) {
+                    CrashReportStore store = storeFor(project);
+                    for (CrashReportStore.PendingReport pending : store.listPendingReports(settings.maxUploadsPerFlush())) {
+                        attempted++;
+                        CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
+                        if (uploadResult.success()) {
+                            if (store.delete(pending.path())) {
+                                uploaded++;
+                            } else {
+                                lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
+                            }
+                        } else {
+                            lastFailure = uploadResult.detail() == null
+                                    ? "HTTP status " + uploadResult.statusCode()
+                                    : uploadResult.detail();
+                        }
+                    }
+                }
+
+                CrashReportClient.DeliveryTarget eventTarget = project.resolveEventDeliveryTarget(settings);
+                if (eventTarget == null || eventTarget.endpoint().isBlank()) {
                     continue;
                 }
-                CrashReportStore store = storeFor(project);
-                for (CrashReportStore.PendingReport pending : store.listPendingReports(settings.maxUploadsPerFlush())) {
+                TelemetryEventStore eventStore = eventStoreFor(project);
+                for (TelemetryEventStore.PendingEvent pending : eventStore.listPendingEvents(settings.maxUploadsPerFlush())) {
                     attempted++;
-                    CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
+                    CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
                     if (uploadResult.success()) {
-                        if (store.delete(pending.path())) {
+                        if (eventStore.delete(pending.path())) {
                             uploaded++;
                         } else {
-                            lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
+                            lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
                         }
                     } else {
                         lastFailure = uploadResult.detail() == null
@@ -339,10 +519,12 @@ public final class TelemetryCoreEngine {
                          @Nullable String worldName,
                          @Nullable String worldRemovalReason,
                          @Nullable String worldFailurePluginIdentifier) {
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
         CrashReportEnvelope envelope = CrashReportEnvelope.create(
                 project.projectId(),
                 project.displayName(),
                 source,
+                sessionId,
                 attribution.fingerprint(),
                 project.pluginIdentifier(),
                 project.pluginVersion(),
@@ -350,15 +532,35 @@ public final class TelemetryCoreEngine {
                 worldName,
                 worldRemovalReason,
                 worldFailurePluginIdentifier,
+                environmentFor(project, runtimeMetadata),
                 attribution,
                 breadcrumbs.snapshot(project.projectId()),
                 throwable,
-                CrashReportEnvelope.RuntimeMetadata.capture(loadedMods)
+                runtimeMetadata
         );
         CrashReportStore.WriteResult result = storeFor(project).persist(envelope);
         if (result == CrashReportStore.WriteResult.FAILED) {
             logWarning("Failed to store crash telemetry report for project " + project.projectId() + ".", null);
         }
+    }
+
+    @Nonnull
+    private CrashReportEnvelope.EnvironmentSnapshot environmentFor(@Nonnull TelemetryProjectRegistration project,
+                                                                   @Nonnull CrashReportEnvelope.RuntimeMetadata runtimeMetadata) {
+        String key = project.projectId().toLowerCase(Locale.ROOT);
+        CrashReportEnvelope.EnvironmentSnapshot existing = environmentsByProjectId.get(key);
+        if (existing != null) {
+            return existing;
+        }
+        CrashReportEnvelope.EnvironmentSnapshot snapshot = CrashReportEnvelope.EnvironmentSnapshot.capture(
+                project.projectId(),
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                project.runtimeMode(),
+                runtimeMetadata
+        );
+        environmentsByProjectId.put(key, snapshot);
+        return snapshot;
     }
 
     private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {
@@ -404,10 +606,22 @@ public final class TelemetryCoreEngine {
         );
     }
 
+    private TelemetryEventStore eventStoreFor(@Nonnull TelemetryProjectRegistration project) {
+        return eventStoresByProjectId.computeIfAbsent(
+                project.projectId().toLowerCase(Locale.ROOT),
+                ignored -> new TelemetryEventStore(
+                        dataPaths.pendingEventsDirectory(project.projectId()),
+                        settings.maxPendingEventsPerProject(),
+                        logger
+                )
+        );
+    }
+
     private int totalPendingCount(@Nullable String projectIdFilter) {
         int total = 0;
         for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
             total += storeFor(project).pendingCount();
+            total += eventStoreFor(project).pendingCount();
         }
         return total;
     }
