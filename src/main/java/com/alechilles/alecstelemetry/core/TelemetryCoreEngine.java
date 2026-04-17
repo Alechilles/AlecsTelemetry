@@ -171,6 +171,9 @@ public final class TelemetryCoreEngine {
                             @Nonnull String eventName,
                             @Nullable Throwable throwable,
                             @Nullable String detail) {
+        if (!enabled.get()) {
+            return;
+        }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
             return;
@@ -210,6 +213,9 @@ public final class TelemetryCoreEngine {
                                 int durationMs,
                                 boolean success,
                                 @Nullable String detail) {
+        if (!enabled.get()) {
+            return;
+        }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
             return;
@@ -246,6 +252,9 @@ public final class TelemetryCoreEngine {
                                   int durationMs,
                                   @Nullable Double metricValue,
                                   @Nullable String detail) {
+        if (!enabled.get()) {
+            return;
+        }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
             return;
@@ -287,6 +296,9 @@ public final class TelemetryCoreEngine {
     public void recordUsage(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
+        if (!enabled.get()) {
+            return;
+        }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
             return;
