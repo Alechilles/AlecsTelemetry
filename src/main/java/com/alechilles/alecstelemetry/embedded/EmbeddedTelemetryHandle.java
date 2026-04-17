@@ -32,6 +32,14 @@ public interface EmbeddedTelemetryHandle {
 
     void captureStartFailure(@Nullable Throwable throwable);
 
+    void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable String detail);
+
+    void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail);
+
+    void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable String detail);
+
+    void recordUsage(@Nonnull String eventName, @Nullable String detail);
+
     void captureExceptionalWorldRemoval(@Nullable World world, @Nullable RemoveWorldEvent.RemovalReason removalReason);
 
     boolean requestFlush();

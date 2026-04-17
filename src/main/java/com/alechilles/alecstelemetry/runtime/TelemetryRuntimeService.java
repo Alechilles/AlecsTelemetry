@@ -160,6 +160,35 @@ public final class TelemetryRuntimeService {
         engine.captureStartFailure(projectId, throwable);
     }
 
+    public void recordError(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable Throwable throwable,
+                            @Nullable String detail) {
+        engine.recordError(projectId, eventName, throwable, detail);
+    }
+
+    public void recordLifecycle(@Nonnull String projectId,
+                                @Nonnull String eventName,
+                                int durationMs,
+                                boolean success,
+                                @Nullable String detail) {
+        engine.recordLifecycle(projectId, eventName, durationMs, success, detail);
+    }
+
+    public void recordPerformance(@Nonnull String projectId,
+                                  @Nonnull String eventName,
+                                  int durationMs,
+                                  @Nullable Double metricValue,
+                                  @Nullable String detail) {
+        engine.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
+    }
+
+    public void recordUsage(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable String detail) {
+        engine.recordUsage(projectId, eventName, detail);
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return engine.captureTestReport(projectId, detail);
     }

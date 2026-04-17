@@ -34,6 +34,7 @@ class EmbeddedTelemetryServiceTest {
                 telemetryRoot.resolve("Settings").resolve("projects"),
                 telemetryRoot,
                 telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
                 null
         );
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
