@@ -155,7 +155,9 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         if ("custom".equalsIgnoreCase(destinationMode())) {
             String url = firstNonBlank(
                     override == null ? null : override.customEndpoint().eventUrl(),
-                    descriptor.customEndpoint().eventUrl()
+                    descriptor.customEndpoint().eventUrl(),
+                    override == null ? null : override.customEndpoint().url(),
+                    descriptor.customEndpoint().url()
             );
             if (url == null) {
                 return null;
@@ -172,6 +174,8 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         String endpoint = firstNonBlank(
                 override == null ? null : override.hosted().eventEndpoint(),
                 descriptor.hosted().eventEndpoint(),
+                override == null ? null : override.hosted().endpoint(),
+                descriptor.hosted().endpoint(),
                 settings.hostedEventIngestEndpoint()
         );
         LinkedHashMap<String, String> headers = new LinkedHashMap<>(mergeHeaders(
