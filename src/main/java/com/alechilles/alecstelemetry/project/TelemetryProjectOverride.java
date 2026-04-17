@@ -14,8 +14,8 @@ import java.util.Map;
  */
 public record TelemetryProjectOverride(@Nullable Boolean enabled,
                                         @Nullable String destinationMode,
-                                        @Nullable TelemetryProjectDescriptor.PerformanceOptions performance,
-                                       @Nullable TelemetryProjectDescriptor.UsageOptions usage,
+                                        @Nullable PerformanceOverride performance,
+                                        @Nullable UsageOverride usage,
                                         @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
                                         @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
 
@@ -30,15 +30,15 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                 normalizeMode(safe.destinationMode),
                 safe.performance == null
                         ? null
-                        : new TelemetryProjectDescriptor.PerformanceOptions(
-                        safe.performance.enabled != null && safe.performance.enabled,
-                        safe.performance.sampleRate == null ? 1.0d : Math.max(0.0d, Math.min(1.0d, safe.performance.sampleRate)),
-                        safe.performance.thresholdMs == null ? 100 : Math.max(1, Math.min(60000, safe.performance.thresholdMs))
+                        : new PerformanceOverride(
+                        safe.performance.enabled,
+                        safe.performance.sampleRate == null ? null : Math.max(0.0d, Math.min(1.0d, safe.performance.sampleRate)),
+                        safe.performance.thresholdMs == null ? null : Math.max(1, Math.min(60000, safe.performance.thresholdMs))
                 ),
                 safe.usage == null
                         ? null
-                        : new TelemetryProjectDescriptor.UsageOptions(
-                        safe.usage.enabled != null && safe.usage.enabled,
+                        : new UsageOverride(
+                        safe.usage.enabled,
                         normalizeNonBlankList(safe.usage.allowedEvents, 120)
                 ),
                 new TelemetryProjectDescriptor.HostedDestination(
@@ -147,6 +147,15 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     private static final class UsageDocument {
         private Boolean enabled;
         private java.util.List<String> allowedEvents;
+    }
+
+    public record PerformanceOverride(@Nullable Boolean enabled,
+                                      @Nullable Double sampleRate,
+                                      @Nullable Integer thresholdMs) {
+    }
+
+    public record UsageOverride(@Nullable Boolean enabled,
+                                @Nonnull java.util.List<String> allowedEvents) {
     }
 
     private static final class HostedDocument {

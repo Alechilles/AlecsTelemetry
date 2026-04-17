@@ -81,12 +81,29 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     @Nonnull
     public TelemetryProjectDescriptor.PerformanceOptions performance() {
-        return override != null && override.performance() != null ? override.performance() : descriptor.performance();
+        if (override == null || override.performance() == null) {
+            return descriptor.performance();
+        }
+        TelemetryProjectDescriptor.PerformanceOptions defaults = descriptor.performance();
+        TelemetryProjectOverride.PerformanceOverride performanceOverride = override.performance();
+        return new TelemetryProjectDescriptor.PerformanceOptions(
+                performanceOverride.enabled() == null ? defaults.enabled() : performanceOverride.enabled(),
+                performanceOverride.sampleRate() == null ? defaults.sampleRate() : performanceOverride.sampleRate(),
+                performanceOverride.thresholdMs() == null ? defaults.thresholdMs() : performanceOverride.thresholdMs()
+        );
     }
 
     @Nonnull
     public TelemetryProjectDescriptor.UsageOptions usage() {
-        return override != null && override.usage() != null ? override.usage() : descriptor.usage();
+        if (override == null || override.usage() == null) {
+            return descriptor.usage();
+        }
+        TelemetryProjectDescriptor.UsageOptions defaults = descriptor.usage();
+        TelemetryProjectOverride.UsageOverride usageOverride = override.usage();
+        return new TelemetryProjectDescriptor.UsageOptions(
+                usageOverride.enabled() == null ? defaults.enabled() : usageOverride.enabled(),
+                usageOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : usageOverride.allowedEvents()
+        );
     }
 
     @Nullable
