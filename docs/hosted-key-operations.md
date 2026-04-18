@@ -14,7 +14,12 @@ of the box for the mod author.
 
 ## Rotation Model
 
-The platform supports dual-key rotation.
+Dual-key rotation is supported in Alec's Telemetry Platform deployments that
+include the grace-key feature.
+
+The lightweight reference hosted backend that lives in this repository still
+uses a single publishable key with manual rotation, so older mod versions stop
+ingesting as soon as that backend key changes.
 
 - one active key remains the primary key shown in the portal
 - one grace key may continue to ingest temporarily after rotation
