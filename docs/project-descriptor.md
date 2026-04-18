@@ -42,6 +42,12 @@ then you can omit a lot of telemetry fields because Alec's Telemetry will infer:
 }
 ```
 
+Hosted `projectKey` values are designed to be publishable ingest keys.
+
+- bake them into the shipped descriptor for plug-and-play telemetry
+- do not treat them as operator-managed secrets
+- keep destructive/admin capabilities out of ingest-key auth scope
+
 ## Minimal Custom Endpoint Example
 
 ```json
@@ -135,6 +141,8 @@ then you can omit a lot of telemetry fields because Alec's Telemetry will infer:
 
 - `endpoint`
   - optional override; normally omitted so the runtime default hosted endpoint is used
+- `eventEndpoint`
+  - optional override for the generic non-crash event ingest path
 - `projectKey`
 - `projectKey` is a public ingest key, not a hidden secret
 - `headers`
@@ -151,6 +159,7 @@ For most modders, keep this file small.
 Only set:
 
 - destination config
+- publishable hosted `projectKey` when using Alec's hosted service
 - extra package prefixes if your mod spans multiple packages
 - explicit ids if you need stable naming that differs from your manifest
 

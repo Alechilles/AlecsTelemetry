@@ -3,6 +3,9 @@
 Server owners can override destination settings without editing the packaged
 descriptor inside another mod.
 
+This is optional. Hosted telemetry is expected to work from the shipped
+descriptor alone when the mod bakes in a publishable ingest key.
+
 Override files live under Alec's Telemetry data directory:
 
 ```text
@@ -47,9 +50,16 @@ Settings/projects/<project-id>.json
 - `enabled`
 - `destinationMode`
 - `hosted.endpoint`
+- `hosted.eventEndpoint`
 - `hosted.projectKey`
 - `hosted.headers`
+- `performance.enabled`
+- `performance.sampleRate`
+- `performance.thresholdMs`
+- `usage.enabled`
+- `usage.allowedEvents`
 - `customEndpoint.url`
+- `customEndpoint.eventUrl`
 - `customEndpoint.headers`
 
 ## Merge Rules
