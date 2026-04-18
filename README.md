@@ -18,8 +18,8 @@ In the common dependency-mode case, a mod author should only need to:
 
 1. Add Alec's Telemetry as a dependency.
 2. Ship a small `telemetry/project.json` file.
-3. Provide either:
-   - a hosted `projectKey` for Alec's telemetry service, or
+3. Bake in either:
+   - a publishable hosted `projectKey` for Alec's telemetry service, or
    - a custom endpoint URL.
 
 The runtime will then:
@@ -113,6 +113,7 @@ See:
 - `docs/project-descriptor.md`
 - `docs/embedded-mode.md`
 - `docs/runtime-overrides.md`
+- `docs/hosted-key-operations.md`
 - `docs/hosted-ingest-contract.md`
 - `docs/expanded-telemetry-system-plan.md`
 - `docs/embedded-mode-refactor-plan.md`
@@ -131,6 +132,13 @@ See:
 
 Server owners can override packaged destination settings without editing another
 mod's files.
+
+Overrides are optional. The intended default model is:
+
+- mod author ships a publishable hosted ingest key in `telemetry/project.json`
+- telemetry works out of the box for the mod author's project
+- server owners only add overrides when they want to disable telemetry, redirect
+  it, or change runtime behavior
 
 Override files live under:
 
