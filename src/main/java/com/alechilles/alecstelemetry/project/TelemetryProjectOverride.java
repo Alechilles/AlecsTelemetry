@@ -13,9 +13,11 @@ import java.util.Map;
  * Runtime override loaded from Alec's Telemetry settings for one project.
  */
 public record TelemetryProjectOverride(@Nullable Boolean enabled,
-                                       @Nullable String destinationMode,
-                                       @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
-                                       @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
+                                        @Nullable String destinationMode,
+                                        @Nullable PerformanceOverride performance,
+                                        @Nullable UsageOverride usage,
+                                        @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
+                                        @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
@@ -26,13 +28,28 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         return new TelemetryProjectOverride(
                 safe.enabled,
                 normalizeMode(safe.destinationMode),
+                safe.performance == null
+                        ? null
+                        : new PerformanceOverride(
+                        safe.performance.enabled,
+                        safe.performance.sampleRate == null ? null : Math.max(0.0d, Math.min(1.0d, safe.performance.sampleRate)),
+                        safe.performance.thresholdMs == null ? null : Math.max(1, Math.min(60000, safe.performance.thresholdMs))
+                ),
+                safe.usage == null
+                        ? null
+                        : new UsageOverride(
+                        safe.usage.enabled,
+                        normalizeNonBlankList(safe.usage.allowedEvents, 120)
+                ),
                 new TelemetryProjectDescriptor.HostedDestination(
                         normalizeNullable(safe.hosted == null ? null : safe.hosted.endpoint),
+                        normalizeNullable(safe.hosted == null ? null : safe.hosted.eventEndpoint),
                         normalizeNullable(safe.hosted == null ? null : safe.hosted.projectKey),
                         normalizeHeaders(safe.hosted == null ? null : safe.hosted.headers)
                 ),
                 new TelemetryProjectDescriptor.CustomEndpoint(
                         normalizeNullable(safe.customEndpoint == null ? null : safe.customEndpoint.url),
+                        normalizeNullable(safe.customEndpoint == null ? null : safe.customEndpoint.eventUrl),
                         normalizeHeaders(safe.customEndpoint == null ? null : safe.customEndpoint.headers)
                 )
         );
@@ -41,10 +58,14 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     public boolean hasAnyValue() {
         return enabled != null
                 || destinationMode != null
+                || performance != null
+                || usage != null
                 || hosted.endpoint() != null
+                || hosted.eventEndpoint() != null
                 || hosted.projectKey() != null
                 || !hosted.headers().isEmpty()
                 || customEndpoint.url() != null
+                || customEndpoint.eventUrl() != null
                 || !customEndpoint.headers().isEmpty();
     }
 
@@ -92,21 +113,61 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         return Map.copyOf(withOriginalKeys);
     }
 
+    @Nonnull
+    private static java.util.List<String> normalizeNonBlankList(@Nullable java.util.List<String> values, int maxLength) {
+        if (values == null || values.isEmpty()) {
+            return java.util.List.of();
+        }
+        LinkedHashMap<String, String> normalized = new LinkedHashMap<>();
+        for (String value : values) {
+            String safe = normalizeNullable(value);
+            if (safe != null) {
+                String trimmed = safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
+                normalized.putIfAbsent(trimmed.toLowerCase(Locale.ROOT), trimmed);
+            }
+        }
+        return java.util.List.copyOf(new java.util.ArrayList<>(normalized.values()));
+    }
+
     private static final class Document {
         private Boolean enabled;
         private String destinationMode;
+        private PerformanceDocument performance;
+        private UsageDocument usage;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
     }
 
+    private static final class PerformanceDocument {
+        private Boolean enabled;
+        private Double sampleRate;
+        private Integer thresholdMs;
+    }
+
+    private static final class UsageDocument {
+        private Boolean enabled;
+        private java.util.List<String> allowedEvents;
+    }
+
+    public record PerformanceOverride(@Nullable Boolean enabled,
+                                      @Nullable Double sampleRate,
+                                      @Nullable Integer thresholdMs) {
+    }
+
+    public record UsageOverride(@Nullable Boolean enabled,
+                                @Nonnull java.util.List<String> allowedEvents) {
+    }
+
     private static final class HostedDocument {
         private String endpoint;
+        private String eventEndpoint;
         private String projectKey;
         private Map<String, String> headers;
     }
 
     private static final class CustomEndpointDocument {
         private String url;
+        private String eventUrl;
         private Map<String, String> headers;
     }
 }

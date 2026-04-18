@@ -76,6 +76,41 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
+    void parsesPerformanceAndEventDestinationOptions() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ownerPluginIdentifiers": ["Example:Custom Mod"],
+                  "packagePrefixes": ["com.example.custom"],
+                  "performance": {
+                    "enabled": true,
+                    "sampleRate": 0.5,
+                    "thresholdMs": 250
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_page_opened", "reload_config_command_used"]
+                  },
+                  "hosted": {
+                    "projectKey": "public-key",
+                    "eventEndpoint": "https://example.com/ingest/event"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.performance().enabled());
+        assertEquals(0.5d, descriptor.performance().sampleRate());
+        assertEquals(250, descriptor.performance().thresholdMs());
+        assertTrue(descriptor.usage().enabled());
+        assertTrue(descriptor.usage().allows("settings_page_opened"));
+        assertEquals("https://example.com/ingest/event", descriptor.hosted().eventEndpoint());
+    }
+
+    @Test
     void parsesExplicitEmbeddedRuntimeMode() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """

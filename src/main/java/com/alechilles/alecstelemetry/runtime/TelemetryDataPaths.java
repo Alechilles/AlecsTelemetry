@@ -10,11 +10,12 @@ import java.nio.file.Path;
  * Runtime-owned filesystem layout for Alec's Telemetry.
  */
 public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
-                                 @Nonnull Path settingsFile,
-                                 @Nonnull Path projectSettingsDirectory,
-                                 @Nonnull Path telemetryRoot,
-                                 @Nonnull Path crashReportsRoot,
-                                 @Nullable Path modsDirectory) {
+                                  @Nonnull Path settingsFile,
+                                  @Nonnull Path projectSettingsDirectory,
+                                  @Nonnull Path telemetryRoot,
+                                  @Nonnull Path crashReportsRoot,
+                                  @Nonnull Path eventReportsRoot,
+                                  @Nullable Path modsDirectory) {
 
     @Nonnull
     public static TelemetryDataPaths from(@Nonnull JavaPlugin plugin) {
@@ -28,6 +29,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                 settingsRoot.resolve("projects"),
                 telemetryRoot,
                 telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
                 resolveModsDirectory(dataDirectory)
         );
     }
@@ -43,6 +45,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                 settingsRoot.resolve("projects"),
                 telemetryRoot,
                 telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
                 null
         );
     }
@@ -50,6 +53,11 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     @Nonnull
     public Path pendingDirectory(@Nonnull String projectId) {
         return crashReportsRoot.resolve(projectId).resolve("pending");
+    }
+
+    @Nonnull
+    public Path pendingEventsDirectory(@Nonnull String projectId) {
+        return eventReportsRoot.resolve(projectId).resolve("pending");
     }
 
     @Nonnull
