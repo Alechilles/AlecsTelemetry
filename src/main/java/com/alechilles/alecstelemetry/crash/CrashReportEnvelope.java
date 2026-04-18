@@ -5,10 +5,14 @@ import com.google.gson.GsonBuilder;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -20,6 +24,7 @@ public record CrashReportEnvelope(int schemaVersion,
                                   @Nonnull String projectId,
                                   @Nonnull String projectDisplayName,
                                   @Nonnull String source,
+                                  @Nonnull String sessionId,
                                   @Nonnull String fingerprint,
                                   @Nonnull String capturedAtUtc,
                                   @Nonnull String lastCapturedAtUtc,
@@ -30,6 +35,7 @@ public record CrashReportEnvelope(int schemaVersion,
                                   @Nullable String worldName,
                                   @Nullable String worldRemovalReason,
                                   @Nullable String worldFailurePluginIdentifier,
+                                  @Nullable EnvironmentSnapshot environment,
                                   @Nonnull AttributionDetails attribution,
                                   @Nonnull List<BreadcrumbEntry> breadcrumbs,
                                   @Nonnull ThrowableDetails throwable,
@@ -37,13 +43,14 @@ public record CrashReportEnvelope(int schemaVersion,
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
     public static final String EVENT_TYPE_CRASH = "crash";
 
     @Nonnull
     public static CrashReportEnvelope create(@Nonnull String projectId,
                                              @Nonnull String projectDisplayName,
                                              @Nonnull String source,
+                                             @Nonnull String sessionId,
                                              @Nonnull String fingerprint,
                                              @Nonnull String pluginIdentifier,
                                              @Nonnull String pluginVersion,
@@ -51,10 +58,11 @@ public record CrashReportEnvelope(int schemaVersion,
                                              @Nullable String worldName,
                                               @Nullable String worldRemovalReason,
                                               @Nullable String worldFailurePluginIdentifier,
-                                              @Nonnull CrashAttribution.AttributionResult attributionResult,
-                                              @Nonnull List<BreadcrumbEntry> breadcrumbs,
-                                              @Nonnull Throwable throwable,
-                                              @Nonnull RuntimeMetadata runtimeMetadata) {
+                                              @Nonnull EnvironmentSnapshot environmentSnapshot,
+                                               @Nonnull CrashAttribution.AttributionResult attributionResult,
+                                               @Nonnull List<BreadcrumbEntry> breadcrumbs,
+                                               @Nonnull Throwable throwable,
+                                               @Nonnull RuntimeMetadata runtimeMetadata) {
         String capturedAtUtc = Instant.now().toString();
         return new CrashReportEnvelope(
                 SCHEMA_VERSION,
@@ -63,6 +71,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 normalizeNonBlank(projectId, "unknown-project"),
                 normalizeNonBlank(projectDisplayName, projectId),
                 normalizeNonBlank(source, "unknown"),
+                normalizeNonBlank(sessionId, UUID.randomUUID().toString()),
                 normalizeNonBlank(fingerprint, "unknown"),
                 capturedAtUtc,
                 capturedAtUtc,
@@ -73,6 +82,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 normalizeNullable(worldName),
                 normalizeNullable(worldRemovalReason),
                 normalizeNullable(worldFailurePluginIdentifier),
+                environmentSnapshot.normalize(),
                 new AttributionDetails(
                         attributionResult.identifiedPlugin(),
                         attributionResult.matchedPluginIdentifier(),
@@ -106,6 +116,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 current.projectId(),
                 chooseNonBlank(current.projectDisplayName(), latest.projectDisplayName()),
                 chooseNonBlank(current.source(), latest.source()),
+                chooseNonBlank(current.sessionId(), latest.sessionId()),
                 current.fingerprint(),
                 current.capturedAtUtc(),
                 latest.lastCapturedAtUtc(),
@@ -116,6 +127,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 chooseNullable(current.worldName(), latest.worldName()),
                 chooseNullable(current.worldRemovalReason(), latest.worldRemovalReason()),
                 chooseNullable(current.worldFailurePluginIdentifier(), latest.worldFailurePluginIdentifier()),
+                latest.environment() == null ? current.environment() : latest.environment().normalize(),
                 latest.attribution(),
                 latest.breadcrumbs(),
                 latest.throwable(),
@@ -133,6 +145,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 normalizeNonBlank(projectId(), "unknown-project"),
                 normalizeNonBlank(projectDisplayName(), projectId()),
                 normalizeNonBlank(source(), "unknown"),
+                normalizeNonBlank(sessionId(), UUID.randomUUID().toString()),
                 normalizeNonBlank(fingerprint(), "unknown"),
                 firstCapturedAt,
                 normalizeTimestamp(lastCapturedAtUtc(), firstCapturedAt),
@@ -143,6 +156,15 @@ public record CrashReportEnvelope(int schemaVersion,
                 normalizeNullable(worldName()),
                 normalizeNullable(worldRemovalReason()),
                 normalizeNullable(worldFailurePluginIdentifier()),
+                environment() == null
+                        ? EnvironmentSnapshot.capture(
+                        projectId(),
+                        pluginIdentifier(),
+                        pluginVersion(),
+                        "unknown",
+                        runtime() == null ? RuntimeMetadata.capture(List.of()) : runtime().normalize()
+                )
+                        : environment().normalize(),
                 attribution() == null ? new AttributionDetails(null, false, false) : attribution(),
                 normalizeBreadcrumbs(breadcrumbs()),
                 throwable() == null
@@ -162,6 +184,7 @@ public record CrashReportEnvelope(int schemaVersion,
                 "unknown-project",
                 "Unknown Project",
                 "unknown",
+                UUID.randomUUID().toString(),
                 "unknown",
                 now,
                 now,
@@ -172,6 +195,13 @@ public record CrashReportEnvelope(int schemaVersion,
                 null,
                 null,
                 null,
+                EnvironmentSnapshot.capture(
+                        "unknown-project",
+                        "unknown",
+                        "unknown",
+                        "unknown",
+                        RuntimeMetadata.capture(List.of())
+                ),
                 new AttributionDetails(null, false, false),
                 List.of(),
                 new ThrowableDetails("java.lang.Throwable", "<empty>", List.of(), List.of()),
@@ -330,6 +360,64 @@ public record CrashReportEnvelope(int schemaVersion,
     }
 
     /**
+     * Stable environment snapshot metadata attached to crash and event payloads.
+     */
+    public record EnvironmentSnapshot(@Nonnull String snapshotKey,
+                                      @Nonnull String runtimeMode,
+                                      @Nonnull String modSetHash) {
+
+        @Nonnull
+        public static EnvironmentSnapshot capture(@Nonnull String projectId,
+                                                  @Nonnull String pluginIdentifier,
+                                                  @Nonnull String pluginVersion,
+                                                  @Nonnull String runtimeMode,
+                                                  @Nonnull RuntimeMetadata runtimeMetadata) {
+            RuntimeMetadata normalizedRuntime = runtimeMetadata.normalize();
+            String normalizedProjectId = normalizeNonBlank(projectId, "unknown-project");
+            String normalizedPluginIdentifier = normalizeNonBlank(pluginIdentifier, "unknown");
+            String normalizedPluginVersion = normalizeNonBlank(pluginVersion, "unknown");
+            String normalizedRuntimeMode = truncate(normalizeNonBlank(runtimeMode, "unknown"), 80);
+            String modSetHash = shortHash(buildModSetHashInput(normalizedRuntime.loadedMods()));
+            String snapshotKey = shortHash(
+                    normalizedProjectId.toLowerCase(Locale.ROOT),
+                    normalizedPluginIdentifier.toLowerCase(Locale.ROOT),
+                    normalizedPluginVersion,
+                    normalizedRuntimeMode,
+                    normalizedRuntime.hytaleBuild(),
+                    normalizedRuntime.serverVersion(),
+                    modSetHash
+            );
+            return new EnvironmentSnapshot(snapshotKey, normalizedRuntimeMode, modSetHash);
+        }
+
+        @Nonnull
+        public EnvironmentSnapshot normalize() {
+            return new EnvironmentSnapshot(
+                    truncate(normalizeNonBlank(snapshotKey(), "unknown"), 64),
+                    truncate(normalizeNonBlank(runtimeMode(), "unknown"), 80),
+                    truncate(normalizeNonBlank(modSetHash(), "unknown"), 64)
+            );
+        }
+
+        @Nonnull
+        private static String buildModSetHashInput(@Nonnull List<LoadedModMetadata> loadedMods) {
+            if (loadedMods.isEmpty()) {
+                return "<none>";
+            }
+            ArrayList<String> parts = new ArrayList<>(loadedMods.size());
+            for (LoadedModMetadata mod : loadedMods) {
+                parts.add(
+                        normalizeNonBlank(mod.identifier(), "unknown").toLowerCase(Locale.ROOT)
+                                + "@"
+                                + normalizeNonBlank(mod.version(), "unknown")
+                );
+            }
+            parts.sort(String::compareTo);
+            return String.join("|", parts);
+        }
+    }
+
+    /**
      * Runtime details serialized with a crash report.
      */
     public record RuntimeMetadata(@Nonnull String javaVersion,
@@ -365,7 +453,7 @@ public record CrashReportEnvelope(int schemaVersion,
         }
 
         @Nonnull
-        RuntimeMetadata normalize() {
+        public RuntimeMetadata normalize() {
             return new RuntimeMetadata(
                     normalizeNonBlank(javaVersion(), "unknown"),
                     normalizeNonBlank(runtimeVersion(), "unknown"),
@@ -439,6 +527,25 @@ public record CrashReportEnvelope(int schemaVersion,
      * Summary for one loaded mod.
      */
     public record LoadedModMetadata(@Nonnull String identifier,
-                                    @Nonnull String version) {
+                                     @Nonnull String version) {
+    }
+
+    @Nonnull
+    private static String shortHash(@Nonnull String... values) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (String value : values) {
+                digest.update(normalizeNonBlank(value, "unknown").getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder out = new StringBuilder(24);
+            for (int i = 0; i < hash.length && out.length() < 24; i++) {
+                out.append(String.format(Locale.ROOT, "%02x", hash[i]));
+            }
+            return out.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
     }
 }

@@ -21,11 +21,13 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull String displayName,
                                          @Nonnull String runtimeMode,
                                          @Nonnull List<String> ownerPluginIdentifiers,
-                                         @Nonnull List<String> packagePrefixes,
-                                         @Nonnull CaptureOptions capture,
-                                         @Nonnull Defaults defaults,
-                                         @Nonnull HostedDestination hosted,
-                                         @Nonnull CustomEndpoint customEndpoint) {
+                                          @Nonnull List<String> packagePrefixes,
+                                          @Nonnull CaptureOptions capture,
+                                          @Nonnull PerformanceOptions performance,
+                                          @Nonnull UsageOptions usage,
+                                          @Nonnull Defaults defaults,
+                                          @Nonnull HostedDestination hosted,
+                                          @Nonnull CustomEndpoint customEndpoint) {
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final int CURRENT_SCHEMA_VERSION = 1;
@@ -72,13 +74,30 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 destinationMode
         );
 
+        PerformanceOptions performance = safe.performance == null
+                ? new PerformanceOptions(false, 1.0d, 100)
+                : new PerformanceOptions(
+                boolOrDefault(safe.performance.enabled, false),
+                doubleOrDefault(safe.performance.sampleRate, 1.0d, 0.0d, 1.0d),
+                intOrDefault(safe.performance.thresholdMs, 100, 1, 60000)
+        );
+
+        UsageOptions usage = safe.usage == null
+                ? new UsageOptions(false, List.of())
+                : new UsageOptions(
+                boolOrDefault(safe.usage.enabled, false),
+                normalizeNonBlankList(safe.usage.allowedEvents, 120)
+        );
+
         HostedDestination hosted = new HostedDestination(
                 normalizeNullable(safe.hosted == null ? null : safe.hosted.endpoint),
+                normalizeNullable(safe.hosted == null ? null : safe.hosted.eventEndpoint),
                 normalizeNullable(safe.hosted == null ? null : safe.hosted.projectKey),
                 normalizeHeaders(safe.hosted == null ? null : safe.hosted.headers)
         );
         CustomEndpoint customEndpoint = new CustomEndpoint(
                 normalizeNullable(safe.customEndpoint == null ? null : safe.customEndpoint.url),
+                normalizeNullable(safe.customEndpoint == null ? null : safe.customEndpoint.eventUrl),
                 normalizeHeaders(safe.customEndpoint == null ? null : safe.customEndpoint.headers)
         );
 
@@ -95,6 +114,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 ownerPluginIdentifiers,
                 packagePrefixes,
                 capture,
+                performance,
+                usage,
                 defaults,
                 hosted,
                 customEndpoint
@@ -125,6 +146,16 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     private static boolean boolOrDefault(@Nullable Boolean value, boolean fallback) {
         return value == null ? fallback : value;
+    }
+
+    private static int intOrDefault(@Nullable Integer value, int fallback, int min, int max) {
+        int safe = value == null ? fallback : value;
+        return Math.max(min, Math.min(max, safe));
+    }
+
+    private static double doubleOrDefault(@Nullable Double value, double fallback, double min, double max) {
+        double safe = value == null ? fallback : value;
+        return Math.max(min, Math.min(max, safe));
     }
 
     @Nonnull
@@ -158,6 +189,22 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             String safe = normalizeNullable(value);
             if (safe != null) {
                 normalized.putIfAbsent(safe.toLowerCase(Locale.ROOT), safe);
+            }
+        }
+        return List.copyOf(new ArrayList<>(normalized.values()));
+    }
+
+    @Nonnull
+    private static List<String> normalizeNonBlankList(@Nullable List<String> values, int maxLength) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashMap<String, String> normalized = new LinkedHashMap<>();
+        for (String value : values) {
+            String safe = normalizeNullable(value);
+            if (safe != null) {
+                String trimmed = safe.length() <= maxLength ? safe : safe.substring(0, maxLength);
+                normalized.putIfAbsent(trimmed.toLowerCase(Locale.ROOT), trimmed);
             }
         }
         return List.copyOf(new ArrayList<>(normalized.values()));
@@ -260,9 +307,30 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     /**
+     * Performance telemetry defaults for one project.
+     */
+    public record PerformanceOptions(boolean enabled,
+                                     double sampleRate,
+                                     int thresholdMs) {
+    }
+
+    /**
+     * Usage telemetry defaults and allowlist for one project.
+     */
+    public record UsageOptions(boolean enabled,
+                               @Nonnull List<String> allowedEvents) {
+
+        public boolean allows(@Nonnull String eventName) {
+            String normalized = normalizeNullable(eventName);
+            return enabled() && normalized != null && allowedEvents().stream().anyMatch(normalized::equalsIgnoreCase);
+        }
+    }
+
+    /**
      * Hosted destination configuration.
      */
     public record HostedDestination(@Nullable String endpoint,
+                                    @Nullable String eventEndpoint,
                                     @Nullable String projectKey,
                                     @Nonnull Map<String, String> headers) {
     }
@@ -271,7 +339,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
      * Custom endpoint configuration.
      */
     public record CustomEndpoint(@Nullable String url,
-                                 @Nonnull Map<String, String> headers) {
+                                 @Nullable String eventUrl,
+                                  @Nonnull Map<String, String> headers) {
     }
 
     /**
@@ -291,6 +360,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private List<String> ownerPluginIdentifiers;
         private List<String> packagePrefixes;
         private CaptureDocument capture;
+        private PerformanceDocument performance;
+        private UsageDocument usage;
         private DefaultsDocument defaults;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
@@ -308,14 +379,27 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private String destinationMode;
     }
 
+    private static final class PerformanceDocument {
+        private Boolean enabled;
+        private Double sampleRate;
+        private Integer thresholdMs;
+    }
+
+    private static final class UsageDocument {
+        private Boolean enabled;
+        private List<String> allowedEvents;
+    }
+
     private static final class HostedDocument {
         private String endpoint;
+        private String eventEndpoint;
         private String projectKey;
         private Map<String, String> headers;
     }
 
     private static final class CustomEndpointDocument {
         private String url;
+        private String eventUrl;
         private Map<String, String> headers;
     }
 }

@@ -62,6 +62,7 @@ class CrashReportStoreTest {
                 "example-mod",
                 "Example Mod",
                 "unit_test",
+                "session-store-test",
                 fingerprint,
                 "Example:Example Mod",
                 "1.2.3",
@@ -69,6 +70,13 @@ class CrashReportStoreTest {
                 null,
                 null,
                 null,
+                CrashReportEnvelope.EnvironmentSnapshot.capture(
+                        "example-mod",
+                        "Example:Example Mod",
+                        "1.2.3",
+                        "dependency",
+                        CrashReportEnvelope.RuntimeMetadata.capture(List.of())
+                ),
                 attribution,
                 List.of(),
                 throwable,

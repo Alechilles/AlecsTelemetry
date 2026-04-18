@@ -114,6 +114,7 @@ See:
 - `docs/embedded-mode.md`
 - `docs/runtime-overrides.md`
 - `docs/hosted-ingest-contract.md`
+- `docs/expanded-telemetry-system-plan.md`
 - `docs/embedded-mode-refactor-plan.md`
 - `examples/ExampleConsumerMod/`
 - `examples/EmbeddedConsumerMod/`

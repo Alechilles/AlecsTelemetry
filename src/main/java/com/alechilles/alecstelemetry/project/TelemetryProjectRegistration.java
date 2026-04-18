@@ -79,6 +79,33 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         return descriptor.capture().capturesSource(source);
     }
 
+    @Nonnull
+    public TelemetryProjectDescriptor.PerformanceOptions performance() {
+        if (override == null || override.performance() == null) {
+            return descriptor.performance();
+        }
+        TelemetryProjectDescriptor.PerformanceOptions defaults = descriptor.performance();
+        TelemetryProjectOverride.PerformanceOverride performanceOverride = override.performance();
+        return new TelemetryProjectDescriptor.PerformanceOptions(
+                performanceOverride.enabled() == null ? defaults.enabled() : performanceOverride.enabled(),
+                performanceOverride.sampleRate() == null ? defaults.sampleRate() : performanceOverride.sampleRate(),
+                performanceOverride.thresholdMs() == null ? defaults.thresholdMs() : performanceOverride.thresholdMs()
+        );
+    }
+
+    @Nonnull
+    public TelemetryProjectDescriptor.UsageOptions usage() {
+        if (override == null || override.usage() == null) {
+            return descriptor.usage();
+        }
+        TelemetryProjectDescriptor.UsageOptions defaults = descriptor.usage();
+        TelemetryProjectOverride.UsageOverride usageOverride = override.usage();
+        return new TelemetryProjectDescriptor.UsageOptions(
+                usageOverride.enabled() == null ? defaults.enabled() : usageOverride.enabled(),
+                usageOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : usageOverride.allowedEvents()
+        );
+    }
+
     @Nullable
     public CrashReportClient.DeliveryTarget resolveDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
         if (!isEnabled()) {
@@ -105,6 +132,51 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                 override == null ? null : override.hosted().endpoint(),
                 descriptor.hosted().endpoint(),
                 settings.hostedIngestEndpoint()
+        );
+        LinkedHashMap<String, String> headers = new LinkedHashMap<>(mergeHeaders(
+                descriptor.hosted().headers(),
+                override == null ? Map.of() : override.hosted().headers()
+        ));
+        String projectKey = firstNonBlank(
+                override == null ? null : override.hosted().projectKey(),
+                descriptor.hosted().projectKey()
+        );
+        if (projectKey != null) {
+            headers.put(TelemetryProjectDescriptor.PROJECT_KEY_HEADER, projectKey);
+        }
+        return endpoint == null ? null : new CrashReportClient.DeliveryTarget(endpoint, headers);
+    }
+
+    @Nullable
+    public CrashReportClient.DeliveryTarget resolveEventDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
+        if (!isEnabled()) {
+            return null;
+        }
+        if ("custom".equalsIgnoreCase(destinationMode())) {
+            String url = firstNonBlank(
+                    override == null ? null : override.customEndpoint().eventUrl(),
+                    descriptor.customEndpoint().eventUrl(),
+                    override == null ? null : override.customEndpoint().url(),
+                    descriptor.customEndpoint().url()
+            );
+            if (url == null) {
+                return null;
+            }
+            return new CrashReportClient.DeliveryTarget(
+                    url,
+                    mergeHeaders(
+                            descriptor.customEndpoint().headers(),
+                            override == null ? Map.of() : override.customEndpoint().headers()
+                    )
+            );
+        }
+
+        String endpoint = firstNonBlank(
+                override == null ? null : override.hosted().eventEndpoint(),
+                descriptor.hosted().eventEndpoint(),
+                override == null ? null : override.hosted().endpoint(),
+                descriptor.hosted().endpoint(),
+                settings.hostedEventIngestEndpoint()
         );
         LinkedHashMap<String, String> headers = new LinkedHashMap<>(mergeHeaders(
                 descriptor.hosted().headers(),
