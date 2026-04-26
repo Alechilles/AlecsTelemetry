@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -126,9 +127,23 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
+    public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
+        if (engine != null) {
+            engine.recordError(project.projectId(), eventName, throwable, context);
+        }
+    }
+
+    @Override
     public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail) {
         if (engine != null) {
             engine.recordLifecycle(project.projectId(), eventName, durationMs, success, detail);
+        }
+    }
+
+    @Override
+    public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
+        if (engine != null) {
+            engine.recordLifecycle(project.projectId(), eventName, durationMs, success, context);
         }
     }
 
@@ -140,9 +155,23 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
+    public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
+        if (engine != null) {
+            engine.recordPerformance(project.projectId(), eventName, durationMs, metricValue, context);
+        }
+    }
+
+    @Override
     public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
         if (engine != null) {
             engine.recordUsage(project.projectId(), eventName, detail);
+        }
+    }
+
+    @Override
+    public void recordUsage(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        if (engine != null) {
+            engine.recordUsage(project.projectId(), eventName, context);
         }
     }
 
@@ -187,8 +216,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                         List.of(),
                         List.of(),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.CaptureOptions(true, true, true, true),
-                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.PerformanceOptions(false, 1.0d, 100),
-                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UsageOptions(false, java.util.List.of()),
+                        com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.EventOptions.defaults(),
+                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.PerformanceOptions(false, 1.0d, 100, java.util.Map.of()),
+                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UsageOptions(false, java.util.List.of(), java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.Defaults(false, "hosted"),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.HostedDestination(null, null, null, java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.CustomEndpoint(null, null, java.util.Map.of())

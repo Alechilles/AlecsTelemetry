@@ -3,6 +3,7 @@ package com.alechilles.alecstelemetry.runtime;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.google.gson.JsonObject;
@@ -150,6 +151,171 @@ class TelemetryRuntimeServiceTest {
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("error", payload.get("eventType").getAsString());
         assertEquals("handled_exception", payload.get("eventName").getAsString());
+    }
+
+    @Test
+    void typedContextPromotesFieldsAndSanitizesUsageDetails() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_opened"],
+                    "details": {
+                      "settings_opened": {
+                        "allowedFields": {
+                          "source": { "type": "enum", "values": ["command", "settings_ui"] },
+                          "changedSettingCount": { "type": "number" }
+                        }
+                      }
+                    }
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        TelemetryProjectHandle handle = service.api().findProject("example-mod");
+        if (handle != null) {
+            handle.recordUsage(
+                    "settings_opened",
+                    TelemetryEventContext.usage()
+                            .subsystem("settings")
+                            .featureKey("settings_page")
+                            .entryPoint("/tw settings")
+                            .runtimeSide("server")
+                            .detail("source", "settings_ui")
+                            .detail("changedSettingCount", 2)
+                            .detail("ignored", "drop me")
+                            .build()
+            );
+        }
+
+        assertEquals(1, service.flushPendingReportsNow("test-events").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("usage", payload.get("eventType").getAsString());
+        assertEquals("settings", payload.get("subsystem").getAsString());
+        assertEquals("settings_page", payload.get("featureKey").getAsString());
+        assertEquals("/tw settings", payload.get("entryPoint").getAsString());
+        assertEquals("server", payload.get("runtimeSide").getAsString());
+        assertEquals("settings_ui", payload.getAsJsonObject("details").get("source").getAsString());
+        assertEquals(2, payload.getAsJsonObject("details").get("changedSettingCount").getAsInt());
+        assertTrue(!payload.getAsJsonObject("details").has("ignored"));
+    }
+
+    @Test
+    void errorContextIncludesBreadcrumbDetailsAndHonorsEventControls() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        TelemetryProjectHandle handle = service.api().findProject("example-mod");
+        if (handle != null) {
+            handle.recordBreadcrumb("ui", "Opened settings.");
+            handle.recordLifecycle("suppressed_lifecycle", 10, true, TelemetryEventContext.lifecycle().phase("start").build());
+            handle.recordError(
+                    "handled_exception",
+                    new IllegalStateException("bad state"),
+                    TelemetryEventContext.error()
+                            .subsystem("settings")
+                            .operation("apply")
+                            .fingerprint("settings-apply")
+                            .detail("Recovered after retry")
+                            .build()
+            );
+        }
+
+        assertEquals(1, service.flushPendingReportsNow("test-events").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("handled_exception", payload.get("eventName").getAsString());
+        assertEquals("settings-apply", payload.get("fingerprint").getAsString());
+        assertEquals("settings", payload.get("subsystem").getAsString());
+        assertEquals("apply", payload.get("operation").getAsString());
+        assertEquals("Recovered after retry", payload.getAsJsonObject("attributes").get("detail").getAsString());
+        assertTrue(payload.getAsJsonObject("details").getAsJsonArray("breadcrumbs").size() > 0);
     }
 
     private static final class SequencedClient implements CrashReportClient {
