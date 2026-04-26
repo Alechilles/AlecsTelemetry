@@ -19,11 +19,15 @@ hosted backend running with `HytaleModWikiBot` on the VPS.
 The `hosted/` package in this repo is a reference/dev implementation and should not
 be treated as the long-term production backend.
 
-## Endpoint
+## Endpoints
 
 ```text
 POST /ingest/crash
+POST /ingest/event
 ```
+
+`/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the
+canonical hosted endpoint for both crash envelopes and normal event envelopes.
 
 ## Required Headers
 
@@ -32,7 +36,7 @@ POST /ingest/crash
 
 ## Request Body
 
-The body is the crash envelope emitted by the runtime mod.
+For crash reports, the body is the crash envelope emitted by the runtime mod.
 
 Important fields:
 
@@ -55,6 +59,39 @@ Important fields:
 - `throwable`
 - `runtime`
 
+Normal event envelopes use:
+
+- `schemaVersion`
+- `eventType`
+  - `error`
+  - `lifecycle`
+  - `performance`
+  - `usage`
+- `eventName`
+- `eventId`
+- `projectId`
+- `projectDisplayName`
+- `source`
+- `sessionId`
+- `fingerprint`
+- `capturedAtUtc`
+- `pluginIdentifier`
+- `pluginVersion`
+- `worldName`
+- `severity`
+- `durationMs`
+- `metricValue`
+- context fields such as `subsystem`, `phase`, `operation`, `featureKey`,
+  `entryPoint`, `runtimeSide`, `entityType`, `itemId`, `blockId`, `biomeId`, and
+  `commandName`
+- `environment`
+- `attributes`
+- `details`
+- `runtime`
+
+`details` is reserved for descriptor-validated custom usage/performance fields and
+bounded debug context such as breadcrumbs on error or failed lifecycle events.
+
 ## Validation Rules
 
 The hosted service should reject or throttle when:
@@ -65,7 +102,8 @@ The hosted service should reject or throttle when:
 - `projectId` does not match the project mapped by the key
 - the request body exceeds the global or per-project size limit
 - the body is not valid JSON
-- the body does not match the crash envelope schema
+- the body does not match either the crash envelope schema or event envelope schema
+- the event type or event name is not allowed for the hosted project
 - the project exceeds its request-per-minute budget
 
 ## Response Codes
