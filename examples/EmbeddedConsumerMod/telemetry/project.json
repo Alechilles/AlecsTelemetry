@@ -1,5 +1,33 @@
 {
   "runtimeMode": "embedded",
+  "events": {
+    "errors": { "enabled": true },
+    "lifecycle": { "enabled": true },
+    "breadcrumbs": { "enabled": true, "automatic": true }
+  },
+  "performance": {
+    "enabled": true,
+    "sampleRate": 1.0,
+    "thresholdMs": 100,
+    "details": {
+      "plugin_start_duration": {
+        "allowedFields": {
+          "phase": { "type": "enum", "values": ["setup", "start"] }
+        }
+      }
+    }
+  },
+  "usage": {
+    "enabled": true,
+    "allowedEvents": ["settings_opened"],
+    "details": {
+      "settings_opened": {
+        "allowedFields": {
+          "source": { "type": "enum", "values": ["command", "settings_ui"] }
+        }
+      }
+    }
+  },
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }

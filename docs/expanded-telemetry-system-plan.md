@@ -5,7 +5,7 @@ broader event system covering six additional telemetry categories:
 
 - non-fatal error events
 - lifecycle timing events
-- config snapshot hashes
+- config snapshot hashes (deferred after the initial event/context pass)
 - environment snapshots with per-mod indexing support
 - performance sample events
 - feature usage events
@@ -106,6 +106,9 @@ Runtime behavior:
   event payload
 
 ### Config Projection
+
+Status: deferred. The first implementation pass intentionally leaves config
+snapshot paths, config hashes, and config schema versions for a later design pass.
 
 Do not upload full config files by default.
 

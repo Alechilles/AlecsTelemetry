@@ -111,6 +111,74 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
+    void parsesExplicitEventControlsAndDetailAllowlists() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "context-mod",
+                  "displayName": "Context Mod",
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true, "automatic": false }
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_opened"],
+                    "details": {
+                      "settings_opened": {
+                        "allowedFields": {
+                          "source": { "type": "enum", "values": ["command", "settings_ui"] },
+                          "changedSettingCount": { "type": "number" },
+                          "configArea": { "type": "string", "maxLength": 24 }
+                        }
+                      }
+                    }
+                  },
+                  "performance": {
+                    "enabled": true,
+                    "details": {
+                      "reload_config_duration": {
+                        "allowedFields": {
+                          "configFileCount": { "type": "number" }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.events().errors().enabled());
+        assertTrue(descriptor.events().lifecycle().enabled());
+        assertTrue(descriptor.events().breadcrumbs().enabled());
+        assertTrue(!descriptor.events().breadcrumbs().automatic());
+        assertEquals("settings_ui", descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of(
+                        "source", "settings_ui",
+                        "changedSettingCount", 3,
+                        "configArea", "companions-and-too-long-for-max",
+                        "ignored", "drop me"
+                )
+        ).get("source"));
+        assertEquals(3, descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of("changedSettingCount", 3)
+        ).get("changedSettingCount"));
+        assertEquals("companions-and-too-long-", descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of("configArea", "companions-and-too-long-for-max")
+        ).get("configArea"));
+        assertTrue(descriptor.usage().sanitizeDetails("settings_opened", java.util.Map.of("source", "unknown")).isEmpty());
+        assertEquals(7, descriptor.performance().sanitizeDetails(
+                "reload_config_duration",
+                java.util.Map.of("configFileCount", 7, "ignored", true)
+        ).get("configFileCount"));
+    }
+
+    @Test
     void parsesExplicitEmbeddedRuntimeMode() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
