@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.runtime;
 
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -167,12 +168,27 @@ public final class TelemetryRuntimeService {
         engine.recordError(projectId, eventName, throwable, detail);
     }
 
+    public void recordErrorWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable Throwable throwable,
+                                       @Nullable TelemetryEventContext context) {
+        engine.recordErrorWithContext(projectId, eventName, throwable, context);
+    }
+
     public void recordLifecycle(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 int durationMs,
                                 boolean success,
                                 @Nullable String detail) {
         engine.recordLifecycle(projectId, eventName, durationMs, success, detail);
+    }
+
+    public void recordLifecycleWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           int durationMs,
+                                           boolean success,
+                                           @Nullable TelemetryEventContext context) {
+        engine.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
     public void recordPerformance(@Nonnull String projectId,
@@ -183,10 +199,24 @@ public final class TelemetryRuntimeService {
         engine.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
     }
 
+    public void recordPerformanceWithContext(@Nonnull String projectId,
+                                             @Nonnull String eventName,
+                                             int durationMs,
+                                             @Nullable Double metricValue,
+                                             @Nullable TelemetryEventContext context) {
+        engine.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
+    }
+
     public void recordUsage(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
         engine.recordUsage(projectId, eventName, detail);
+    }
+
+    public void recordUsageWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable TelemetryEventContext context) {
+        engine.recordUsageWithContext(projectId, eventName, context);
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
