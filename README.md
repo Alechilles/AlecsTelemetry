@@ -106,7 +106,7 @@ if (api != null) {
     TelemetryProjectHandle project = api.findProject("my-mod-id");
     if (project != null) {
         project.recordBreadcrumb("bootstrap", "Finished loading config.");
-        project.recordUsage(
+        project.recordUsageWithContext(
             "settings_opened",
             TelemetryEventContext.usage()
                 .subsystem("settings")

@@ -20,7 +20,7 @@ public final class EmbeddedConsumerMod extends JavaPlugin {
         try {
             setupInternal();
             telemetry.recordBreadcrumb("lifecycle", "Setup completed.");
-            telemetry.recordLifecycle(
+            telemetry.recordLifecycleWithContext(
                     "plugin_setup",
                     0,
                     true,
@@ -42,7 +42,7 @@ public final class EmbeddedConsumerMod extends JavaPlugin {
             startInternal();
             telemetry.start();
             telemetry.recordBreadcrumb("lifecycle", "Start completed.");
-            telemetry.recordUsage(
+            telemetry.recordUsageWithContext(
                     "settings_opened",
                     TelemetryEventContext.usage()
                             .subsystem("settings")

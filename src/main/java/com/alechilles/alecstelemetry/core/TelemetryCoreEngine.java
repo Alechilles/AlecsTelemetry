@@ -180,13 +180,13 @@ public final class TelemetryCoreEngine {
                             @Nonnull String eventName,
                             @Nullable Throwable throwable,
                             @Nullable String detail) {
-        recordError(projectId, eventName, throwable, TelemetryEventContext.builder().detail(detail).build());
+        recordErrorWithContext(projectId, eventName, throwable, TelemetryEventContext.builder().detail(detail).build());
     }
 
-    public void recordError(@Nonnull String projectId,
-                            @Nonnull String eventName,
-                            @Nullable Throwable throwable,
-                            @Nullable TelemetryEventContext context) {
+    public void recordErrorWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable Throwable throwable,
+                                       @Nullable TelemetryEventContext context) {
         if (!enabled.get()) {
             return;
         }
@@ -235,14 +235,14 @@ public final class TelemetryCoreEngine {
                                 int durationMs,
                                 boolean success,
                                 @Nullable String detail) {
-        recordLifecycle(projectId, eventName, durationMs, success, TelemetryEventContext.builder().detail(detail).build());
+        recordLifecycleWithContext(projectId, eventName, durationMs, success, TelemetryEventContext.builder().detail(detail).build());
     }
 
-    public void recordLifecycle(@Nonnull String projectId,
-                                @Nonnull String eventName,
-                                int durationMs,
-                                boolean success,
-                                @Nullable TelemetryEventContext context) {
+    public void recordLifecycleWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           int durationMs,
+                                           boolean success,
+                                           @Nullable TelemetryEventContext context) {
         if (!enabled.get()) {
             return;
         }
@@ -290,14 +290,14 @@ public final class TelemetryCoreEngine {
                                   int durationMs,
                                   @Nullable Double metricValue,
                                   @Nullable String detail) {
-        recordPerformance(projectId, eventName, durationMs, metricValue, TelemetryEventContext.builder().detail(detail).build());
+        recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, TelemetryEventContext.builder().detail(detail).build());
     }
 
-    public void recordPerformance(@Nonnull String projectId,
-                                  @Nonnull String eventName,
-                                  int durationMs,
-                                  @Nullable Double metricValue,
-                                  @Nullable TelemetryEventContext context) {
+    public void recordPerformanceWithContext(@Nonnull String projectId,
+                                             @Nonnull String eventName,
+                                             int durationMs,
+                                             @Nullable Double metricValue,
+                                             @Nullable TelemetryEventContext context) {
         if (!enabled.get()) {
             return;
         }
@@ -344,12 +344,12 @@ public final class TelemetryCoreEngine {
     public void recordUsage(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
-        recordUsage(projectId, eventName, TelemetryEventContext.builder().detail(detail).build());
+        recordUsageWithContext(projectId, eventName, TelemetryEventContext.builder().detail(detail).build());
     }
 
-    public void recordUsage(@Nonnull String projectId,
-                            @Nonnull String eventName,
-                            @Nullable TelemetryEventContext context) {
+    public void recordUsageWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable TelemetryEventContext context) {
         if (!enabled.get()) {
             return;
         }

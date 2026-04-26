@@ -127,9 +127,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
-    public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
+    public void recordErrorWithContext(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
         if (engine != null) {
-            engine.recordError(project.projectId(), eventName, throwable, context);
+            engine.recordErrorWithContext(project.projectId(), eventName, throwable, context);
         }
     }
 
@@ -141,9 +141,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
-    public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
+    public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
         if (engine != null) {
-            engine.recordLifecycle(project.projectId(), eventName, durationMs, success, context);
+            engine.recordLifecycleWithContext(project.projectId(), eventName, durationMs, success, context);
         }
     }
 
@@ -155,9 +155,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
-    public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
+    public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
         if (engine != null) {
-            engine.recordPerformance(project.projectId(), eventName, durationMs, metricValue, context);
+            engine.recordPerformanceWithContext(project.projectId(), eventName, durationMs, metricValue, context);
         }
     }
 
@@ -169,9 +169,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
-    public void recordUsage(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+    public void recordUsageWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
         if (engine != null) {
-            engine.recordUsage(project.projectId(), eventName, context);
+            engine.recordUsageWithContext(project.projectId(), eventName, context);
         }
     }
 
