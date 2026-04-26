@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,6 +91,65 @@ class EmbeddedTelemetryServiceTest {
         JsonObject firstPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("embedded-mod", firstPayload.get("projectId").getAsString());
         assertTrue(firstPayload.getAsJsonArray("breadcrumbs").size() > 0);
+    }
+
+    @Test
+    void embeddedGenericEventsIncludeStableServerId() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Example:Embedded Mod"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+
+        service.recordError("embedded_event", null, "Embedded runtime event");
+
+        assertEquals(1, service.flushPendingReportsNow("embedded-event").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("embedded-mod", payload.get("projectId").getAsString());
+        assertEquals(2, payload.get("schemaVersion").getAsInt());
+        UUID.fromString(payload.get("serverId").getAsString());
+        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-id.txt")));
     }
 
     private static final class SequencedClient implements CrashReportClient {
