@@ -1,53 +1,68 @@
-# Commercial Licensing
+# Separate Licensing
 
-This repository is published under the Business Source License 1.1 in the root
+Alec's Telemetry is published under the custom runtime license in the root
 `LICENSE` file.
 
-That means the source is visible and usable for non-commercial Hytale modding use
-cases described in that file, but commercial use requires a separate license from
-the Licensor.
+That public license already allows free, paid, commercial, and non-commercial
+Hytale projects to use and ship unmodified copies of Alec's Telemetry as a
+runtime dependency or embedded runtime component.
 
-This document is a plain-English commercial licensing guide. It is not itself a
-commercial license grant. Commercial rights are granted only by a separate written
-agreement with the Licensor.
+This document is a plain-English guide for use cases that need separate written
+permission. It is not itself a license grant. Additional rights are granted only
+by a separate written agreement with the Licensor.
 
-## When You Need A Commercial License
+## You Usually Do Not Need Separate Permission For
 
-You should contact the Licensor for a commercial license if you want to do any of
-the following with Alec's Telemetry or a derivative work of it:
+- using Alec's Telemetry in your own Hytale mod
+- using Alec's Telemetry in a paid or free Hytale mod
+- using Alec's Telemetry in a modpack or server project
+- requiring Alec's Telemetry as an unmodified dependency
+- bundling an unmodified copy through documented embedded-mode packaging
+- sending telemetry from your own Hytale project to Alec's hosted service
+- sending telemetry from your own Hytale project to your own custom endpoint
 
-- sell, license, or otherwise monetize a mod that includes it
-- bundle it into a paid modpack, paid server offering, or paid toolkit
-- use it in a subscription-backed, paywalled, ad-monetized, or sponsored product
-- run a hosted or managed telemetry service based on it
-- offer a competing crash telemetry SaaS, dashboard, Discord alerting service, or
-  white-label fork based on it
-- sublicense or resell it to third parties
-- deploy it internally as part of a commercial tool, consulting package, or hosted
-  service offering
+## You Need Separate Written Permission For
 
-## What A Commercial License May Cover
+Contact the Licensor before doing any of the following:
 
-A commercial license may, depending on the agreement, grant some combination of
-the following:
+- modifying Alec's Telemetry and distributing the modified version
+- publishing a fork, port, rebrand, translation, patch set, or derivative work
+- redistributing Alec's Telemetry as a standalone package, SDK, toolkit, mirror,
+  or alternate download
+- selling, sublicensing, renting, leasing, reselling, or white-labeling Alec's
+  Telemetry
+- running a hosted or managed telemetry service for third-party projects
+- building a competing crash telemetry SaaS, dashboard, Discord alerting service,
+  analytics product, or white-label telemetry platform
+- integrating Alec's Telemetry into a commercial service offering where telemetry
+  is provided to third parties
+- using Alec's branding, names, or logos in a way that suggests official status,
+  endorsement, or sponsorship
 
-- commercial production use rights
-- rights to distribute the software in commercial mods, bundles, or services
-- rights to modify and maintain a private commercial fork
-- rights to offer hosted telemetry or related services built on the software
-- agreed support, update, and attribution terms
+## What Separate Permission May Cover
+
+A separate agreement may, depending on the use case, grant some combination of:
+
+- modified redistribution rights
+- private fork rights
+- standalone package redistribution rights
+- hosted service rights
+- white-label or managed-service rights
+- support, update, or maintenance terms
+- custom development terms
+- attribution or branding terms
 
 ## What Is Not Automatically Included
 
-Unless separately agreed in writing, a commercial license does not automatically
-include:
+Unless separately agreed in writing, separate permission does not include:
 
-- any right to use Alec's branding, project names, logos, or trademarks in a way
-  that suggests endorsement
 - exclusivity
-- transferability or sublicensing rights
+- transferability
+- sublicensing rights
+- rights to Alec's branding, names, logos, or trademarks
 - support SLAs
 - custom development work
+- rights to AlecsTelemetryPlatform or other separate repositories
 
 ## Information To Include When Reaching Out
 
@@ -56,10 +71,11 @@ To speed things up, include:
 - your name or company name
 - the project or product name
 - whether the use is a mod, modpack, server product, tool, or hosted service
-- whether the software will be modified
+- whether Alec's Telemetry will be modified
 - how it will be distributed
 - how it will be monetized
-- expected audience size or server count
+- whether telemetry is for your own project or for third parties
+- expected audience size, server count, or customer count
 - whether you need support or a private fork arrangement
 
 ## Contact
@@ -70,11 +86,11 @@ Initial contact path:
 
 - Discord: `alechilles`
 
-If a business email or dedicated licensing page is added later, update this file to
-point to the formal intake path.
+If a business email or dedicated licensing page is added later, update this file
+to point to the formal intake path.
 
-## No Commercial Rights Without Agreement
+## No Additional Rights Without Agreement
 
-If your use case is commercial and you do not yet have a signed agreement from the
-Licensor, you do not have commercial rights to use this project beyond what is
-already granted in the root `LICENSE`.
+If your use case is outside the public runtime license and you do not yet have a
+separate written agreement from the Licensor, you do not have rights to use the
+project for that use case.

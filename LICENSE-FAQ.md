@@ -8,108 +8,104 @@ This FAQ is not legal advice.
 
 ## Is This Project Open Source?
 
-Not today in the OSI sense.
+No.
 
-It is source-available under the Business Source License 1.1, and it converts to
-the Apache License 2.0 on the Change Date listed in `LICENSE`.
+Alec's Telemetry is source-available under the Alec's Telemetry Runtime License.
+You can read the source, use the runtime in Hytale projects, and ship unmodified
+copies with your mod or modpack, but the license does not allow modified
+redistribution or general-purpose reuse.
 
-## Can I Read The Source And Learn From It?
-
-Yes.
-
-That is one of the main goals of publishing the source.
-
-## Can I Use It In My Free Hobby Mod?
-
-Yes, if your use is non-commercial and otherwise follows the terms in `LICENSE`.
-
-## Can I Modify It For My Own Non-Commercial Mod Or Server?
+## Can I Use It In My Mod?
 
 Yes.
 
-You can study it, modify it, and use those modifications for non-commercial Hytale
-modding purposes under the terms in `LICENSE`.
+You may use Alec's Telemetry in a Hytale mod, modpack, server, development tool,
+or similar Hytale project.
 
-## Can I Redistribute It As A Dependency Of My Mod?
+## Can I Use It In A Paid Mod, Paid Modpack, Or Monetized Server?
 
-Yes, if all of the following are true:
+Yes, as long as you are using Alec's Telemetry only as telemetry runtime for your
+own Hytale project and you follow the license.
 
-- your use is non-commercial
-- you redistribute an unmodified copy of Alec's Telemetry
-- you keep this license and copyright notices with it
+Paid or commercial Hytale projects are allowed. Hosted telemetry services,
+white-label telemetry services, competing dashboards, and resale of Alec's
+Telemetry are not allowed without separate written permission.
 
-If you want to redistribute a modified version, read the root `LICENSE` carefully
-and contact the Licensor if your use is commercial or unclear.
+## Can I Add Alec's Telemetry As A Dependency?
 
-## Can I Fork It And Build My Own Competing Paid Telemetry Product?
+Yes.
+
+Dependency mode is the recommended default. You may require users to install an
+unmodified copy of Alec's Telemetry alongside your mod.
+
+## Can I Bundle Alec's Telemetry Inside My Mod?
+
+Yes, if you bundle an unmodified copy and use the documented embedded-mode
+integration points.
+
+You may configure and call Alec's Telemetry through its documented descriptors,
+settings, and public APIs. You may not edit its source, rebrand it, or publish a
+modified embedded copy.
+
+## Can I Modify It For My Own Mod?
+
+Not under the public license.
+
+The intent is to let modders integrate Alec's Telemetry freely, not to create a
+network of modified runtime forks. If you need changes, open an issue, submit a
+pull request for upstream inclusion, or ask for separate permission.
+
+## Can I Fork The Repo?
+
+The code host may technically let you fork the repo, but the license does not
+give you permission to use, modify, or distribute a fork except where the root
+`LICENSE` explicitly allows it.
+
+## Can I Redistribute It?
+
+You may redistribute unmodified copies only when they are bundled with or
+required by your Hytale project.
+
+You may not publish Alec's Telemetry as a standalone mirror, alternate download,
+renamed package, modified package, SDK, toolkit, or fork.
+
+## Can I Use A Custom Endpoint?
+
+Yes, for your own Hytale project.
+
+The runtime supports custom endpoints so modders and server operators can send
+their own telemetry somewhere other than Alec's hosted service. That does not
+grant permission to run a hosted or managed telemetry service for third parties.
+
+## Can I Run My Own Public Telemetry Platform With This?
 
 No.
 
-That requires a separate commercial license.
+Operating a hosted telemetry service, managed crash-reporting service, dashboard,
+alerting product, white-label platform, or competing telemetry SaaS requires
+separate written permission.
 
-## Can I Run A Paid Hosted Crash Telemetry Or Dashboard Service Based On This Code?
+## Can I Use The Code As Inspiration?
 
-No.
+You can read the source and learn from it. Do not copy protected code into a
+different project unless the license allows that use or you have separate
+permission.
 
-That is commercial use and requires a separate written license from the Licensor.
+## Can I Use Alec's Branding, Name, Or Logo?
 
-## Can I Use It In A Paid Mod, Paid Modpack, Or Paid Server Product?
+Only for accurate attribution, such as saying your mod uses Alec's Telemetry.
 
-Not under the default public license.
+Do not imply that your project is official, endorsed, sponsored, or maintained by
+Alec unless you have separate written permission.
 
-That requires a separate commercial license.
-
-## What Counts As Non-Commercial?
-
-The intent is to allow personal, educational, hobbyist, and other genuinely
-non-commercial Hytale modding use.
-
-As a practical rule of thumb, your use is more likely to be commercial if you are:
-
-- charging for access
-- selling licenses
-- bundling it into a paid offering
-- operating a paid hosted service
-- using it as part of a commercial consulting or managed service package
-- creating a product whose business value materially depends on this software
-
-## Are Donations Allowed?
-
-The license text does not try to spell out every donation scenario.
-
-As a practical interpretation, purely voluntary donations that are not required for
-access and do not unlock this software, premium features, or hosted functionality
-are generally intended to remain on the non-commercial side.
-
-If your donation, Patreon, sponsorship, or supporter flow is effectively paying for
-access, support, premium features, or a service built from this software, treat it
-as commercial and ask for a commercial license.
-
-## Can I Use The Code As Inspiration For My Own Original Non-Commercial Mod?
-
-Yes.
-
-That is part of the reason the source is public.
-
-## Can I Use Alec's Branding, Name, Or Logo In My Fork?
-
-No, not unless you have separate permission.
-
-The license does not give trademark rights.
-
-## When Does This Become Apache 2.0?
-
-On the Change Date listed in the root `LICENSE`, or the fourth anniversary of the
-first publicly available distribution of a specific version of the Licensed Work,
-whichever comes first.
-
-## I Am Not Sure Whether My Use Is Commercial. What Should I Do?
+## What If I Need Permission Outside The Public License?
 
 Ask first.
 
 Use the contact details in `COMMERCIAL-LICENSE.md` and describe:
 
 - what you are building
-- how you plan to distribute it
-- how money is involved, if at all
-- whether you plan to modify or host the software
+- whether the runtime will be modified
+- how it will be distributed
+- whether money is involved
+- whether telemetry is only for your own Hytale project or for third parties
