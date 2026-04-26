@@ -214,7 +214,7 @@ class TelemetryRuntimeServiceTest {
 
         TelemetryProjectHandle handle = service.api().findProject("example-mod");
         if (handle != null) {
-            handle.recordUsage(
+            handle.recordUsageWithContext(
                     "settings_opened",
                     TelemetryEventContext.usage()
                             .subsystem("settings")
@@ -295,8 +295,8 @@ class TelemetryRuntimeServiceTest {
         TelemetryProjectHandle handle = service.api().findProject("example-mod");
         if (handle != null) {
             handle.recordBreadcrumb("ui", "Opened settings.");
-            handle.recordLifecycle("suppressed_lifecycle", 10, true, TelemetryEventContext.lifecycle().phase("start").build());
-            handle.recordError(
+            handle.recordLifecycleWithContext("suppressed_lifecycle", 10, true, TelemetryEventContext.lifecycle().phase("start").build());
+            handle.recordErrorWithContext(
                     "handled_exception",
                     new IllegalStateException("bad state"),
                     TelemetryEventContext.error()

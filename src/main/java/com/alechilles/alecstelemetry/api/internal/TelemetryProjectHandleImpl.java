@@ -62,8 +62,8 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
-    public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
-        runtimeService.recordError(projectId, eventName, throwable, context);
+    public void recordErrorWithContext(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
+        runtimeService.recordErrorWithContext(projectId, eventName, throwable, context);
     }
 
     @Override
@@ -72,8 +72,8 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
-    public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
-        runtimeService.recordLifecycle(projectId, eventName, durationMs, success, context);
+    public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
+        runtimeService.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
     @Override
@@ -82,8 +82,8 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
-    public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
-        runtimeService.recordPerformance(projectId, eventName, durationMs, metricValue, context);
+    public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
+        runtimeService.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
     }
 
     @Override
@@ -92,8 +92,8 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
-    public void recordUsage(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
-        runtimeService.recordUsage(projectId, eventName, context);
+    public void recordUsageWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        runtimeService.recordUsageWithContext(projectId, eventName, context);
     }
 
     @Override
