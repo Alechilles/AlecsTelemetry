@@ -185,7 +185,7 @@ See:
 
 ## License
 
-This project is source-available under the Business Source License 1.1.
+This project is source-available under the Alec's Telemetry Runtime License.
 
 See:
 
