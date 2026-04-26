@@ -38,6 +38,7 @@ Suggested common fields:
 - `pluginVersion`
 - `capturedAtUtc`
 - `source`
+- `serverId`
 - `sessionId`
 - `environmentSnapshotKey`
 - `worldName`
@@ -64,11 +65,19 @@ Recommendation:
 
 ## Shared Runtime Foundations
 
-### Session Identity
+### Server And Session Identity
 
-Generate a `sessionId` once per runtime start.
+Generate a stable `serverId` once per server install and persist it under the
+runtime settings directory. Generate a separate `sessionId` once per runtime
+start.
 
-Use it to:
+Use `serverId` to:
+
+- link lifecycle, usage, performance, and error events from the same server
+  across restarts
+- distinguish different server installs that report for the same project
+
+Use `sessionId` to:
 
 - correlate lifecycle, usage, performance, error, and crash events
 - associate events with one environment snapshot
@@ -321,6 +330,7 @@ Implementation notes:
 
 ### Phase 1
 
+- generate stable `serverId`
 - generate `sessionId`
 - capture normalized environment snapshots
 - add config projection and `configProfileHash`

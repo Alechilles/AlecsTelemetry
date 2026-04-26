@@ -11,6 +11,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBuffer;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.TelemetryServerIdentity;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -57,6 +58,7 @@ public final class TelemetryCoreEngine {
     private final LinkedHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new LinkedHashMap<>();
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
+    private final String serverId;
 
     private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
     private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
@@ -79,6 +81,7 @@ public final class TelemetryCoreEngine {
         this.executor = executor;
         this.enabled = new AtomicBoolean(settings.enabled());
         this.breadcrumbs = new TelemetryBreadcrumbBuffer(settings.maxBreadcrumbsPerProject());
+        this.serverId = TelemetryServerIdentity.loadOrCreate(dataPaths.serverIdFile(), logger);
     }
 
     public void start() {
@@ -212,6 +215,7 @@ public final class TelemetryCoreEngine {
                 project.displayName(),
                 "runtime_api",
                 sessionId,
+                serverId,
                 eventName,
                 project.pluginIdentifier(),
                 project.pluginVersion(),
@@ -266,6 +270,7 @@ public final class TelemetryCoreEngine {
                 project.displayName(),
                 "runtime_api",
                 sessionId,
+                serverId,
                 eventName,
                 project.pluginIdentifier(),
                 project.pluginVersion(),
@@ -322,6 +327,7 @@ public final class TelemetryCoreEngine {
                 project.displayName(),
                 "runtime_api",
                 sessionId,
+                serverId,
                 eventName,
                 project.pluginIdentifier(),
                 project.pluginVersion(),
@@ -370,6 +376,7 @@ public final class TelemetryCoreEngine {
                 project.displayName(),
                 "runtime_api",
                 sessionId,
+                serverId,
                 eventName,
                 project.pluginIdentifier(),
                 project.pluginVersion(),
