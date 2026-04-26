@@ -15,8 +15,10 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryRuntimeServiceTest {
@@ -96,7 +98,7 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
-    void runtimeApiCanQueueAndFlushGenericEvents() {
+    void runtimeApiCanQueueAndFlushGenericEventsWithStableServerId() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
                 tempDir,
@@ -145,12 +147,38 @@ class TelemetryRuntimeServiceTest {
         TelemetryProjectHandle handle = service.api().findProject("example-mod");
         if (handle != null) {
             handle.recordError("handled_exception", new IllegalStateException("bad state"), "Recovered after retry");
+            handle.recordLifecycle("startup", 42, true, "Loaded telemetry bridge");
         }
 
-        assertEquals(1, service.flushPendingReportsNow("test-events").attempted());
-        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
-        assertEquals("error", payload.get("eventType").getAsString());
-        assertEquals("handled_exception", payload.get("eventName").getAsString());
+        assertEquals(2, service.flushPendingReportsNow("test-events").attempted());
+        JsonObject firstPayload = JsonParser.parseString(client.payloads.get(0)).getAsJsonObject();
+        JsonObject secondPayload = JsonParser.parseString(client.payloads.get(1)).getAsJsonObject();
+        assertEquals(2, firstPayload.get("schemaVersion").getAsInt());
+        assertEquals("error", firstPayload.get("eventType").getAsString());
+        assertEquals("handled_exception", firstPayload.get("eventName").getAsString());
+        String serverId = firstPayload.get("serverId").getAsString();
+        UUID.fromString(serverId);
+        assertEquals(serverId, secondPayload.get("serverId").getAsString());
+
+        SequencedClient secondClient = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService secondService = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")),
+                secondClient,
+                null,
+                null
+        );
+        TelemetryProjectHandle secondHandle = secondService.api().findProject("example-mod");
+        if (secondHandle != null) {
+            secondHandle.recordError("second_session_event", null, "Recorded after restart");
+        }
+
+        assertEquals(1, secondService.flushPendingReportsNow("test-events-second-session").attempted());
+        JsonObject secondSessionPayload = JsonParser.parseString(secondClient.payloads.getFirst()).getAsJsonObject();
+        assertEquals(serverId, secondSessionPayload.get("serverId").getAsString());
+        assertNotEquals(firstPayload.get("sessionId").getAsString(), secondSessionPayload.get("sessionId").getAsString());
     }
 
     @Test

@@ -61,6 +61,11 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public Path serverIdFile() {
+        return settingsFile.getParent().resolve("server-id.txt");
+    }
+
+    @Nonnull
     public Path projectOverrideFile(@Nonnull String projectId) {
         return projectSettingsDirectory.resolve(projectId + ".json");
     }
