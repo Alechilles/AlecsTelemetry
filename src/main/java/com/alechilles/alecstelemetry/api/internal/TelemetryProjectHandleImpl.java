@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 
 import javax.annotation.Nonnull;
@@ -61,8 +62,18 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
+    public void recordErrorWithContext(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
+        runtimeService.recordErrorWithContext(projectId, eventName, throwable, context);
+    }
+
+    @Override
     public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail) {
         runtimeService.recordLifecycle(projectId, eventName, durationMs, success, detail);
+    }
+
+    @Override
+    public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
+        runtimeService.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
     @Override
@@ -71,8 +82,18 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
+    public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
+        runtimeService.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
+    }
+
+    @Override
     public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
         runtimeService.recordUsage(projectId, eventName, detail);
+    }
+
+    @Override
+    public void recordUsageWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        runtimeService.recordUsageWithContext(projectId, eventName, context);
     }
 
     @Override

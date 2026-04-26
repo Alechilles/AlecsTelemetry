@@ -62,6 +62,10 @@ Settings/projects/<project-id>.json
 - `customEndpoint.eventUrl`
 - `customEndpoint.headers`
 
+Descriptor-declared `usage.details` and `performance.details` allowlists are not
+runtime override fields. They are part of the mod author's packaged telemetry
+contract so uploaded custom details stay predictable for the hosted portal.
+
 ## Merge Rules
 
 - packaged descriptor stays the source of truth for project identity and attribution

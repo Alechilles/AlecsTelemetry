@@ -50,6 +50,10 @@ public final class TelemetryBreadcrumbBuffer {
         return List.copyOf(new ArrayList<>(deque));
     }
 
+    public synchronized void clear(@Nonnull String projectId) {
+        byProjectId.remove(projectId.toLowerCase(Locale.ROOT));
+    }
+
     @Nonnull
     private static String normalize(@Nonnull String value, int maxLength) {
         String trimmed = value.trim();
