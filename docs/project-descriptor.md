@@ -83,6 +83,37 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
     "startFailures": true,
     "exceptionalWorldRemovals": true
   },
+  "events": {
+    "errors": { "enabled": true },
+    "lifecycle": { "enabled": true },
+    "breadcrumbs": { "enabled": true, "automatic": true }
+  },
+  "performance": {
+    "enabled": true,
+    "sampleRate": 1.0,
+    "thresholdMs": 100,
+    "details": {
+      "reload_config_duration": {
+        "allowedFields": {
+          "configFileCount": { "type": "number" },
+          "phase": { "type": "enum", "values": ["read", "parse", "apply"] }
+        }
+      }
+    }
+  },
+  "usage": {
+    "enabled": true,
+    "allowedEvents": ["settings_opened"],
+    "details": {
+      "settings_opened": {
+        "allowedFields": {
+          "source": { "type": "enum", "values": ["command", "settings_ui"] },
+          "changedSettingCount": { "type": "number" },
+          "configArea": { "type": "string", "maxLength": 60 }
+        }
+      }
+    }
+  },
   "defaults": {
     "enabled": true,
     "destinationMode": "hosted"
@@ -110,6 +141,9 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `ownerPluginIdentifiers`
 - `packagePrefixes`
 - `capture`
+- `events`
+- `performance`
+- `usage`
 - `defaults`
 - `hosted`
 - `customEndpoint`
@@ -120,6 +154,52 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `setupFailures`
 - `startFailures`
 - `exceptionalWorldRemovals`
+
+### `events`
+
+- `errors.enabled`
+  - controls explicit non-fatal error events recorded through the runtime API
+- `lifecycle.enabled`
+  - controls explicit lifecycle timing events recorded through the runtime API
+- `breadcrumbs.enabled`
+  - controls breadcrumb storage and breadcrumb attachment to crashes/debug events
+- `breadcrumbs.automatic`
+  - reserved for low-noise automatic breadcrumbs; leave enabled unless the project wants manual breadcrumbs only
+
+### `performance`
+
+- `enabled`
+- `sampleRate`
+  - `0.0` to `1.0`
+- `thresholdMs`
+  - events below this duration are skipped
+- `details`
+  - optional per-event allowlist for custom mod-specific detail fields
+
+### `usage`
+
+- `enabled`
+- `allowedEvents`
+  - usage event names that this descriptor permits
+- `details`
+  - optional per-event allowlist for custom mod-specific detail fields
+
+### Detail allowlists
+
+Custom `usage.details` and `performance.details` are intentionally descriptor-declared.
+Runtime code can send only fields that are listed for that event name.
+
+Supported field types:
+
+- `string`
+  - optional `maxLength`
+- `number`
+- `boolean`
+- `enum`
+  - requires `values`
+
+Unknown fields, wrong types, blank strings, and enum values outside the declared set
+are dropped before upload.
 
 ### `runtimeMode`
 

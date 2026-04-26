@@ -1,11 +1,11 @@
 # Alec's Telemetry
 
-Crash telemetry platform for Hytale mods with both standalone dependency mode and
-embedded library mode.
+Crash and event telemetry platform for Hytale mods with both standalone
+dependency mode and embedded library mode.
 
 ## Goal
 
-Make crash telemetry as plug-and-play as possible for mod authors.
+Make useful telemetry as plug-and-play as possible for mod authors.
 
 Two integration modes are supported:
 
@@ -27,6 +27,8 @@ The runtime will then:
 - discover the mod automatically
 - infer fallback values from the mod manifest when possible
 - capture attributed crashes
+- record opt-in error, lifecycle, performance, and usage events
+- attach session, environment, breadcrumb, and typed event context
 - queue reports locally
 - flush them to the configured destination
 
@@ -95,8 +97,8 @@ That means many mods only need to specify destination settings.
 
 Most mods do not need Java integration.
 
-If you want richer breadcrumbs or explicit lifecycle forwarding, use the optional
-runtime API:
+If you want richer breadcrumbs, lifecycle timings, usage events, or performance
+samples, use the optional runtime API:
 
 ```java
 TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
@@ -104,6 +106,16 @@ if (api != null) {
     TelemetryProjectHandle project = api.findProject("my-mod-id");
     if (project != null) {
         project.recordBreadcrumb("bootstrap", "Finished loading config.");
+        project.recordUsage(
+            "settings_opened",
+            TelemetryEventContext.usage()
+                .subsystem("settings")
+                .featureKey("settings_page")
+                .entryPoint("/my settings")
+                .runtimeSide("server")
+                .detail("source", "command")
+                .build()
+        );
     }
 }
 ```
