@@ -138,19 +138,6 @@
 
     <profiles>
         <profile>
-            <id>prerelease</id>
-            <activation>
-                <property>
-                    <name>prerelease</name>
-                    <value>true</value>
-                </property>
-            </activation>
-            <properties>
-                <hytale.install.path>${hytale.install.path.prerelease}</hytale.install.path>
-            </properties>
-        </profile>
-
-        <profile>
             <id>run-server</id>
             <build>
                 <plugins>
