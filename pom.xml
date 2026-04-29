@@ -30,4 +30,19 @@
         <hytale.server.extra.args />
         <junit.jupiter.version>5.10.2</junit.jupiter.version>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>prerelease</id>
+            <activation>
+                <property>
+                    <name>prerelease</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <properties>
+                <hytale.install.path>${hytale.install.path.prerelease}</hytale.install.path>
+            </properties>
+        </profile>
+    </profiles>
 </project>
