@@ -23,6 +23,7 @@ import java.util.logging.Level;
 public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
 
     private final TelemetryProjectRegistration project;
+    private final TelemetryRuntimeSettings settings;
     private final TelemetryCoreEngine engine;
     private final HytaleLogger logger;
     private final String disabledReason;
@@ -35,6 +36,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                              @Nullable HytaleLogger logger,
                              @Nullable ScheduledExecutorService executor) {
         this.project = project;
+        this.settings = settings;
         this.engine = new TelemetryCoreEngine(settings, dataPaths, List.of(project), loadedMods, client, logger, executor);
         this.logger = logger;
         this.disabledReason = null;
@@ -45,6 +47,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                                      @Nullable HytaleLogger logger,
                                      @Nonnull String disabledReason) {
         this.project = nullRegistration(projectId, displayName);
+        this.settings = null;
         this.engine = null;
         this.logger = logger;
         this.disabledReason = disabledReason;
@@ -102,6 +105,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
         if (engine != null) {
             engine.recordBreadcrumb(project.projectId(), category, detail);
+        }
+    }
+
+    public void clearBreadcrumbs() {
+        if (engine != null) {
+            engine.clearBreadcrumbs(project.projectId());
         }
     }
 
@@ -193,6 +202,17 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         return engine != null && engine.captureTestReport(project.projectId(), detail);
     }
 
+    @Nonnull
+    public EmbeddedTelemetryDiagnostics diagnostics() {
+        return new EmbeddedTelemetryDiagnostics(
+                isEnabled(),
+                resolveEndpoint(),
+                pendingReports(),
+                engine != null && engine.flushInProgress(),
+                engine == null ? disabledReason : engine.lastFlushResult()
+        );
+    }
+
     int pendingReports() {
         return engine == null ? 0 : engine.pendingReports(project.projectId());
     }
@@ -202,6 +222,20 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         return engine == null
                 ? new TelemetryCoreEngine.FlushSummary(0, 0, 0, disabledReason)
                 : engine.flushPendingReportsNow(reason, project.projectId());
+    }
+
+    @Nonnull
+    private String resolveEndpoint() {
+        if (settings == null) {
+            return "<disabled>";
+        }
+        CrashReportClient.DeliveryTarget target = project.resolveEventDeliveryTarget(settings);
+        if (target == null || target.endpoint() == null || target.endpoint().isBlank()) {
+            target = project.resolveDeliveryTarget(settings);
+        }
+        return target == null || target.endpoint() == null || target.endpoint().isBlank()
+                ? "<disabled>"
+                : target.endpoint();
     }
 
     @Nonnull
