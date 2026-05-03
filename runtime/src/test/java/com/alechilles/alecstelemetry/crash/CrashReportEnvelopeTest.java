@@ -30,6 +30,7 @@ class CrashReportEnvelopeTest {
                 "Example Mod",
                 "unit_test",
                 "session-123",
+                "server-123",
                 attribution.fingerprint(),
                 "Example:Example Mod",
                 "1.2.3",
@@ -59,6 +60,7 @@ class CrashReportEnvelopeTest {
         assertEquals("crash", json.get("eventType").getAsString());
         assertEquals("example-mod", json.get("projectId").getAsString());
         assertEquals("session-123", json.get("sessionId").getAsString());
+        assertEquals("server-123", json.get("serverId").getAsString());
         assertEquals("Example:Example Mod", json.get("pluginIdentifier").getAsString());
         assertTrue(json.has("breadcrumbs"));
         assertTrue(json.getAsJsonObject("environment").has("snapshotKey"));

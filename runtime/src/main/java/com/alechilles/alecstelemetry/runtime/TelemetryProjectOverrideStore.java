@@ -1,6 +1,11 @@
 package com.alechilles.alecstelemetry.runtime;
 
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -9,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +24,8 @@ import java.util.logging.Level;
  * Loads optional project override files stored by the telemetry runtime.
  */
 public final class TelemetryProjectOverrideStore {
+
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
     private final HytaleLogger logger;
 
@@ -50,6 +58,33 @@ public final class TelemetryProjectOverrideStore {
         return Map.copyOf(overrides);
     }
 
+    @Nullable
+    public TelemetryProjectOverride load(@Nonnull Path file) {
+        try {
+            if (!Files.isRegularFile(file)) {
+                return null;
+            }
+            String rawJson = Files.readString(file, StandardCharsets.UTF_8);
+            TelemetryProjectOverride override = TelemetryProjectOverride.fromJson(rawJson);
+            return override.hasAnyValue() ? override : null;
+        } catch (Exception ex) {
+            warn("Failed to load telemetry project override from " + file, ex);
+            return null;
+        }
+    }
+
+    public boolean saveProjectEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> root.addProperty("enabled", enabled));
+    }
+
+    public boolean saveBreadcrumbsEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> {
+            JsonObject events = object(root, "events");
+            JsonObject breadcrumbs = object(events, "breadcrumbs");
+            breadcrumbs.addProperty("enabled", enabled);
+        });
+    }
+
     @Nonnull
     private static String projectIdFromFileName(@Nonnull String fileName) {
         String trimmed = fileName.trim();
@@ -57,6 +92,54 @@ public final class TelemetryProjectOverrideStore {
             return "";
         }
         return trimmed.substring(0, trimmed.length() - 5).trim();
+    }
+
+    private boolean update(@Nonnull Path file, @Nonnull OverrideMutation mutation) {
+        try {
+            JsonObject root = readObject(file);
+            mutation.apply(root);
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            String serialized = GSON.toJson(root) + System.lineSeparator();
+            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(tmp, serialized, StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception ignored) {
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (Exception ex) {
+            warn("Failed to save telemetry project override to " + file, ex);
+            return false;
+        }
+    }
+
+    @Nonnull
+    private JsonObject readObject(@Nonnull Path file) {
+        try {
+            if (!Files.isRegularFile(file)) {
+                return new JsonObject();
+            }
+            JsonElement parsed = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8));
+            return parsed != null && parsed.isJsonObject() ? parsed.getAsJsonObject() : new JsonObject();
+        } catch (Exception ex) {
+            warn("Failed to parse telemetry project override from " + file + "; replacing with a valid override file.", ex);
+            return new JsonObject();
+        }
+    }
+
+    @Nonnull
+    private static JsonObject object(@Nonnull JsonObject parent, @Nonnull String key) {
+        JsonElement existing = parent.get(key);
+        if (existing != null && existing.isJsonObject()) {
+            return existing.getAsJsonObject();
+        }
+        JsonObject created = new JsonObject();
+        parent.add(key, created);
+        return created;
     }
 
     private void warn(@Nonnull String message, @Nullable Throwable throwable) {
@@ -68,5 +151,9 @@ public final class TelemetryProjectOverrideStore {
             return;
         }
         logger.at(Level.WARNING).withCause(throwable).log(message);
+    }
+
+    private interface OverrideMutation {
+        void apply(@Nonnull JsonObject root);
     }
 }

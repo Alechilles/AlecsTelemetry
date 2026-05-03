@@ -42,4 +42,31 @@ class TelemetryProjectOverrideStoreTest {
         assertEquals("custom", overrides.get("example-mod").destinationMode());
         assertEquals("Bearer token", overrides.get("example-mod").customEndpoint().headers().get("Authorization"));
     }
+
+    @Test
+    void savesProjectAndBreadcrumbControlsWithoutRemovingOtherFields() throws Exception {
+        Path overrideFile = tempDir.resolve("projects").resolve("example-mod.json");
+        Files.createDirectories(overrideFile.getParent());
+        Files.writeString(
+                overrideFile,
+                """
+                {
+                  "destinationMode": "custom",
+                  "customEndpoint": {
+                    "url": "https://example.com/telemetry"
+                  }
+                }
+                """
+        );
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);
+
+        assertTrue(store.saveProjectEnabled(overrideFile, false));
+        assertTrue(store.saveBreadcrumbsEnabled(overrideFile, false));
+
+        TelemetryProjectOverride override = store.load(overrideFile);
+        assertEquals(false, override.enabled());
+        assertEquals(false, override.events().breadcrumbs().enabled());
+        assertEquals("custom", override.destinationMode());
+        assertEquals("https://example.com/telemetry", override.customEndpoint().url());
+    }
 }

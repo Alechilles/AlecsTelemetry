@@ -14,6 +14,7 @@ import java.util.Map;
  */
 public record TelemetryProjectOverride(@Nullable Boolean enabled,
                                         @Nullable String destinationMode,
+                                        @Nullable EventsOverride events,
                                         @Nullable PerformanceOverride performance,
                                         @Nullable UsageOverride usage,
                                         @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
@@ -28,6 +29,13 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         return new TelemetryProjectOverride(
                 safe.enabled,
                 normalizeMode(safe.destinationMode),
+                safe.events == null
+                        ? null
+                        : new EventsOverride(
+                        safe.events.errors == null ? null : new EventTypeOverride(safe.events.errors.enabled),
+                        safe.events.lifecycle == null ? null : new EventTypeOverride(safe.events.lifecycle.enabled),
+                        safe.events.breadcrumbs == null ? null : new BreadcrumbsOverride(safe.events.breadcrumbs.enabled)
+                ),
                 safe.performance == null
                         ? null
                         : new PerformanceOverride(
@@ -58,6 +66,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     public boolean hasAnyValue() {
         return enabled != null
                 || destinationMode != null
+                || events != null && events.hasAnyValue()
                 || performance != null
                 || usage != null
                 || hosted.endpoint() != null
@@ -132,10 +141,25 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     private static final class Document {
         private Boolean enabled;
         private String destinationMode;
+        private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
+    }
+
+    private static final class EventsDocument {
+        private EventTypeDocument errors;
+        private EventTypeDocument lifecycle;
+        private BreadcrumbsDocument breadcrumbs;
+    }
+
+    private static final class EventTypeDocument {
+        private Boolean enabled;
+    }
+
+    private static final class BreadcrumbsDocument {
+        private Boolean enabled;
     }
 
     private static final class PerformanceDocument {
@@ -156,6 +180,22 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
 
     public record UsageOverride(@Nullable Boolean enabled,
                                 @Nonnull java.util.List<String> allowedEvents) {
+    }
+
+    public record EventsOverride(@Nullable EventTypeOverride errors,
+                                 @Nullable EventTypeOverride lifecycle,
+                                 @Nullable BreadcrumbsOverride breadcrumbs) {
+        public boolean hasAnyValue() {
+            return errors != null && errors.enabled() != null
+                    || lifecycle != null && lifecycle.enabled() != null
+                    || breadcrumbs != null && breadcrumbs.enabled() != null;
+        }
+    }
+
+    public record EventTypeOverride(@Nullable Boolean enabled) {
+    }
+
+    public record BreadcrumbsOverride(@Nullable Boolean enabled) {
     }
 
     private static final class HostedDocument {

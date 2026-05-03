@@ -63,6 +63,7 @@ class CrashReportStoreTest {
                 "Example Mod",
                 "unit_test",
                 "session-store-test",
+                "server-store-test",
                 fingerprint,
                 "Example:Example Mod",
                 "1.2.3",
