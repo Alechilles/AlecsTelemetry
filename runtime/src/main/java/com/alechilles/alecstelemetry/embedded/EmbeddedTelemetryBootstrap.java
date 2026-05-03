@@ -3,8 +3,10 @@ package com.alechilles.alecstelemetry.embedded;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.common.plugin.PluginManifest;
@@ -62,13 +64,15 @@ public final class EmbeddedTelemetryBootstrap {
 
         TelemetryDataPaths dataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
+        TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
+                .load(dataPaths.projectOverrideFile(descriptor.projectId()));
         String pluginVersion = resolvePluginVersion(plugin);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
                 descriptor,
                 pluginIdentifier,
                 pluginVersion,
                 resolvePluginSourcePath(plugin)
-        );
+        ).withOverride(override);
         return new EmbeddedTelemetryService(
                 settings,
                 dataPaths,

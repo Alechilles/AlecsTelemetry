@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -56,6 +57,8 @@ public final class TelemetryCoreEngine {
     private final LinkedHashMap<String, CrashReportStore> storesByProjectId = new LinkedHashMap<>();
     private final LinkedHashMap<String, TelemetryEventStore> eventStoresByProjectId = new LinkedHashMap<>();
     private final LinkedHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new LinkedHashMap<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> projectEnabledOverrides = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> breadcrumbsEnabledOverrides = new ConcurrentHashMap<>();
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
@@ -139,7 +142,21 @@ public final class TelemetryCoreEngine {
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
-        return project != null && project.isEnabled();
+        return project != null && isProjectRuntimeEnabled(project);
+    }
+
+    public void setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+        projectEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
+        if (!enabled) {
+            clearBreadcrumbs(projectId);
+        }
+    }
+
+    public void setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+        breadcrumbsEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
+        if (!enabled) {
+            clearBreadcrumbs(projectId);
+        }
     }
 
     public boolean triggerFlushAsync() {
@@ -157,10 +174,10 @@ public final class TelemetryCoreEngine {
             return;
         }
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled()) {
+        if (project == null || !isProjectRuntimeEnabled(project)) {
             return;
         }
-        if (!project.events().breadcrumbs().enabled()) {
+        if (!areBreadcrumbsRuntimeEnabled(project)) {
             return;
         }
         breadcrumbs.record(project.projectId(), category, detail);
@@ -195,7 +212,7 @@ public final class TelemetryCoreEngine {
         }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null
-                || !project.isEnabled()
+                || !isProjectRuntimeEnabled(project)
                 || !project.events().errors().enabled()
                 || project.resolveEventDeliveryTarget(settings) == null) {
             return;
@@ -252,7 +269,7 @@ public final class TelemetryCoreEngine {
         }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null
-                || !project.isEnabled()
+                || !isProjectRuntimeEnabled(project)
                 || !project.events().lifecycle().enabled()
                 || project.resolveEventDeliveryTarget(settings) == null) {
             return;
@@ -307,7 +324,7 @@ public final class TelemetryCoreEngine {
             return;
         }
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+        if (project == null || !isProjectRuntimeEnabled(project) || project.resolveEventDeliveryTarget(settings) == null) {
             return;
         }
         if (!project.performance().enabled() || durationMs < project.performance().thresholdMs()) {
@@ -360,7 +377,7 @@ public final class TelemetryCoreEngine {
             return;
         }
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled() || project.resolveEventDeliveryTarget(settings) == null) {
+        if (project == null || !isProjectRuntimeEnabled(project) || project.resolveEventDeliveryTarget(settings) == null) {
             return;
         }
         if (!project.usage().allows(eventName)) {
@@ -396,7 +413,7 @@ public final class TelemetryCoreEngine {
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled()) {
+        if (project == null || !isProjectRuntimeEnabled(project)) {
             return false;
         }
         String suffix = detail == null || detail.isBlank() ? "" : ": " + detail.trim();
@@ -441,6 +458,21 @@ public final class TelemetryCoreEngine {
         return null;
     }
 
+    private boolean isProjectRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
+        AtomicBoolean override = projectEnabledOverrides.get(normalizeProjectId(project.projectId()));
+        return override == null ? project.isEnabled() : override.get();
+    }
+
+    private boolean areBreadcrumbsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
+        AtomicBoolean override = breadcrumbsEnabledOverrides.get(normalizeProjectId(project.projectId()));
+        return override == null ? project.events().breadcrumbs().enabled() : override.get();
+    }
+
+    @Nonnull
+    private static String normalizeProjectId(@Nonnull String projectId) {
+        return projectId.trim().toLowerCase(Locale.ROOT);
+    }
+
     @Nonnull
     public FlushSummary flushPendingReportsNow(@Nonnull String reason) {
         return flushPendingReportsNow(reason, null);
@@ -459,7 +491,7 @@ public final class TelemetryCoreEngine {
         String lastFailure = null;
         try {
             for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
-                if (!project.isEnabled()) {
+                if (!isProjectRuntimeEnabled(project)) {
                     continue;
                 }
                 CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
@@ -521,7 +553,7 @@ public final class TelemetryCoreEngine {
             return;
         }
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null || !project.isEnabled() || !project.capturesSource(source)) {
+        if (project == null || !isProjectRuntimeEnabled(project) || !project.capturesSource(source)) {
             return;
         }
 
@@ -552,7 +584,7 @@ public final class TelemetryCoreEngine {
         String identifiedPluginHint = worldFailurePluginIdentifier == null ? null : worldFailurePluginIdentifier.toString();
         String threadName = thread == null ? Thread.currentThread().getName() : thread.getName();
         for (TelemetryProjectRegistration project : projects) {
-            if (!project.isEnabled() || !project.capturesSource(source)) {
+            if (!isProjectRuntimeEnabled(project) || !project.capturesSource(source)) {
                 continue;
             }
             try {
@@ -600,6 +632,7 @@ public final class TelemetryCoreEngine {
                 project.displayName(),
                 source,
                 sessionId,
+                serverId,
                 attribution.fingerprint(),
                 project.pluginIdentifier(),
                 project.pluginVersion(),
@@ -633,7 +666,7 @@ public final class TelemetryCoreEngine {
 
     private void putBreadcrumbDetails(@Nonnull TelemetryProjectRegistration project,
                                       @Nonnull Map<String, Object> details) {
-        if (!project.events().breadcrumbs().enabled()) {
+        if (!areBreadcrumbsRuntimeEnabled(project)) {
             return;
         }
         List<CrashReportEnvelope.BreadcrumbEntry> snapshot = breadcrumbs.snapshot(project.projectId());
