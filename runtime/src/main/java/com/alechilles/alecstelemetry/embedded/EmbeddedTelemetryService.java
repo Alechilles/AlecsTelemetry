@@ -6,6 +6,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -23,6 +24,8 @@ import java.util.logging.Level;
 public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
 
     private final TelemetryProjectRegistration project;
+    private final TelemetryDataPaths dataPaths;
+    private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryRuntimeSettings settings;
     private final TelemetryCoreEngine engine;
     private final HytaleLogger logger;
@@ -36,6 +39,8 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                              @Nullable HytaleLogger logger,
                              @Nullable ScheduledExecutorService executor) {
         this.project = project;
+        this.dataPaths = dataPaths;
+        this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.settings = settings;
         this.engine = new TelemetryCoreEngine(settings, dataPaths, List.of(project), loadedMods, client, logger, executor);
         this.logger = logger;
@@ -47,6 +52,8 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                                      @Nullable HytaleLogger logger,
                                      @Nonnull String disabledReason) {
         this.project = nullRegistration(projectId, displayName);
+        this.dataPaths = null;
+        this.overrideStore = null;
         this.settings = null;
         this.engine = null;
         this.logger = logger;
@@ -85,6 +92,26 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     @Override
     public String disabledReason() {
         return disabledReason;
+    }
+
+    @Override
+    public boolean setProjectEnabled(boolean enabled) {
+        if (engine == null || dataPaths == null || overrideStore == null) {
+            return false;
+        }
+        boolean saved = overrideStore.saveProjectEnabled(dataPaths.projectOverrideFile(project.projectId()), enabled);
+        engine.setProjectEnabled(project.projectId(), enabled);
+        return saved;
+    }
+
+    @Override
+    public boolean setBreadcrumbsEnabled(boolean enabled) {
+        if (engine == null || dataPaths == null || overrideStore == null) {
+            return false;
+        }
+        boolean saved = overrideStore.saveBreadcrumbsEnabled(dataPaths.projectOverrideFile(project.projectId()), enabled);
+        engine.setBreadcrumbsEnabled(project.projectId(), enabled);
+        return saved;
     }
 
     @Override

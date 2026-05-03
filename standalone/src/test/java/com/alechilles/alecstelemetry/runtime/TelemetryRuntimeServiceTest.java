@@ -93,6 +93,7 @@ class TelemetryRuntimeServiceTest {
         JsonObject firstPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("bootstrap", firstPayload.getAsJsonArray("breadcrumbs").get(0).getAsJsonObject().get("category").getAsString());
         assertTrue(firstPayload.get("sessionId").getAsString().length() > 10);
+        UUID.fromString(firstPayload.get("serverId").getAsString());
         assertEquals("dependency", firstPayload.getAsJsonObject("environment").get("runtimeMode").getAsString());
         assertEquals(0, service.flushPendingReportsNow("test-third").attempted());
     }

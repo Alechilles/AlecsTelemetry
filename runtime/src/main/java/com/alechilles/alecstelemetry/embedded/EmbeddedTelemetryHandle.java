@@ -23,6 +23,10 @@ public interface EmbeddedTelemetryHandle {
     @Nullable
     String disabledReason();
 
+    boolean setProjectEnabled(boolean enabled);
+
+    boolean setBreadcrumbsEnabled(boolean enabled);
+
     void start();
 
     void shutdown();

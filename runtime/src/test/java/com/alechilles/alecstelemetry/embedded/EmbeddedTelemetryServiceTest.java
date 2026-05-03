@@ -18,6 +18,7 @@ import java.util.Queue;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EmbeddedTelemetryServiceTest {
@@ -90,6 +91,8 @@ class EmbeddedTelemetryServiceTest {
         assertEquals(2, client.calls);
         JsonObject firstPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("embedded-mod", firstPayload.get("projectId").getAsString());
+        UUID.fromString(firstPayload.get("serverId").getAsString());
+        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-id.txt")));
         assertTrue(firstPayload.getAsJsonArray("breadcrumbs").size() > 0);
     }
 
@@ -150,6 +153,120 @@ class EmbeddedTelemetryServiceTest {
         assertEquals(2, payload.get("schemaVersion").getAsInt());
         UUID.fromString(payload.get("serverId").getAsString());
         assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-id.txt")));
+    }
+
+    @Test
+    void embeddedProjectEnabledControlPersistsAndBlocksCaptureImmediately() throws Exception {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.setProjectEnabled(false));
+        assertFalse(service.isEnabled());
+        service.captureSetupFailure(testThrowable());
+        service.recordError("embedded_event", null, "Embedded runtime event");
+
+        assertEquals(0, service.pendingReports());
+        assertEquals(0, service.flushPendingReportsNow("disabled").attempted());
+        String overrideRaw = java.nio.file.Files.readString(dataPaths.projectOverrideFile("embedded-mod"));
+        JsonObject override = JsonParser.parseString(overrideRaw).getAsJsonObject();
+        assertFalse(override.get("enabled").getAsBoolean());
+    }
+
+    @Test
+    void embeddedBreadcrumbControlPersistsAndSuppressesBreadcrumbPayloads() throws Exception {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.setBreadcrumbsEnabled(false));
+        service.recordBreadcrumb("bootstrap", "Should not be included.");
+        service.captureSetupFailure(testThrowable());
+
+        assertEquals(1, service.flushPendingReportsNow("breadcrumbs-disabled").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals(0, payload.getAsJsonArray("breadcrumbs").size());
+        String overrideRaw = java.nio.file.Files.readString(dataPaths.projectOverrideFile("embedded-mod"));
+        JsonObject override = JsonParser.parseString(overrideRaw).getAsJsonObject();
+        assertFalse(override.getAsJsonObject("events").getAsJsonObject("breadcrumbs").get("enabled").getAsBoolean());
+    }
+
+    private static TelemetryProjectDescriptor descriptor() {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Example:Embedded Mod"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+    }
+
+    private static RuntimeException testThrowable() {
+        RuntimeException throwable = new RuntimeException("embedded setup failed");
+        throwable.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.example.embedded.EmbeddedMod", "setup", "EmbeddedMod.java", 12)
+        });
+        return throwable;
     }
 
     private static final class SequencedClient implements CrashReportClient {

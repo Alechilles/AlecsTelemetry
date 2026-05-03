@@ -34,6 +34,18 @@ Settings/projects/<project-id>.json
 }
 ```
 
+## Example: disable breadcrumbs only
+
+```json
+{
+  "events": {
+    "breadcrumbs": {
+      "enabled": false
+    }
+  }
+}
+```
+
 ## Example: override hosted key
 
 ```json
@@ -49,6 +61,9 @@ Settings/projects/<project-id>.json
 
 - `enabled`
 - `destinationMode`
+- `events.breadcrumbs.enabled`
+- `events.errors.enabled`
+- `events.lifecycle.enabled`
 - `hosted.endpoint`
 - `hosted.eventEndpoint`
 - `hosted.projectKey`

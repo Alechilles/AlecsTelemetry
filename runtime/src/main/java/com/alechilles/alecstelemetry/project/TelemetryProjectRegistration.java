@@ -81,7 +81,32 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     @Nonnull
     public TelemetryProjectDescriptor.EventOptions events() {
-        return descriptor.events();
+        if (override == null || override.events() == null) {
+            return descriptor.events();
+        }
+        TelemetryProjectDescriptor.EventOptions defaults = descriptor.events();
+        TelemetryProjectOverride.EventsOverride eventsOverride = override.events();
+        TelemetryProjectOverride.EventTypeOverride errorsOverride = eventsOverride.errors();
+        TelemetryProjectOverride.EventTypeOverride lifecycleOverride = eventsOverride.lifecycle();
+        TelemetryProjectOverride.BreadcrumbsOverride breadcrumbsOverride = eventsOverride.breadcrumbs();
+        return new TelemetryProjectDescriptor.EventOptions(
+                new TelemetryProjectDescriptor.EventTypeOptions(
+                        errorsOverride == null || errorsOverride.enabled() == null
+                                ? defaults.errors().enabled()
+                                : errorsOverride.enabled()
+                ),
+                new TelemetryProjectDescriptor.EventTypeOptions(
+                        lifecycleOverride == null || lifecycleOverride.enabled() == null
+                                ? defaults.lifecycle().enabled()
+                                : lifecycleOverride.enabled()
+                ),
+                new TelemetryProjectDescriptor.BreadcrumbOptions(
+                        breadcrumbsOverride == null || breadcrumbsOverride.enabled() == null
+                                ? defaults.breadcrumbs().enabled()
+                                : breadcrumbsOverride.enabled(),
+                        defaults.breadcrumbs().automatic()
+                )
+        );
     }
 
     @Nonnull
@@ -115,9 +140,6 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     @Nullable
     public CrashReportClient.DeliveryTarget resolveDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
-        if (!isEnabled()) {
-            return null;
-        }
         if ("custom".equalsIgnoreCase(destinationMode())) {
             String url = firstNonBlank(
                     override == null ? null : override.customEndpoint().url(),
@@ -156,9 +178,6 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     @Nullable
     public CrashReportClient.DeliveryTarget resolveEventDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
-        if (!isEnabled()) {
-            return null;
-        }
         if ("custom".equalsIgnoreCase(destinationMode())) {
             String url = firstNonBlank(
                     override == null ? null : override.customEndpoint().eventUrl(),
