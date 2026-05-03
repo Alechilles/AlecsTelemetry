@@ -1,0 +1,125 @@
+---
+title: "Hosted Ingest Contract"
+order: 3
+published: true
+draft: false
+---
+
+# Hosted Ingest Contract
+
+Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+
+This page describes the Alec-hosted telemetry ingest contract used by the standalone runtime, embedded bootstrap consumers, and the hosted service.
+
+## Trust Model
+
+- The client includes a `publicProjectKey`.
+- The key is treated as public, not secret.
+- Protection comes from validation and backend limits, not from the client keeping the key hidden.
+- Key rotation is handled by updating hosted project config and the mod descriptor.
+
+## Canonical Backend
+
+The long-term hosted backend is Alec's Telemetry Platform. The `hosted/` package in this repo is a reference/dev implementation and should not be treated as the long-term production backend.
+
+## Endpoints
+
+```text
+POST /ingest/crash
+POST /ingest/event
+```
+
+`/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the canonical hosted endpoint for both crash envelopes and normal event envelopes.
+
+## Required Headers
+
+- `Content-Type: application/json`
+- `X-Telemetry-Project-Key: <publicProjectKey>`
+
+## Crash Report Body
+
+Crash reports use the crash envelope emitted by the runtime mod.
+
+Important fields:
+
+- `schemaVersion`
+- `eventType`
+- `reportId`
+- `projectId`
+- `projectDisplayName`
+- `source`
+- `fingerprint`
+- `capturedAtUtc`
+- `lastCapturedAtUtc`
+- `occurrenceCount`
+- `pluginIdentifier`
+- `pluginVersion`
+- `threadName`
+- `attribution`
+- `breadcrumbs`
+- `throwable`
+- `runtime`
+
+## Normal Event Body
+
+Normal event envelopes use:
+
+- `schemaVersion`
+- `eventType`
+- `eventName`
+- `eventId`
+- `projectId`
+- `projectDisplayName`
+- `source`
+- `sessionId`
+- `fingerprint`
+- `capturedAtUtc`
+- `pluginIdentifier`
+- `pluginVersion`
+- `worldName`
+- `severity`
+- `durationMs`
+- `metricValue`
+- `environment`
+- `attributes`
+- `details`
+- `runtime`
+
+Normal `eventType` values include:
+
+- `error`
+- `lifecycle`
+- `performance`
+- `usage`
+
+`details` is reserved for descriptor-validated custom usage/performance fields and bounded debug context such as breadcrumbs on error or failed lifecycle events.
+
+## Validation Rules
+
+The hosted service should reject or throttle when:
+
+- the project key is missing
+- the project key does not map to a known hosted project
+- the project is disabled
+- `projectId` does not match the project mapped by the key
+- the request body exceeds the global or per-project size limit
+- the body is not valid JSON
+- the body does not match either the crash envelope schema or event envelope schema
+- the event type or event name is not allowed for the hosted project
+- the project exceeds its request-per-minute budget
+
+## Response Codes
+
+- `202 Accepted`: report accepted.
+- `400 Bad Request`: invalid JSON or schema mismatch.
+- `401 Unauthorized`: missing project key.
+- `403 Forbidden`: unknown key, disabled project, or `projectId` mismatch.
+- `413 Payload Too Large`: request exceeds the size limit.
+- `429 Too Many Requests`: project exceeded rate limits.
+- `500 Internal Server Error`: unexpected server failure.
+
+## Discord Routing Behavior
+
+After accepting a report, the hosted service may dispatch a Discord alert or suppress the alert if the same `projectId + fingerprint` was recently alerted.
+
+Suppression should not reject the ingest request. It only reduces notification spam.
