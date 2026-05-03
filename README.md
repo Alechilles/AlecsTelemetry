@@ -1,63 +1,127 @@
 # Alec's Telemetry
 
-Crash and event telemetry platform for Hytale mods with both standalone
-dependency mode and embedded library mode.
+Alec's Telemetry is a standalone crash telemetry runtime for Hytale mods and the
+easiest way to connect a mod to Alec's hosted telemetry platform.
 
-## Goal
+For modders, it turns crash reporting into a small integration task: install the
+dependency, ship `telemetry/project.json`, and route real-world crashes into the
+hosted portal and Discord workflows.
 
-Make useful telemetry as plug-and-play as possible for mod authors.
+For players and server communities, it means faster fixes, less guesswork, and
+fewer situations where someone has to manually gather logs just to explain what
+broke.
 
-Two integration modes are supported:
+[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Join Discord](https://discord.gg/E8n8RgTTdq) | [Runtime Source + Docs](https://github.com/Alechilles/AlecsTelemetry) | [Platform Repo](https://github.com/Alechilles/AlecsTelemetryPlatform)
 
-1. dependency mode
-   - install `Alec's Telemetry` as a standalone mod dependency
-2. embedded mode
-   - bundle the telemetry bootstrap inside the owning mod
+## What Alec's Telemetry Is
 
-In the common dependency-mode case, a mod author should only need to:
+- A standalone runtime mod for crash telemetry in Hytale mods.
+- Designed around `dependency` mode as the default integration path.
+- Also supports `embedded` mode for advanced integrations that want to bundle the
+  telemetry bootstrap directly.
+- Captures attributed crashes and startup/setup failures, queues reports locally,
+  and flushes them to the configured destination.
+- Uses your mod metadata as fallback where possible, so many mods only need one
+  small descriptor file to get started.
 
-1. Add Alec's Telemetry as a dependency.
-2. Ship a small `telemetry/project.json` file.
-3. Bake in either:
-   - a publishable hosted `projectKey` for Alec's telemetry service, or
-   - a custom endpoint URL.
+## Why Modders Use It
 
-The runtime will then:
+- The main integration path is simple: install Alec's Telemetry and ship
+  `telemetry/project.json`.
+- If your `manifest.json` already has the right `Group`, `Name`, and `Main`,
+  Alec's Telemetry can infer most of the rest.
+- Hosted `projectKey` values are publishable ingest keys, so normal hosted setup
+  does not depend on server owners managing secrets.
+- The hosted platform pairs portal-based crash triage with Discord-based access
+  and routing workflows.
+- Project keys, project memberships, and project management live in the hosted
+  platform instead of being spread across ad-hoc scripts and manual edits.
+- Most mods do not need custom Java code for the default hosted flow.
 
-- discover the mod automatically
-- infer fallback values from the mod manifest when possible
-- capture attributed crashes
-- record opt-in error, lifecycle, performance, and usage events
-- attach session, environment, breadcrumb, and typed event context
-- queue reports locally
-- flush them to the configured destination
+## Why Players Benefit
 
-## Quick Start
+- Mod authors can see recurring crash issues faster instead of waiting on manual
+  bug reports with incomplete logs.
+- Real-world failures are easier to group and investigate, which shortens the
+  path from "something broke" to "here is the actual fix."
+- Server communities spend less time reproducing the same crash by hand just to
+  get useful debugging context.
+- Support conversations can move faster because the modder already has structured
+  telemetry instead of starting from guesswork.
 
-### Pick a runtime mode
+## What Integration Looks Like
 
-`telemetry/project.json` supports:
+1. Install `Alec's Telemetry` alongside your mod.
+2. Add a small `telemetry/project.json` file to your mod project.
+3. Put in the hosted `projectKey` for your project.
+4. Package and ship your mod with that descriptor included.
 
-- `runtimeMode: "dependency"`
-- `runtimeMode: "embedded"`
+Recommended default: `runtimeMode: "dependency"`.
 
-If omitted, the default is `dependency`.
+Advanced alternatives: `embedded` mode and custom endpoints.
 
-### Minimal hosted descriptor
+## Minimal Setup
 
-If your mod manifest already has a correct `Main` class package, a minimal hosted
-descriptor can be as small as:
+If your mod manifest already has a correct `Group`, `Name`, and `Main`, Alec's
+Telemetry can infer:
+
+- `projectId`
+- `displayName`
+- `ownerPluginIdentifiers`
+- `packagePrefixes`
+
+That means many mods only need destination settings plus a hosted key.
+
+Hosted `projectKey` values are publishable ingest keys. They are meant to be
+shipped in the descriptor, not treated like hidden operator secrets.
 
 ```json
 {
   "runtimeMode": "dependency",
   "hosted": {
-    "projectKey": "your_public_project_key"
+    "projectKey": "replace_with_your_public_project_key"
   }
 }
 ```
 
-### Minimal custom-endpoint descriptor
+Place the file at:
+
+```text
+telemetry/project.json
+```
+
+Then package it with your mod.
+
+## Hosted Platform Highlights
+
+- Sign in to the portal with Discord and manage project access through
+  memberships.
+- Manage project keys and related project settings through the hosted platform.
+- Review recurring crash issues in the portal instead of starting from raw logs.
+- Use Explore workflows when you need to inspect individual telemetry
+  occurrences more closely.
+- Keep Discord in the loop through the hosted stack's Discord-based access and
+  routing workflows.
+
+Portal URL: `https://telemetry.alecsmods.com/portal`
+
+## Advanced Options
+
+Need something more custom than the default hosted dependency-mode flow?
+
+- Use `runtimeMode: "embedded"` if you want to bundle telemetry bootstrap logic
+  directly into your mod.
+- Use a custom endpoint if you want reports to go somewhere other than Alec's
+  hosted service.
+- Server owners can override packaged destination settings at runtime through
+  `Settings/projects/<project-id>.json`.
+- The optional runtime API is available for richer breadcrumbs or explicit
+  lifecycle forwarding.
+- Admin commands are available for inspection and manual testing:
+  `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`,
+  `/telemetry flush [project-id]`, `/telemetry test <project-id> [detail]`
+
+Minimal custom-endpoint example:
 
 ```json
 {
@@ -71,136 +135,27 @@ descriptor can be as small as:
 }
 ```
 
-Place the file at:
+If you want to run your own stack, start with the reference hosted service in
+this repository and the full hosted backend/portal repository:
 
-```text
-telemetry/project.json
-```
+- [Reference hosted service](https://github.com/Alechilles/AlecsTelemetry/tree/main/hosted)
+- [AlecsTelemetryPlatform](https://github.com/Alechilles/AlecsTelemetryPlatform)
 
-inside your mod project so it ships with the mod.
+## Docs and Examples
 
-## What Gets Inferred Automatically
+- [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
+- [Embedded mode guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
+- [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+- [Hosted key operations](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-key-operations.md)
+- [Hosted ingest contract](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-ingest-contract.md)
+- [Example consumer mod](https://github.com/Alechilles/AlecsTelemetry/tree/main/examples/ExampleConsumerMod)
+- [Embedded consumer mod](https://github.com/Alechilles/AlecsTelemetry/tree/main/examples/EmbeddedConsumerMod)
 
-When fields are omitted from `telemetry/project.json`, Alec's Telemetry will try to
-use the mod's `manifest.json` as fallback.
-
-Current fallbacks:
-
-- `projectId` from manifest `Name`
-- `displayName` from manifest `Name`
-- `ownerPluginIdentifiers` from manifest `Group` + `Name`
-- `packagePrefixes` from the package of manifest `Main`
-
-That means many mods only need to specify destination settings.
-
-## Optional Runtime API
-
-Most mods do not need Java integration.
-
-If you want richer breadcrumbs, lifecycle timings, usage events, or performance
-samples, use the optional runtime API:
-
-```java
-TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
-if (api != null) {
-    TelemetryProjectHandle project = api.findProject("my-mod-id");
-    if (project != null) {
-        project.recordBreadcrumb("bootstrap", "Finished loading config.");
-        project.recordUsageWithContext(
-            "settings_opened",
-            TelemetryEventContext.usage()
-                .subsystem("settings")
-                .featureKey("settings_page")
-                .entryPoint("/my settings")
-                .runtimeSide("server")
-                .detail("source", "command")
-                .build()
-        );
-    }
-}
-```
-
-See:
-
-- `docs/project-descriptor.md`
-- `docs/embedded-mode.md`
-- `docs/runtime-overrides.md`
-- `docs/hosted-key-operations.md`
-- `docs/hosted-ingest-contract.md`
-- `docs/expanded-telemetry-system-plan.md`
-- `docs/embedded-mode-refactor-plan.md`
-- `examples/ExampleConsumerMod/`
-- `examples/EmbeddedConsumerMod/`
-
-## Admin Commands
-
-- `/telemetry status`
-- `/telemetry projects`
-- `/telemetry project <project-id>`
-- `/telemetry flush [project-id]`
-- `/telemetry test <project-id> [detail]`
-
-## Runtime Overrides
-
-Server owners can override packaged destination settings without editing another
-mod's files.
-
-Overrides are optional. The intended default model is:
-
-- mod author ships a publishable hosted ingest key in `telemetry/project.json`
-- telemetry works out of the box for the mod author's project
-- server owners only add overrides when they want to disable telemetry, redirect
-  it, or change runtime behavior
-
-Override files live under:
-
-```text
-Settings/projects/<project-id>.json
-```
-
-See `docs/runtime-overrides.md`.
-
-## Hosted Service
-
-This repo also contains a hosted-service prototype under:
-
-```text
-hosted/
-```
-
-It currently provides a local/dev reference implementation for:
-
-- hosted crash ingest endpoint
-- project-key validation
-- basic rate limiting and duplicate-alert suppression
-- Discord routing
-
-Production hosting recommendation:
-
-- use `HytaleModWikiBot` as the canonical hosted backend and Discord bot service
-- treat `AlecsTelemetry/hosted` as prototype/dev reference code, not the long-term production service
-
-See:
-
-- `docs/hosted-ingest-contract.md`
-- `hosted/README.md`
-
-## Embedded Mode
-
-Embedded mode is implemented for modders who want a single bundled mod instead of a
-standalone dependency.
-
-See:
-
-- `docs/embedded-mode.md`
-- `docs/embedded-mode-refactor-plan.md`
-
-## License
+## License / Support
 
 This project is source-available under the Alec's Telemetry Runtime License.
 
-See:
-
-- `LICENSE`
-- `LICENSE-FAQ.md`
-- `COMMERCIAL-LICENSE.md`
+- [License](https://github.com/Alechilles/AlecsTelemetry/blob/main/LICENSE)
+- [License FAQ](https://github.com/Alechilles/AlecsTelemetry/blob/main/LICENSE-FAQ.md)
+- [Commercial License](https://github.com/Alechilles/AlecsTelemetry/blob/main/COMMERCIAL-LICENSE.md)
+- [Discord support and issue reporting](https://discord.gg/E8n8RgTTdq)
