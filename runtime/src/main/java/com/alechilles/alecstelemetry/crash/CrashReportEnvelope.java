@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.crash;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.hypixel.hytale.common.util.java.ManifestUtil;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -447,11 +448,14 @@ public record CrashReportEnvelope(int schemaVersion,
                             systemProperty("hytale.build"),
                             systemProperty("hytale.build.id"),
                             systemProperty("hytale.build.version"),
+                            hytaleManifestVersion(),
+                            hytaleManifestRevisionId(),
                             "unknown"
                     ),
                     firstNonBlank(
                             systemProperty("hytale.server.version"),
                             systemProperty("hytale.version"),
+                            hytaleManifestVersion(),
                             "unknown"
                     ),
                     normalizeLoadedMods(loadedMods)
@@ -517,6 +521,43 @@ public record CrashReportEnvelope(int schemaVersion,
                 return third;
             }
             return fallback;
+        }
+
+        @Nonnull
+        private static String firstNonBlank(@Nonnull String first,
+                                            @Nonnull String second,
+                                            @Nonnull String third,
+                                            @Nonnull String fourth,
+                                            @Nonnull String fifth,
+                                            @Nonnull String fallback) {
+            if (!first.isBlank()) {
+                return first;
+            }
+            if (!second.isBlank()) {
+                return second;
+            }
+            if (!third.isBlank()) {
+                return third;
+            }
+            if (!fourth.isBlank()) {
+                return fourth;
+            }
+            if (!fifth.isBlank()) {
+                return fifth;
+            }
+            return fallback;
+        }
+
+        @Nonnull
+        private static String hytaleManifestVersion() {
+            String normalized = normalizeNullable(ManifestUtil.getImplementationVersion());
+            return normalized == null ? "" : normalized;
+        }
+
+        @Nonnull
+        private static String hytaleManifestRevisionId() {
+            String normalized = normalizeNullable(ManifestUtil.getImplementationRevisionId());
+            return normalized == null ? "" : normalized;
         }
 
         @Nonnull
