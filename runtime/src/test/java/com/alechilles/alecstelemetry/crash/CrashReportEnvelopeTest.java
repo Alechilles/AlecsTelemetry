@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CrashReportEnvelopeTest {
@@ -66,5 +67,40 @@ class CrashReportEnvelopeTest {
         assertTrue(json.getAsJsonObject("environment").has("snapshotKey"));
         assertTrue(json.getAsJsonObject("throwable").has("stack"));
         assertTrue(json.getAsJsonObject("runtime").has("loadedMods"));
+    }
+
+    @Test
+    void runtimeMetadataFallsBackToHytaleManifestVersionWhenSystemPropertiesAreAbsent() {
+        String originalBuild = System.getProperty("hytale.build");
+        String originalBuildId = System.getProperty("hytale.build.id");
+        String originalBuildVersion = System.getProperty("hytale.build.version");
+        String originalServerVersion = System.getProperty("hytale.server.version");
+        String originalHytaleVersion = System.getProperty("hytale.version");
+        try {
+            System.clearProperty("hytale.build");
+            System.clearProperty("hytale.build.id");
+            System.clearProperty("hytale.build.version");
+            System.clearProperty("hytale.server.version");
+            System.clearProperty("hytale.version");
+
+            CrashReportEnvelope.RuntimeMetadata metadata = CrashReportEnvelope.RuntimeMetadata.capture(List.of());
+
+            assertNotEquals("unknown", metadata.hytaleBuild());
+            assertNotEquals("unknown", metadata.serverVersion());
+        } finally {
+            restoreProperty("hytale.build", originalBuild);
+            restoreProperty("hytale.build.id", originalBuildId);
+            restoreProperty("hytale.build.version", originalBuildVersion);
+            restoreProperty("hytale.server.version", originalServerVersion);
+            restoreProperty("hytale.version", originalHytaleVersion);
+        }
+    }
+
+    private static void restoreProperty(String key, String value) {
+        if (value == null) {
+            System.clearProperty(key);
+            return;
+        }
+        System.setProperty(key, value);
     }
 }
