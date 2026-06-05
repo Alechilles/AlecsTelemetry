@@ -84,7 +84,17 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
     "exceptionalWorldRemovals": true
   },
   "events": {
-    "errors": { "enabled": true },
+    "errors": {
+      "enabled": true,
+      "details": {
+        "needs_seek_failed": {
+          "allowedFields": {
+            "reason": { "type": "string", "maxLength": 120 },
+            "resource": { "type": "enum", "values": ["food", "water", "unknown"] }
+          }
+        }
+      }
+    },
     "lifecycle": { "enabled": true },
     "breadcrumbs": { "enabled": true, "automatic": true }
   },
@@ -159,6 +169,8 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 
 - `errors.enabled`
   - controls explicit non-fatal error events recorded through the runtime API
+- `errors.details`
+  - optional per-error-event allowlist for custom mod-specific Event Context fields
 - `lifecycle.enabled`
   - controls explicit lifecycle timing events recorded through the runtime API
 - `breadcrumbs.enabled`
@@ -186,7 +198,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 
 ### Detail allowlists
 
-Custom `usage.details` and `performance.details` are intentionally descriptor-declared.
+Custom `events.errors.details`, `usage.details`, and `performance.details` are intentionally descriptor-declared.
 Runtime code can send only fields that are listed for that event name.
 
 Supported field types:
@@ -200,6 +212,14 @@ Supported field types:
 
 Unknown fields, wrong types, blank strings, and enum values outside the declared set
 are dropped before upload.
+
+### Event Context details
+
+The hosted portal presents descriptor-validated `details` fields as Event Context. Scalar,
+bounded, low-cardinality fields may be aggregated into Context Breakdowns on issue pages.
+Mods should use stable reason codes, resource types, role IDs, entity types, and coarse
+buckets. Avoid player identifiers, raw UUIDs, secrets, exact coordinates, and free-form
+messages when a field is intended for breakdowns.
 
 ### `runtimeMode`
 

@@ -225,7 +225,9 @@ public final class TelemetryCoreEngine {
             attributes.put("throwableType", throwable.getClass().getName());
             attributes.put("throwableMessage", throwable.getMessage() == null ? "<empty>" : throwable.getMessage());
         }
-        LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>(
+                project.events().errors().sanitizeDetails(eventName, normalizedContext.details())
+        );
         putBreadcrumbDetails(project, details);
         TelemetryEventEnvelope event = TelemetryEventEnvelope.error(
                 project.projectId(),

@@ -89,8 +89,12 @@ Normal event envelopes use:
 - `details`
 - `runtime`
 
-`details` is reserved for descriptor-validated custom usage/performance fields and
+`details` is reserved for descriptor-validated custom Event Context fields and
 bounded debug context such as breadcrumbs on error or failed lifecycle events.
+For issue-producing events, the hosted portal may aggregate scalar, low-cardinality
+`details` values into Context Breakdowns using generic `field_key` / `field_value`
+rollups. The wire field remains `details` for compatibility; portal UI should label
+these values as Event Context.
 
 ## Validation Rules
 

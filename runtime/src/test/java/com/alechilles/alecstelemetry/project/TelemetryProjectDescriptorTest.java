@@ -118,7 +118,17 @@ class TelemetryProjectDescriptorTest {
                   "projectId": "context-mod",
                   "displayName": "Context Mod",
                   "events": {
-                    "errors": { "enabled": false },
+                    "errors": {
+                      "enabled": false,
+                      "details": {
+                        "needs_seek_failed": {
+                          "allowedFields": {
+                            "reason": { "type": "string", "maxLength": 120 },
+                            "resource": { "type": "enum", "values": ["food", "water", "unknown"] }
+                          }
+                        }
+                      }
+                    },
                     "lifecycle": { "enabled": true },
                     "breadcrumbs": { "enabled": true, "automatic": false }
                   },
@@ -154,6 +164,18 @@ class TelemetryProjectDescriptorTest {
         assertTrue(descriptor.events().lifecycle().enabled());
         assertTrue(descriptor.events().breadcrumbs().enabled());
         assertTrue(!descriptor.events().breadcrumbs().automatic());
+        assertEquals("no_water_target", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("reason", "no_water_target", "resource", "water", "ignored", "drop me")
+        ).get("reason"));
+        assertEquals("water", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("resource", "water")
+        ).get("resource"));
+        assertTrue(descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("resource", "lava")
+        ).isEmpty());
         assertEquals("settings_ui", descriptor.usage().sanitizeDetails(
                 "settings_opened",
                 java.util.Map.of(
