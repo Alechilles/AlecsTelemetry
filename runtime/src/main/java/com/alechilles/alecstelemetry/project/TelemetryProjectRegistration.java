@@ -93,12 +93,14 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                 new TelemetryProjectDescriptor.EventTypeOptions(
                         errorsOverride == null || errorsOverride.enabled() == null
                                 ? defaults.errors().enabled()
-                                : errorsOverride.enabled()
+                                : errorsOverride.enabled(),
+                        defaults.errors().details()
                 ),
                 new TelemetryProjectDescriptor.EventTypeOptions(
                         lifecycleOverride == null || lifecycleOverride.enabled() == null
                                 ? defaults.lifecycle().enabled()
-                                : lifecycleOverride.enabled()
+                                : lifecycleOverride.enabled(),
+                        defaults.lifecycle().details()
                 ),
                 new TelemetryProjectDescriptor.BreadcrumbOptions(
                         breadcrumbsOverride == null || breadcrumbsOverride.enabled() == null

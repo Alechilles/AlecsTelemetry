@@ -289,7 +289,16 @@ class TelemetryRuntimeServiceTest {
                   "ownerPluginIdentifiers": ["Example:Example Mod"],
                   "packagePrefixes": ["com.example.telemetry"],
                   "events": {
-                    "errors": { "enabled": true },
+                    "errors": {
+                      "enabled": true,
+                      "details": {
+                        "handled_exception": {
+                          "allowedFields": {
+                            "reason": { "type": "string", "maxLength": 120 }
+                          }
+                        }
+                      }
+                    },
                     "lifecycle": { "enabled": false },
                     "breadcrumbs": { "enabled": true }
                   },
@@ -333,6 +342,8 @@ class TelemetryRuntimeServiceTest {
                             .operation("apply")
                             .fingerprint("settings-apply")
                             .detail("Recovered after retry")
+                            .detail("reason", "bad_state")
+                            .detail("ignored", "drop me")
                             .build()
             );
         }
@@ -344,6 +355,8 @@ class TelemetryRuntimeServiceTest {
         assertEquals("settings", payload.get("subsystem").getAsString());
         assertEquals("apply", payload.get("operation").getAsString());
         assertEquals("Recovered after retry", payload.getAsJsonObject("attributes").get("detail").getAsString());
+        assertEquals("bad_state", payload.getAsJsonObject("details").get("reason").getAsString());
+        assertTrue(!payload.getAsJsonObject("details").has("ignored"));
         assertTrue(payload.getAsJsonObject("details").getAsJsonArray("breadcrumbs").size() > 0);
     }
 

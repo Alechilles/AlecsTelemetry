@@ -95,8 +95,14 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         EventOptions events = safe.events == null
                 ? EventOptions.defaults()
                 : new EventOptions(
-                new EventTypeOptions(safe.events.errors == null || boolOrDefault(safe.events.errors.enabled, true)),
-                new EventTypeOptions(safe.events.lifecycle == null || boolOrDefault(safe.events.lifecycle.enabled, true)),
+                new EventTypeOptions(
+                        safe.events.errors == null || boolOrDefault(safe.events.errors.enabled, true),
+                        normalizeDetailRules(safe.events.errors == null ? null : safe.events.errors.details)
+                ),
+                new EventTypeOptions(
+                        safe.events.lifecycle == null || boolOrDefault(safe.events.lifecycle.enabled, true),
+                        normalizeDetailRules(safe.events.lifecycle == null ? null : safe.events.lifecycle.details)
+                ),
                 safe.events.breadcrumbs == null
                         ? new BreadcrumbOptions(true, true)
                         : new BreadcrumbOptions(
@@ -467,14 +473,20 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         @Nonnull
         public static EventOptions defaults() {
             return new EventOptions(
-                    new EventTypeOptions(true),
-                    new EventTypeOptions(true),
+                    new EventTypeOptions(true, Map.of()),
+                    new EventTypeOptions(true, Map.of()),
                     new BreadcrumbOptions(true, true)
             );
         }
     }
 
-    public record EventTypeOptions(boolean enabled) {
+    public record EventTypeOptions(boolean enabled,
+                                   @Nonnull Map<String, DetailRules> details) {
+
+        @Nonnull
+        public Map<String, Object> sanitizeDetails(@Nonnull String eventName, @Nullable Map<String, Object> rawDetails) {
+            return sanitizeDetailMap(details, eventName, rawDetails);
+        }
     }
 
     public record BreadcrumbOptions(boolean enabled, boolean automatic) {
@@ -582,6 +594,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     private static final class EventTypeDocument {
         private Boolean enabled;
+        private Map<String, DetailRulesDocument> details;
     }
 
     private static final class BreadcrumbsDocument {
