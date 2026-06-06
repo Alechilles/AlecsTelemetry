@@ -73,6 +73,7 @@ Normal event envelopes use:
 - `projectDisplayName`
 - `source`
 - `sessionId`
+- `serverId`
 - `fingerprint`
 - `capturedAtUtc`
 - `pluginIdentifier`
@@ -81,7 +82,7 @@ Normal event envelopes use:
 - `severity`
 - `durationMs`
 - `metricValue`
-- context fields such as `subsystem`, `phase`, `operation`, `featureKey`,
+- context fields such as `subsystem`, `phase`, `operation`, `target`, `featureKey`,
   `entryPoint`, `runtimeSide`, `entityType`, `itemId`, `blockId`, `biomeId`, and
   `commandName`
 - `environment`

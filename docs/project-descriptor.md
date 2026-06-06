@@ -133,6 +133,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
   },
   "customEndpoint": {
     "url": "https://example.com/api/telemetry/crash",
+    "eventUrl": "https://example.com/api/telemetry/event",
     "headers": {
       "Authorization": "Bearer your-token"
     }
@@ -173,6 +174,8 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
   - optional per-error-event allowlist for custom mod-specific Event Context fields
 - `lifecycle.enabled`
   - controls explicit lifecycle timing events recorded through the runtime API
+- `lifecycle.details`
+  - optional per-lifecycle-event allowlist for custom mod-specific Event Context fields
 - `breadcrumbs.enabled`
   - controls breadcrumb storage and breadcrumb attachment to crashes/debug events
 - `breadcrumbs.automatic`
@@ -198,8 +201,9 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 
 ### Detail allowlists
 
-Custom `events.errors.details`, `usage.details`, and `performance.details` are intentionally descriptor-declared.
-Runtime code can send only fields that are listed for that event name.
+Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`,
+and `performance.details` are intentionally descriptor-declared. Runtime code can
+send only fields that are listed for that event name.
 
 Supported field types:
 
@@ -213,7 +217,40 @@ Supported field types:
 Unknown fields, wrong types, blank strings, and enum values outside the declared set
 are dropped before upload.
 
-### Event Context details
+### Runtime API Event Context
+
+Consumer mods can attach typed context to explicit non-crash events with:
+
+- `recordErrorWithContext`
+- `recordLifecycleWithContext`
+- `recordPerformanceWithContext`
+- `recordUsageWithContext`
+
+`TelemetryEventContext` supports these standardized fields:
+
+- `detail`
+- `severity`
+- `fingerprint`
+- `subsystem`
+- `phase`
+- `operation`
+- `target`
+- `featureKey`
+- `entryPoint`
+- `runtimeSide`
+- `entityType`
+- `itemId`
+- `blockId`
+- `biomeId`
+- `commandName`
+- `worldName`
+
+`detail` is stored in the event `attributes` map. The other standardized fields
+are first-class event envelope fields. The context builder also accepts custom
+`detail(key, value)` entries; those custom fields are uploaded only when the
+descriptor declares an allowlist for the matching event name.
+
+### Custom Event Context details
 
 The hosted portal presents descriptor-validated `details` fields as Event Context. Scalar,
 bounded, low-cardinality fields may be aggregated into Context Breakdowns on issue pages.
@@ -250,6 +287,8 @@ messages when a field is intended for breakdowns.
 ### `customEndpoint`
 
 - `url`
+- `eventUrl`
+  - optional override for the generic non-crash event ingest path
 - `headers`
 
 ## Recommendation

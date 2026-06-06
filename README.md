@@ -115,11 +115,14 @@ Need something more custom than the default hosted dependency-mode flow?
   hosted service.
 - Server owners can override packaged destination settings at runtime through
   `Settings/projects/<project-id>.json`.
-- The optional runtime API is available for richer breadcrumbs or explicit
-  lifecycle forwarding.
+- The optional runtime API is available for richer breadcrumbs, explicit
+  lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
+  `usage` events with typed `TelemetryEventContext` fields.
 - Admin commands are available for inspection and manual testing:
   `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`,
   `/telemetry flush [project-id]`, `/telemetry test <project-id> [detail]`
+- The root command permission is `telemetry.command.telemetry`; subcommands use
+  the same stable `telemetry.command.telemetry.*` prefix.
 
 Minimal custom-endpoint example:
 

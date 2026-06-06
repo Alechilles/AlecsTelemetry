@@ -82,7 +82,9 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 ## Event Fields
 
 - `errors.enabled`: controls explicit non-fatal error events recorded through the runtime API.
+- `errors.details`: optional per-error-event allowlist for custom mod-specific Event Context fields.
 - `lifecycle.enabled`: controls explicit lifecycle timing events recorded through the runtime API.
+- `lifecycle.details`: optional per-lifecycle-event allowlist for custom mod-specific Event Context fields.
 - `breadcrumbs.enabled`: controls breadcrumb storage and breadcrumb attachment to crashes/debug events.
 - `breadcrumbs.automatic`: reserved for low-noise automatic breadcrumbs.
 
@@ -101,7 +103,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `allowedEvents`
 - `details`
 
-Custom `usage.details` and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
+Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`, and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
 
 Supported detail field types:
 
@@ -111,6 +113,36 @@ Supported detail field types:
 - `enum` with required `values`
 
 Unknown fields, wrong types, blank strings, and enum values outside the declared set are dropped before upload.
+
+## Runtime API Event Context
+
+Consumer mods can attach typed context to explicit non-crash events with:
+
+- `recordErrorWithContext`
+- `recordLifecycleWithContext`
+- `recordPerformanceWithContext`
+- `recordUsageWithContext`
+
+`TelemetryEventContext` supports these standardized fields:
+
+- `detail`
+- `severity`
+- `fingerprint`
+- `subsystem`
+- `phase`
+- `operation`
+- `target`
+- `featureKey`
+- `entryPoint`
+- `runtimeSide`
+- `entityType`
+- `itemId`
+- `blockId`
+- `biomeId`
+- `commandName`
+- `worldName`
+
+`detail` is stored in the event `attributes` map. The other standardized fields are first-class event envelope fields. Custom `detail(key, value)` entries are uploaded only when the descriptor declares an allowlist for the matching event name.
 
 ## Runtime Mode
 
@@ -134,6 +166,7 @@ Unknown fields, wrong types, blank strings, and enum values outside the declared
 `customEndpoint` supports:
 
 - `url`
+- `eventUrl`
 - `headers`
 
 ## Recommendation
