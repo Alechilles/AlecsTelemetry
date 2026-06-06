@@ -72,6 +72,7 @@ Normal event envelopes use:
 - `projectDisplayName`
 - `source`
 - `sessionId`
+- `serverId`
 - `fingerprint`
 - `capturedAtUtc`
 - `pluginIdentifier`
@@ -80,6 +81,18 @@ Normal event envelopes use:
 - `severity`
 - `durationMs`
 - `metricValue`
+- `subsystem`
+- `phase`
+- `operation`
+- `target`
+- `featureKey`
+- `entryPoint`
+- `runtimeSide`
+- `entityType`
+- `itemId`
+- `blockId`
+- `biomeId`
+- `commandName`
 - `environment`
 - `attributes`
 - `details`
@@ -92,7 +105,7 @@ Normal `eventType` values include:
 - `performance`
 - `usage`
 
-`details` is reserved for descriptor-validated custom usage/performance fields and bounded debug context such as breadcrumbs on error or failed lifecycle events.
+`details` is reserved for descriptor-validated custom Event Context fields and bounded debug context such as breadcrumbs on error or failed lifecycle events. Standardized context fields are first-class event envelope fields; custom `detail(key, value)` entries are uploaded only after descriptor allowlist validation.
 
 ## Validation Rules
 

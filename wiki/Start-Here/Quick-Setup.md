@@ -51,3 +51,9 @@ That means many mods only need destination settings plus a hosted key.
 Hosted `projectKey` values are publishable ingest keys. They are meant to be shipped in the descriptor, not treated like hidden operator secrets.
 
 If you need a deeper descriptor reference, see [Project Descriptor](/mod/alecs-telemetry/project-descriptor).
+
+## Admin Commands
+
+The standalone runtime exposes `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`, `/telemetry flush [project-id]`, and `/telemetry test <project-id> [detail]`.
+
+The root command permission is `telemetry.command.telemetry`; subcommands use the same stable `telemetry.command.telemetry.*` prefix.

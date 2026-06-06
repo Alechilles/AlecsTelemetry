@@ -41,6 +41,8 @@ declare `runtimeMode=embedded`.
 The owning mod boots telemetry directly:
 
 ```java
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+
 private EmbeddedTelemetryService telemetry;
 
 @Override
@@ -49,6 +51,16 @@ protected void setup() {
     try {
         setupInternal();
         telemetry.recordBreadcrumb("lifecycle", "Setup completed.");
+        telemetry.recordLifecycleWithContext(
+                "plugin_setup",
+                0,
+                true,
+                TelemetryEventContext.lifecycle()
+                        .subsystem("plugin")
+                        .phase("setup")
+                        .runtimeSide("server")
+                        .build()
+        );
     } catch (Throwable throwable) {
         telemetry.captureSetupFailure(throwable);
         throw throwable;
@@ -61,6 +73,16 @@ protected void start() {
         startInternal();
         telemetry.start();
         telemetry.recordBreadcrumb("lifecycle", "Start completed.");
+        telemetry.recordUsageWithContext(
+                "settings_opened",
+                TelemetryEventContext.usage()
+                        .subsystem("settings")
+                        .featureKey("settings_page")
+                        .entryPoint("/example settings")
+                        .runtimeSide("server")
+                        .detail("source", "command")
+                        .build()
+        );
     } catch (Throwable throwable) {
         telemetry.captureStartFailure(throwable);
         throw throwable;
@@ -74,6 +96,12 @@ protected void shutdown() {
     }
 }
 ```
+
+The `*WithContext` helpers accept `TelemetryEventContext` so embedded mods can
+attach standardized fields such as `subsystem`, `phase`, `featureKey`,
+`entryPoint`, `runtimeSide`, `commandName`, and `worldName`. Custom
+`detail(key, value)` entries are filtered by the descriptor allowlist before
+upload.
 
 ## Storage Layout
 
