@@ -138,12 +138,6 @@ Minimal custom-endpoint example:
 }
 ```
 
-If you want to run your own stack, start with the reference hosted service in
-this repository and the full hosted backend/portal repository:
-
-- [Reference hosted service](https://github.com/Alechilles/AlecsTelemetry/tree/main/hosted)
-- [AlecsTelemetryPlatform](https://github.com/Alechilles/AlecsTelemetryPlatform)
-
 ## Docs and Examples
 
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
