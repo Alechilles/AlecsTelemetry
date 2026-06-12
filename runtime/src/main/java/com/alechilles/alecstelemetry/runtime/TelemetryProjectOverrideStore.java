@@ -85,6 +85,22 @@ public final class TelemetryProjectOverrideStore {
         });
     }
 
+    public boolean saveErrorEventsEnabled(@Nonnull Path file, boolean enabled) {
+        return updateEventTypeEnabled(file, "errors", enabled);
+    }
+
+    public boolean saveLifecycleEventsEnabled(@Nonnull Path file, boolean enabled) {
+        return updateEventTypeEnabled(file, "lifecycle", enabled);
+    }
+
+    public boolean savePerformanceEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "performance").addProperty("enabled", enabled));
+    }
+
+    public boolean saveUsageEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "usage").addProperty("enabled", enabled));
+    }
+
     @Nonnull
     private static String projectIdFromFileName(@Nonnull String fileName) {
         String trimmed = fileName.trim();
@@ -115,6 +131,14 @@ public final class TelemetryProjectOverrideStore {
             warn("Failed to save telemetry project override to " + file, ex);
             return false;
         }
+    }
+
+    private boolean updateEventTypeEnabled(@Nonnull Path file, @Nonnull String eventType, boolean enabled) {
+        return update(file, root -> {
+            JsonObject events = object(root, "events");
+            JsonObject eventObject = object(events, eventType);
+            eventObject.addProperty("enabled", enabled);
+        });
     }
 
     @Nonnull
