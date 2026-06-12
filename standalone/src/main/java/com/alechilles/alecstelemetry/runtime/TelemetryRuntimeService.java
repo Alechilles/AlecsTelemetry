@@ -3,6 +3,8 @@ package com.alechilles.alecstelemetry.runtime;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
@@ -39,6 +41,8 @@ public final class TelemetryRuntimeService {
     private final TelemetryRuntimeApi api;
     private final TelemetryCoreEngine engine;
     private final HytaleLogger logger;
+    private final TelemetryProjectOverrideStore overrideStore;
+    private final TelemetryConsentStateStore consentStateStore;
 
     @Nonnull
     public static TelemetryRuntimeService create(@Nonnull JavaPlugin plugin) {
@@ -99,6 +103,8 @@ public final class TelemetryRuntimeService {
         this.collisions = List.copyOf(collisions);
         this.registrationWarnings = List.copyOf(registrationWarnings);
         this.logger = logger;
+        this.overrideStore = new TelemetryProjectOverrideStore(logger);
+        this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
         this.api = new TelemetryRuntimeApiImpl(this);
         logRegistrationWarnings();
@@ -137,6 +143,50 @@ public final class TelemetryRuntimeService {
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
         return engine.isProjectEnabled(projectId);
+    }
+
+    @Nonnull
+    public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
+        return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), engine.projects());
+    }
+
+    public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
+        boolean appliedAll = true;
+        for (TelemetryProjectRegistration project : engine.projects()) {
+            appliedAll &= applyConsent(project.projectId(), snapshot);
+        }
+        return appliedAll;
+    }
+
+    public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null) {
+            return false;
+        }
+        java.nio.file.Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
+        boolean saved = overrideStore.saveProjectEnabled(overrideFile, snapshot.projectEnabled())
+                && overrideStore.saveCrashEnabled(overrideFile, snapshot.crashEnabled())
+                && overrideStore.saveErrorEventsEnabled(overrideFile, snapshot.errorEnabled())
+                && overrideStore.saveLifecycleEventsEnabled(overrideFile, snapshot.lifecycleEnabled())
+                && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
+                && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
+                && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
+        if (!saved) {
+            return false;
+        }
+        engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
+        engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
+        engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
+        engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
+        engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
+        engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
+        engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
+        return true;
+    }
+
+    public boolean markConsentReviewed(@Nonnull String projectId) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
     }
 
     public boolean triggerFlushAsync() {
@@ -290,7 +340,13 @@ public final class TelemetryRuntimeService {
                 project.pluginVersion(),
                 project.sourcePath() == null ? null : project.sourcePath().toString(),
                 project.packagePrefixes(),
-                project.runtimeMode()
+                project.runtimeMode(),
+                engine.isCrashEnabled(project.projectId()),
+                engine.isErrorEventsEnabled(project.projectId()),
+                engine.isLifecycleEventsEnabled(project.projectId()),
+                engine.isPerformanceEnabled(project.projectId()),
+                engine.isUsageEnabled(project.projectId()),
+                engine.isBreadcrumbsEnabled(project.projectId())
         );
     }
 

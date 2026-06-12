@@ -4,6 +4,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -19,6 +20,7 @@ import java.util.Queue;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -436,6 +438,107 @@ class TelemetryRuntimeServiceTest {
 
         assertEquals(0, service.flushPendingReportsNow("test-crash-consent").attempted());
         assertEquals(0, client.calls);
+    }
+
+    @Test
+    void runtimeConsentApiPersistsAppliesAndMarksReviewedProjects() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true,
+                    "thresholdMs": 1
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_opened"]
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        assertEquals(List.of(registration), service.unreviewedConsentProjects());
+        assertTrue(service.applyConsent(
+                "example-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false)
+        ));
+        assertFalse(service.isProjectEnabled("example-mod"));
+        assertFalse(service.projectDiagnostics("example-mod").crashEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").errorEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").lifecycleEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").performanceEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").usageEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").breadcrumbsEnabled());
+
+        TelemetryProjectOverride override = new TelemetryProjectOverrideStore(null)
+                .load(dataPaths.projectOverrideFile("example-mod"));
+        assertEquals(false, override.enabled());
+        assertEquals(false, override.capture().setupFailures());
+        assertEquals(false, override.events().errors().enabled());
+        assertEquals(false, override.events().lifecycle().enabled());
+        assertEquals(false, override.events().breadcrumbs().enabled());
+        assertEquals(false, override.performance().enabled());
+        assertEquals(false, override.usage().enabled());
+
+        RuntimeException throwable = new RuntimeException("setup failed");
+        throwable.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.example.telemetry.Setup", "run", "Setup.java", 10)
+        });
+        service.captureSetupFailure("example-mod", throwable);
+        TelemetryProjectHandle handle = service.api().findProject("example-mod");
+        if (handle != null) {
+            handle.recordError("handled_exception", new IllegalStateException("bad state"), "Recovered after retry");
+            handle.recordPerformance("reload_config_duration", 10, null, "Reloaded config");
+            handle.recordUsage("settings_opened", "Opened settings");
+        }
+
+        assertEquals(0, service.flushPendingReportsNow("test-consent-off").attempted());
+        assertEquals(0, client.calls);
+        assertTrue(service.markConsentReviewed("example-mod"));
+        assertTrue(service.unreviewedConsentProjects().isEmpty());
     }
 
     private static final class SequencedClient implements CrashReportClient {

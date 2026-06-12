@@ -31,6 +31,12 @@ public record TelemetryRuntimeDiagnostics(boolean enabled,
                                      @Nonnull String pluginVersion,
                                      @Nullable String sourcePath,
                                      @Nonnull List<String> packagePrefixes,
-                                     @Nonnull String runtimeMode) {
+                                     @Nonnull String runtimeMode,
+                                     boolean crashEnabled,
+                                     boolean errorEnabled,
+                                     boolean lifecycleEnabled,
+                                     boolean performanceEnabled,
+                                     boolean usageEnabled,
+                                     boolean breadcrumbsEnabled) {
     }
 }
