@@ -8,6 +8,7 @@ import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
+import com.hypixel.hytale.server.core.modules.singleplayer.SingleplayerModule;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
@@ -42,7 +43,7 @@ public final class TelemetryConsentCoordinator {
         Ref<EntityStore> playerEntityRef = event.getPlayerRef();
         Store<EntityStore> store = playerEntityRef.getStore();
         PlayerRef playerRef = store.getComponent(playerEntityRef, PlayerRef.getComponentType());
-        if (playerRef == null || !playerRef.hasPermission(TelemetryCommandRoot.ROOT_PERMISSION, false)) {
+        if (!hasConsentAccess(playerRef)) {
             return;
         }
         String promptKey = promptKey(unreviewed);
@@ -69,6 +70,17 @@ public final class TelemetryConsentCoordinator {
                 new TelemetryConsentPage(playerRef, runtimeService, firstRun)
         );
         return true;
+    }
+
+    private static boolean hasConsentAccess(@Nullable PlayerRef playerRef) {
+        return playerRef != null
+                && playerRef.isValid()
+                && (playerRef.hasPermission(TelemetryCommandRoot.ROOT_PERMISSION, false)
+                || isLocalSingleplayerOwner(playerRef));
+    }
+
+    private static boolean isLocalSingleplayerOwner(@Nonnull PlayerRef playerRef) {
+        return SingleplayerModule.get() != null && SingleplayerModule.isOwner(playerRef);
     }
 
     @Nonnull
