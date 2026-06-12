@@ -77,6 +77,16 @@ public final class TelemetryProjectOverrideStore {
         return update(file, root -> root.addProperty("enabled", enabled));
     }
 
+    public boolean saveCrashEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> {
+            JsonObject capture = object(root, "capture");
+            capture.addProperty("uncaughtExceptions", enabled);
+            capture.addProperty("setupFailures", enabled);
+            capture.addProperty("startFailures", enabled);
+            capture.addProperty("exceptionalWorldRemovals", enabled);
+        });
+    }
+
     public boolean saveBreadcrumbsEnabled(@Nonnull Path file, boolean enabled) {
         return update(file, root -> {
             JsonObject events = object(root, "events");

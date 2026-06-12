@@ -5,6 +5,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -358,6 +359,83 @@ class TelemetryRuntimeServiceTest {
         assertEquals("bad_state", payload.getAsJsonObject("details").get("reason").getAsString());
         assertTrue(!payload.getAsJsonObject("details").has("ignored"));
         assertTrue(payload.getAsJsonObject("details").getAsJsonArray("breadcrumbs").size() > 0);
+    }
+
+    @Test
+    void crashCaptureOverrideSuppressesCrashReports() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectOverride override = TelemetryProjectOverride.fromJson(
+                """
+                {
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  }
+                }
+                """
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod"),
+                override
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        RuntimeException throwable = new RuntimeException("setup failed");
+        throwable.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.example.telemetry.Setup", "run", "Setup.java", 10)
+        });
+
+        service.captureSetupFailure("example-mod", throwable);
+
+        assertEquals(0, service.flushPendingReportsNow("test-crash-consent").attempted());
+        assertEquals(0, client.calls);
     }
 
     private static final class SequencedClient implements CrashReportClient {

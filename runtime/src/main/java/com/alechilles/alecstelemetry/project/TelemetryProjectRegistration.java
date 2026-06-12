@@ -77,11 +77,11 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
     }
 
     public boolean capturesSource(@Nonnull String source) {
-        return descriptor.capture().capturesSource(source);
+        return capture().capturesSource(source);
     }
 
     public boolean isCrashTelemetryEnabled() {
-        TelemetryProjectDescriptor.CaptureOptions capture = descriptor.capture();
+        TelemetryProjectDescriptor.CaptureOptions capture = capture();
         return isEnabled()
                 && (capture.uncaughtExceptions()
                 || capture.setupFailures()
@@ -99,6 +99,21 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                 performance().enabled(),
                 usage().enabled(),
                 events().breadcrumbs().enabled()
+        );
+    }
+
+    @Nonnull
+    public TelemetryProjectDescriptor.CaptureOptions capture() {
+        if (override == null || override.capture() == null) {
+            return descriptor.capture();
+        }
+        TelemetryProjectDescriptor.CaptureOptions defaults = descriptor.capture();
+        TelemetryProjectOverride.CaptureOverride captureOverride = override.capture();
+        return new TelemetryProjectDescriptor.CaptureOptions(
+                captureOverride.uncaughtExceptions() == null ? defaults.uncaughtExceptions() : captureOverride.uncaughtExceptions(),
+                captureOverride.setupFailures() == null ? defaults.setupFailures() : captureOverride.setupFailures(),
+                captureOverride.startFailures() == null ? defaults.startFailures() : captureOverride.startFailures(),
+                captureOverride.exceptionalWorldRemovals() == null ? defaults.exceptionalWorldRemovals() : captureOverride.exceptionalWorldRemovals()
         );
     }
 

@@ -61,6 +61,7 @@ class TelemetryProjectOverrideStoreTest {
         TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);
 
         assertTrue(store.saveProjectEnabled(overrideFile, false));
+        assertTrue(store.saveCrashEnabled(overrideFile, false));
         assertTrue(store.saveErrorEventsEnabled(overrideFile, false));
         assertTrue(store.saveLifecycleEventsEnabled(overrideFile, false));
         assertTrue(store.savePerformanceEnabled(overrideFile, false));
@@ -69,6 +70,10 @@ class TelemetryProjectOverrideStoreTest {
 
         TelemetryProjectOverride override = store.load(overrideFile);
         assertEquals(false, override.enabled());
+        assertEquals(false, override.capture().uncaughtExceptions());
+        assertEquals(false, override.capture().setupFailures());
+        assertEquals(false, override.capture().startFailures());
+        assertEquals(false, override.capture().exceptionalWorldRemovals());
         assertEquals(false, override.events().errors().enabled());
         assertEquals(false, override.events().lifecycle().enabled());
         assertEquals(false, override.events().breadcrumbs().enabled());
