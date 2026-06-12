@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.project;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -76,5 +77,57 @@ class TelemetryProjectRegistrationTest {
         assertNotNull(target);
         assertEquals("https://example.com/project-hosted", target.endpoint());
         assertEquals("public-key", target.headers().get(TelemetryProjectDescriptor.PROJECT_KEY_HEADER));
+    }
+
+    @Test
+    void consentSnapshotReflectsDescriptorDefaults() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "consent-mod",
+                  "displayName": "Consent Mod",
+                  "ownerPluginIdentifiers": ["Example:Consent Mod"],
+                  "packagePrefixes": ["com.example.consent"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "performance": {
+                    "enabled": false
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_opened"]
+                  },
+                  "defaults": {
+                    "enabled": true
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Consent Mod",
+                "1.0.0",
+                null
+        );
+
+        TelemetryConsentSnapshot snapshot = registration.consentSnapshot();
+
+        assertEquals(true, snapshot.projectEnabled());
+        assertEquals(true, snapshot.crashEnabled());
+        assertEquals(false, snapshot.errorEnabled());
+        assertEquals(true, snapshot.lifecycleEnabled());
+        assertEquals(false, snapshot.performanceEnabled());
+        assertEquals(true, snapshot.usageEnabled());
+        assertEquals(false, snapshot.breadcrumbsEnabled());
     }
 }

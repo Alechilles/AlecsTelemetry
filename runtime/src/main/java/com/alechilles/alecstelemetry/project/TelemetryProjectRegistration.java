@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.project;
 
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 
 import javax.annotation.Nonnull;
@@ -77,6 +78,28 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     public boolean capturesSource(@Nonnull String source) {
         return descriptor.capture().capturesSource(source);
+    }
+
+    public boolean isCrashTelemetryEnabled() {
+        TelemetryProjectDescriptor.CaptureOptions capture = descriptor.capture();
+        return isEnabled()
+                && (capture.uncaughtExceptions()
+                || capture.setupFailures()
+                || capture.startFailures()
+                || capture.exceptionalWorldRemovals());
+    }
+
+    @Nonnull
+    public TelemetryConsentSnapshot consentSnapshot() {
+        return new TelemetryConsentSnapshot(
+                isEnabled(),
+                isCrashTelemetryEnabled(),
+                events().errors().enabled(),
+                events().lifecycle().enabled(),
+                performance().enabled(),
+                usage().enabled(),
+                events().breadcrumbs().enabled()
+        );
     }
 
     @Nonnull
