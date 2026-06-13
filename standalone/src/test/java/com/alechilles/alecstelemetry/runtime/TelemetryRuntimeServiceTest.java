@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryRuntimeServiceTest {
@@ -539,6 +540,105 @@ class TelemetryRuntimeServiceTest {
         assertEquals(0, client.calls);
         assertTrue(service.markConsentReviewed("example-mod"));
         assertTrue(service.unreviewedConsentProjects().isEmpty());
+    }
+
+    @Test
+    void embeddedConsentProjectIsVisibleAndMirrorsOverridesToOwnerSettings() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        Path modsDir = tempDir.resolve("mods");
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                modsDir
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Example:Embedded Mod"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true
+                  },
+                  "usage": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Embedded Mod",
+                "1.2.3",
+                modsDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.projects().isEmpty());
+        assertNull(service.api().findProject("embedded-mod"));
+        assertEquals(1, service.diagnostics().registeredProjects());
+        assertEquals(1, service.diagnostics().projects().size());
+        assertEquals("embedded", service.diagnostics().projects().getFirst().runtimeMode());
+        assertTrue(service.diagnostics().projects().getFirst().enabled());
+
+        assertTrue(service.applyConsent(
+                "embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false)
+        ));
+
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = service.projectDiagnostics("embedded-mod");
+        assertFalse(diagnostics.enabled());
+        assertFalse(diagnostics.crashEnabled());
+        assertFalse(diagnostics.errorEnabled());
+        assertFalse(diagnostics.lifecycleEnabled());
+        assertFalse(diagnostics.performanceEnabled());
+        assertFalse(diagnostics.usageEnabled());
+        assertFalse(diagnostics.breadcrumbsEnabled());
+
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);
+        TelemetryProjectOverride centralOverride = store.load(dataPaths.projectOverrideFile("embedded-mod"));
+        Path embeddedOverrideFile = modsDir
+                .resolve("Example_Embedded Mod")
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve("embedded-mod.json");
+        TelemetryProjectOverride embeddedOverride = store.load(embeddedOverrideFile);
+        assertEquals(false, centralOverride.enabled());
+        assertEquals(false, centralOverride.events().errors().enabled());
+        assertEquals(false, embeddedOverride.enabled());
+        assertEquals(false, embeddedOverride.events().errors().enabled());
+        assertEquals(0, service.flushPendingReportsNow("embedded-consent").attempted());
+        assertEquals(0, client.calls);
     }
 
     private static final class SequencedClient implements CrashReportClient {

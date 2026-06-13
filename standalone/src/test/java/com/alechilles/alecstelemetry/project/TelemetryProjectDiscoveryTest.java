@@ -42,15 +42,17 @@ class TelemetryProjectDiscoveryTest {
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
         assertEquals(1, result.projects().size());
+        assertEquals(1, result.consentProjects().size());
         assertEquals(1, result.loadedMods().size());
         assertTrue(result.skippedRegistrationWarnings().isEmpty());
         assertEquals("example-mod", result.projects().getFirst().projectId());
+        assertEquals("example-mod", result.consentProjects().getFirst().projectId());
         assertEquals("Example:Example Mod", result.projects().getFirst().pluginIdentifier());
         assertTrue(result.projects().getFirst().packagePrefixes().contains("com.example.telemetry"));
     }
 
     @Test
-    void skipsEmbeddedRuntimeModeDescriptors() throws Exception {
+    void keepsEmbeddedDescriptorsConsentVisibleWithoutRegisteringForStandaloneRuntime() throws Exception {
         Path modFolder = tempDir.resolve("Embedded Mod");
         Files.createDirectories(modFolder.resolve("telemetry"));
         Files.writeString(
@@ -77,6 +79,8 @@ class TelemetryProjectDiscoveryTest {
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
         assertTrue(result.projects().isEmpty());
+        assertEquals(1, result.consentProjects().size());
+        assertEquals("embedded-mod", result.consentProjects().getFirst().projectId());
         assertEquals(1, result.loadedMods().size());
         assertEquals(1, result.skippedRegistrationWarnings().size());
         assertFalse(result.skippedRegistrationWarnings().getFirst().isBlank());

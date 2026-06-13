@@ -43,6 +43,7 @@ public final class TelemetryRuntimeService {
     private final HytaleLogger logger;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
+    private List<TelemetryProjectRegistration> consentProjects;
 
     @Nonnull
     public static TelemetryRuntimeService create(@Nonnull JavaPlugin plugin) {
@@ -53,13 +54,21 @@ public final class TelemetryRuntimeService {
                 .discover(dataPaths.modsDirectory());
         Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
                 .loadAll(dataPaths.projectSettingsDirectory());
+        Map<String, TelemetryProjectOverride> consentOverrides = loadConsentOverrides(
+                discoveryResult.consentProjects(),
+                overrides,
+                dataPaths,
+                logger
+        );
         List<TelemetryProjectRegistration> resolvedProjects = applyOverrides(discoveryResult.projects(), overrides);
+        List<TelemetryProjectRegistration> resolvedConsentProjects = applyOverrides(discoveryResult.consentProjects(), consentOverrides);
         List<TelemetryProjectCollisionDetector.Collision> collisions = TelemetryProjectCollisionDetector.detect(resolvedProjects);
         List<String> registrationWarnings = buildRegistrationWarnings(collisions, discoveryResult.skippedRegistrationWarnings());
         return new TelemetryRuntimeService(
                 settings,
                 dataPaths,
                 resolvedProjects,
+                resolvedConsentProjects,
                 discoveryResult.loadedMods(),
                 collisions,
                 registrationWarnings,
@@ -72,6 +81,7 @@ public final class TelemetryRuntimeService {
     TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
                             @Nonnull TelemetryDataPaths dataPaths,
                             @Nonnull List<TelemetryProjectRegistration> projects,
+                            @Nonnull List<TelemetryProjectRegistration> consentProjects,
                             @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
                             @Nonnull CrashReportClient client,
                             @Nullable HytaleLogger logger,
@@ -80,6 +90,7 @@ public final class TelemetryRuntimeService {
                 settings,
                 dataPaths,
                 projects,
+                consentProjects,
                 loadedMods,
                 TelemetryProjectCollisionDetector.detect(projects),
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
@@ -89,9 +100,20 @@ public final class TelemetryRuntimeService {
         );
     }
 
+    TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
+                            @Nonnull TelemetryDataPaths dataPaths,
+                            @Nonnull List<TelemetryProjectRegistration> projects,
+                            @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                            @Nonnull CrashReportClient client,
+                            @Nullable HytaleLogger logger,
+                            @Nullable ScheduledExecutorService executor) {
+        this(settings, dataPaths, projects, projects, loadedMods, client, logger, executor);
+    }
+
     private TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
                                     @Nonnull TelemetryDataPaths dataPaths,
                                     @Nonnull List<TelemetryProjectRegistration> projects,
+                                    @Nonnull List<TelemetryProjectRegistration> consentProjects,
                                     @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
                                     @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
                                     @Nonnull List<String> registrationWarnings,
@@ -107,6 +129,7 @@ public final class TelemetryRuntimeService {
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
         this.api = new TelemetryRuntimeApiImpl(this);
+        this.consentProjects = List.copyOf(consentProjects);
         logRegistrationWarnings();
     }
 
@@ -147,19 +170,19 @@ public final class TelemetryRuntimeService {
 
     @Nonnull
     public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
-        return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), engine.projects());
+        return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), consentProjects);
     }
 
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
-        for (TelemetryProjectRegistration project : engine.projects()) {
+        for (TelemetryProjectRegistration project : consentProjects) {
             appliedAll &= applyConsent(project.projectId(), snapshot);
         }
         return appliedAll;
     }
 
     public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
-        TelemetryProjectRegistration project = findProject(projectId);
+        TelemetryProjectRegistration project = findConsentProject(projectId);
         if (project == null) {
             return false;
         }
@@ -171,21 +194,38 @@ public final class TelemetryRuntimeService {
                 && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
                 && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
                 && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
+        java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(project);
+        if (embeddedOverrideFile != null) {
+            saved = saved
+                    && overrideStore.saveProjectEnabled(embeddedOverrideFile, snapshot.projectEnabled())
+                    && overrideStore.saveCrashEnabled(embeddedOverrideFile, snapshot.crashEnabled())
+                    && overrideStore.saveErrorEventsEnabled(embeddedOverrideFile, snapshot.errorEnabled())
+                    && overrideStore.saveLifecycleEventsEnabled(embeddedOverrideFile, snapshot.lifecycleEnabled())
+                    && overrideStore.savePerformanceEnabled(embeddedOverrideFile, snapshot.performanceEnabled())
+                    && overrideStore.saveUsageEnabled(embeddedOverrideFile, snapshot.usageEnabled())
+                    && overrideStore.saveBreadcrumbsEnabled(embeddedOverrideFile, snapshot.breadcrumbsEnabled());
+        }
         if (!saved) {
             return false;
         }
-        engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
-        engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
-        engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
-        engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
-        engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
-        engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
-        engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
+        TelemetryProjectOverride override = overrideStore.load(overrideFile);
+        if (override != null) {
+            replaceConsentProject(project.withOverride(override));
+        }
+        if (findProject(project.projectId()) != null) {
+            engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
+            engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
+            engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
+            engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
+            engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
+            engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
+            engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
+        }
         return true;
     }
 
     public boolean markConsentReviewed(@Nonnull String projectId) {
-        TelemetryProjectRegistration project = findProject(projectId);
+        TelemetryProjectRegistration project = findConsentProject(projectId);
         return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
     }
 
@@ -280,13 +320,13 @@ public final class TelemetryRuntimeService {
 
     @Nonnull
     public TelemetryRuntimeDiagnostics diagnostics() {
-        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(engine.projects().size());
-        for (TelemetryProjectRegistration project : engine.projects()) {
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
+        for (TelemetryProjectRegistration project : consentProjects) {
             projectDiagnostics.add(buildProjectDiagnostics(project));
         }
         return new TelemetryRuntimeDiagnostics(
                 engine.isEnabled(),
-                engine.projects().size(),
+                consentProjects.size(),
                 engine.loadedMods().size(),
                 engine.pendingReports(null),
                 engine.flushInProgress(),
@@ -299,7 +339,7 @@ public final class TelemetryRuntimeService {
 
     @Nullable
     public TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId) {
-        TelemetryProjectRegistration project = findProject(projectId);
+        TelemetryProjectRegistration project = findConsentProject(projectId);
         return project == null ? null : buildProjectDiagnostics(project);
     }
 
@@ -328,6 +368,8 @@ public final class TelemetryRuntimeService {
     private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildProjectDiagnostics(
             @Nonnull TelemetryProjectRegistration project) {
         CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
+        boolean registeredForStandaloneRuntime = findProject(project.projectId()) != null;
+        int pendingReports = registeredForStandaloneRuntime ? engine.pendingReports(project.projectId()) : 0;
         return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
                 project.projectId(),
                 project.displayName(),
@@ -335,18 +377,18 @@ public final class TelemetryRuntimeService {
                 project.hasOverride(),
                 project.destinationMode(),
                 target == null ? null : target.endpoint(),
-                engine.pendingReports(project.projectId()),
+                pendingReports,
                 project.pluginIdentifier(),
                 project.pluginVersion(),
                 project.sourcePath() == null ? null : project.sourcePath().toString(),
                 project.packagePrefixes(),
                 project.runtimeMode(),
-                engine.isCrashEnabled(project.projectId()),
-                engine.isErrorEventsEnabled(project.projectId()),
-                engine.isLifecycleEventsEnabled(project.projectId()),
-                engine.isPerformanceEnabled(project.projectId()),
-                engine.isUsageEnabled(project.projectId()),
-                engine.isBreadcrumbsEnabled(project.projectId())
+                registeredForStandaloneRuntime ? engine.isCrashEnabled(project.projectId()) : project.isCrashTelemetryEnabled(),
+                registeredForStandaloneRuntime ? engine.isErrorEventsEnabled(project.projectId()) : project.events().errors().enabled(),
+                registeredForStandaloneRuntime ? engine.isLifecycleEventsEnabled(project.projectId()) : project.events().lifecycle().enabled(),
+                registeredForStandaloneRuntime ? engine.isPerformanceEnabled(project.projectId()) : project.performance().enabled(),
+                registeredForStandaloneRuntime ? engine.isUsageEnabled(project.projectId()) : project.usage().enabled(),
+                registeredForStandaloneRuntime ? engine.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled()
         );
     }
 
@@ -359,6 +401,75 @@ public final class TelemetryRuntimeService {
             resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
         }
         return List.copyOf(resolved);
+    }
+
+    @Nonnull
+    private static Map<String, TelemetryProjectOverride> loadConsentOverrides(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull Map<String, TelemetryProjectOverride> centralOverrides,
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nullable HytaleLogger logger) {
+        LinkedHashMap<String, TelemetryProjectOverride> resolved = new LinkedHashMap<>(centralOverrides);
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
+        for (TelemetryProjectRegistration project : projects) {
+            String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
+            if (resolved.containsKey(projectIdKey)) {
+                continue;
+            }
+            java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(dataPaths, project);
+            if (embeddedOverrideFile == null) {
+                continue;
+            }
+            TelemetryProjectOverride override = store.load(embeddedOverrideFile);
+            if (override != null) {
+                resolved.put(projectIdKey, override);
+            }
+        }
+        return Map.copyOf(resolved);
+    }
+
+    @Nullable
+    private TelemetryProjectRegistration findConsentProject(@Nonnull String projectId) {
+        String normalized = projectId.trim();
+        for (TelemetryProjectRegistration project : consentProjects) {
+            if (project.projectId().equalsIgnoreCase(normalized)) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    private void replaceConsentProject(@Nonnull TelemetryProjectRegistration replacement) {
+        ArrayList<TelemetryProjectRegistration> updated = new ArrayList<>(consentProjects.size());
+        for (TelemetryProjectRegistration project : consentProjects) {
+            updated.add(project.projectId().equalsIgnoreCase(replacement.projectId()) ? replacement : project);
+        }
+        consentProjects = List.copyOf(updated);
+    }
+
+    @Nullable
+    private java.nio.file.Path embeddedProjectOverrideFile(@Nonnull TelemetryProjectRegistration project) {
+        return embeddedProjectOverrideFile(dataPaths, project);
+    }
+
+    @Nullable
+    private static java.nio.file.Path embeddedProjectOverrideFile(
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nonnull TelemetryProjectRegistration project) {
+        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+            return null;
+        }
+        return dataPaths.modsDirectory()
+                .resolve(sanitizePluginDataDirectory(project.pluginIdentifier()))
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve(project.projectId() + ".json");
+    }
+
+    @Nonnull
+    private static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
+        return pluginIdentifier.trim().replace(':', '_');
     }
 
     @Nonnull
@@ -378,7 +489,7 @@ public final class TelemetryRuntimeService {
             return;
         }
         for (String warning : registrationWarnings) {
-            Level level = warning.contains("runtimeMode=embedded") ? Level.INFO : Level.WARNING;
+            Level level = warning.contains("embedded telemetry project") ? Level.INFO : Level.WARNING;
             logger.at(level).log("Telemetry registration note: " + warning);
         }
     }
