@@ -11,7 +11,7 @@ For players and server communities, it means faster fixes, less guesswork, and
 fewer situations where someone has to manually gather logs just to explain what
 broke.
 
-[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Join Discord](https://discord.gg/E8n8RgTTdq) | [Runtime Source + Docs](https://github.com/Alechilles/AlecsTelemetry) | [Platform Repo](https://github.com/Alechilles/AlecsTelemetryPlatform)
+[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Join Discord](https://discord.gg/E8n8RgTTdq) | [Runtime Source + Docs](https://github.com/Alechilles/AlecsTelemetry) 
 
 ## What Alec's Telemetry Is
 
