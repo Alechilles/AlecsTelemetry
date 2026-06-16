@@ -16,11 +16,16 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -326,6 +331,14 @@ public final class TelemetryRuntimeService {
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
         return engine.submitManualReport(projectId, submission, playerContext);
+    }
+
+    public boolean openReportPage(@Nonnull String projectId,
+                                  @Nonnull Ref<EntityStore> playerEntityRef,
+                                  @Nonnull Store<EntityStore> store,
+                                  @Nonnull PlayerRef playerRef,
+                                  @Nonnull TelemetryReportOpenRequest request) {
+        return false;
     }
 
     @Nonnull

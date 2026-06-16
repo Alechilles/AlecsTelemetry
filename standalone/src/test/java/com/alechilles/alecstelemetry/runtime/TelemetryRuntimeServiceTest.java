@@ -12,6 +12,7 @@ import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -78,6 +79,28 @@ class TelemetryRuntimeServiceTest {
         assertTrue(result.validationErrors().contains("project_reports_disabled"));
         assertEquals(0, service.pendingReports("example-mod"));
         assertEquals(0, client.calls);
+    }
+
+    @Test
+    void runtimeBackedProjectHandleExposesReportPageOpenApi() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryRuntimeService service = manualReportService(
+                settings,
+                dataPaths,
+                true,
+                new SequencedClient(CrashReportClient.UploadResult.success(204))
+        );
+
+        TelemetryProjectHandle handle = service.api().findProject("example-mod");
+
+        assertFalse(handle == null);
+        assertFalse(handle.openReportPage(
+                null,
+                null,
+                null,
+                new TelemetryReportOpenRequest("issue", null, null)
+        ));
     }
 
     @Test
