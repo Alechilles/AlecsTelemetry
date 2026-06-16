@@ -79,6 +79,11 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public Path rejectedManualReportsDirectory(@Nonnull String projectId) {
+        return manualReportsRoot().resolve(projectId).resolve("rejected");
+    }
+
+    @Nonnull
     public Path submittedManualReportsLog() {
         return manualReportsRoot().resolve("submitted-reports.jsonl");
     }
