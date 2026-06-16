@@ -49,6 +49,18 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must offset content below the enlarged logo title bar"
         );
         assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconFrame"),
+                "TelemetryConsentPage.ui must include a left-side project icon frame in each consent row"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconImage"),
+                "TelemetryConsentPage.ui must include a bindable project icon image layer"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconPlaceholder"),
+                "TelemetryConsentPage.ui must include a fallback placeholder for mods without icons"
+        );
+        assertTrue(
                 !consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"),
                 "TelemetryConsentPage.ui must not use the unresolved asset-pack path for the logo texture"
         );

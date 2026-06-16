@@ -4,8 +4,11 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.zip.ZipFile;
 
 /**
  * UI-independent consent state projected from runtime diagnostics.
@@ -13,6 +16,8 @@ import java.util.List;
 public record TelemetryConsentViewModel(boolean allEnabled,
                                         @Nonnull List<ProjectRow> projects,
                                         @Nonnull List<String> explanationLines) {
+
+    private static final String MOD_ICON_TEXTURE_PATH = "icon-256.png";
 
     @Nonnull
     public static TelemetryConsentViewModel from(@Nonnull TelemetryRuntimeDiagnostics diagnostics) {
@@ -42,6 +47,7 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                              @Nonnull String pluginIdentifier,
                              @Nonnull String pluginVersion,
                              @Nullable String sourcePath,
+                             @Nullable String iconTexturePath,
                              @Nonnull String runtimeMode,
                              @Nonnull TelemetryConsentSnapshot consent) {
 
@@ -56,6 +62,7 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                     project.pluginIdentifier(),
                     project.pluginVersion(),
                     project.sourcePath(),
+                    resolveIconTexturePath(project.sourcePath()),
                     project.runtimeMode(),
                     new TelemetryConsentSnapshot(
                             project.enabled(),
@@ -67,6 +74,40 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                             project.breadcrumbsEnabled()
                     )
             );
+        }
+
+        public boolean hasIconTexture() {
+            return iconTexturePath != null && !iconTexturePath.isBlank();
+        }
+    }
+
+    @Nullable
+    private static String resolveIconTexturePath(@Nullable String sourcePath) {
+        if (sourcePath == null || sourcePath.isBlank()) {
+            return null;
+        }
+        Path path;
+        try {
+            path = Path.of(sourcePath);
+        } catch (Exception ignored) {
+            return null;
+        }
+        try {
+            if (Files.isDirectory(path)) {
+                return Files.isRegularFile(path.resolve(MOD_ICON_TEXTURE_PATH)) ? MOD_ICON_TEXTURE_PATH : null;
+            }
+            if (!Files.isRegularFile(path)) {
+                return null;
+            }
+            String fileName = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+            if (!fileName.endsWith(".jar") && !fileName.endsWith(".zip")) {
+                return null;
+            }
+            try (ZipFile zipFile = new ZipFile(path.toFile())) {
+                return zipFile.getEntry(MOD_ICON_TEXTURE_PATH) == null ? null : MOD_ICON_TEXTURE_PATH;
+            }
+        } catch (Exception ignored) {
+            return null;
         }
     }
 }

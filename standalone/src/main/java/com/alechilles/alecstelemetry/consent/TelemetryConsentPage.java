@@ -134,6 +134,13 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 + " | " + project.pluginVersion()
                 + " | " + project.destinationMode()
                 + (project.overridePresent() ? " | override" : ""));
+        if (project.hasIconTexture()) {
+            commands.set(rowSelector(index) + " #TelemetryConsentProjectIconImage.Background", project.iconTexturePath());
+            commands.set(rowSelector(index) + " #TelemetryConsentProjectIconPlaceholder.Visible", false);
+        } else {
+            commands.set(rowSelector(index) + " #TelemetryConsentProjectIconImage.Background", "#203a5a");
+            commands.set(rowSelector(index) + " #TelemetryConsentProjectIconPlaceholder.Visible", true);
+        }
         commands.set(projectCheckSelector(index) + ".Value", consent.projectEnabled());
         commands.set(categoryCheckSelector(index, "crash") + ".Value", consent.crashEnabled());
         commands.set(categoryCheckSelector(index, "error") + ".Value", consent.errorEnabled());
