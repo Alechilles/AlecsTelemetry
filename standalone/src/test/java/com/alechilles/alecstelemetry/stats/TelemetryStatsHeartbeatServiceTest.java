@@ -15,6 +15,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class TelemetryStatsHeartbeatServiceTest {
 
     @Test
+    void usesFiveMinuteFixedHeartbeatInterval() {
+        assertEquals(300, TelemetryStatsHeartbeatService.HEARTBEAT_INTERVAL_SECONDS);
+    }
+
+    @Test
     void emitsHeartbeatForEveryStatsRuntimeProject() {
         FakeStatsRuntime runtime = new FakeStatsRuntime(List.of(
                 registration("example-mod", "Example Mod"),
@@ -69,11 +74,6 @@ class TelemetryStatsHeartbeatServiceTest {
                                            @Nonnull TelemetryEventContext context) {
             projectIds.add(projectId);
             playersOnlineValues.add(((Number) context.details().get("playersOnline")).intValue());
-        }
-
-        @Override
-        public int heartbeatIntervalSeconds() {
-            return 1800;
         }
     }
 }

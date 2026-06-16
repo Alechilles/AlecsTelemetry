@@ -24,7 +24,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        int maxPendingEventsPerProject,
                                        int maxUploadsPerFlush,
                                        int maxBreadcrumbsPerProject,
-                                       int statsHeartbeatIntervalSeconds,
                                        @Nonnull ManualReportSettings manualReports,
                                        @Nonnull String hostedIngestEndpoint,
                                        @Nonnull String hostedEventIngestEndpoint) {
@@ -45,7 +44,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     private static final int DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT = 500;
     private static final int DEFAULT_MAX_UPLOADS_PER_FLUSH = 10;
     private static final int DEFAULT_MAX_BREADCRUMBS_PER_PROJECT = 30;
-    private static final int DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS = 1800;
     private static final boolean DEFAULT_MANUAL_REPORTS_ENABLED = true;
     private static final boolean DEFAULT_MANUAL_REVIEW_REQUIRED = false;
     private static final boolean DEFAULT_ALLOW_REPORT_CONTACT = true;
@@ -72,7 +70,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(parsed.maxPendingEventsPerProject, DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT, 1, 10000),
                 clamp(parsed.maxUploadsPerFlush, DEFAULT_MAX_UPLOADS_PER_FLUSH, 1, 500),
                 clamp(parsed.maxBreadcrumbsPerProject, DEFAULT_MAX_BREADCRUMBS_PER_PROJECT, 1, 200),
-                clamp(parsed.statsHeartbeatIntervalSeconds, DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS, 60, 86400),
                 normalizeManualReportSettings(parsed.manualReports),
                 parsed.hostedIngestEndpoint == null || parsed.hostedIngestEndpoint.isBlank()
                         ? DEFAULT_HOSTED_INGEST_ENDPOINT
@@ -122,7 +119,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         safe.maxPendingEventsPerProject = DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT;
         safe.maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         safe.maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
-        safe.statsHeartbeatIntervalSeconds = DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS;
         safe.manualReports = ManualReportSettingsDocument.defaults();
         safe.hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         safe.hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;
@@ -197,7 +193,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         private Integer maxPendingEventsPerProject = DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT;
         private Integer maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         private Integer maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
-        private Integer statsHeartbeatIntervalSeconds = DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS;
         private ManualReportSettingsDocument manualReports = ManualReportSettingsDocument.defaults();
         private String hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         private String hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;

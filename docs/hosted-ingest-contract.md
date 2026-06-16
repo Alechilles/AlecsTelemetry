@@ -110,7 +110,7 @@ project's telemetry.
 Supported stats event names:
 
 - `heartbeat`
-  - emitted by the standalone runtime every `statsHeartbeatIntervalSeconds`
+  - emitted by the standalone runtime every 5 minutes
   - includes `details.playersOnline` as a non-negative integer
   - derives plugin version, Hytale build, Java version, OS, architecture, loaded
     mods, server id, and session id from the normal event runtime metadata

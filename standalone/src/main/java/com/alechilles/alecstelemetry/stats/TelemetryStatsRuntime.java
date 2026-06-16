@@ -19,8 +19,6 @@ public interface TelemetryStatsRuntime {
                                 @Nonnull String eventName,
                                 @Nonnull TelemetryEventContext context);
 
-    int heartbeatIntervalSeconds();
-
     @Nonnull
     static TelemetryStatsRuntime from(@Nonnull TelemetryRuntimeService runtimeService) {
         return new TelemetryStatsRuntime() {
@@ -37,10 +35,6 @@ public interface TelemetryStatsRuntime {
                 runtimeService.recordStatsWithContext(projectId, eventName, context);
             }
 
-            @Override
-            public int heartbeatIntervalSeconds() {
-                return runtimeService.statsHeartbeatIntervalSeconds();
-            }
         };
     }
 }

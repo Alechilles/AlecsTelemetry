@@ -7,7 +7,7 @@ keys.
 ## Default Stats
 
 The standalone runtime emits a `stats` `heartbeat` event for each dependency-mode
-project every 30 minutes by default. The hosted stats surface derives:
+project every 5 minutes. The hosted stats surface derives:
 
 - active servers
 - active players
@@ -20,8 +20,9 @@ project every 30 minutes by default. The hosted stats surface derives:
 - system architecture breakdown
 - loaded mod breakdowns
 
-The heartbeat interval is controlled by `statsHeartbeatIntervalSeconds` in the
-runtime settings file. The default is `1800`.
+The heartbeat interval is fixed at 5 minutes. It is intentionally not exposed in
+runtime settings so servers cannot accidentally or deliberately report at an
+unsafe cadence.
 
 ## Consent
 

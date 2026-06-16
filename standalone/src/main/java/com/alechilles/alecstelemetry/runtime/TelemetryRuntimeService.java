@@ -165,11 +165,6 @@ public final class TelemetryRuntimeService {
         return engine.isEnabled();
     }
 
-    @Nonnull
-    public int statsHeartbeatIntervalSeconds() {
-        return settings.statsHeartbeatIntervalSeconds();
-    }
-
     public int registeredProjectCount() {
         return engine.projects().size();
     }

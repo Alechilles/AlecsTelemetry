@@ -18,6 +18,7 @@ import java.util.logging.Level;
 public final class TelemetryStatsHeartbeatService {
 
     public static final String EVENT_HEARTBEAT = "heartbeat";
+    public static final int HEARTBEAT_INTERVAL_SECONDS = 300;
 
     private final TelemetryStatsRuntime runtime;
     private final TelemetryPlayerCounter playerCounter;
@@ -41,11 +42,10 @@ public final class TelemetryStatsHeartbeatService {
         if (executor == null || !started.compareAndSet(false, true)) {
             return;
         }
-        int intervalSeconds = runtime.heartbeatIntervalSeconds();
         future = executor.scheduleWithFixedDelay(
                 this::emitHeartbeatSafely,
-                intervalSeconds,
-                intervalSeconds,
+                HEARTBEAT_INTERVAL_SECONDS,
+                HEARTBEAT_INTERVAL_SECONDS,
                 TimeUnit.SECONDS
         );
     }

@@ -2208,7 +2208,7 @@ HStats and bStats.
 ## Default Stats
 
 The standalone runtime emits a `stats` `heartbeat` event for each
-dependency-mode project every 30 minutes. The hosted stats surface derives:
+dependency-mode project every 5 minutes. The hosted stats surface derives:
 
 - active servers
 - active players
