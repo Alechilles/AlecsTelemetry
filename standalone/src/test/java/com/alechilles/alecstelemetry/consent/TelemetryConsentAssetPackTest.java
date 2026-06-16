@@ -14,6 +14,7 @@ class TelemetryConsentAssetPackTest {
     @Test
     void consentUiIsPackagedAsClientAssetPackContent() throws IOException {
         String manifest = resourceText("manifest.json");
+        String consentPage = resourceText("Common/UI/Custom/TelemetryConsentPage.ui");
 
         assertTrue(
                 manifest.contains("\"IncludesAssetPack\": true"),
@@ -26,6 +27,22 @@ class TelemetryConsentAssetPackTest {
         assertNotNull(
                 getClass().getClassLoader().getResource("Common/UI/Custom/AlecsTelemetryLogo.png"),
                 "AlecsTelemetryLogo.png must be packaged for the consent page header"
+        );
+        assertTrue(
+                consentPage.contains("Background: \"AlecsTelemetryLogo.png\""),
+                "TelemetryConsentPage.ui must reference the logo relative to its custom UI folder"
+        );
+        assertTrue(
+                consentPage.contains("Anchor: (Height: 128, Top: 0)"),
+                "TelemetryConsentPage.ui must enlarge the decorated title bar for the logo"
+        );
+        assertTrue(
+                consentPage.contains("Anchor: (Top: 128)"),
+                "TelemetryConsentPage.ui must offset content below the enlarged logo title bar"
+        );
+        assertTrue(
+                !consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"),
+                "TelemetryConsentPage.ui must not use the unresolved asset-pack path for the logo texture"
         );
     }
 

@@ -18,20 +18,24 @@ $C.@PageOverlay {
   LayoutMode: Middle;
 
   $C.@DecoratedContainer #TelemetryConsentRoot {
+    @TitleHeight = 128;
+
     Anchor: (Width: 780, Height: 710);
 
+    #Title {
+      Anchor: (Height: 128, Top: 0);
+      Padding: (Top: 10, Bottom: 10);
+
+      Group #TelemetryConsentLogo {
+        Anchor: (Width: 299, Height: 108);
+        Background: "AlecsTelemetryLogo.png";
+      }
+    }
+
     #Content {
+      Anchor: (Top: 128);
       LayoutMode: Top;
       Padding: (Left: 12, Right: 12, Top: 8, Bottom: 10);
-
-      Group {
-        Anchor: (Height: 90);
-
-        Group #TelemetryConsentLogo {
-          Anchor: (Left: 0, Top: 0, Width: 256, Height: 90);
-          Background: (TexturePath: "Common/UI/Custom/AlecsTelemetryLogo.png");
-        }
-      }
 
       Label #TelemetryConsentSummary {
         Anchor: (Height: 58);
