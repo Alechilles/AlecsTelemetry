@@ -37,6 +37,10 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must enlarge the decorated title bar for the logo"
         );
         assertTrue(
+                consentPage.contains("Background: #203b5a"),
+                "TelemetryConsentPage.ui must avoid vertically stretching the stock decorated title texture"
+        );
+        assertTrue(
                 consentPage.contains("Anchor: (Top: 128)"),
                 "TelemetryConsentPage.ui must offset content below the enlarged logo title bar"
         );
