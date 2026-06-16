@@ -137,6 +137,44 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void embeddedConsentProjectCanAcceptManualReportsWithoutStandaloneRegistration() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded Mod")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        assertTrue(service.projects().isEmpty());
+        assertNull(service.api().findProject("embedded-mod"));
+        assertEquals(
+                List.of("embedded-mod"),
+                service.manualReportProjects().stream().map(TelemetryProjectRegistration::projectId).toList()
+        );
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "embedded-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(1, fileCount(dataPaths.pendingManualReportsDirectory("embedded-mod")));
+    }
+
+    @Test
     void manualReviewRequiredStoresReportForReviewAndSkipsFlushUpload() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("""
                 {
@@ -895,6 +933,14 @@ class TelemetryRuntimeServiceTest {
     private static TelemetryProjectDescriptor manualReportDescriptor(String projectId,
                                                                     String displayName,
                                                                     boolean reportsEnabled) {
+        return manualReportDescriptor(projectId, displayName, reportsEnabled, null);
+    }
+
+    private static TelemetryProjectDescriptor manualReportDescriptor(String projectId,
+                                                                    String displayName,
+                                                                    boolean reportsEnabled,
+                                                                    String runtimeMode) {
+        String runtimeModeField = runtimeMode == null ? "" : "  \"runtimeMode\": \"%s\",%n".formatted(runtimeMode);
         String reports = reportsEnabled
                 ? """
                   "reports": {
@@ -924,9 +970,10 @@ class TelemetryRuntimeServiceTest {
                 {
                   "projectId": "%s",
                   "displayName": "%s",
+                """.formatted(projectId, displayName) + runtimeModeField + """
                   "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example.telemetry"],
-                """.formatted(projectId, displayName, displayName) + reports + """
+                """.formatted(displayName) + reports + """
                   "defaults": {
                     "destinationMode": "custom"
                   },

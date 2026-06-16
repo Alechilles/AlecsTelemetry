@@ -260,7 +260,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
 
     @Nonnull
     private TelemetryReportViewModel viewModel() {
-        TelemetryProjectRegistration project = runtimeService.findProject(projectId);
+        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
         if (project == null) {
             throw new IllegalStateException("Unknown telemetry project: " + projectId);
         }
@@ -273,7 +273,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
 
     @Nonnull
     private Map<String, Object> formValues() {
-        TelemetryProjectRegistration project = runtimeService.findProject(projectId);
+        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
         if (project == null) {
             return Map.of();
         }

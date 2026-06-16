@@ -36,8 +36,8 @@ public final class TelemetryReportCoordinator {
             warn("Unable to open manual report page because player UI context is unavailable.", null);
             return false;
         }
-        TelemetryProjectRegistration project = runtimeService.findProject(projectId);
-        if (project == null || !project.descriptor().reports().enabled()) {
+        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        if (project == null || !runtimeService.isProjectEnabled(project.projectId()) || !project.descriptor().reports().enabled()) {
             warn("Unable to open manual report page for unavailable project " + projectId + ".", null);
             return false;
         }

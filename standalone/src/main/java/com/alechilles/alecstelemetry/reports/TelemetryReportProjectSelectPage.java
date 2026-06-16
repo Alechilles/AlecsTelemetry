@@ -73,7 +73,8 @@ public final class TelemetryReportProjectSelectPage
     private void openReportPage(@Nonnull Ref<EntityStore> ref,
                                 @Nonnull Store<EntityStore> store,
                                 @Nonnull String projectId) {
-        if (runtimeService.findProject(projectId) == null) {
+        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        if (project == null || !runtimeService.isProjectEnabled(project.projectId()) || !project.descriptor().reports().enabled()) {
             refreshUi();
             return;
         }
@@ -85,7 +86,7 @@ public final class TelemetryReportProjectSelectPage
         player.getPageManager().openCustomPage(
                 ref,
                 store,
-                new TelemetryReportPage(playerRef, runtimeService, projectId, new TelemetryReportOpenRequest(reportKind, null, null))
+                new TelemetryReportPage(playerRef, runtimeService, project.projectId(), new TelemetryReportOpenRequest(reportKind, null, null))
         );
     }
 

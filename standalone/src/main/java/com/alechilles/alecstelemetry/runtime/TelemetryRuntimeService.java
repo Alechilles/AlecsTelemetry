@@ -138,7 +138,16 @@ public final class TelemetryRuntimeService {
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.projects = List.copyOf(projects);
-        this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
+        this.engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                projects,
+                manualReportRuntimeProjects(projects, consentProjects),
+                loadedMods,
+                client,
+                logger,
+                executor
+        );
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
         logRegistrationWarnings();
@@ -223,8 +232,10 @@ public final class TelemetryRuntimeService {
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        if (findProject(project.projectId()) != null) {
+        if (findProject(project.projectId()) != null || findManualReportProject(project.projectId()) != null) {
             engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
+        }
+        if (findProject(project.projectId()) != null) {
             engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
             engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
             engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
@@ -402,11 +413,16 @@ public final class TelemetryRuntimeService {
         return engine.findProject(projectId);
     }
 
+    @Nullable
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        return engine.findManualReportProject(projectId);
+    }
+
     @Nonnull
     public List<TelemetryProjectRegistration> manualReportProjects() {
         ArrayList<TelemetryProjectRegistration> reportProjects = new ArrayList<>();
-        for (TelemetryProjectRegistration project : projects) {
-            if (project.isEnabled() && project.descriptor().reports().enabled()) {
+        for (TelemetryProjectRegistration project : engine.manualReportProjects()) {
+            if (engine.isProjectEnabled(project.projectId()) && project.descriptor().reports().enabled()) {
                 reportProjects.add(project);
             }
         }
@@ -463,6 +479,22 @@ public final class TelemetryRuntimeService {
             resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
         }
         return List.copyOf(resolved);
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> manualReportRuntimeProjects(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull List<TelemetryProjectRegistration> consentProjects) {
+        LinkedHashMap<String, TelemetryProjectRegistration> reportProjects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : projects) {
+            reportProjects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : consentProjects) {
+            if (project.descriptor().reports().enabled()) {
+                reportProjects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+            }
+        }
+        return List.copyOf(reportProjects.values());
     }
 
     @Nonnull

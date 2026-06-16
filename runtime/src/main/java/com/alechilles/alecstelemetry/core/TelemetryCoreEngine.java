@@ -56,6 +56,7 @@ public final class TelemetryCoreEngine {
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
     private final List<TelemetryProjectRegistration> projects;
+    private final List<TelemetryProjectRegistration> manualReportProjects;
     private final List<CrashReportEnvelope.LoadedModMetadata> loadedMods;
     private final CrashReportClient client;
     private final HytaleLogger logger;
@@ -93,9 +94,21 @@ public final class TelemetryCoreEngine {
                                @Nonnull CrashReportClient client,
                                @Nullable HytaleLogger logger,
                                @Nullable ScheduledExecutorService executor) {
+        this(settings, dataPaths, projects, projects, loadedMods, client, logger, executor);
+    }
+
+    public TelemetryCoreEngine(@Nonnull TelemetryRuntimeSettings settings,
+                               @Nonnull TelemetryDataPaths dataPaths,
+                               @Nonnull List<TelemetryProjectRegistration> projects,
+                               @Nonnull List<TelemetryProjectRegistration> manualReportProjects,
+                               @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                               @Nonnull CrashReportClient client,
+                               @Nullable HytaleLogger logger,
+                               @Nullable ScheduledExecutorService executor) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.projects = List.copyOf(projects);
+        this.manualReportProjects = List.copyOf(manualReportProjects);
         this.loadedMods = List.copyOf(loadedMods);
         this.client = client;
         this.logger = logger;
@@ -145,6 +158,11 @@ public final class TelemetryCoreEngine {
     }
 
     @Nonnull
+    public List<TelemetryProjectRegistration> manualReportProjects() {
+        return manualReportProjects;
+    }
+
+    @Nonnull
     public List<CrashReportEnvelope.LoadedModMetadata> loadedMods() {
         return loadedMods;
     }
@@ -160,6 +178,9 @@ public final class TelemetryCoreEngine {
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null) {
+            project = findManualReportProject(projectId);
+        }
         return project != null && isProjectRuntimeEnabled(project);
     }
 
@@ -518,7 +539,7 @@ public final class TelemetryCoreEngine {
     public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
-        TelemetryProjectRegistration project = findProject(projectId);
+        TelemetryProjectRegistration project = findManualReportProject(projectId);
         if (project == null) {
             return new ManualReportEnvelope.CreateResult(null, List.of("project_not_found"));
         }
@@ -581,7 +602,7 @@ public final class TelemetryCoreEngine {
     @Nonnull
     public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
         ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
-        for (TelemetryProjectRegistration project : projects) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
             ManualReportStore store = manualReportStoreFor(project);
             for (ManualReportStore.PendingReport pending : store.listReviewReports(project.projectId(), maxReportsPerProject)) {
                 ManualReportEnvelope envelope = parseManualReport(pending.payload());
@@ -594,7 +615,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean approveManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : projects) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
             ManualReportStore store = manualReportStoreFor(project);
             if (store.approveReviewed(project.projectId(), reportId).isPresent()) {
                 requestFlushAsync("manual_report_approved", project.projectId());
@@ -605,7 +626,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean rejectManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : projects) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
             ManualReportStore store = manualReportStoreFor(project);
             ManualReportEnvelope envelope = findReviewEnvelope(store, project.projectId(), reportId);
             if (store.rejectReviewed(project.projectId(), reportId).isPresent()) {
@@ -635,6 +656,16 @@ public final class TelemetryCoreEngine {
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         for (TelemetryProjectRegistration project : projects) {
+            if (project.projectId().equalsIgnoreCase(projectId)) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
             if (project.projectId().equalsIgnoreCase(projectId)) {
                 return project;
             }
@@ -742,7 +773,12 @@ public final class TelemetryCoreEngine {
                         }
                     }
                 }
+            }
 
+            for (TelemetryProjectRegistration project : matchingManualReportProjects(projectIdFilter)) {
+                if (!isProjectRuntimeEnabled(project)) {
+                    continue;
+                }
                 CrashReportClient.DeliveryTarget reportTarget = project.resolveReportDeliveryTarget(settings);
                 if (reportTarget != null && !reportTarget.endpoint().isBlank()) {
                     ManualReportStore manualStore = manualReportStoreFor(project);
@@ -930,7 +966,9 @@ public final class TelemetryCoreEngine {
     }
 
     private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {
-        if (!enabled.get() || executor == null || matchingProjects(projectIdFilter).isEmpty()) {
+        if (!enabled.get()
+                || executor == null
+                || (matchingProjects(projectIdFilter).isEmpty() && matchingManualReportProjects(projectIdFilter).isEmpty())) {
             return false;
         }
         if (!flushInProgress.compareAndSet(false, true)) {
@@ -958,6 +996,15 @@ public final class TelemetryCoreEngine {
             return projects;
         }
         TelemetryProjectRegistration project = findProject(projectIdFilter);
+        return project == null ? List.of() : List.of(project);
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> matchingManualReportProjects(@Nullable String projectIdFilter) {
+        if (projectIdFilter == null || projectIdFilter.isBlank()) {
+            return manualReportProjects;
+        }
+        TelemetryProjectRegistration project = findManualReportProject(projectIdFilter);
         return project == null ? List.of() : List.of(project);
     }
 
@@ -1043,6 +1090,8 @@ public final class TelemetryCoreEngine {
         for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
             total += storeFor(project).pendingCount();
             total += eventStoreFor(project).pendingCount();
+        }
+        for (TelemetryProjectRegistration project : matchingManualReportProjects(projectIdFilter)) {
             total += manualReportStoreFor(project).pendingCount(project.projectId());
         }
         return total;
