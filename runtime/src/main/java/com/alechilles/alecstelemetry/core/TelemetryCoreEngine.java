@@ -25,6 +25,8 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -561,6 +563,60 @@ public final class TelemetryCoreEngine {
         return totalPendingCount(projectId);
     }
 
+    @Nonnull
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
+        for (TelemetryProjectRegistration project : projects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            for (ManualReportStore.PendingReport pending : store.listReviewReports(project.projectId(), maxReportsPerProject)) {
+                ManualReportEnvelope envelope = parseManualReport(pending.payload());
+                if (envelope != null) {
+                    reports.add(envelope);
+                }
+            }
+        }
+        return List.copyOf(reports);
+    }
+
+    public boolean approveManualReport(@Nonnull String reportId) {
+        for (TelemetryProjectRegistration project : projects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            if (store.approveReviewed(project.projectId(), reportId).isPresent()) {
+                requestFlushAsync("manual_report_approved", project.projectId());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        for (TelemetryProjectRegistration project : projects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            ManualReportEnvelope envelope = findReviewEnvelope(store, project.projectId(), reportId);
+            if (store.rejectReviewed(project.projectId(), reportId).isPresent()) {
+                if (envelope != null) {
+                    store.appendSubmittedAudit(envelope, "rejected", false);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nonnull
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        try {
+            if (!Files.isRegularFile(dataPaths.submittedManualReportsLog())) {
+                return List.of();
+            }
+            List<String> lines = Files.readAllLines(dataPaths.submittedManualReportsLog(), StandardCharsets.UTF_8);
+            int start = Math.max(0, lines.size() - Math.max(1, maxLines));
+            return List.copyOf(lines.subList(start, lines.size()));
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         for (TelemetryProjectRegistration project : projects) {
@@ -937,12 +993,33 @@ public final class TelemetryCoreEngine {
                                          @Nonnull String payloadJson,
                                          boolean uploaded) {
         try {
-            ManualReportEnvelope envelope = ManualReportEnvelope.fromJson(payloadJson);
+            ManualReportEnvelope envelope = parseManualReport(payloadJson);
             if (envelope != null) {
                 store.appendSubmittedAudit(envelope, "submitted", uploaded);
             }
         } catch (Exception ignored) {
             // Malformed local payloads should not break the rest of the flush pass.
+        }
+    }
+
+    @Nullable
+    private ManualReportEnvelope findReviewEnvelope(@Nonnull ManualReportStore store,
+                                                    @Nonnull String projectId,
+                                                    @Nonnull String reportId) {
+        for (ManualReportStore.PendingReport pending : store.listReviewReports(projectId, settings.maxUploadsPerFlush())) {
+            if (pending.path().getFileName().toString().contains(reportId)) {
+                return parseManualReport(pending.payload());
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static ManualReportEnvelope parseManualReport(@Nonnull String payloadJson) {
+        try {
+            return ManualReportEnvelope.fromJson(payloadJson);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

@@ -52,7 +52,16 @@ public final class ManualReportStore {
 
     @Nonnull
     public List<PendingReport> listPendingReports(@Nonnull String projectId, int maxReports) {
-        Path directory = paths.pendingManualReportsDirectory(projectId);
+        return listReports(paths.pendingManualReportsDirectory(projectId), maxReports);
+    }
+
+    @Nonnull
+    public List<PendingReport> listReviewReports(@Nonnull String projectId, int maxReports) {
+        return listReports(paths.reviewManualReportsDirectory(projectId), maxReports);
+    }
+
+    @Nonnull
+    private static List<PendingReport> listReports(@Nonnull Path directory, int maxReports) {
         if (!Files.isDirectory(directory)) {
             return List.of();
         }

@@ -349,6 +349,24 @@ public final class TelemetryRuntimeService {
     }
 
     @Nonnull
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        return engine.manualReportsForReview(maxReportsPerProject);
+    }
+
+    public boolean approveManualReport(@Nonnull String reportId) {
+        return engine.approveManualReport(reportId);
+    }
+
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        return engine.rejectManualReport(reportId);
+    }
+
+    @Nonnull
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        return engine.submittedManualReportAuditLines(maxLines);
+    }
+
+    @Nonnull
     public TelemetryRuntimeDiagnostics diagnostics() {
         ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
         for (TelemetryProjectRegistration project : consentProjects) {
