@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import type { Logger } from 'pino'
 
+import type { ManualReportIngestService } from './ingest/manual-report-ingest-service.js'
 import type { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
 
 function writeJson(response: ServerResponse, status: number, body: Record<string, unknown>): void {
@@ -33,6 +34,7 @@ async function readJsonBody(request: IncomingMessage, maxBytes: number): Promise
 
 export function createHostedServer(options: {
   readonly ingestService: TelemetryIngestService
+  readonly manualReportIngestService?: ManualReportIngestService
   readonly logger: Logger
   readonly maxRequestBodyBytes: number
 }): Server {
@@ -42,7 +44,9 @@ export function createHostedServer(options: {
       return
     }
 
-    if (request.method !== 'POST' || request.url !== '/ingest/crash') {
+    const isCrashIngest = request.method === 'POST' && request.url === '/ingest/crash'
+    const isManualReportIngest = request.method === 'POST' && request.url === '/ingest/report'
+    if (!isCrashIngest && !isManualReportIngest) {
       writeJson(response, 404, { error: 'not_found' })
       return
     }
@@ -57,7 +61,12 @@ export function createHostedServer(options: {
       const { bodyBytes, payload } = await readJsonBody(request, options.maxRequestBodyBytes)
       const projectKeyHeader = request.headers['x-telemetry-project-key']
       const projectKey = Array.isArray(projectKeyHeader) ? projectKeyHeader[0] ?? null : projectKeyHeader ?? null
-      const result = await options.ingestService.ingest({
+      const targetService = isManualReportIngest ? options.manualReportIngestService : options.ingestService
+      if (!targetService) {
+        writeJson(response, 404, { error: 'not_found' })
+        return
+      }
+      const result = await targetService.ingest({
         projectKey,
         payload,
         bodyBytes,
