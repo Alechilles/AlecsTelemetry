@@ -171,6 +171,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `performance`
 - `usage`
 - `stats`
+- `reports`
 - `ui`
 - `defaults`
 - `hosted`
@@ -327,6 +328,71 @@ Consumer mods can attach typed context to explicit non-crash events with:
 are first-class event envelope fields. The context builder also accepts custom
 `detail(key, value)` entries; those custom fields are uploaded only when the
 descriptor declares an allowlist for the matching event name.
+
+### `reports`
+
+Manual player reports use `eventType: "manual_report"` and `reportKind: "issue"` or
+`"suggestion"`. The player form always has title and description fields; the
+descriptor adds project-specific fields and declares which optional sections the
+modder wants to support.
+
+```json
+{
+  "reports": {
+    "enabled": true,
+    "issue": {
+      "enabled": true,
+      "fields": {
+        "severity": {
+          "type": "enum",
+          "label": "Severity",
+          "required": true,
+          "values": ["minor", "moderate", "major", "blocking"]
+        },
+        "steps": {
+          "type": "text",
+          "label": "Steps to reproduce",
+          "maxLength": 2000
+        }
+      }
+    },
+    "suggestion": {
+      "enabled": true,
+      "fields": {
+        "category": {
+          "type": "enum",
+          "label": "Category",
+          "values": ["balance", "content", "quality_of_life", "other"]
+        }
+      }
+    },
+    "attachments": {
+      "currentServerLog": true,
+      "previousServerLog": true,
+      "maxBytes": 262144
+    },
+    "contact": {
+      "enabled": true,
+      "maxLength": 160
+    },
+    "resolutionUpdates": {
+      "enabled": true
+    }
+  }
+}
+```
+
+Supported field types:
+
+- `string`: single-line text, default `maxLength` 120
+- `text`: multiline text, default `maxLength` 1000
+- `boolean`: checkbox
+- `enum`: dropdown or segmented value, requires `values`
+- `number`: numeric input with optional `min` and `max`
+
+Server-owner runtime settings are final authority. A descriptor can request logs,
+loaded mod lists, diagnostics, contact, and resolution updates, but the server can
+disable each option.
 
 ### Custom Event Context details
 

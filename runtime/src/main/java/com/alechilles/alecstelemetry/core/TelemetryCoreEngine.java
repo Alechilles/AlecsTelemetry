@@ -8,6 +8,13 @@ import com.alechilles.alecstelemetry.crash.CrashReportStore;
 import com.alechilles.alecstelemetry.event.TelemetryEventEnvelope;
 import com.alechilles.alecstelemetry.event.TelemetryEventStore;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportAttachment;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportLogCollector;
+import com.alechilles.alecstelemetry.report.ManualReportReceiptStore;
+import com.alechilles.alecstelemetry.report.ManualReportStore;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBuffer;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
@@ -19,7 +26,10 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -46,6 +56,7 @@ public final class TelemetryCoreEngine {
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
     private final List<TelemetryProjectRegistration> projects;
+    private final List<TelemetryProjectRegistration> manualReportProjects;
     private final List<CrashReportEnvelope.LoadedModMetadata> loadedMods;
     private final CrashReportClient client;
     private final HytaleLogger logger;
@@ -56,6 +67,7 @@ public final class TelemetryCoreEngine {
     private final AtomicBoolean flushInProgress = new AtomicBoolean(false);
     private final LinkedHashMap<String, CrashReportStore> storesByProjectId = new LinkedHashMap<>();
     private final LinkedHashMap<String, TelemetryEventStore> eventStoresByProjectId = new LinkedHashMap<>();
+    private final LinkedHashMap<String, ManualReportStore> manualReportStoresByProjectId = new LinkedHashMap<>();
     private final LinkedHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new LinkedHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> projectEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> crashEnabledOverrides = new ConcurrentHashMap<>();
@@ -68,6 +80,8 @@ public final class TelemetryCoreEngine {
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
+    private final ManualReportLogCollector manualReportLogCollector = new ManualReportLogCollector();
+    private final ManualReportReceiptStore manualReportReceiptStore = new ManualReportReceiptStore();
 
     private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
     private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
@@ -81,9 +95,21 @@ public final class TelemetryCoreEngine {
                                @Nonnull CrashReportClient client,
                                @Nullable HytaleLogger logger,
                                @Nullable ScheduledExecutorService executor) {
+        this(settings, dataPaths, projects, projects, loadedMods, client, logger, executor);
+    }
+
+    public TelemetryCoreEngine(@Nonnull TelemetryRuntimeSettings settings,
+                               @Nonnull TelemetryDataPaths dataPaths,
+                               @Nonnull List<TelemetryProjectRegistration> projects,
+                               @Nonnull List<TelemetryProjectRegistration> manualReportProjects,
+                               @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                               @Nonnull CrashReportClient client,
+                               @Nullable HytaleLogger logger,
+                               @Nullable ScheduledExecutorService executor) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.projects = List.copyOf(projects);
+        this.manualReportProjects = List.copyOf(manualReportProjects);
         this.loadedMods = List.copyOf(loadedMods);
         this.client = client;
         this.logger = logger;
@@ -130,6 +156,11 @@ public final class TelemetryCoreEngine {
     @Nonnull
     public List<TelemetryProjectRegistration> projects() {
         return projects;
+    }
+
+    @Nonnull
+    public List<TelemetryProjectRegistration> manualReportProjects() {
+        return manualReportProjects;
     }
 
     @Nonnull
@@ -558,13 +589,137 @@ public final class TelemetryCoreEngine {
         );
     }
 
+    @Nonnull
+    public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
+                                                                @Nonnull ManualReportSubmission submission,
+                                                                @Nullable PlayerReportRuntimeContext playerContext) {
+        TelemetryProjectRegistration project = findManualReportProject(projectId);
+        if (project == null) {
+            return new ManualReportEnvelope.CreateResult(null, List.of("project_not_found"));
+        }
+        PlayerReportRuntimeContext safeContext = playerContext == null ? PlayerReportRuntimeContext.UNKNOWN : playerContext;
+        TelemetryRuntimeSettings.ManualReportSettings reportSettings = settings.manualReports();
+        boolean includeLoadedMods = submission.includeLoadedModList() && reportSettings.allowLoadedModList();
+        boolean includeDiagnostics = submission.includeDiagnostics() && reportSettings.allowDiagnostics();
+        List<CrashReportEnvelope.LoadedModMetadata> reportLoadedMods = includeLoadedMods
+                ? (safeContext.loadedMods().isEmpty() ? loadedMods : safeContext.loadedMods())
+                : List.of();
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(reportLoadedMods);
+        List<ManualReportAttachment> attachments = collectManualReportAttachments(submission);
+        ManualReportEnvelope.CreateResult result = ManualReportEnvelope.createWithAttachments(
+                project,
+                settings,
+                submission,
+                safeContext.toSnapshot(includeLoadedMods, includeDiagnostics),
+                attachments,
+                environmentFor(project, runtimeMetadata),
+                runtimeMetadata,
+                sessionId,
+                serverId
+        );
+        if (!result.accepted()) {
+            return result;
+        }
+        try {
+            ManualReportEnvelope envelope = result.envelope();
+            ManualReportStore store = manualReportStoreFor(project);
+            if (reportSettings.manualReviewRequired()) {
+                store.saveForReview(envelope);
+            } else {
+                store.savePending(envelope);
+                requestFlushAsync("manual_report", project.projectId());
+            }
+            manualReportReceiptStore.saveReceipt(
+                    dataPaths.manualReportReceiptsFile(),
+                    new ManualReportReceiptStore.Receipt(
+                            envelope.reportId(),
+                            envelope.projectId(),
+                            envelope.reportKind(),
+                            envelope.title(),
+                            envelope.submittedAtUtc(),
+                            result.followUpToken() == null ? "" : result.followUpToken(),
+                            reportSettings.manualReviewRequired() ? "review" : "queued",
+                            null
+                    )
+            );
+            return result;
+        } catch (Exception ex) {
+            logWarning("Failed to store manual report for project " + project.projectId() + ".", ex);
+            return new ManualReportEnvelope.CreateResult(null, List.of("store_failed"));
+        }
+    }
+
     public int pendingReports(@Nullable String projectId) {
         return totalPendingCount(projectId);
+    }
+
+    @Nonnull
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
+        for (TelemetryProjectRegistration project : manualReportProjects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            for (ManualReportStore.PendingReport pending : store.listReviewReports(project.projectId(), maxReportsPerProject)) {
+                ManualReportEnvelope envelope = parseManualReport(pending.payload());
+                if (envelope != null) {
+                    reports.add(envelope);
+                }
+            }
+        }
+        return List.copyOf(reports);
+    }
+
+    public boolean approveManualReport(@Nonnull String reportId) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            if (store.approveReviewed(project.projectId(), reportId).isPresent()) {
+                requestFlushAsync("manual_report_approved", project.projectId());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
+            ManualReportStore store = manualReportStoreFor(project);
+            ManualReportEnvelope envelope = findReviewEnvelope(store, project.projectId(), reportId);
+            if (store.rejectReviewed(project.projectId(), reportId).isPresent()) {
+                if (envelope != null) {
+                    store.appendSubmittedAudit(envelope, "rejected", false);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nonnull
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        try {
+            if (!Files.isRegularFile(dataPaths.submittedManualReportsLog())) {
+                return List.of();
+            }
+            List<String> lines = Files.readAllLines(dataPaths.submittedManualReportsLog(), StandardCharsets.UTF_8);
+            int start = Math.max(0, lines.size() - Math.max(1, maxLines));
+            return List.copyOf(lines.subList(start, lines.size()));
+        } catch (Exception ignored) {
+            return List.of();
+        }
     }
 
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         for (TelemetryProjectRegistration project : projects) {
+            if (project.projectId().equalsIgnoreCase(projectId)) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        for (TelemetryProjectRegistration project : manualReportProjects) {
             if (project.projectId().equalsIgnoreCase(projectId)) {
                 return project;
             }
@@ -659,23 +814,45 @@ public final class TelemetryCoreEngine {
                 }
 
                 CrashReportClient.DeliveryTarget eventTarget = project.resolveEventDeliveryTarget(settings);
-                if (eventTarget == null || eventTarget.endpoint().isBlank()) {
-                    continue;
-                }
-                TelemetryEventStore eventStore = eventStoreFor(project);
-                for (TelemetryEventStore.PendingEvent pending : eventStore.listPendingEvents(settings.maxUploadsPerFlush())) {
-                    attempted++;
-                    CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
-                    if (uploadResult.success()) {
-                        if (eventStore.delete(pending.path())) {
-                            uploaded++;
+                if (eventTarget != null && !eventTarget.endpoint().isBlank()) {
+                    TelemetryEventStore eventStore = eventStoreFor(project);
+                    for (TelemetryEventStore.PendingEvent pending : eventStore.listPendingEvents(settings.maxUploadsPerFlush())) {
+                        attempted++;
+                        CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
+                        if (uploadResult.success()) {
+                            if (eventStore.delete(pending.path())) {
+                                uploaded++;
+                            } else {
+                                lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
+                            }
                         } else {
-                            lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
+                            lastFailure = uploadResult.detail() == null
+                                    ? "HTTP status " + uploadResult.statusCode()
+                                    : uploadResult.detail();
                         }
-                    } else {
-                        lastFailure = uploadResult.detail() == null
-                                ? "HTTP status " + uploadResult.statusCode()
-                                : uploadResult.detail();
+                    }
+                }
+            }
+
+            for (TelemetryProjectRegistration project : matchingManualReportProjects(projectIdFilter)) {
+                CrashReportClient.DeliveryTarget reportTarget = project.resolveReportDeliveryTarget(settings);
+                if (reportTarget != null && !reportTarget.endpoint().isBlank()) {
+                    ManualReportStore manualStore = manualReportStoreFor(project);
+                    for (ManualReportStore.PendingReport pending : manualStore.listPendingReports(project.projectId(), settings.maxUploadsPerFlush())) {
+                        attempted++;
+                        CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
+                        if (uploadResult.success()) {
+                            if (manualStore.delete(pending.path())) {
+                                uploaded++;
+                                appendManualReportAudit(manualStore, pending.payload(), true);
+                            } else {
+                                lastFailure = "Uploaded but failed to remove local manual report file " + pending.path().getFileName();
+                            }
+                        } else {
+                            lastFailure = uploadResult.detail() == null
+                                    ? "HTTP status " + uploadResult.statusCode()
+                                    : uploadResult.detail();
+                        }
                     }
                 }
             }
@@ -845,7 +1022,9 @@ public final class TelemetryCoreEngine {
     }
 
     private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {
-        if (!enabled.get() || executor == null || matchingProjects(projectIdFilter).isEmpty()) {
+        if (!enabled.get()
+                || executor == null
+                || (matchingProjects(projectIdFilter).isEmpty() && matchingManualReportProjects(projectIdFilter).isEmpty())) {
             return false;
         }
         if (!flushInProgress.compareAndSet(false, true)) {
@@ -876,6 +1055,15 @@ public final class TelemetryCoreEngine {
         return project == null ? List.of() : List.of(project);
     }
 
+    @Nonnull
+    private List<TelemetryProjectRegistration> matchingManualReportProjects(@Nullable String projectIdFilter) {
+        if (projectIdFilter == null || projectIdFilter.isBlank()) {
+            return manualReportProjects;
+        }
+        TelemetryProjectRegistration project = findManualReportProject(projectIdFilter);
+        return project == null ? List.of() : List.of(project);
+    }
+
     private CrashReportStore storeFor(@Nonnull TelemetryProjectRegistration project) {
         return storesByProjectId.computeIfAbsent(
                 project.projectId().toLowerCase(Locale.ROOT),
@@ -898,11 +1086,69 @@ public final class TelemetryCoreEngine {
         );
     }
 
+    private ManualReportStore manualReportStoreFor(@Nonnull TelemetryProjectRegistration project) {
+        return manualReportStoresByProjectId.computeIfAbsent(
+                project.projectId().toLowerCase(Locale.ROOT),
+                ignored -> new ManualReportStore(dataPaths)
+        );
+    }
+
+    @Nonnull
+    private List<ManualReportAttachment> collectManualReportAttachments(@Nonnull ManualReportSubmission submission) {
+        TelemetryRuntimeSettings.ManualReportSettings reportSettings = settings.manualReports();
+        ArrayList<ManualReportAttachment> attachments = new ArrayList<>();
+        int maxBytes = reportSettings.maxLogAttachmentBytes();
+        if (submission.includeCurrentServerLog() && reportSettings.allowCurrentServerLog()) {
+            manualReportLogCollector.collectCurrentServerLog(dataPaths, maxBytes).ifPresent(attachments::add);
+        }
+        if (submission.includePreviousServerLog() && reportSettings.allowPreviousServerLog()) {
+            manualReportLogCollector.collectPreviousServerLog(dataPaths, maxBytes).ifPresent(attachments::add);
+        }
+        return List.copyOf(attachments);
+    }
+
+    private void appendManualReportAudit(@Nonnull ManualReportStore store,
+                                         @Nonnull String payloadJson,
+                                         boolean uploaded) {
+        try {
+            ManualReportEnvelope envelope = parseManualReport(payloadJson);
+            if (envelope != null) {
+                store.appendSubmittedAudit(envelope, "submitted", uploaded);
+            }
+        } catch (Exception ignored) {
+            // Malformed local payloads should not break the rest of the flush pass.
+        }
+    }
+
+    @Nullable
+    private ManualReportEnvelope findReviewEnvelope(@Nonnull ManualReportStore store,
+                                                    @Nonnull String projectId,
+                                                    @Nonnull String reportId) {
+        for (ManualReportStore.PendingReport pending : store.listReviewReports(projectId, settings.maxUploadsPerFlush())) {
+            if (pending.path().getFileName().toString().contains(reportId)) {
+                return parseManualReport(pending.payload());
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static ManualReportEnvelope parseManualReport(@Nonnull String payloadJson) {
+        try {
+            return ManualReportEnvelope.fromJson(payloadJson);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
     private int totalPendingCount(@Nullable String projectIdFilter) {
         int total = 0;
         for (TelemetryProjectRegistration project : matchingProjects(projectIdFilter)) {
             total += storeFor(project).pendingCount();
             total += eventStoreFor(project).pendingCount();
+        }
+        for (TelemetryProjectRegistration project : matchingManualReportProjects(projectIdFilter)) {
+            total += manualReportStoreFor(project).pendingCount(project.projectId());
         }
         return total;
     }

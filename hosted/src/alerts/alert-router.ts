@@ -1,9 +1,15 @@
 import type { TelemetryCrashEnvelope } from '../contract/crash-envelope.js'
+import type { ManualReportEnvelope } from '../contract/manual-report-envelope.js'
 import type { HostedProjectConfig } from '../projects/project-registry.js'
 
 export interface HostedCrashAlert {
   readonly project: HostedProjectConfig
   readonly envelope: TelemetryCrashEnvelope
+}
+
+export interface HostedManualReportAlert {
+  readonly project: HostedProjectConfig
+  readonly envelope: ManualReportEnvelope
 }
 
 export interface CrashAlertRouteResult {
@@ -13,10 +19,18 @@ export interface CrashAlertRouteResult {
 
 export interface CrashAlertRouter {
   routeCrashAlert(alert: HostedCrashAlert): Promise<CrashAlertRouteResult>
+  routeManualReportAlert(alert: HostedManualReportAlert): Promise<CrashAlertRouteResult>
 }
 
 export class NoopCrashAlertRouter implements CrashAlertRouter {
   async routeCrashAlert(): Promise<CrashAlertRouteResult> {
+    return {
+      dispatched: false,
+      detail: 'No alert router configured.',
+    }
+  }
+
+  async routeManualReportAlert(): Promise<CrashAlertRouteResult> {
     return {
       dispatched: false,
       detail: 'No alert router configured.',

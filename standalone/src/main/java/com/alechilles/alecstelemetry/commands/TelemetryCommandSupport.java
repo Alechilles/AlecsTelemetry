@@ -9,17 +9,17 @@ import javax.annotation.Nullable;
 /**
  * Shared parsing and messaging helpers for `/telemetry` subcommands.
  */
-final class TelemetryCommandSupport {
+public final class TelemetryCommandSupport {
 
     private TelemetryCommandSupport() {
     }
 
-    static void send(@Nonnull CommandContext commandContext, @Nonnull String message) {
+    public static void send(@Nonnull CommandContext commandContext, @Nonnull String message) {
         commandContext.sender().sendMessage(Message.raw(message));
     }
 
     @Nullable
-    static String token(@Nonnull CommandContext commandContext, int tokenIndex) {
+    public static String token(@Nonnull CommandContext commandContext, int tokenIndex) {
         String[] tokens = tokens(commandContext);
         if (tokens.length <= tokenIndex) {
             return null;

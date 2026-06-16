@@ -5,9 +5,12 @@ import pino from 'pino'
 import { DiscordAlertRouter } from './alerts/discord-alert-router.js'
 import { loadHostedServiceConfig } from './config.js'
 import { DuplicateAlertSuppressor } from './ingest/duplicate-alert-suppressor.js'
+import { ManualReportIngestService } from './ingest/manual-report-ingest-service.js'
 import { RequestRateLimiter } from './ingest/request-rate-limiter.js'
 import { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
 import { HostedProjectRegistry } from './projects/project-registry.js'
+import { ManualReportRepository } from './reports/manual-report-repository.js'
+import { ReportStatusService } from './reports/report-status-service.js'
 import { createHostedServer } from './server.js'
 import { StatsApi } from './stats/stats-api.js'
 import { StatsEventLog } from './stats/stats-event-log.js'
@@ -29,9 +32,19 @@ async function main(): Promise<void> {
     logger,
     statsService,
   )
+  const manualReportRepository = new ManualReportRepository()
+  const manualReportIngestService = new ManualReportIngestService(
+    registry,
+    manualReportRepository,
+    router,
+    new RequestRateLimiter(),
+    logger,
+  )
   const server = createHostedServer({
     ingestService,
     statsApi,
+    manualReportIngestService,
+    reportStatusService: new ReportStatusService(manualReportRepository),
     logger,
     maxRequestBodyBytes: config.maxRequestBodyBytes,
   })

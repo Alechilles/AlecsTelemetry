@@ -1,9 +1,13 @@
 package com.alechilles.alecstelemetry.api;
 
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class TelemetryProjectHandleCompatibilityTest {
 
@@ -32,6 +36,24 @@ class TelemetryProjectHandleCompatibilityTest {
         handle.recordErrorWithContext("error_event", null, context);
         handle.recordLifecycleWithContext("lifecycle_event", 0, true, context);
         handle.recordPerformanceWithContext("performance_event", 0, null, context);
+    }
+
+    @Test
+    void reportPageOpenRequestNormalizesKind() {
+        assertEquals("issue", new TelemetryReportOpenRequest("bug", " title ", " desc ").normalizedKind());
+        assertEquals("suggestion", new TelemetryReportOpenRequest("Suggestion", null, null).normalizedKind());
+    }
+
+    @Test
+    void defaultReportPageOpenReturnsFalseWhenRuntimeIsUnavailable() {
+        TelemetryProjectHandle handle = new NoopTelemetryProjectHandle();
+
+        assertFalse(handle.openReportPage(
+                null,
+                null,
+                null,
+                new TelemetryReportOpenRequest("issue", null, null)
+        ));
     }
 
     private static final class NoopTelemetryProjectHandle implements TelemetryProjectHandle {

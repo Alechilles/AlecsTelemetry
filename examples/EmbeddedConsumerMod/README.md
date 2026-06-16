@@ -7,3 +7,6 @@ Key pieces:
 
 - `telemetry/project.json` declares `runtimeMode: "embedded"`
 - the mod boots telemetry in its own lifecycle
+- embedded consumers can still declare `reports` in the descriptor and open the
+  shared manual report UI through `TelemetryReportOpenRequest` when the standalone
+  runtime is present

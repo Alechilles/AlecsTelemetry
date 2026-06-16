@@ -1,0 +1,90 @@
+$C = "Common.ui";
+
+$C.@PageOverlay {
+  LayoutMode: Middle;
+
+  $C.@DecoratedContainer #TelemetryReportRoot {
+    @TitleHeight = 96;
+
+    Anchor: (Width: 720, Height: 780);
+
+    #Title {
+      Anchor: (Height: 96, Top: 0);
+      Background: "TelemetryConsentHeader.png";
+      Padding: (Top: 8, Bottom: 8);
+
+      Group #TelemetryReportLogo {
+        Anchor: (Width: 221, Height: 80);
+        Background: "AlecsTelemetryLogo.png";
+      }
+    }
+
+    #Content {
+      Anchor: (Top: 96);
+      LayoutMode: Top;
+      Padding: (Left: 14, Right: 14, Top: 14, Bottom: 12);
+
+      Label #TelemetryReportProject {
+        Anchor: (Height: 32);
+        Text: "";
+        Style: (FontSize: 17, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center);
+      }
+
+      Group #TelemetryReportKindSelector {
+        Anchor: (Height: 36);
+        LayoutMode: Left;
+
+        $C.@SmallSecondaryTextButton #TelemetryReportIssueButton { @Sounds = $C.@ButtonSounds; @Text = "Issue"; @Anchor = (MinWidth: 96); }
+        Group { Anchor: (Width: 8); }
+        $C.@SmallSecondaryTextButton #TelemetryReportSuggestionButton { @Sounds = $C.@ButtonSounds; @Text = "Suggestion"; @Anchor = (MinWidth: 116); }
+        Label #TelemetryReportIssueSelected { Anchor: (Left: 236, Width: 72, Height: 30); Text: "Issue"; Style: (FontSize: 12, TextColor: #8fe08f, HorizontalAlignment: Start, VerticalAlignment: Center); }
+        Label #TelemetryReportSuggestionSelected { Anchor: (Left: 236, Width: 104, Height: 30); Text: "Suggestion"; Style: (FontSize: 12, TextColor: #8fe08f, HorizontalAlignment: Start, VerticalAlignment: Center); }
+      }
+
+      Label #TelemetryReportReviewWarning {
+        Anchor: (Height: 26);
+        Text: "This server reviews reports before they are sent.";
+        Style: (FontSize: 12, TextColor: #ffcf77, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: true);
+      }
+
+      Label #TelemetryReportError {
+        Anchor: (Height: 46);
+        Text: "";
+        Style: (FontSize: 12, TextColor: #ff9a9a, HorizontalAlignment: Start, VerticalAlignment: Start, Wrap: true);
+      }
+
+      Label { Anchor: (Height: 18); Text: "Title"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
+      TextField #TelemetryReportTitle { Anchor: (Height: 30); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 10); PlaceholderText: "Short summary"; MaxLength: 120; }
+
+      Label { Anchor: (Height: 18); Text: "Description"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
+      MultilineTextField #TelemetryReportDescription { Anchor: (Height: 68); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; AutoGrow: false; Padding: (Horizontal: 10, Vertical: 8); PlaceholderText: "What happened? What were you doing?"; MaxLength: 4000; }
+
+      Group #TelemetryReportContactRow { Anchor: (Height: 48); LayoutMode: Top;
+        Label { Anchor: (Height: 18); Text: "Contact"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
+        TextField #TelemetryReportContact { Anchor: (Height: 28); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 10); PlaceholderText: "Discord, email, or other contact"; MaxLength: 160; }
+      }
+
+      Group #TelemetryReportFields { Anchor: (Height: 218); LayoutMode: Top;
+        Group #TelemetryReportFieldRow0 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow1 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow2 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow3 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow4 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow5 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow6 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+        Group #TelemetryReportFieldRow7 { Anchor: (Height: 30); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 28); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldTextValue { Anchor: (Left: 230, Right: 0, Height: 26); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } DropdownBox #TelemetryReportFieldDropdownValue { Anchor: (Left: 230, Right: 0, Height: 28); Style: $C.@DefaultDropdownBoxStyle; } }
+      }
+
+      Group #TelemetryReportCurrentLogRow { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 210, Height: 24); Text: "Current server log"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryReportCurrentLog { Anchor: (Left: 216, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } }
+      Group #TelemetryReportPreviousLogRow { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 210, Height: 24); Text: "Previous server log"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryReportPreviousLog { Anchor: (Left: 216, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } }
+      Group #TelemetryReportLoadedModsRow { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 210, Height: 24); Text: "Installed mod list"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryReportLoadedMods { Anchor: (Left: 216, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } }
+      Group #TelemetryReportDiagnosticsRow { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 210, Height: 24); Text: "Diagnostics"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryReportDiagnostics { Anchor: (Left: 216, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } }
+
+      Group { Anchor: (Height: 42); LayoutMode: Right;
+        $C.@SmallSecondaryTextButton #TelemetryReportSubmit { @Sounds = $C.@ButtonSounds; @Text = "Submit"; @Anchor = (MinWidth: 108); }
+        Group { Anchor: (Width: 8); }
+        $C.@SmallSecondaryTextButton #TelemetryReportCancel { @Sounds = $C.@ButtonSounds; @Text = "Cancel"; @Anchor = (MinWidth: 96); }
+      }
+    }
+  }
+}

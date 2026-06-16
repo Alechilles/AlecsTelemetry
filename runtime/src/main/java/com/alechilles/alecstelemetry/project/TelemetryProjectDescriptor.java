@@ -28,6 +28,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull UsageOptions usage,
                                          @Nonnull StatsOptions stats,
                                          @Nonnull UiOptions ui,
+                                         @Nonnull ManualReportOptions reports,
                                          @Nonnull Defaults defaults,
                                          @Nonnull HostedDestination hosted,
                                          @Nonnull CustomEndpoint customEndpoint) {
@@ -106,6 +107,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 ? new UiOptions(null)
                 : new UiOptions(normalizeUiTexturePath(safe.ui.iconTexturePath));
 
+        ManualReportOptions reports = normalizeManualReports(safe.reports);
+
         EventOptions events = safe.events == null
                 ? EventOptions.defaults()
                 : new EventOptions(
@@ -155,6 +158,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 usage,
                 stats,
                 ui,
+                reports,
                 defaults,
                 hosted,
                 customEndpoint
@@ -335,6 +339,103 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         );
     }
 
+    @Nonnull
+    private static ManualReportOptions normalizeManualReports(@Nullable ReportsDocument document) {
+        boolean enabled = document != null && boolOrDefault(document.enabled, false);
+        return new ManualReportOptions(
+                enabled,
+                normalizeManualReportForm(document == null ? null : document.issue, enabled),
+                normalizeManualReportForm(document == null ? null : document.suggestion, enabled),
+                normalizeManualReportAttachments(document == null ? null : document.attachments),
+                normalizeManualReportContact(document == null ? null : document.contact),
+                normalizeManualReportResolutionUpdates(document == null ? null : document.resolutionUpdates)
+        );
+    }
+
+    @Nonnull
+    private static ManualReportForm normalizeManualReportForm(@Nullable ManualReportFormDocument document,
+                                                              boolean parentEnabled) {
+        boolean enabled = document == null ? parentEnabled : boolOrDefault(document.enabled, parentEnabled);
+        return new ManualReportForm(enabled, normalizeManualReportFields(document == null ? null : document.fields));
+    }
+
+    @Nonnull
+    private static List<ManualReportField> normalizeManualReportFields(@Nullable Map<String, ManualReportFieldDocument> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<ManualReportField> fields = new ArrayList<>();
+        for (Map.Entry<String, ManualReportFieldDocument> entry : documents.entrySet()) {
+            if (fields.size() >= 20 || entry == null) {
+                break;
+            }
+            String key = normalizeNullable(entry.getKey());
+            ManualReportField field = normalizeManualReportField(key, entry.getValue());
+            if (field != null) {
+                fields.add(field);
+            }
+        }
+        return List.copyOf(fields);
+    }
+
+    @Nullable
+    private static ManualReportField normalizeManualReportField(@Nullable String key,
+                                                                @Nullable ManualReportFieldDocument document) {
+        if (key == null || document == null) {
+            return null;
+        }
+        ManualReportFieldType type = ManualReportFieldType.from(document.type);
+        if (type == null) {
+            return null;
+        }
+        List<String> values = type == ManualReportFieldType.ENUM
+                ? normalizeNonBlankList(document.values, 80)
+                : List.of();
+        if (type == ManualReportFieldType.ENUM && values.isEmpty()) {
+            return null;
+        }
+        return new ManualReportField(
+                key.length() <= 80 ? key : key.substring(0, 80),
+                type,
+                truncate(chooseNonBlank(document.label, key, key), 80),
+                boolOrDefault(document.required, false),
+                values.size() <= 20 ? values : values.subList(0, 20),
+                manualReportMaxLength(type, document.maxLength),
+                document.min,
+                document.max
+        );
+    }
+
+    private static int manualReportMaxLength(@Nonnull ManualReportFieldType type, @Nullable Integer rawMaxLength) {
+        return switch (type) {
+            case TEXT -> intOrDefault(rawMaxLength, 1000, 1, 4000);
+            case STRING -> intOrDefault(rawMaxLength, 120, 1, 500);
+            default -> intOrDefault(rawMaxLength, 120, 1, 500);
+        };
+    }
+
+    @Nonnull
+    private static ManualReportAttachmentOptions normalizeManualReportAttachments(@Nullable ManualReportAttachmentDocument document) {
+        return new ManualReportAttachmentOptions(
+                document != null && boolOrDefault(document.currentServerLog, false),
+                document != null && boolOrDefault(document.previousServerLog, false),
+                intOrDefault(document == null ? null : document.maxBytes, 262144, 0, 1048576)
+        );
+    }
+
+    @Nonnull
+    private static ManualReportContactOptions normalizeManualReportContact(@Nullable ManualReportContactDocument document) {
+        return new ManualReportContactOptions(
+                document != null && boolOrDefault(document.enabled, false),
+                intOrDefault(document == null ? null : document.maxLength, 160, 1, 240)
+        );
+    }
+
+    @Nonnull
+    private static ManualReportResolutionOptions normalizeManualReportResolutionUpdates(@Nullable ManualReportResolutionDocument document) {
+        return new ManualReportResolutionOptions(document != null && boolOrDefault(document.enabled, false));
+    }
+
     @Nullable
     private static String normalizeNullable(@Nullable String value) {
         if (value == null || value.isBlank()) {
@@ -413,6 +514,11 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             return null;
         }
         return normalized.length() <= rule.maxLength() ? normalized : normalized.substring(0, rule.maxLength());
+    }
+
+    @Nonnull
+    private static String truncate(@Nonnull String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     @Nullable
@@ -606,6 +712,75 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     public record UiOptions(@Nullable String iconTexturePath) {
     }
 
+    /**
+     * Player-submitted issue and suggestion report configuration.
+     */
+    public record ManualReportOptions(boolean enabled,
+                                      @Nonnull ManualReportForm issue,
+                                      @Nonnull ManualReportForm suggestion,
+                                      @Nonnull ManualReportAttachmentOptions attachments,
+                                      @Nonnull ManualReportContactOptions contact,
+                                      @Nonnull ManualReportResolutionOptions resolutionUpdates) {
+    }
+
+    public record ManualReportForm(boolean enabled,
+                                   @Nonnull List<ManualReportField> fields) {
+    }
+
+    public record ManualReportField(@Nonnull String key,
+                                    @Nonnull ManualReportFieldType type,
+                                    @Nonnull String label,
+                                    boolean required,
+                                    @Nonnull List<String> values,
+                                    int maxLength,
+                                    @Nullable Double min,
+                                    @Nullable Double max) {
+    }
+
+    public enum ManualReportFieldType {
+        STRING("string"),
+        TEXT("text"),
+        BOOLEAN("boolean"),
+        ENUM("enum"),
+        NUMBER("number");
+
+        private final String key;
+
+        ManualReportFieldType(@Nonnull String key) {
+            this.key = key;
+        }
+
+        @Nonnull
+        public String key() {
+            return key;
+        }
+
+        @Nullable
+        static ManualReportFieldType from(@Nullable String value) {
+            String normalized = normalizeNullable(value);
+            if (normalized == null) {
+                return null;
+            }
+            for (ManualReportFieldType type : values()) {
+                if (type.key.equalsIgnoreCase(normalized)) {
+                    return type;
+                }
+            }
+            return null;
+        }
+    }
+
+    public record ManualReportAttachmentOptions(boolean currentServerLog,
+                                                boolean previousServerLog,
+                                                int maxBytes) {
+    }
+
+    public record ManualReportContactOptions(boolean enabled, int maxLength) {
+    }
+
+    public record ManualReportResolutionOptions(boolean enabled) {
+    }
+
     public record DetailRules(@Nonnull Map<String, DetailFieldRule> allowedFields) {
     }
 
@@ -653,6 +828,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private UsageDocument usage;
         private StatsDocument stats;
         private UiDocument ui;
+        private ReportsDocument reports;
         private DefaultsDocument defaults;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
@@ -707,6 +883,45 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     private static final class UiDocument {
         private String iconTexturePath;
+    }
+
+    private static final class ReportsDocument {
+        private Boolean enabled;
+        private ManualReportFormDocument issue;
+        private ManualReportFormDocument suggestion;
+        private ManualReportAttachmentDocument attachments;
+        private ManualReportContactDocument contact;
+        private ManualReportResolutionDocument resolutionUpdates;
+    }
+
+    private static final class ManualReportFormDocument {
+        private Boolean enabled;
+        private Map<String, ManualReportFieldDocument> fields;
+    }
+
+    private static final class ManualReportFieldDocument {
+        private String type;
+        private String label;
+        private Boolean required;
+        private List<String> values;
+        private Integer maxLength;
+        private Double min;
+        private Double max;
+    }
+
+    private static final class ManualReportAttachmentDocument {
+        private Boolean currentServerLog;
+        private Boolean previousServerLog;
+        private Integer maxBytes;
+    }
+
+    private static final class ManualReportContactDocument {
+        private Boolean enabled;
+        private Integer maxLength;
+    }
+
+    private static final class ManualReportResolutionDocument {
+        private Boolean enabled;
     }
 
     private static final class DetailRulesDocument {

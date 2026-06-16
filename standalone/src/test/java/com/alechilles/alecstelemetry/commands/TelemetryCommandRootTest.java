@@ -29,6 +29,10 @@ class TelemetryCommandRootTest {
                 "telemetry.command.telemetry.consent",
                 root.getSubCommands().get("consent").getPermission()
         );
+        assertEquals(
+                "telemetry.command.telemetry.report",
+                root.getSubCommands().get("report").getPermission()
+        );
     }
 
     private static final class DisplayNameOwner implements CommandOwner {

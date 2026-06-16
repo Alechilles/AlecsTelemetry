@@ -2,7 +2,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import type { Logger } from 'pino'
 
+import type { ManualReportIngestService } from './ingest/manual-report-ingest-service.js'
 import type { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
+import type { ReportStatusService } from './reports/report-status-service.js'
 import type { StatsApi } from './stats/stats-api.js'
 
 function writeJson(response: ServerResponse, status: number, body: object): void {
@@ -35,6 +37,8 @@ async function readJsonBody(request: IncomingMessage, maxBytes: number): Promise
 export function createHostedServer(options: {
   readonly ingestService: TelemetryIngestService
   readonly statsApi?: StatsApi
+  readonly manualReportIngestService?: ManualReportIngestService
+  readonly reportStatusService?: ReportStatusService
   readonly logger: Logger
   readonly maxRequestBodyBytes: number
 }): Server {
@@ -60,7 +64,9 @@ export function createHostedServer(options: {
         ? 'event'
         : null
 
-    if (request.method !== 'POST' || ingestKind === null) {
+    const isManualReportIngest = request.method === 'POST' && request.url === '/ingest/report'
+    const isReportStatus = request.method === 'POST' && request.url === '/reports/status'
+    if ((request.method !== 'POST' || ingestKind === null) && !isManualReportIngest && !isReportStatus) {
       writeJson(response, 404, { error: 'not_found' })
       return
     }
@@ -73,16 +79,40 @@ export function createHostedServer(options: {
 
     try {
       const { bodyBytes, payload } = await readJsonBody(request, options.maxRequestBodyBytes)
+      if (isReportStatus) {
+        if (!options.reportStatusService) {
+          writeJson(response, 404, { error: 'not_found' })
+          return
+        }
+        if (!payload || typeof payload !== 'object') {
+          writeJson(response, 400, { found: false, error: 'invalid_payload' })
+          return
+        }
+        const body = payload as Record<string, unknown>
+        if (typeof body.reportId !== 'string' || typeof body.followUpToken !== 'string') {
+          writeJson(response, 400, { found: false, error: 'invalid_payload' })
+          return
+        }
+        writeJson(response, 200, options.reportStatusService.lookup(body.reportId, body.followUpToken) as unknown as Record<string, unknown>)
+        return
+      }
       const projectKeyHeader = request.headers['x-telemetry-project-key']
       const projectKey = Array.isArray(projectKeyHeader) ? projectKeyHeader[0] ?? null : projectKeyHeader ?? null
-      const result = await options.ingestService.ingest({
-        kind: ingestKind,
+      const targetService = isManualReportIngest ? options.manualReportIngestService : options.ingestService
+      if (!targetService) {
+        writeJson(response, 404, { error: 'not_found' })
+        return
+      }
+      const ingestRequest = {
         projectKey,
         payload,
         bodyBytes,
         remoteAddress: request.socket.remoteAddress ?? null,
         receivedAt: new Date(),
-      })
+      }
+      const result = await targetService.ingest(ingestKind === null
+        ? ingestRequest
+        : { ...ingestRequest, kind: ingestKind })
       writeJson(response, result.status, result.body)
     } catch (error) {
       if (error instanceof Error && error.message === 'request_body_too_large') {

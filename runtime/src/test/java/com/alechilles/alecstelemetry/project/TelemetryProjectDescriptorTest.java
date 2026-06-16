@@ -281,6 +281,98 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
+    void parsesManualReportSchema() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "report-mod",
+                  "displayName": "Report Mod",
+                  "reports": {
+                    "enabled": true,
+                    "issue": {
+                      "enabled": true,
+                      "fields": {
+                        "severity": {
+                          "type": "enum",
+                          "label": "Severity",
+                          "required": true,
+                          "values": ["minor", "moderate", "major", "blocking"]
+                        },
+                        "steps": {
+                          "type": "text",
+                          "label": "Steps to reproduce",
+                          "required": false,
+                          "maxLength": 2000
+                        }
+                      }
+                    },
+                    "suggestion": {
+                      "enabled": true,
+                      "fields": {
+                        "category": {
+                          "type": "enum",
+                          "label": "Category",
+                          "required": false,
+                          "values": ["balance", "content", "quality_of_life", "other"]
+                        }
+                      }
+                    },
+                    "attachments": {
+                      "currentServerLog": true,
+                      "previousServerLog": true,
+                      "maxBytes": 262144
+                    },
+                    "contact": {
+                      "enabled": true,
+                      "maxLength": 160
+                    },
+                    "resolutionUpdates": {
+                      "enabled": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.reports().enabled());
+        assertTrue(descriptor.reports().issue().enabled());
+        assertTrue(descriptor.reports().suggestion().enabled());
+        assertEquals("severity", descriptor.reports().issue().fields().getFirst().key());
+        assertEquals("enum", descriptor.reports().issue().fields().getFirst().type().key());
+        assertTrue(descriptor.reports().issue().fields().getFirst().required());
+        assertEquals("steps", descriptor.reports().issue().fields().get(1).key());
+        assertEquals("text", descriptor.reports().issue().fields().get(1).type().key());
+        assertEquals(2000, descriptor.reports().issue().fields().get(1).maxLength());
+        assertEquals("category", descriptor.reports().suggestion().fields().getFirst().key());
+        assertTrue(descriptor.reports().attachments().currentServerLog());
+        assertTrue(descriptor.reports().attachments().previousServerLog());
+        assertEquals(262144, descriptor.reports().attachments().maxBytes());
+        assertTrue(descriptor.reports().contact().enabled());
+        assertEquals(160, descriptor.reports().contact().maxLength());
+        assertTrue(descriptor.reports().resolutionUpdates().enabled());
+    }
+
+    @Test
+    void disablesManualReportsWhenOmitted() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "no-reports-mod",
+                  "displayName": "No Reports Mod"
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.reports().enabled());
+        assertTrue(!descriptor.reports().issue().enabled());
+        assertTrue(!descriptor.reports().suggestion().enabled());
+        assertTrue(descriptor.reports().issue().fields().isEmpty());
+        assertTrue(descriptor.reports().suggestion().fields().isEmpty());
+    }
+
+    @Test
     void parsesExplicitEmbeddedRuntimeMode() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """

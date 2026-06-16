@@ -13,11 +13,20 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
+import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -43,6 +52,7 @@ public final class TelemetryRuntimeService {
     private final HytaleLogger logger;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
+    private final List<TelemetryProjectRegistration> projects;
     private List<TelemetryProjectRegistration> consentProjects;
 
     @Nonnull
@@ -127,7 +137,17 @@ public final class TelemetryRuntimeService {
         this.logger = logger;
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
-        this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
+        this.projects = List.copyOf(projects);
+        this.engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                projects,
+                manualReportRuntimeProjects(projects, consentProjects),
+                loadedMods,
+                client,
+                logger,
+                executor
+        );
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
         logRegistrationWarnings();
@@ -219,8 +239,10 @@ public final class TelemetryRuntimeService {
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        if (findProject(project.projectId()) != null) {
+        if (findProject(project.projectId()) != null || findManualReportProject(project.projectId()) != null) {
             engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
+        }
+        if (findProject(project.projectId()) != null) {
             engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
             engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
             engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
@@ -339,6 +361,45 @@ public final class TelemetryRuntimeService {
     }
 
     @Nonnull
+    public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
+                                                                @Nonnull ManualReportSubmission submission,
+                                                                @Nullable PlayerReportRuntimeContext playerContext) {
+        return engine.submitManualReport(projectId, submission, playerContext);
+    }
+
+    @Nonnull
+    public TelemetryRuntimeSettings.ManualReportSettings manualReportSettings() {
+        return settings.manualReports();
+    }
+
+    public boolean openReportPage(@Nonnull String projectId,
+                                  @Nonnull Ref<EntityStore> playerEntityRef,
+                                  @Nonnull Store<EntityStore> store,
+                                  @Nonnull PlayerRef playerRef,
+                                  @Nonnull TelemetryReportOpenRequest request) {
+        return new TelemetryReportCoordinator(this, logger)
+                .openReportPage(projectId, playerEntityRef, store, playerRef, request);
+    }
+
+    @Nonnull
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        return engine.manualReportsForReview(maxReportsPerProject);
+    }
+
+    public boolean approveManualReport(@Nonnull String reportId) {
+        return engine.approveManualReport(reportId);
+    }
+
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        return engine.rejectManualReport(reportId);
+    }
+
+    @Nonnull
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        return engine.submittedManualReportAuditLines(maxLines);
+    }
+
+    @Nonnull
     public TelemetryRuntimeDiagnostics diagnostics() {
         ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
         for (TelemetryProjectRegistration project : consentProjects) {
@@ -370,6 +431,22 @@ public final class TelemetryRuntimeService {
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         return engine.findProject(projectId);
+    }
+
+    @Nullable
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        return engine.findManualReportProject(projectId);
+    }
+
+    @Nonnull
+    public List<TelemetryProjectRegistration> manualReportProjects() {
+        ArrayList<TelemetryProjectRegistration> reportProjects = new ArrayList<>();
+        for (TelemetryProjectRegistration project : engine.manualReportProjects()) {
+            if (project.descriptor().reports().enabled()) {
+                reportProjects.add(project);
+            }
+        }
+        return List.copyOf(reportProjects);
     }
 
     @Nonnull
@@ -423,6 +500,22 @@ public final class TelemetryRuntimeService {
             resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
         }
         return List.copyOf(resolved);
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> manualReportRuntimeProjects(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull List<TelemetryProjectRegistration> consentProjects) {
+        LinkedHashMap<String, TelemetryProjectRegistration> reportProjects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : projects) {
+            reportProjects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : consentProjects) {
+            if (project.descriptor().reports().enabled()) {
+                reportProjects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+            }
+        }
+        return List.copyOf(reportProjects.values());
     }
 
     @Nonnull

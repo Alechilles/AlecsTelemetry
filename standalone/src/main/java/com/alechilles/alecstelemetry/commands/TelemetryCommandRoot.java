@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.commands;
 
 import com.alechilles.alecstelemetry.AlecsTelemetry;
+import com.alechilles.alecstelemetry.reports.TelemetryReportReviewCommand;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
 
 import javax.annotation.Nonnull;
@@ -19,6 +20,8 @@ public final class TelemetryCommandRoot extends AbstractCommandCollection {
         addSubCommand(new TelemetryProjectsCommand(plugin));
         addSubCommand(new TelemetryProjectCommand(plugin));
         addSubCommand(new TelemetryConsentCommand(plugin));
+        addSubCommand(new TelemetryReportCommand(plugin));
+        addSubCommand(new TelemetryReportReviewCommand(plugin));
         addSubCommand(new TelemetryFlushCommand(plugin));
         addSubCommand(new TelemetryTestCommand(plugin));
     }

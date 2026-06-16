@@ -8,6 +8,8 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryDataPathsTest {
 
@@ -37,5 +39,53 @@ class TelemetryDataPathsTest {
         assertEquals(2, descriptorDirectories.size());
         assertEquals(saveModsDirectory.toAbsolutePath().normalize(), descriptorDirectories.get(0));
         assertEquals(globalModsDirectory.toAbsolutePath().normalize(), descriptorDirectories.get(1));
+    }
+
+    @Test
+    void defaultsManualReportRuntimeSettings() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null);
+
+        assertTrue(settings.manualReports().enabled());
+        assertFalse(settings.manualReports().manualReviewRequired());
+        assertTrue(settings.manualReports().allowContact());
+        assertTrue(settings.manualReports().allowResolutionUpdates());
+        assertTrue(settings.manualReports().allowCurrentServerLog());
+        assertTrue(settings.manualReports().allowPreviousServerLog());
+        assertTrue(settings.manualReports().allowLoadedModList());
+        assertTrue(settings.manualReports().allowDiagnostics());
+        assertEquals(262144, settings.manualReports().maxLogAttachmentBytes());
+        assertEquals(200, settings.manualReports().maxPendingManualReportsPerProject());
+        assertEquals("https://telemetry.alecsmods.com/ingest/report", settings.manualReports().hostedReportIngestEndpoint());
+    }
+
+    @Test
+    void exposesManualReportPaths() {
+        Path runtimeRoot = tempDir.resolve("runtime");
+        TelemetryDataPaths paths = new TelemetryDataPaths(
+                runtimeRoot,
+                runtimeRoot.resolve("Settings").resolve("runtime.json"),
+                runtimeRoot.resolve("Settings").resolve("projects"),
+                runtimeRoot.resolve("Telemetry"),
+                runtimeRoot.resolve("Telemetry").resolve("crash-reports"),
+                runtimeRoot.resolve("Telemetry").resolve("events"),
+                null
+        );
+
+        assertEquals(
+                runtimeRoot.resolve("Telemetry").resolve("manual-reports").resolve("example-mod").resolve("pending"),
+                paths.pendingManualReportsDirectory("example-mod")
+        );
+        assertEquals(
+                runtimeRoot.resolve("Telemetry").resolve("manual-reports").resolve("example-mod").resolve("review"),
+                paths.reviewManualReportsDirectory("example-mod")
+        );
+        assertEquals(
+                runtimeRoot.resolve("Telemetry").resolve("manual-reports").resolve("submitted-reports.jsonl"),
+                paths.submittedManualReportsLog()
+        );
+        assertEquals(
+                runtimeRoot.resolve("Telemetry").resolve("manual-reports").resolve("receipts.json"),
+                paths.manualReportReceiptsFile()
+        );
     }
 }

@@ -64,6 +64,36 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public Path manualReportsRoot() {
+        return telemetryRoot.resolve("manual-reports");
+    }
+
+    @Nonnull
+    public Path pendingManualReportsDirectory(@Nonnull String projectId) {
+        return manualReportsRoot().resolve(projectId).resolve("pending");
+    }
+
+    @Nonnull
+    public Path reviewManualReportsDirectory(@Nonnull String projectId) {
+        return manualReportsRoot().resolve(projectId).resolve("review");
+    }
+
+    @Nonnull
+    public Path rejectedManualReportsDirectory(@Nonnull String projectId) {
+        return manualReportsRoot().resolve(projectId).resolve("rejected");
+    }
+
+    @Nonnull
+    public Path submittedManualReportsLog() {
+        return manualReportsRoot().resolve("submitted-reports.jsonl");
+    }
+
+    @Nonnull
+    public Path manualReportReceiptsFile() {
+        return manualReportsRoot().resolve("receipts.json");
+    }
+
+    @Nonnull
     public Path serverIdFile() {
         return settingsFile.getParent().resolve("server-id.txt");
     }

@@ -10,3 +10,14 @@ telemetry/project.json
 ```
 
 because the runtime can infer the rest from `manifest.json`.
+
+The sample descriptor also enables manual issue and suggestion reports. A consumer
+mod can open the report UI from its own player UI handler with:
+
+```java
+TelemetryRuntimeApi api = TelemetryRuntimeLocator.get();
+TelemetryProjectHandle project = api == null ? null : api.findProject("example-consumer-mod");
+if (project != null) {
+    project.openReportPage(ref, store, playerRef, new TelemetryReportOpenRequest("issue", null, null));
+}
+```

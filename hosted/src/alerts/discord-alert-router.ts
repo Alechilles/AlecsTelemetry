@@ -1,8 +1,9 @@
 import { REST, Routes } from 'discord.js'
 import type { Logger } from 'pino'
 
-import type { CrashAlertRouter, CrashAlertRouteResult, HostedCrashAlert } from './alert-router.js'
+import type { CrashAlertRouter, CrashAlertRouteResult, HostedCrashAlert, HostedManualReportAlert } from './alert-router.js'
 import { formatCrashAlert } from './crash-alert-formatter.js'
+import { formatReportAlert } from './report-alert-formatter.js'
 
 export class DiscordAlertRouter implements CrashAlertRouter {
   private readonly botToken: string | null
@@ -16,7 +17,14 @@ export class DiscordAlertRouter implements CrashAlertRouter {
   }
 
   async routeCrashAlert(alert: HostedCrashAlert): Promise<CrashAlertRouteResult> {
-    const channelId = alert.project.discord?.channelId
+    return this.routeDiscordMessage(alert.project.projectId, alert.project.discord?.channelId, formatCrashAlert(alert))
+  }
+
+  async routeManualReportAlert(alert: HostedManualReportAlert): Promise<CrashAlertRouteResult> {
+    return this.routeDiscordMessage(alert.project.projectId, alert.project.discord?.channelId, formatReportAlert(alert))
+  }
+
+  private async routeDiscordMessage(projectId: string, channelId: string | undefined, content: string): Promise<CrashAlertRouteResult> {
     if (!channelId) {
       return {
         dispatched: false,
@@ -24,14 +32,13 @@ export class DiscordAlertRouter implements CrashAlertRouter {
       }
     }
     if (!this.botToken || !this.rest) {
-      this.logger.warn({ projectId: alert.project.projectId }, 'Discord bot token is not configured; skipping alert dispatch.')
+      this.logger.warn({ projectId }, 'Discord bot token is not configured; skipping alert dispatch.')
       return {
         dispatched: false,
         detail: 'Discord bot token not configured.',
       }
     }
 
-    const content = formatCrashAlert(alert)
     await this.rest.post(Routes.channelMessages(channelId), {
       body: {
         content,
