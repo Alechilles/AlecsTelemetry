@@ -153,8 +153,22 @@ Consumer mods can attach typed context to explicit non-crash events with:
 
 `defaults` supports:
 
-- `enabled`
+- `enabled` is the mod author's default project-level consent setting and initial project toggle state in the first-run consent UI.
 - `destinationMode`: `hosted` or `custom`
+
+## Consent Defaults
+
+Alec's Telemetry shows a first-run consent UI when an operator installs a telemetry-enabled mod that has not been reviewed before. The initial toggle state comes from the packaged descriptor:
+
+- `defaults.enabled` controls the project-level opt-in or opt-out default.
+- `capture.*` controls the default crash telemetry category.
+- `events.errors.enabled` controls the default error telemetry category.
+- `events.lifecycle.enabled` controls the default lifecycle telemetry category.
+- `performance.enabled` controls the default performance telemetry category.
+- `usage.enabled` controls the default usage telemetry category.
+- `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
+
+Server owners can override each value in the consent UI or through `Settings/projects/<project-id>.json`. Descriptor defaults are used until an override exists.
 
 `hosted` supports:
 

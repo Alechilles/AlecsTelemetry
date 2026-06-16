@@ -66,6 +66,11 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public Path consentStateFile() {
+        return settingsFile.getParent().resolve("consent-reviewed-projects.json");
+    }
+
+    @Nonnull
     public Path projectOverrideFile(@Nonnull String projectId) {
         return projectSettingsDirectory.resolve(projectId + ".json");
     }

@@ -13,6 +13,7 @@ import java.util.Map;
  * Runtime override loaded from Alec's Telemetry settings for one project.
  */
 public record TelemetryProjectOverride(@Nullable Boolean enabled,
+                                        @Nullable CaptureOverride capture,
                                         @Nullable String destinationMode,
                                         @Nullable EventsOverride events,
                                         @Nullable PerformanceOverride performance,
@@ -28,6 +29,14 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         Document safe = parsed == null ? new Document() : parsed;
         return new TelemetryProjectOverride(
                 safe.enabled,
+                safe.capture == null
+                        ? null
+                        : new CaptureOverride(
+                        safe.capture.uncaughtExceptions,
+                        safe.capture.setupFailures,
+                        safe.capture.startFailures,
+                        safe.capture.exceptionalWorldRemovals
+                ),
                 normalizeMode(safe.destinationMode),
                 safe.events == null
                         ? null
@@ -65,6 +74,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
 
     public boolean hasAnyValue() {
         return enabled != null
+                || capture != null && capture.hasAnyValue()
                 || destinationMode != null
                 || events != null && events.hasAnyValue()
                 || performance != null
@@ -140,12 +150,20 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
 
     private static final class Document {
         private Boolean enabled;
+        private CaptureDocument capture;
         private String destinationMode;
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
+    }
+
+    private static final class CaptureDocument {
+        private Boolean uncaughtExceptions;
+        private Boolean setupFailures;
+        private Boolean startFailures;
+        private Boolean exceptionalWorldRemovals;
     }
 
     private static final class EventsDocument {
@@ -180,6 +198,18 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
 
     public record UsageOverride(@Nullable Boolean enabled,
                                 @Nonnull java.util.List<String> allowedEvents) {
+    }
+
+    public record CaptureOverride(@Nullable Boolean uncaughtExceptions,
+                                  @Nullable Boolean setupFailures,
+                                  @Nullable Boolean startFailures,
+                                  @Nullable Boolean exceptionalWorldRemovals) {
+        public boolean hasAnyValue() {
+            return uncaughtExceptions != null
+                    || setupFailures != null
+                    || startFailures != null
+                    || exceptionalWorldRemovals != null;
+        }
     }
 
     public record EventsOverride(@Nullable EventTypeOverride errors,

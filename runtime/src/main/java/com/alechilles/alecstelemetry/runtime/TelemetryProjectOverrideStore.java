@@ -77,12 +77,38 @@ public final class TelemetryProjectOverrideStore {
         return update(file, root -> root.addProperty("enabled", enabled));
     }
 
+    public boolean saveCrashEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> {
+            JsonObject capture = object(root, "capture");
+            capture.addProperty("uncaughtExceptions", enabled);
+            capture.addProperty("setupFailures", enabled);
+            capture.addProperty("startFailures", enabled);
+            capture.addProperty("exceptionalWorldRemovals", enabled);
+        });
+    }
+
     public boolean saveBreadcrumbsEnabled(@Nonnull Path file, boolean enabled) {
         return update(file, root -> {
             JsonObject events = object(root, "events");
             JsonObject breadcrumbs = object(events, "breadcrumbs");
             breadcrumbs.addProperty("enabled", enabled);
         });
+    }
+
+    public boolean saveErrorEventsEnabled(@Nonnull Path file, boolean enabled) {
+        return updateEventTypeEnabled(file, "errors", enabled);
+    }
+
+    public boolean saveLifecycleEventsEnabled(@Nonnull Path file, boolean enabled) {
+        return updateEventTypeEnabled(file, "lifecycle", enabled);
+    }
+
+    public boolean savePerformanceEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "performance").addProperty("enabled", enabled));
+    }
+
+    public boolean saveUsageEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "usage").addProperty("enabled", enabled));
     }
 
     @Nonnull
@@ -115,6 +141,14 @@ public final class TelemetryProjectOverrideStore {
             warn("Failed to save telemetry project override to " + file, ex);
             return false;
         }
+    }
+
+    private boolean updateEventTypeEnabled(@Nonnull Path file, @Nonnull String eventType, boolean enabled) {
+        return update(file, root -> {
+            JsonObject events = object(root, "events");
+            JsonObject eventObject = object(events, eventType);
+            eventObject.addProperty("enabled", enabled);
+        });
     }
 
     @Nonnull

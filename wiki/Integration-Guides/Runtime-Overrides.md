@@ -53,6 +53,29 @@ Settings/projects/<project-id>.json
 }
 ```
 
+## Disable Telemetry Categories
+
+These fields are also written by the first-run consent UI and by `/telemetry consent`.
+
+```json
+{
+  "enabled": true,
+  "capture": {
+    "uncaughtExceptions": false,
+    "setupFailures": false,
+    "startFailures": false,
+    "exceptionalWorldRemovals": false
+  },
+  "events": {
+    "errors": { "enabled": false },
+    "lifecycle": { "enabled": false },
+    "breadcrumbs": { "enabled": false }
+  },
+  "performance": { "enabled": false },
+  "usage": { "enabled": false }
+}
+```
+
 ## Override Hosted Key
 
 ```json
@@ -68,6 +91,10 @@ Settings/projects/<project-id>.json
 
 - `enabled`
 - `destinationMode`
+- `capture.uncaughtExceptions`
+- `capture.setupFailures`
+- `capture.startFailures`
+- `capture.exceptionalWorldRemovals`
 - `events.breadcrumbs.enabled`
 - `events.errors.enabled`
 - `events.lifecycle.enabled`
