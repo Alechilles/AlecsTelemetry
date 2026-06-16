@@ -24,7 +24,7 @@ $C.@PageOverlay {
 
     #Title {
       Anchor: (Height: 128, Top: 0);
-      Background: #203b5a;
+      Background: "TelemetryConsentHeader.png";
       Padding: (Top: 10, Bottom: 10);
 
       Group #TelemetryConsentLogo {
