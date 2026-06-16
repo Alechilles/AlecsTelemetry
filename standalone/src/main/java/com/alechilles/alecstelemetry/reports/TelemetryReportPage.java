@@ -16,6 +16,8 @@ import com.hypixel.hytale.protocol.packets.interface_.CustomPageLifetime;
 import com.hypixel.hytale.protocol.packets.interface_.CustomUIEventBindingType;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.entity.entities.player.pages.InteractiveCustomUIPage;
+import com.hypixel.hytale.server.core.ui.DropdownEntryInfo;
+import com.hypixel.hytale.server.core.ui.LocalizableString;
 import com.hypixel.hytale.server.core.ui.builder.EventData;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.ui.builder.UIEventBuilder;
@@ -24,6 +26,7 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +45,10 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     static final String ACTION_TOGGLE_PREVIOUS_LOG = "toggle_previous_log";
     static final String ACTION_TOGGLE_LOADED_MODS = "toggle_loaded_mods";
     static final String ACTION_TOGGLE_DIAGNOSTICS = "toggle_diagnostics";
+    static final String ACTION_UPDATE_TITLE = "update_title";
+    static final String ACTION_UPDATE_DESCRIPTION = "update_description";
+    static final String ACTION_UPDATE_CONTACT = "update_contact";
+    static final String ACTION_UPDATE_FIELD = "update_field";
 
     private static final int MAX_CUSTOM_FIELDS = 8;
     private static final String KEY_ACTION = "Action";
@@ -50,16 +57,8 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private static final String KEY_DESCRIPTION = "Description";
     private static final String KEY_CONTACT = "Contact";
     private static final String KEY_ENABLED = "Enabled";
-    private static final List<String> KEY_FIELDS = List.of(
-            "Field0",
-            "Field1",
-            "Field2",
-            "Field3",
-            "Field4",
-            "Field5",
-            "Field6",
-            "Field7"
-    );
+    private static final String KEY_FIELD_INDEX = "FieldIndex";
+    private static final String KEY_FIELD_VALUE = "FieldValue";
 
     private final TelemetryRuntimeService runtimeService;
     private final PlayerRef playerRef;
@@ -104,25 +103,26 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                                 @Nonnull Store<EntityStore> store,
                                 @Nonnull ReportEventData data) {
         switch (data.action == null ? "" : data.action) {
-            case ACTION_SET_KIND -> {
-                captureInputState(data);
-                selectedKind = "suggestion".equalsIgnoreCase(data.kind) ? "suggestion" : "issue";
+            case ACTION_SET_KIND -> selectedKind = "suggestion".equalsIgnoreCase(data.kind) ? "suggestion" : "issue";
+            case ACTION_TOGGLE_CURRENT_LOG -> includeCurrentServerLog = data.enabled;
+            case ACTION_TOGGLE_PREVIOUS_LOG -> includePreviousServerLog = data.enabled;
+            case ACTION_TOGGLE_LOADED_MODS -> includeLoadedMods = data.enabled;
+            case ACTION_TOGGLE_DIAGNOSTICS -> includeDiagnostics = data.enabled;
+            case ACTION_UPDATE_TITLE -> {
+                title = normalizeInput(data.title);
+                return;
             }
-            case ACTION_TOGGLE_CURRENT_LOG -> {
-                captureInputState(data);
-                includeCurrentServerLog = data.enabled;
+            case ACTION_UPDATE_DESCRIPTION -> {
+                description = normalizeInput(data.description);
+                return;
             }
-            case ACTION_TOGGLE_PREVIOUS_LOG -> {
-                captureInputState(data);
-                includePreviousServerLog = data.enabled;
+            case ACTION_UPDATE_CONTACT -> {
+                contact = normalizeInput(data.contact);
+                return;
             }
-            case ACTION_TOGGLE_LOADED_MODS -> {
-                captureInputState(data);
-                includeLoadedMods = data.enabled;
-            }
-            case ACTION_TOGGLE_DIAGNOSTICS -> {
-                captureInputState(data);
-                includeDiagnostics = data.enabled;
+            case ACTION_UPDATE_FIELD -> {
+                updateFieldInput(data);
+                return;
             }
             case ACTION_SUBMIT -> {
                 submit(ref, store, data);
@@ -142,7 +142,6 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private void submit(@Nonnull Ref<EntityStore> ref,
                         @Nonnull Store<EntityStore> store,
                         @Nonnull ReportEventData data) {
-        captureInputState(data);
         ManualReportEnvelope.CreateResult result = runtimeService.submitManualReport(
                 projectId,
                 new ManualReportSubmission(
@@ -224,9 +223,17 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
             }
             TelemetryReportViewModel.FieldRow field = fields.get(index);
             commands.set(row + " #TelemetryReportFieldLabel.Text", field.label() + (field.required() ? " *" : ""));
-            commands.set(row + " #TelemetryReportFieldValue.Value", fieldInputs.getOrDefault(field.key(), defaultFieldValue(field)));
-            commands.set(row + " #TelemetryReportFieldValue.PlaceholderText", placeholderText(field));
-            commands.set(row + " #TelemetryReportFieldValue.MaxLength", field.maxLength());
+            boolean dropdown = isDropdownField(field);
+            commands.set(row + " #TelemetryReportFieldTextValue.Visible", !dropdown);
+            commands.set(row + " #TelemetryReportFieldDropdownValue.Visible", dropdown);
+            if (dropdown) {
+                commands.set(row + " #TelemetryReportFieldDropdownValue.Entries", dropdownEntries(field.values()));
+                commands.set(row + " #TelemetryReportFieldDropdownValue.Value", normalizeDropdownValue(fieldInputs.get(field.key()), field.values()));
+            } else {
+                commands.set(row + " #TelemetryReportFieldTextValue.Value", fieldInputs.getOrDefault(field.key(), ""));
+                commands.set(row + " #TelemetryReportFieldTextValue.PlaceholderText", "");
+                commands.set(row + " #TelemetryReportFieldTextValue.MaxLength", field.maxLength());
+            }
         }
     }
 
@@ -234,43 +241,43 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryReportIssueButton",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_SET_KIND).append(KEY_KIND, "issue")),
+                EventData.of(KEY_ACTION, ACTION_SET_KIND).append(KEY_KIND, "issue"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryReportSuggestionButton",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_SET_KIND).append(KEY_KIND, "suggestion")),
+                EventData.of(KEY_ACTION, ACTION_SET_KIND).append(KEY_KIND, "suggestion"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
                 "#TelemetryReportCurrentLog",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_TOGGLE_CURRENT_LOG).append(KEY_ENABLED, "#TelemetryReportCurrentLog.Value")),
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_CURRENT_LOG).append(KEY_ENABLED, "#TelemetryReportCurrentLog.Value"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
                 "#TelemetryReportPreviousLog",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_TOGGLE_PREVIOUS_LOG).append(KEY_ENABLED, "#TelemetryReportPreviousLog.Value")),
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_PREVIOUS_LOG).append(KEY_ENABLED, "#TelemetryReportPreviousLog.Value"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
                 "#TelemetryReportLoadedMods",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_TOGGLE_LOADED_MODS).append(KEY_ENABLED, "#TelemetryReportLoadedMods.Value")),
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_LOADED_MODS).append(KEY_ENABLED, "#TelemetryReportLoadedMods.Value"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
                 "#TelemetryReportDiagnostics",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_TOGGLE_DIAGNOSTICS).append(KEY_ENABLED, "#TelemetryReportDiagnostics.Value")),
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_DIAGNOSTICS).append(KEY_ENABLED, "#TelemetryReportDiagnostics.Value"),
                 false
         );
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryReportSubmit",
-                appendFormInputs(EventData.of(KEY_ACTION, ACTION_SUBMIT)),
+                EventData.of(KEY_ACTION, ACTION_SUBMIT),
                 false
         );
         events.addEventBinding(
@@ -279,6 +286,40 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 EventData.of(KEY_ACTION, ACTION_CANCEL),
                 false
         );
+        bindInputEvents(events);
+    }
+
+    private void bindInputEvents(@Nonnull UIEventBuilder events) {
+        bindValueUpdate(events, "#TelemetryReportTitle", EventData.of(KEY_ACTION, ACTION_UPDATE_TITLE)
+                .append(KEY_TITLE, "#TelemetryReportTitle.Value"));
+        bindValueUpdate(events, "#TelemetryReportDescription", EventData.of(KEY_ACTION, ACTION_UPDATE_DESCRIPTION)
+                .append(KEY_DESCRIPTION, "#TelemetryReportDescription.Value"));
+        bindValueUpdate(events, "#TelemetryReportContact", EventData.of(KEY_ACTION, ACTION_UPDATE_CONTACT)
+                .append(KEY_CONTACT, "#TelemetryReportContact.Value"));
+        for (int index = 0; index < MAX_CUSTOM_FIELDS; index++) {
+            String row = "#TelemetryReportFieldRow" + index;
+            bindValueUpdate(
+                    events,
+                    row + " #TelemetryReportFieldTextValue",
+                    EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
+                            .append(KEY_FIELD_INDEX, String.valueOf(index))
+                            .append(KEY_FIELD_VALUE, row + " #TelemetryReportFieldTextValue.Value")
+            );
+            bindValueUpdate(
+                    events,
+                    row + " #TelemetryReportFieldDropdownValue",
+                    EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
+                            .append(KEY_FIELD_INDEX, String.valueOf(index))
+                            .append(KEY_FIELD_VALUE, row + " #TelemetryReportFieldDropdownValue.Value")
+            );
+        }
+    }
+
+    private static void bindValueUpdate(@Nonnull UIEventBuilder events,
+                                        @Nonnull String selector,
+                                        @Nonnull EventData eventData) {
+        events.addEventBinding(CustomUIEventBindingType.ValueChanged, selector, eventData, false);
+        events.addEventBinding(CustomUIEventBindingType.Validating, selector, eventData, false);
     }
 
     @Nonnull
@@ -307,10 +348,10 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         for (TelemetryProjectDescriptor.ManualReportField field : form.fields()) {
             String value = inputValues.get(field.key());
             if (value != null && !value.isBlank()) {
-                values.put(field.key(), value.trim());
+                values.put(field.key(), isDropdownField(field) ? normalizeDropdownValue(value, field.values()) : value.trim());
                 continue;
             }
-            if (field.required() && field.type() == TelemetryProjectDescriptor.ManualReportFieldType.ENUM && !field.values().isEmpty()) {
+            if (field.type() == TelemetryProjectDescriptor.ManualReportFieldType.ENUM && !field.values().isEmpty()) {
                 values.put(field.key(), field.values().getFirst());
             }
         }
@@ -325,56 +366,67 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         return value.trim();
     }
 
-    private void captureInputState(@Nonnull ReportEventData data) {
-        title = normalize(data.title, title);
-        description = normalize(data.description, description);
-        contact = normalize(data.contact, contact);
-        fieldInputs = fieldInputValues(data);
+    private void updateFieldInput(@Nonnull ReportEventData data) {
+        int index = parseFieldIndex(data.fieldIndex);
+        TelemetryReportViewModel viewModel = viewModel();
+        if (index < 0 || index >= Math.min(MAX_CUSTOM_FIELDS, viewModel.fields().size())) {
+            return;
+        }
+        TelemetryReportViewModel.FieldRow field = viewModel.fields().get(index);
+        String value = normalizeNullable(data.fieldValue);
+        LinkedHashMap<String, String> values = new LinkedHashMap<>(fieldInputs);
+        if (value == null) {
+            values.remove(field.key());
+        } else if (isDropdownField(field)) {
+            values.put(field.key(), normalizeDropdownValue(value, field.values()));
+        } else {
+            values.put(field.key(), value);
+        }
+        fieldInputs = Map.copyOf(values);
+    }
+
+    private static int parseFieldIndex(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+
+    private static boolean isDropdownField(@Nonnull TelemetryReportViewModel.FieldRow field) {
+        return "enum".equals(field.type()) && !field.values().isEmpty();
+    }
+
+    private static boolean isDropdownField(@Nonnull TelemetryProjectDescriptor.ManualReportField field) {
+        return field.type() == TelemetryProjectDescriptor.ManualReportFieldType.ENUM && !field.values().isEmpty();
     }
 
     @Nonnull
-    private Map<String, String> fieldInputValues(@Nonnull ReportEventData data) {
-        TelemetryReportViewModel viewModel = viewModel();
-        LinkedHashMap<String, String> values = new LinkedHashMap<>(fieldInputs);
-        int visibleRows = Math.min(MAX_CUSTOM_FIELDS, viewModel.fields().size());
-        for (int index = 0; index < visibleRows; index++) {
-            String value = normalizeNullable(data.field(index));
-            TelemetryReportViewModel.FieldRow field = viewModel.fields().get(index);
-            if (value == null) {
-                values.remove(field.key());
-            } else {
-                values.put(field.key(), value);
+    private static String normalizeDropdownValue(@Nullable String value,
+                                                 @Nonnull List<String> options) {
+        if (options.isEmpty()) {
+            return "";
+        }
+        if (value != null) {
+            for (String option : options) {
+                if (option.equalsIgnoreCase(value.trim())) {
+                    return option;
+                }
             }
         }
-        return Map.copyOf(values);
+        return options.getFirst();
     }
 
     @Nonnull
-    private static EventData appendFormInputs(@Nonnull EventData data) {
-        EventData result = data
-                .append(KEY_TITLE, "#TelemetryReportTitle.Value")
-                .append(KEY_DESCRIPTION, "#TelemetryReportDescription.Value")
-                .append(KEY_CONTACT, "#TelemetryReportContact.Value");
-        for (int index = 0; index < KEY_FIELDS.size(); index++) {
-            result = result.append(KEY_FIELDS.get(index), "#TelemetryReportFieldRow" + index + " #TelemetryReportFieldValue.Value");
+    private static List<DropdownEntryInfo> dropdownEntries(@Nonnull List<String> options) {
+        ArrayList<DropdownEntryInfo> entries = new ArrayList<>(options.size());
+        for (String option : options) {
+            entries.add(new DropdownEntryInfo(LocalizableString.fromString(option), option));
         }
-        return result;
-    }
-
-    @Nonnull
-    private static String defaultFieldValue(@Nonnull TelemetryReportViewModel.FieldRow field) {
-        if ("enum".equals(field.type()) && !field.values().isEmpty()) {
-            return field.values().getFirst();
-        }
-        return "";
-    }
-
-    @Nonnull
-    private static String placeholderText(@Nonnull TelemetryReportViewModel.FieldRow field) {
-        if ("enum".equals(field.type()) && !field.values().isEmpty()) {
-            return "Allowed: " + String.join(", ", field.values());
-        }
-        return "";
+        return entries;
     }
 
     @Nullable
@@ -383,6 +435,11 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
             return null;
         }
         return value.trim();
+    }
+
+    @Nonnull
+    private static String normalizeInput(@Nullable String value) {
+        return value == null ? "" : value.trim();
     }
 
     public static final class ReportEventData {
@@ -396,14 +453,8 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 .addField(new KeyedCodec<>(KEY_DESCRIPTION, Codec.STRING), (data, value) -> data.description = value, data -> data.description)
                 .addField(new KeyedCodec<>(KEY_CONTACT, Codec.STRING), (data, value) -> data.contact = value, data -> data.contact)
                 .addField(new KeyedCodec<>(KEY_ENABLED, Codec.BOOLEAN), (data, value) -> data.enabled = value, data -> data.enabled)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(0), Codec.STRING), (data, value) -> data.field0 = value, data -> data.field0)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(1), Codec.STRING), (data, value) -> data.field1 = value, data -> data.field1)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(2), Codec.STRING), (data, value) -> data.field2 = value, data -> data.field2)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(3), Codec.STRING), (data, value) -> data.field3 = value, data -> data.field3)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(4), Codec.STRING), (data, value) -> data.field4 = value, data -> data.field4)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(5), Codec.STRING), (data, value) -> data.field5 = value, data -> data.field5)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(6), Codec.STRING), (data, value) -> data.field6 = value, data -> data.field6)
-                .addField(new KeyedCodec<>(KEY_FIELDS.get(7), Codec.STRING), (data, value) -> data.field7 = value, data -> data.field7)
+                .addField(new KeyedCodec<>(KEY_FIELD_INDEX, Codec.STRING), (data, value) -> data.fieldIndex = value, data -> data.fieldIndex)
+                .addField(new KeyedCodec<>(KEY_FIELD_VALUE, Codec.STRING), (data, value) -> data.fieldValue = value, data -> data.fieldValue)
                 .build();
 
         private String action = "";
@@ -412,28 +463,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         private String description = "";
         private String contact = "";
         private boolean enabled;
-        private String field0 = "";
-        private String field1 = "";
-        private String field2 = "";
-        private String field3 = "";
-        private String field4 = "";
-        private String field5 = "";
-        private String field6 = "";
-        private String field7 = "";
-
-        @Nullable
-        private String field(int index) {
-            return switch (index) {
-                case 0 -> field0;
-                case 1 -> field1;
-                case 2 -> field2;
-                case 3 -> field3;
-                case 4 -> field4;
-                case 5 -> field5;
-                case 6 -> field6;
-                case 7 -> field7;
-                default -> null;
-            };
-        }
+        private String fieldIndex = "";
+        private String fieldValue = "";
     }
 }

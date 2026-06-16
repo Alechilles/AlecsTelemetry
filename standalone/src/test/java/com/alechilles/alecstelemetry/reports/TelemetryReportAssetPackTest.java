@@ -29,12 +29,20 @@ class TelemetryReportAssetPackTest {
                 "TelemetryReportPage.ui must use an editable contact field"
         );
         assertTrue(
-                reportPage.contains("TextField #TelemetryReportFieldValue"),
+                reportPage.contains("TextField #TelemetryReportFieldTextValue"),
                 "TelemetryReportPage.ui must use editable schema field controls"
+        );
+        assertTrue(
+                reportPage.contains("DropdownBox #TelemetryReportFieldDropdownValue"),
+                "TelemetryReportPage.ui must include dropdown controls for enum schema fields"
         );
         assertFalse(
                 reportPage.contains("Label #TelemetryReportTitle"),
                 "TelemetryReportPage.ui must not render the title input as a read-only label"
+        );
+        assertFalse(
+                reportPage.contains("#TelemetryReportFieldValue"),
+                "TelemetryReportPage.ui must not use the old single schema field value control"
         );
         assertTrue(
                 reportPage.contains("Background: \"AlecsTelemetryLogo.png\""),
