@@ -4,7 +4,7 @@
 
 **Goal:** Add HStats/bStats-style anonymous Hytale mod usage statistics to Alec's Telemetry, starting with a shippable heartbeat, aggregate stats store, public stats API, embeds, and chart definitions.
 
-**Architecture:** Runtime mods emit bounded `stats_heartbeat` and optional custom chart events through the existing `TelemetryEventEnvelope` path. The hosted prototype accepts `/ingest/event`, validates event payloads against project config, appends accepted stats observations to a file-backed event log, and derives current counts, records, time-series charts, and categorical breakdowns from that log. Public stats endpoints remain read-only and separate from crash/error diagnostics.
+**Architecture:** Runtime mods emit bounded `stats` events through the existing `TelemetryEventEnvelope` transport: `eventName: "heartbeat"` for built-in server/player activity and `eventName: "chart_sample"` for custom chart values. The hosted prototype accepts `/ingest/event`, validates stats payloads against project config, appends accepted stats observations to a file-backed event log, and derives current counts, records, time-series charts, and categorical breakdowns from that log. Public stats endpoints remain read-only and separate from crash/error/usage diagnostics.
 
 **Tech Stack:** Java 25 runtime modules, Hytale server plugin API, TypeScript hosted prototype, Node 20, zod, vitest, Maven/JUnit.
 
@@ -35,8 +35,8 @@ This plan does not implement account login, project self-registration UI, projec
 - All public stats are aggregate-only. Raw server identifiers never appear in public API responses.
 - `remoteAddress` is used only for rate limiting and optional country derivation. It is not stored in observations.
 - Country is `unknown` until a backend deployment provides a country resolver.
-- Runtime consent must suppress heartbeat and custom chart emission when project usage telemetry is disabled.
-- Diagnostic crash/error/performance pages stay separate from public usage stats unless a later product decision explicitly exposes aggregate issue counts.
+- Runtime consent must suppress heartbeat and custom chart emission when the separate project stats telemetry category is disabled.
+- Diagnostic crash/error/performance/usage pages stay separate from public stats unless a later product decision explicitly exposes aggregate issue counts.
 
 ## File Structure
 
@@ -78,9 +78,27 @@ This plan does not implement account login, project self-registration UI, projec
 - Create: `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsRuntime.java`
   - small adapter interface around `TelemetryRuntimeService` so heartbeat tests do not subclass the final runtime service.
 - Create: `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatService.java`
-  - periodically emits `stats_heartbeat` usage events for dependency-mode projects.
+  - periodically emits first-class `stats` heartbeat events for dependency-mode projects.
 - Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/AlecsTelemetry.java`
   - register player counter events and start/stop stats heartbeat service.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentCategory.java`
+  - add a separate `STATS("stats")` category.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentSnapshot.java`
+  - persist and expose the stats category toggle separately from usage.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectDescriptor.java`
+  - add descriptor-level `stats` defaults, allowlists, and detail rules.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectOverride.java`
+  - parse runtime stats overrides.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectRegistration.java`
+  - merge descriptor and override stats settings.
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/core/TelemetryCoreEngine.java`
+  - add `recordStatsWithContext` and enforce the stats category gate.
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/runtime/TelemetryRuntimeService.java`
+  - expose the stats event API and consent mutation.
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentViewModel.java`
+  - surface stats as its own consent column.
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java`
+  - bind the stats checkbox separately from usage.
 - Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryHandle.java`
   - add default helper methods for custom stats chart events.
 - Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandle.java`
@@ -114,11 +132,11 @@ import { describe, expect, it } from 'vitest'
 import { telemetryEventEnvelopeSchema } from '../src/contract/event-envelope.js'
 
 describe('telemetryEventEnvelopeSchema', () => {
-  it('accepts a stats heartbeat usage event', () => {
+  it('accepts a stats heartbeat event', () => {
     const parsed = telemetryEventEnvelopeSchema.parse({
       schemaVersion: 2,
-      eventType: 'usage',
-      eventName: 'stats_heartbeat',
+      eventType: 'stats',
+      eventName: 'heartbeat',
       eventId: 'event-1',
       projectId: 'example-mod',
       projectDisplayName: 'Example Mod',
@@ -168,7 +186,7 @@ describe('telemetryEventEnvelopeSchema', () => {
       },
     })
 
-    expect(parsed.eventType).toBe('usage')
+    expect(parsed.eventType).toBe('stats')
     expect(parsed.details.playersOnline).toBe(12)
   })
 
@@ -176,7 +194,7 @@ describe('telemetryEventEnvelopeSchema', () => {
     const parsed = telemetryEventEnvelopeSchema.safeParse({
       schemaVersion: 2,
       eventType: 'debug',
-      eventName: 'stats_heartbeat',
+      eventName: 'heartbeat',
       eventId: 'event-1',
       projectId: 'example-mod',
       projectDisplayName: 'Example Mod',
@@ -251,7 +269,7 @@ export const environmentSnapshotSchema = z.object({
 
 export const telemetryEventEnvelopeSchema = z.object({
   schemaVersion: z.number().int().min(1),
-  eventType: z.enum(['error', 'lifecycle', 'performance', 'usage']),
+  eventType: z.enum(['error', 'lifecycle', 'performance', 'usage', 'stats']),
   eventName: z.string().min(1),
   eventId: z.string().min(1),
   projectId: z.string().min(1),
@@ -339,7 +357,7 @@ describe('HostedProjectRegistry stats config', () => {
             chartId: 'language',
             title: 'Language',
             type: 'simple_pie',
-            sourceEvent: 'stats_chart',
+            sourceEvent: 'chart_sample',
             valueField: 'language',
             position: 20,
           },
@@ -397,7 +415,7 @@ const statsChartConfigSchema = z.object({
   chartId: z.string().regex(/^[a-z0-9_:-]{1,80}$/),
   title: z.string().min(1).max(120),
   type: statsChartTypeSchema,
-  sourceEvent: z.string().min(1).max(120).default('stats_chart'),
+  sourceEvent: z.string().min(1).max(120).default('chart_sample'),
   valueField: z.string().min(1).max(80).optional(),
   seriesField: z.string().min(1).max(80).optional(),
   groupField: z.string().min(1).max(80).optional(),
@@ -479,7 +497,7 @@ describe('StatsEventLog', () => {
     const observation: StatsObservation = {
       projectId: 'example-mod',
       eventId: 'event-1',
-      eventName: 'stats_heartbeat',
+      eventName: 'heartbeat',
       serverId: 'server-1',
       sessionId: 'session-1',
       observedAtUtc: '2026-06-16T20:00:00.000Z',
@@ -509,7 +527,7 @@ describe('StatsEventLog', () => {
     const observation: StatsObservation = {
       projectId: 'example-mod',
       eventId: 'event-1',
-      eventName: 'stats_heartbeat',
+      eventName: 'heartbeat',
       serverId: 'server-1',
       sessionId: 'session-1',
       observedAtUtc: '2026-06-16T20:00:00.000Z',
@@ -690,7 +708,7 @@ function observation(overrides: Partial<StatsObservation>): StatsObservation {
   return {
     projectId: 'example-mod',
     eventId: `event-${Math.random()}`,
-    eventName: 'stats_heartbeat',
+    eventName: 'heartbeat',
     serverId: 'server-1',
     sessionId: 'session-1',
     observedAtUtc: '2026-06-16T20:00:00.000Z',
@@ -876,7 +894,7 @@ Expected: `PASS hosted/tests/stats-aggregator.test.ts`.
 
 ```powershell
 git add hosted/src/stats/stats-aggregator.ts hosted/tests/stats-aggregator.test.ts
-git commit -m "Feat: aggregate usage stats"
+git commit -m "Feat: aggregate public stats"
 ```
 
 ---
@@ -902,8 +920,8 @@ import { StatsService } from '../src/stats/stats-service.js'
 function event(overrides: Partial<TelemetryEventEnvelope> = {}): TelemetryEventEnvelope {
   return {
     schemaVersion: 2,
-    eventType: 'usage',
-    eventName: 'stats_heartbeat',
+    eventType: 'stats',
+    eventName: 'heartbeat',
     eventId: 'event-1',
     projectId: 'example-mod',
     projectDisplayName: 'Example Mod',
@@ -964,11 +982,11 @@ describe('StatsService', () => {
     }))
   })
 
-  it('ignores non-stats usage events without writing observations', async () => {
+  it('ignores non-stats events without writing observations', async () => {
     const append = vi.fn()
     const service = new StatsService({ append, readAll: vi.fn() })
 
-    const result = await service.acceptEvent(event({ eventName: 'settings_opened' }), 'unknown')
+    const result = await service.acceptEvent(event({ eventType: 'usage', eventName: 'settings_opened' }), 'unknown')
 
     expect(result.accepted).toBe(true)
     expect(result.storedObservation).toBe(false)
@@ -1028,7 +1046,7 @@ export class StatsService {
   constructor(private readonly log: Pick<StatsEventLog, 'append' | 'readAll'>) {}
 
   async acceptEvent(event: TelemetryEventEnvelope, countryCode: string | null): Promise<StatsAcceptResult> {
-    if (event.eventType !== 'usage' || (event.eventName !== 'stats_heartbeat' && event.eventName !== 'stats_chart')) {
+    if (event.eventType !== 'stats' || (event.eventName !== 'heartbeat' && event.eventName !== 'chart_sample')) {
       return { accepted: true, storedObservation: false }
     }
 
@@ -1159,8 +1177,8 @@ Append to `hosted/tests/telemetry-ingest-service.test.ts`:
       projectKey: project.publicProjectKey,
       payload: {
         schemaVersion: 2,
-        eventType: 'usage',
-        eventName: 'stats_heartbeat',
+        eventType: 'stats',
+        eventName: 'heartbeat',
         eventId: 'event-1',
         projectId: project.projectId,
         projectDisplayName: project.displayName,
@@ -1241,7 +1259,7 @@ import type { StatsObservation } from '../src/stats/stats-model.js'
 const observations: StatsObservation[] = [{
   projectId: 'example-mod',
   eventId: 'event-1',
-  eventName: 'stats_heartbeat',
+  eventName: 'heartbeat',
   serverId: 'server-1',
   sessionId: 'session-1',
   observedAtUtc: '2026-06-16T20:00:00.000Z',
@@ -1449,18 +1467,32 @@ Expected: all hosted tests pass and TypeScript check passes.
 
 ```powershell
 git add hosted/src/server.ts hosted/src/index.ts hosted/src/config.ts hosted/src/stats/stats-api.ts hosted/src/projects/project-registry.ts hosted/tests/stats-api.test.ts hosted/tests/server-stats.test.ts
-git commit -m "Feat: expose public usage stats API"
+git commit -m "Feat: expose public stats API"
 ```
 
 ---
 
-### Task 7: Runtime Player Counter and Heartbeat
+### Task 7: Runtime Stats Consent, Player Counter, and Heartbeat
 
 **Files:**
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/api/TelemetryEventContext.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentCategory.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentSnapshot.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectDescriptor.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectOverride.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/project/TelemetryProjectRegistration.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/core/TelemetryCoreEngine.java`
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/runtime/TelemetryRuntimeService.java`
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentViewModel.java`
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java`
 - Create: `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounter.java`
 - Create: `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsRuntime.java`
 - Create: `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatService.java`
 - Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/AlecsTelemetry.java`
+- Test: `runtime/src/test/java/com/alechilles/alecstelemetry/project/TelemetryProjectDescriptorTest.java`
+- Test: `runtime/src/test/java/com/alechilles/alecstelemetry/project/TelemetryProjectRegistrationTest.java`
+- Test: `runtime/src/test/java/com/alechilles/alecstelemetry/api/TelemetryEventContextTest.java`
+- Test: `standalone/src/test/java/com/alechilles/alecstelemetry/consent/TelemetryConsentViewModelTest.java`
 - Test: `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounterTest.java`
 - Test: `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatServiceTest.java`
 
@@ -1474,7 +1506,211 @@ javap -classpath "C:\Users\22ale\AppData\Roaming\Hytale\install\release\package\
 
 Expected: `PlayerReadyEvent.getPlayerRef()`, `PlayerDisconnectEvent.getPlayerRef()`, and `PlayerRef.getUuid()` are present.
 
-- [ ] **Step 2: Add player counter tests**
+- [ ] **Step 2: Add failing tests for the stats consent model**
+
+Add this test to `runtime/src/test/java/com/alechilles/alecstelemetry/project/TelemetryProjectDescriptorTest.java`:
+
+```java
+@Test
+void parsesStatsOptionsSeparatelyFromUsageOptions() {
+    TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+            """
+            {
+              "projectId": "stats-mod",
+              "displayName": "Stats Mod",
+              "stats": {
+                "enabled": true,
+                "allowedEvents": ["heartbeat", "chart_sample"],
+                "details": {
+                  "chart_sample": {
+                    "allowedFields": {
+                      "chartId": { "type": "string", "maxLength": 80 },
+                      "value": { "type": "string", "maxLength": 120 }
+                    }
+                  }
+                }
+              },
+              "usage": {
+                "enabled": false,
+                "allowedEvents": ["settings_opened"]
+              }
+            }
+            """,
+            null
+    );
+
+    assertEquals(true, descriptor.stats().enabled());
+    assertEquals(List.of("heartbeat", "chart_sample"), descriptor.stats().allowedEvents());
+    assertEquals(false, descriptor.usage().enabled());
+}
+```
+
+Add this test to `runtime/src/test/java/com/alechilles/alecstelemetry/project/TelemetryProjectRegistrationTest.java`:
+
+```java
+@Test
+void consentSnapshotKeepsStatsSeparateFromUsage() {
+    TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+            """
+            {
+              "projectId": "stats-mod",
+              "displayName": "Stats Mod",
+              "stats": { "enabled": true, "allowedEvents": ["heartbeat"] },
+              "usage": { "enabled": false, "allowedEvents": ["settings_opened"] }
+            }
+            """,
+            null
+    );
+    TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+            descriptor,
+            "Example:Stats Mod",
+            "1.0.0",
+            null
+    );
+
+    assertEquals(true, registration.consentSnapshot().statsEnabled());
+    assertEquals(false, registration.consentSnapshot().usageEnabled());
+}
+```
+
+Add this test to `runtime/src/test/java/com/alechilles/alecstelemetry/api/TelemetryEventContextTest.java`:
+
+```java
+@Test
+void statsBuilderCreatesStatsContext() {
+    TelemetryEventContext context = TelemetryEventContext.stats()
+            .detail("playersOnline", 5)
+            .build();
+
+    assertEquals(5, context.details().get("playersOnline"));
+}
+```
+
+Run:
+
+```powershell
+.\mvnw.cmd -pl runtime -Dtest=TelemetryProjectDescriptorTest,TelemetryProjectRegistrationTest,TelemetryEventContextTest test
+```
+
+Expected: tests fail because `stats()` descriptor options, `statsEnabled()`, and `TelemetryEventContext.stats()` do not exist.
+
+- [ ] **Step 3: Implement stats consent model and runtime gate**
+
+Implement these concrete changes:
+
+```java
+// TelemetryConsentCategory.java
+STATS("stats"),
+```
+
+```java
+// TelemetryConsentSnapshot.java
+public record TelemetryConsentSnapshot(boolean projectEnabled,
+                                       boolean crashEnabled,
+                                       boolean errorEnabled,
+                                       boolean lifecycleEnabled,
+                                       boolean performanceEnabled,
+                                       boolean usageEnabled,
+                                       boolean statsEnabled,
+                                       boolean breadcrumbsEnabled) {
+}
+```
+
+```java
+// TelemetryEventContext.java
+@Nonnull
+public static Builder stats() {
+    return builder();
+}
+```
+
+In `TelemetryProjectDescriptor`, add a `StatsOptions` record with the same shape as `UsageOptions`, parse top-level `"stats"`, default it to disabled with no allowed events, and expose `descriptor.stats()`.
+
+```java
+public record StatsOptions(boolean enabled,
+                           @Nonnull List<String> allowedEvents,
+                           @Nonnull Map<String, DetailRules> details) {
+    public boolean allows(@Nonnull String eventName) {
+        return allowedEvents().contains(eventName);
+    }
+
+    @Nonnull
+    public Map<String, Object> sanitizeDetails(@Nonnull String eventName,
+                                               @Nonnull Map<String, Object> rawDetails) {
+        DetailRules rules = details().get(eventName);
+        return rules == null ? Map.of() : rules.sanitize(rawDetails);
+    }
+}
+```
+
+In `TelemetryProjectOverride`, add `StatsOverride` matching `UsageOverride`, parse top-level `"stats"`, and include it in `hasAnyValue()`.
+
+In `TelemetryProjectRegistration`, add `stats()` merge logic equivalent to `usage()` and update `consentSnapshot()` to pass `stats().enabled()` into the new snapshot field.
+
+In `TelemetryCoreEngine`, add a `statsEnabledOverrides` map, `setStatsEnabled(String projectId, boolean enabled)`, `isStatsRuntimeEnabled(project)`, `recordStats(...)`, and `recordStatsWithContext(...)`. These methods should mirror the usage event methods but create a `TelemetryEventEnvelope.stats(...)` event and enforce `project.stats().allows(eventName)`.
+
+In `TelemetryEventEnvelope`, add:
+
+```java
+public static final String TYPE_STATS = "stats";
+```
+
+and a static factory:
+
+```java
+@Nonnull
+public static TelemetryEventEnvelope stats(@Nonnull String projectId,
+                                           @Nonnull String projectDisplayName,
+                                           @Nonnull String source,
+                                           @Nonnull String sessionId,
+                                           @Nonnull String serverId,
+                                           @Nonnull String eventName,
+                                           @Nonnull String pluginIdentifier,
+                                           @Nonnull String pluginVersion,
+                                           @Nullable String worldName,
+                                           @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
+                                           @Nonnull Map<String, Object> attributes,
+                                           @Nonnull Map<String, Object> details,
+                                           @Nonnull TelemetryEventContext context,
+                                           @Nonnull CrashReportEnvelope.RuntimeMetadata runtime) {
+    return create(TYPE_STATS, eventName, projectId, projectDisplayName, source, sessionId, serverId, pluginIdentifier, pluginVersion, worldName, SEVERITY_INFO, null, null, environment, attributes, details, context, runtime);
+}
+```
+
+Update `normalizeType` to preserve `TYPE_STATS`.
+
+In `TelemetryRuntimeService`, add:
+
+```java
+public void recordStats(@Nonnull String projectId,
+                        @Nonnull String eventName,
+                        @Nullable String detail) {
+    engine.recordStats(projectId, eventName, detail);
+}
+
+public void recordStatsWithContext(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nullable TelemetryEventContext context) {
+    engine.recordStatsWithContext(projectId, eventName, context);
+}
+```
+
+Update consent persistence methods so `TelemetryConsentCategory.STATS` writes and reads `stats.enabled`.
+
+Update `TelemetryConsentViewModel` and `TelemetryConsentPage` to add a separate stats checkbox. Keep `usage` visible as feature usage telemetry and label stats as anonymous public stats.
+
+- [ ] **Step 4: Run stats consent model tests**
+
+Run:
+
+```powershell
+.\mvnw.cmd -pl runtime -Dtest=TelemetryProjectDescriptorTest,TelemetryProjectRegistrationTest,TelemetryEventContextTest test
+.\mvnw.cmd -pl standalone -Dtest=TelemetryConsentViewModelTest test
+```
+
+Expected: tests pass.
+
+- [ ] **Step 5: Add player counter tests**
 
 Create `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounterTest.java`:
 
@@ -1512,7 +1748,7 @@ class TelemetryPlayerCounterTest {
 }
 ```
 
-- [ ] **Step 3: Implement player counter**
+- [ ] **Step 6: Implement player counter**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounter.java`:
 
@@ -1564,7 +1800,7 @@ public final class TelemetryPlayerCounter {
 }
 ```
 
-- [ ] **Step 4: Add heartbeat service tests**
+- [ ] **Step 7: Add heartbeat service tests**
 
 Create `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatServiceTest.java`:
 
@@ -1605,9 +1841,9 @@ class TelemetryStatsHeartbeatServiceTest {
                   "displayName": "%s",
                   "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example"],
-                  "usage": {
+                  "stats": {
                     "enabled": true,
-                    "allowedEvents": ["stats_heartbeat"]
+                    "allowedEvents": ["heartbeat", "chart_sample"]
                   }
                 }
                 """.formatted(projectId, displayName, displayName),
@@ -1631,7 +1867,7 @@ class TelemetryStatsHeartbeatServiceTest {
         }
 
         @Override
-        public void recordUsageWithContext(String projectId, String eventName, TelemetryEventContext context) {
+        public void recordStatsWithContext(String projectId, String eventName, TelemetryEventContext context) {
             projectIds.add(projectId);
             playersOnlineValues.add(((Number) context.details().get("playersOnline")).intValue());
         }
@@ -1639,7 +1875,7 @@ class TelemetryStatsHeartbeatServiceTest {
 }
 ```
 
-- [ ] **Step 5: Implement runtime adapter**
+- [ ] **Step 8: Implement runtime adapter**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsRuntime.java`:
 
@@ -1657,7 +1893,7 @@ public interface TelemetryStatsRuntime {
     @Nonnull
     List<TelemetryProjectRegistration> projects();
 
-    void recordUsageWithContext(@Nonnull String projectId,
+    void recordStatsWithContext(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 @Nonnull TelemetryEventContext context);
 
@@ -1670,17 +1906,17 @@ public interface TelemetryStatsRuntime {
             }
 
             @Override
-            public void recordUsageWithContext(@Nonnull String projectId,
+            public void recordStatsWithContext(@Nonnull String projectId,
                                                @Nonnull String eventName,
                                                @Nonnull TelemetryEventContext context) {
-                runtimeService.recordUsageWithContext(projectId, eventName, context);
+                runtimeService.recordStatsWithContext(projectId, eventName, context);
             }
         };
     }
 }
 ```
 
-- [ ] **Step 6: Implement heartbeat service**
+- [ ] **Step 9: Implement heartbeat service**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatService.java`:
 
@@ -1721,10 +1957,10 @@ public final class TelemetryStatsHeartbeatService implements AutoCloseable {
     public void emitHeartbeatNow() {
         int playersOnline = playerCounter.onlinePlayers();
         for (TelemetryProjectRegistration project : runtime.projects()) {
-            runtime.recordUsageWithContext(
+            runtime.recordStatsWithContext(
                     project.projectId(),
-                    "stats_heartbeat",
-                    TelemetryEventContext.usage()
+                    "heartbeat",
+                    TelemetryEventContext.stats()
                             .featureKey("stats")
                             .entryPoint("heartbeat")
                             .runtimeSide("server")
@@ -1741,7 +1977,7 @@ public final class TelemetryStatsHeartbeatService implements AutoCloseable {
 }
 ```
 
-- [ ] **Step 7: Wire standalone plugin events**
+- [ ] **Step 10: Wire standalone plugin events**
 
 Modify `standalone/src/main/java/com/alechilles/alecstelemetry/AlecsTelemetry.java`:
 
@@ -1768,7 +2004,7 @@ if (statsHeartbeatService != null) {
 }
 ```
 
-- [ ] **Step 8: Run runtime tests**
+- [ ] **Step 11: Run runtime tests**
 
 Run:
 
@@ -1779,11 +2015,11 @@ Run:
 
 Expected: tests pass.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 12: Commit**
 
 ```powershell
 git add standalone/src/main/java/com/alechilles/alecstelemetry/stats standalone/src/main/java/com/alechilles/alecstelemetry/AlecsTelemetry.java standalone/src/test/java/com/alechilles/alecstelemetry/stats
-git commit -m "Feat: emit usage stats heartbeats"
+git commit -m "Feat: emit stats heartbeats"
 ```
 
 ---
@@ -1792,7 +2028,9 @@ git commit -m "Feat: emit usage stats heartbeats"
 
 **Files:**
 - Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandle.java`
+- Modify: `standalone/src/main/java/com/alechilles/alecstelemetry/api/internal/TelemetryProjectHandleImpl.java`
 - Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryHandle.java`
+- Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryService.java`
 - Modify: `standalone/src/test/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandleCompatibilityTest.java`
 
 - [ ] **Step 1: Add compatibility test calls**
@@ -1802,17 +2040,24 @@ Append calls to `TelemetryProjectHandleCompatibilityTest.compatibilityImplementa
 ```java
 handle.recordSimpleStatChart("language", "English");
 handle.recordNumericStatChart("active_npcs", 12);
+handle.recordStatsWithContext("chart_sample", TelemetryEventContext.stats().detail("chartId", "language").detail("value", "English").build());
 ```
 
-- [ ] **Step 2: Add dependency-mode default helpers**
+- [ ] **Step 2: Add dependency-mode stats event methods and default chart helpers**
 
 Modify `TelemetryProjectHandle`:
 
 ```java
+void recordStats(@Nonnull String eventName, @Nullable String detail);
+
+default void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+    recordStats(eventName, context == null ? null : context.detail());
+}
+
 default void recordSimpleStatChart(@Nonnull String chartId, @Nonnull String value) {
-    recordUsageWithContext(
-            "stats_chart",
-            TelemetryEventContext.usage()
+    recordStatsWithContext(
+            "chart_sample",
+            TelemetryEventContext.stats()
                     .featureKey("stats")
                     .entryPoint("custom_chart")
                     .runtimeSide("server")
@@ -1823,9 +2068,9 @@ default void recordSimpleStatChart(@Nonnull String chartId, @Nonnull String valu
 }
 
 default void recordNumericStatChart(@Nonnull String chartId, double value) {
-    recordUsageWithContext(
-            "stats_chart",
-            TelemetryEventContext.usage()
+    recordStatsWithContext(
+            "chart_sample",
+            TelemetryEventContext.stats()
                     .featureKey("stats")
                     .entryPoint("custom_chart")
                     .runtimeSide("server")
@@ -1836,9 +2081,47 @@ default void recordNumericStatChart(@Nonnull String chartId, double value) {
 }
 ```
 
+Modify `TelemetryProjectHandleImpl`:
+
+```java
+@Override
+public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+    runtimeService.recordStats(projectId, eventName, detail);
+}
+
+@Override
+public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+    runtimeService.recordStatsWithContext(projectId, eventName, context);
+}
+```
+
+Add this method to the `NoopTelemetryProjectHandle` test implementation:
+
+```java
+@Override
+public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+}
+```
+
 - [ ] **Step 3: Add embedded-mode matching helpers**
 
-Add the same default helper methods to `EmbeddedTelemetryHandle`.
+Add the same `recordStats`, `recordStatsWithContext`, `recordSimpleStatChart`, and `recordNumericStatChart` methods to `EmbeddedTelemetryHandle`.
+
+Modify `EmbeddedTelemetryService`:
+
+```java
+public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+    if (isEnabled()) {
+        engine.recordStats(project.projectId(), eventName, detail);
+    }
+}
+
+public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+    if (isEnabled()) {
+        engine.recordStatsWithContext(project.projectId(), eventName, context);
+    }
+}
+```
 
 - [ ] **Step 4: Run compatibility tests**
 
@@ -1854,7 +2137,7 @@ Expected: tests pass and existing implementors do not need source changes becaus
 - [ ] **Step 5: Commit**
 
 ```powershell
-git add standalone/src/main/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandle.java runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryHandle.java standalone/src/test/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandleCompatibilityTest.java
+git add standalone/src/main/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandle.java standalone/src/main/java/com/alechilles/alecstelemetry/api/internal/TelemetryProjectHandleImpl.java runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryHandle.java runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryService.java standalone/src/test/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandleCompatibilityTest.java
 git commit -m "Feat: add custom stats chart helpers"
 ```
 
@@ -1873,33 +2156,33 @@ git commit -m "Feat: add custom stats chart helpers"
 Update `docs/hosted-ingest-contract.md` endpoint section to include:
 
 ```markdown
-`/ingest/event` accepts generic event envelopes. Usage stats are represented as
-`eventType: "usage"` with either:
+`/ingest/event` accepts generic event envelopes. Public aggregate stats are represented as
+`eventType: "stats"` with either:
 
-- `eventName: "stats_heartbeat"`
-- `eventName: "stats_chart"`
+- `eventName: "heartbeat"`
+- `eventName: "chart_sample"`
 
-`stats_heartbeat` requires `details.playersOnline` as a non-negative integer.
-`stats_chart` requires `details.chartId` and a chart-specific `details.value`
+`heartbeat` requires `details.playersOnline` as a non-negative integer.
+`chart_sample` requires `details.chartId` and a chart-specific `details.value`
 or configured field names from hosted project config.
 ```
 
 - [ ] **Step 2: Document project stats config**
 
-Update `docs/project-descriptor.md` with a `usage.allowedEvents` example:
+Update `docs/project-descriptor.md` with a separate `stats` category example:
 
 ```json
 {
-  "usage": {
+  "stats": {
     "enabled": true,
-    "allowedEvents": ["stats_heartbeat", "stats_chart"],
+    "allowedEvents": ["heartbeat", "chart_sample"],
     "details": {
-      "stats_heartbeat": {
+      "heartbeat": {
         "allowedFields": {
           "playersOnline": { "type": "number" }
         }
       },
-      "stats_chart": {
+      "chart_sample": {
         "allowedFields": {
           "chartId": { "type": "string", "maxLength": 80 },
           "value": { "type": "string", "maxLength": 120 }
@@ -1922,7 +2205,7 @@ HStats and bStats.
 
 ## Default Stats
 
-The standalone runtime emits a `stats_heartbeat` usage event for each
+The standalone runtime emits a `stats` `heartbeat` event for each
 dependency-mode project every 30 minutes. The hosted stats surface derives:
 
 - active servers
@@ -1968,7 +2251,7 @@ Add one bullet to `README.md` near existing telemetry categories:
 Run:
 
 ```powershell
-rg -n "stats_heartbeat|stats_chart|usage statistics" docs README.md
+rg -n "eventType: \"stats\"|heartbeat|chart_sample|usage statistics" docs README.md
 ```
 
 Expected: matches appear in the hosted contract, project descriptor, usage stats guide, and README.
@@ -2023,8 +2306,8 @@ In a second terminal, send a heartbeat payload:
 ```powershell
 $payload = @{
   schemaVersion = 2
-  eventType = "usage"
-  eventName = "stats_heartbeat"
+  eventType = "stats"
+  eventName = "heartbeat"
   eventId = "manual-event-1"
   projectId = "example-mod"
   projectDisplayName = "Example Mod"
@@ -2064,8 +2347,8 @@ Expected response:
   "accepted": true,
   "projectId": "example-mod",
   "eventId": "manual-event-1",
-  "eventType": "usage",
-  "eventName": "stats_heartbeat",
+  "eventType": "stats",
+  "eventName": "heartbeat",
   "storedStatsObservation": true
 }
 ```
@@ -2114,4 +2397,4 @@ Create separate plans after this one lands:
 
 - Spec coverage: the plan covers HStats-style registration key usage, active servers, players, embeds, and public stats; it covers bStats-style default charts, custom chart families, public REST API, global privacy boundaries, and server-owner consent. Account UI and production persistence are intentionally split into follow-on plans because they live in the canonical backend rather than this repo's prototype.
 - Placeholder scan: no implementation step depends on an unnamed file or unspecified command. Runtime event access and final-service adaptation are grounded in the current local Hytale jar and existing `TelemetryRuntimeService.projects()` API.
-- Type consistency: hosted event schemas use `TelemetryEventEnvelope`; stats storage uses `StatsObservation`; runtime heartbeat emits `stats_heartbeat`; custom charts emit `stats_chart`; public aggregation consumes those same names.
+- Type consistency: hosted event schemas use `TelemetryEventEnvelope`; stats storage uses `StatsObservation`; runtime heartbeat emits `eventType="stats", eventName="heartbeat"`; custom charts emit `eventType="stats", eventName="chart_sample"`; public aggregation consumes those same names.
