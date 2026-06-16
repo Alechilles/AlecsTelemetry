@@ -10,6 +10,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
+import com.alechilles.alecstelemetry.report.ManualReportReceiptStore;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
@@ -169,6 +170,13 @@ class TelemetryRuntimeServiceTest {
         assertFalse(attachmentContent.contains("admin@example.com"));
         assertEquals(0, fileCount(dataPaths.pendingManualReportsDirectory("example-mod")));
         assertEquals(1, Files.readAllLines(dataPaths.submittedManualReportsLog()).size());
+
+        List<ManualReportReceiptStore.Receipt> receipts = new ManualReportReceiptStore()
+                .loadAll(dataPaths.manualReportReceiptsFile());
+        assertEquals(1, receipts.size());
+        assertEquals(result.envelope().reportId(), receipts.getFirst().reportId());
+        assertEquals("queued", receipts.getFirst().lastKnownStatus());
+        assertTrue(receipts.getFirst().followUpToken().length() > 10);
     }
 
     @Test

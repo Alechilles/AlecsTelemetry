@@ -8,6 +8,7 @@ import { RequestRateLimiter } from '../src/ingest/request-rate-limiter.js'
 import { TelemetryIngestService, createExampleCrashEnvelope } from '../src/ingest/telemetry-ingest-service.js'
 import { HostedProjectRegistry } from '../src/projects/project-registry.js'
 import { ManualReportRepository } from '../src/reports/manual-report-repository.js'
+import { ReportStatusService } from '../src/reports/report-status-service.js'
 import { createHostedServer } from '../src/server.js'
 
 describe('hosted server', () => {
@@ -95,9 +96,10 @@ describe('hosted server', () => {
       new DuplicateAlertSuppressor(),
       pino({ enabled: false }),
     )
+    const manualReportRepository = new ManualReportRepository()
     const manualReportIngestService = new ManualReportIngestService(
       registry,
-      new ManualReportRepository(),
+      manualReportRepository,
       new NoopCrashAlertRouter(),
       new RequestRateLimiter(),
       pino({ enabled: false }),
@@ -105,6 +107,7 @@ describe('hosted server', () => {
     const server = createHostedServer({
       ingestService,
       manualReportIngestService,
+      reportStatusService: new ReportStatusService(manualReportRepository),
       logger: pino({ enabled: false }),
       maxRequestBodyBytes: 262_144,
     })
@@ -130,5 +133,21 @@ describe('hosted server', () => {
     expect(payload.accepted).toBe(true)
     expect(payload.projectId).toBe(project.projectId)
     expect(payload.reportKind).toBe('issue')
+
+    const statusResponse = await fetch(`http://127.0.0.1:${address.port}/reports/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        reportId: 'manual-report-123',
+        followUpToken: 'follow-up-token',
+      }),
+    })
+    const statusPayload = await statusResponse.json() as Record<string, unknown>
+
+    expect(statusResponse.status).toBe(200)
+    expect(statusPayload.found).toBe(true)
+    expect(statusPayload.status).toBe('received')
   })
 })

@@ -187,7 +187,7 @@ public record ManualReportEnvelope(int schemaVersion,
                 environment.normalize(),
                 runtime.normalize()
         );
-        return new CreateResult(envelope, List.of());
+        return new CreateResult(envelope, List.of(), followUpToken);
     }
 
     @Nonnull
@@ -336,7 +336,14 @@ public record ManualReportEnvelope(int schemaVersion,
     }
 
     public record CreateResult(@Nullable ManualReportEnvelope envelope,
-                               @Nonnull List<String> validationErrors) {
+                               @Nonnull List<String> validationErrors,
+                               @Nullable String followUpToken) {
+
+        public CreateResult(@Nullable ManualReportEnvelope envelope,
+                            @Nonnull List<String> validationErrors) {
+            this(envelope, validationErrors, null);
+        }
+
         public boolean accepted() {
             return envelope != null && validationErrors.isEmpty();
         }

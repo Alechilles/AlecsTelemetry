@@ -10,6 +10,7 @@ import { RequestRateLimiter } from './ingest/request-rate-limiter.js'
 import { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
 import { HostedProjectRegistry } from './projects/project-registry.js'
 import { ManualReportRepository } from './reports/manual-report-repository.js'
+import { ReportStatusService } from './reports/report-status-service.js'
 import { createHostedServer } from './server.js'
 
 async function main(): Promise<void> {
@@ -24,9 +25,10 @@ async function main(): Promise<void> {
     new DuplicateAlertSuppressor(),
     logger,
   )
+  const manualReportRepository = new ManualReportRepository()
   const manualReportIngestService = new ManualReportIngestService(
     registry,
-    new ManualReportRepository(),
+    manualReportRepository,
     router,
     new RequestRateLimiter(),
     logger,
@@ -34,6 +36,7 @@ async function main(): Promise<void> {
   const server = createHostedServer({
     ingestService,
     manualReportIngestService,
+    reportStatusService: new ReportStatusService(manualReportRepository),
     logger,
     maxRequestBodyBytes: config.maxRequestBodyBytes,
   })

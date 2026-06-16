@@ -11,6 +11,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportAttachment;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportLogCollector;
+import com.alechilles.alecstelemetry.report.ManualReportReceiptStore;
 import com.alechilles.alecstelemetry.report.ManualReportStore;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
@@ -78,6 +79,7 @@ public final class TelemetryCoreEngine {
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
     private final ManualReportLogCollector manualReportLogCollector = new ManualReportLogCollector();
+    private final ManualReportReceiptStore manualReportReceiptStore = new ManualReportReceiptStore();
 
     private volatile Thread.UncaughtExceptionHandler previousUncaughtHandler;
     private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
@@ -552,6 +554,19 @@ public final class TelemetryCoreEngine {
                 store.savePending(envelope);
                 requestFlushAsync("manual_report", project.projectId());
             }
+            manualReportReceiptStore.saveReceipt(
+                    dataPaths.manualReportReceiptsFile(),
+                    new ManualReportReceiptStore.Receipt(
+                            envelope.reportId(),
+                            envelope.projectId(),
+                            envelope.reportKind(),
+                            envelope.title(),
+                            envelope.submittedAtUtc(),
+                            result.followUpToken() == null ? "" : result.followUpToken(),
+                            reportSettings.manualReviewRequired() ? "review" : "queued",
+                            null
+                    )
+            );
             return result;
         } catch (Exception ex) {
             logWarning("Failed to store manual report for project " + project.projectId() + ".", ex);

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 import type { ManualReportRepository } from './manual-report-repository.js'
 
 export interface ReportStatusLookupResult {
@@ -10,9 +12,9 @@ export interface ReportStatusLookupResult {
 export class ReportStatusService {
   constructor(private readonly repository: ManualReportRepository) {}
 
-  lookup(reportId: string, followUpTokenHash: string): ReportStatusLookupResult {
+  lookup(reportId: string, followUpToken: string): ReportStatusLookupResult {
     const record = this.repository.findByReportId(reportId)
-    if (!record || record.envelope.followUpTokenHash !== followUpTokenHash) {
+    if (!record || record.envelope.followUpTokenHash !== hashFollowUpToken(followUpToken)) {
       return {
         found: false,
         reportId,
@@ -27,4 +29,8 @@ export class ReportStatusService {
       resolved: record.status === 'resolved',
     }
   }
+}
+
+export function hashFollowUpToken(followUpToken: string): string {
+  return createHash('sha256').update(followUpToken).digest('hex').slice(0, 24)
 }

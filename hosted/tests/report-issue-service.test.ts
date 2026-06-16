@@ -60,7 +60,7 @@ describe('ReportIssueService', () => {
 
     expect(resolved?.status).toBe('resolved')
     expect(repository.findByReportId('report-1')?.status).toBe('resolved')
-    expect(statusService.lookup('report-1', 'follow-up-hash')).toMatchObject({
+    expect(statusService.lookup('report-1', 'follow-up-token')).toMatchObject({
       found: true,
       status: 'resolved',
       resolved: true,
