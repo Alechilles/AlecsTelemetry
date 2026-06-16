@@ -175,6 +175,55 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void embeddedManualReportsIgnoreAutomatedTelemetryConsent() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded Mod")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.applyConsent(
+                "embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false)
+        ));
+        assertFalse(service.projectDiagnostics("embedded-mod").enabled());
+        assertEquals(
+                List.of("embedded-mod"),
+                service.manualReportProjects().stream().map(TelemetryProjectRegistration::projectId).toList()
+        );
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "embedded-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(1, fileCount(dataPaths.pendingManualReportsDirectory("embedded-mod")));
+
+        TelemetryRuntimeService.FlushSummary summary = service.flushPendingReportsNow("test", "embedded-mod");
+
+        assertEquals(1, summary.attempted());
+        assertEquals(1, summary.uploaded());
+        assertEquals(1, client.calls);
+        assertEquals(0, fileCount(dataPaths.pendingManualReportsDirectory("embedded-mod")));
+    }
+
+    @Test
     void manualReviewRequiredStoresReportForReviewAndSkipsFlushUpload() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("""
                 {

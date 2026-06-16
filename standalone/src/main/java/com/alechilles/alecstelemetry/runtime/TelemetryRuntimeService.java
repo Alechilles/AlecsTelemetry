@@ -422,7 +422,7 @@ public final class TelemetryRuntimeService {
     public List<TelemetryProjectRegistration> manualReportProjects() {
         ArrayList<TelemetryProjectRegistration> reportProjects = new ArrayList<>();
         for (TelemetryProjectRegistration project : engine.manualReportProjects()) {
-            if (engine.isProjectEnabled(project.projectId()) && project.descriptor().reports().enabled()) {
+            if (project.descriptor().reports().enabled()) {
                 reportProjects.add(project);
             }
         }

@@ -74,7 +74,7 @@ public final class TelemetryReportProjectSelectPage
                                 @Nonnull Store<EntityStore> store,
                                 @Nonnull String projectId) {
         TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
-        if (project == null || !runtimeService.isProjectEnabled(project.projectId()) || !project.descriptor().reports().enabled()) {
+        if (project == null || !project.descriptor().reports().enabled()) {
             refreshUi();
             return;
         }

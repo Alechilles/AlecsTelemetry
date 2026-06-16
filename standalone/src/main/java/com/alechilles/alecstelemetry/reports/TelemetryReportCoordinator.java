@@ -37,7 +37,7 @@ public final class TelemetryReportCoordinator {
             return false;
         }
         TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
-        if (project == null || !runtimeService.isProjectEnabled(project.projectId()) || !project.descriptor().reports().enabled()) {
+        if (project == null || !project.descriptor().reports().enabled()) {
             warn("Unable to open manual report page for unavailable project " + projectId + ".", null);
             return false;
         }

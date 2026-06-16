@@ -178,9 +178,6 @@ public final class TelemetryCoreEngine {
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
-        if (project == null) {
-            project = findManualReportProject(projectId);
-        }
         return project != null && isProjectRuntimeEnabled(project);
     }
 
@@ -776,9 +773,6 @@ public final class TelemetryCoreEngine {
             }
 
             for (TelemetryProjectRegistration project : matchingManualReportProjects(projectIdFilter)) {
-                if (!isProjectRuntimeEnabled(project)) {
-                    continue;
-                }
                 CrashReportClient.DeliveryTarget reportTarget = project.resolveReportDeliveryTarget(settings);
                 if (reportTarget != null && !reportTarget.endpoint().isBlank()) {
                     ManualReportStore manualStore = manualReportStoreFor(project);
