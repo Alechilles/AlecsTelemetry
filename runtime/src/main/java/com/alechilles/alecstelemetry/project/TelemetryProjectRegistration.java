@@ -98,6 +98,7 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                 events().lifecycle().enabled(),
                 performance().enabled(),
                 usage().enabled(),
+                stats().enabled(),
                 events().breadcrumbs().enabled()
         );
     }
@@ -174,6 +175,20 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         return new TelemetryProjectDescriptor.UsageOptions(
                 usageOverride.enabled() == null ? defaults.enabled() : usageOverride.enabled(),
                 usageOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : usageOverride.allowedEvents(),
+                defaults.details()
+        );
+    }
+
+    @Nonnull
+    public TelemetryProjectDescriptor.StatsOptions stats() {
+        if (override == null || override.stats() == null) {
+            return descriptor.stats();
+        }
+        TelemetryProjectDescriptor.StatsOptions defaults = descriptor.stats();
+        TelemetryProjectOverride.StatsOverride statsOverride = override.stats();
+        return new TelemetryProjectDescriptor.StatsOptions(
+                statsOverride.enabled() == null ? defaults.enabled() : statsOverride.enabled(),
+                statsOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : statsOverride.allowedEvents(),
                 defaults.details()
         );
     }

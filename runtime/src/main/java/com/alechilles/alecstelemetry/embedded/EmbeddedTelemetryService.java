@@ -212,6 +212,20 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     }
 
     @Override
+    public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+        if (engine != null) {
+            engine.recordStats(project.projectId(), eventName, detail);
+        }
+    }
+
+    @Override
+    public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        if (engine != null) {
+            engine.recordStatsWithContext(project.projectId(), eventName, context);
+        }
+    }
+
+    @Override
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
         if (engine != null) {
@@ -280,6 +294,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                         com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.EventOptions.defaults(),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.PerformanceOptions(false, 1.0d, 100, java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UsageOptions(false, java.util.List.of(), java.util.Map.of()),
+                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.StatsOptions(false, java.util.List.of(), java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UiOptions(null),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.Defaults(false, "hosted"),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.HostedDestination(null, null, null, java.util.Map.of()),

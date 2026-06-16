@@ -63,6 +63,7 @@ public final class TelemetryCoreEngine {
     private final ConcurrentHashMap<String, AtomicBoolean> lifecycleEventsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> performanceEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> usageEnabledOverrides = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> statsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> breadcrumbsEnabledOverrides = new ConcurrentHashMap<>();
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
@@ -175,6 +176,11 @@ public final class TelemetryCoreEngine {
         return project != null && isUsageRuntimeEnabled(project);
     }
 
+    public boolean isStatsEnabled(@Nonnull String projectId) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        return project != null && isStatsRuntimeEnabled(project);
+    }
+
     public boolean isBreadcrumbsEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
         return project != null && areBreadcrumbsRuntimeEnabled(project);
@@ -205,6 +211,10 @@ public final class TelemetryCoreEngine {
 
     public void setUsageEnabled(@Nonnull String projectId, boolean enabled) {
         usageEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
+    }
+
+    public void setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+        statsEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
     }
 
     public void setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
@@ -468,6 +478,53 @@ public final class TelemetryCoreEngine {
         requestFlushAsync("event", project.projectId());
     }
 
+    public void recordStats(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable String detail) {
+        recordStatsWithContext(projectId, eventName, TelemetryEventContext.stats().detail(detail).build());
+    }
+
+    public void recordStatsWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable TelemetryEventContext context) {
+        if (!enabled.get()) {
+            return;
+        }
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null || !isProjectRuntimeEnabled(project) || project.resolveEventDeliveryTarget(settings) == null) {
+            return;
+        }
+        if (!isStatsRuntimeEnabled(project) || !project.stats().allows(eventName)) {
+            return;
+        }
+        TelemetryEventContext normalizedContext = normalizeContext(context);
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        putDetail(attributes, normalizedContext);
+        Map<String, Object> details = project.stats().sanitizeDetails(eventName, normalizedContext.details());
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
+                project.projectId(),
+                project.displayName(),
+                "runtime_api",
+                sessionId,
+                serverId,
+                eventName,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                normalizedContext.worldName(),
+                environmentFor(project, runtimeMetadata),
+                attributes,
+                details,
+                normalizedContext,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(project).persist(event)) {
+            logWarning("Failed to store telemetry stats event for project " + project.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", project.projectId());
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !isProjectRuntimeEnabled(project)) {
@@ -548,6 +605,11 @@ public final class TelemetryCoreEngine {
     private boolean isUsageRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
         AtomicBoolean override = usageEnabledOverrides.get(normalizeProjectId(project.projectId()));
         return override == null ? project.usage().enabled() : override.get();
+    }
+
+    private boolean isStatsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
+        AtomicBoolean override = statsEnabledOverrides.get(normalizeProjectId(project.projectId()));
+        return override == null ? project.stats().enabled() : override.get();
     }
 
     @Nonnull

@@ -66,6 +66,7 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                             project.lifecycleEnabled(),
                             project.performanceEnabled(),
                             project.usageEnabled(),
+                            project.statsEnabled(),
                             project.breadcrumbsEnabled()
                     )
             );

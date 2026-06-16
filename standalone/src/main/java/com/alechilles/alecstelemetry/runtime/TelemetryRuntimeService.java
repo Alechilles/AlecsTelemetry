@@ -145,6 +145,11 @@ public final class TelemetryRuntimeService {
         return engine.isEnabled();
     }
 
+    @Nonnull
+    public int statsHeartbeatIntervalSeconds() {
+        return settings.statsHeartbeatIntervalSeconds();
+    }
+
     public int registeredProjectCount() {
         return engine.projects().size();
     }
@@ -193,6 +198,7 @@ public final class TelemetryRuntimeService {
                 && overrideStore.saveLifecycleEventsEnabled(overrideFile, snapshot.lifecycleEnabled())
                 && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
                 && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
+                && overrideStore.saveStatsEnabled(overrideFile, snapshot.statsEnabled())
                 && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
         java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(project);
         if (embeddedOverrideFile != null) {
@@ -203,6 +209,7 @@ public final class TelemetryRuntimeService {
                     && overrideStore.saveLifecycleEventsEnabled(embeddedOverrideFile, snapshot.lifecycleEnabled())
                     && overrideStore.savePerformanceEnabled(embeddedOverrideFile, snapshot.performanceEnabled())
                     && overrideStore.saveUsageEnabled(embeddedOverrideFile, snapshot.usageEnabled())
+                    && overrideStore.saveStatsEnabled(embeddedOverrideFile, snapshot.statsEnabled())
                     && overrideStore.saveBreadcrumbsEnabled(embeddedOverrideFile, snapshot.breadcrumbsEnabled());
         }
         if (!saved) {
@@ -219,6 +226,7 @@ public final class TelemetryRuntimeService {
             engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
             engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
             engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
+            engine.setStatsEnabled(project.projectId(), snapshot.statsEnabled());
             engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
         }
         return true;
@@ -309,6 +317,18 @@ public final class TelemetryRuntimeService {
         engine.recordUsageWithContext(projectId, eventName, context);
     }
 
+    public void recordStats(@Nonnull String projectId,
+                            @Nonnull String eventName,
+                            @Nullable String detail) {
+        engine.recordStats(projectId, eventName, detail);
+    }
+
+    public void recordStatsWithContext(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       @Nullable TelemetryEventContext context) {
+        engine.recordStatsWithContext(projectId, eventName, context);
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return engine.captureTestReport(projectId, detail);
     }
@@ -389,6 +409,7 @@ public final class TelemetryRuntimeService {
                 registeredForStandaloneRuntime ? engine.isLifecycleEventsEnabled(project.projectId()) : project.events().lifecycle().enabled(),
                 registeredForStandaloneRuntime ? engine.isPerformanceEnabled(project.projectId()) : project.performance().enabled(),
                 registeredForStandaloneRuntime ? engine.isUsageEnabled(project.projectId()) : project.usage().enabled(),
+                registeredForStandaloneRuntime ? engine.isStatsEnabled(project.projectId()) : project.stats().enabled(),
                 registeredForStandaloneRuntime ? engine.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled()
         );
     }

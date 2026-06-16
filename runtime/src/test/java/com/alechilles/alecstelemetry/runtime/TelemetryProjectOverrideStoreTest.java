@@ -66,6 +66,7 @@ class TelemetryProjectOverrideStoreTest {
         assertTrue(store.saveLifecycleEventsEnabled(overrideFile, false));
         assertTrue(store.savePerformanceEnabled(overrideFile, false));
         assertTrue(store.saveUsageEnabled(overrideFile, false));
+        assertTrue(store.saveStatsEnabled(overrideFile, false));
         assertTrue(store.saveBreadcrumbsEnabled(overrideFile, false));
 
         TelemetryProjectOverride override = store.load(overrideFile);
@@ -79,6 +80,7 @@ class TelemetryProjectOverrideStoreTest {
         assertEquals(false, override.events().breadcrumbs().enabled());
         assertEquals(false, override.performance().enabled());
         assertEquals(false, override.usage().enabled());
+        assertEquals(false, override.stats().enabled());
         assertEquals("custom", override.destinationMode());
         assertEquals("https://example.com/telemetry", override.customEndpoint().url());
     }

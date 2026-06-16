@@ -9,6 +9,7 @@ public enum TelemetryConsentCategory {
     LIFECYCLE("lifecycle"),
     PERFORMANCE("performance"),
     USAGE("usage"),
+    STATS("stats"),
     BREADCRUMBS("breadcrumbs");
 
     private final String key;

@@ -12,9 +12,10 @@ and database-backed crash routing behavior.
 
 ## Purpose
 
-It accepts crash telemetry uploads from the runtime mod, validates them against the
-hosted contract, applies basic abuse protections, and routes accepted crash alerts
-to Discord.
+It accepts crash telemetry and generic event uploads from the runtime mod,
+validates them against the hosted contract, applies basic abuse protections, and
+routes accepted crash alerts to Discord. It also includes a file-backed reference
+implementation for public aggregate Hytale usage statistics.
 
 ## Trust Model
 
@@ -35,5 +36,9 @@ to Discord.
 
 - `GET /healthz`
 - `POST /ingest/crash`
+- `POST /ingest/event`
+- `GET /api/v1/projects`
+- `GET /api/v1/projects/:projectId/summary`
+- `GET /api/v1/projects/:projectId/charts/:chartId`
 
 See `../docs/hosted-ingest-contract.md` for the exact contract.

@@ -106,6 +106,10 @@ class TelemetryProjectRegistrationTest {
                     "enabled": true,
                     "allowedEvents": ["settings_opened"]
                   },
+                  "stats": {
+                    "enabled": false,
+                    "allowedEvents": ["heartbeat"]
+                  },
                   "defaults": {
                     "enabled": true
                   }
@@ -128,6 +132,39 @@ class TelemetryProjectRegistrationTest {
         assertEquals(true, snapshot.lifecycleEnabled());
         assertEquals(false, snapshot.performanceEnabled());
         assertEquals(true, snapshot.usageEnabled());
+        assertEquals(false, snapshot.statsEnabled());
         assertEquals(false, snapshot.breadcrumbsEnabled());
+    }
+
+    @Test
+    void consentSnapshotKeepsStatsSeparateFromUsage() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "consent-mod",
+                  "displayName": "Consent Mod",
+                  "usage": {
+                    "enabled": false,
+                    "allowedEvents": ["settings_opened"]
+                  },
+                  "stats": {
+                    "enabled": true,
+                    "allowedEvents": ["heartbeat"]
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Consent Mod",
+                "1.0.0",
+                null
+        );
+
+        TelemetryConsentSnapshot snapshot = registration.consentSnapshot();
+
+        assertEquals(false, snapshot.usageEnabled());
+        assertEquals(true, snapshot.statsEnabled());
     }
 }

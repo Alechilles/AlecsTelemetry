@@ -97,6 +97,16 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     }
 
     @Override
+    public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+        runtimeService.recordStats(projectId, eventName, detail);
+    }
+
+    @Override
+    public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        runtimeService.recordStatsWithContext(projectId, eventName, context);
+    }
+
+    @Override
     public boolean requestFlush() {
         return runtimeService.triggerFlushAsync(projectId);
     }

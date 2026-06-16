@@ -111,6 +111,10 @@ public final class TelemetryProjectOverrideStore {
         return update(file, root -> object(root, "usage").addProperty("enabled", enabled));
     }
 
+    public boolean saveStatsEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "stats").addProperty("enabled", enabled));
+    }
+
     @Nonnull
     private static String projectIdFromFileName(@Nonnull String fileName) {
         String trimmed = fileName.trim();

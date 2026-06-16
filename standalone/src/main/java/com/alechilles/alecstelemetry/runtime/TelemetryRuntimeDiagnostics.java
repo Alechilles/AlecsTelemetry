@@ -38,6 +38,7 @@ public record TelemetryRuntimeDiagnostics(boolean enabled,
                                      boolean lifecycleEnabled,
                                      boolean performanceEnabled,
                                      boolean usageEnabled,
+                                     boolean statsEnabled,
                                      boolean breadcrumbsEnabled) {
     }
 }

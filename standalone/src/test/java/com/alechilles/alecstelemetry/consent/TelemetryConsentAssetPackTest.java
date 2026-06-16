@@ -81,8 +81,12 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must keep the crash checkbox close to its label"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 506, Width: 22, Height: 22)"),
-                "TelemetryConsentPage.ui must use the compact telemetry category layout"
+                consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must expose the separate stats consent category"
+        );
+        assertTrue(
+                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must keep the compact telemetry category layout with stats"
         );
         assertTrue(
                 !consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"),

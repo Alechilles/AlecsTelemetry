@@ -26,6 +26,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull EventOptions events,
                                          @Nonnull PerformanceOptions performance,
                                          @Nonnull UsageOptions usage,
+                                         @Nonnull StatsOptions stats,
                                          @Nonnull UiOptions ui,
                                          @Nonnull Defaults defaults,
                                          @Nonnull HostedDestination hosted,
@@ -93,6 +94,14 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 normalizeDetailRules(safe.usage.details)
         );
 
+        StatsOptions stats = safe.stats == null
+                ? new StatsOptions(false, List.of(), Map.of())
+                : new StatsOptions(
+                boolOrDefault(safe.stats.enabled, false),
+                normalizeNonBlankList(safe.stats.allowedEvents, 120),
+                normalizeDetailRules(safe.stats.details)
+        );
+
         UiOptions ui = safe.ui == null
                 ? new UiOptions(null)
                 : new UiOptions(normalizeUiTexturePath(safe.ui.iconTexturePath));
@@ -144,6 +153,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 events,
                 performance,
                 usage,
+                stats,
                 ui,
                 defaults,
                 hosted,
@@ -550,6 +560,47 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     /**
+     * Anonymous aggregate statistics defaults and allowlist for one project.
+     */
+    public record StatsOptions(boolean enabled,
+                               @Nonnull List<String> allowedEvents,
+                               @Nonnull Map<String, DetailRules> details) {
+
+        public boolean allows(@Nonnull String eventName) {
+            String normalized = normalizeNullable(eventName);
+            return enabled() && normalized != null && allowedEvents().stream().anyMatch(normalized::equalsIgnoreCase);
+        }
+
+        @Nonnull
+        public Map<String, Object> sanitizeDetails(@Nonnull String eventName, @Nullable Map<String, Object> rawDetails) {
+            Map<String, Object> sanitized = sanitizeDetailMap(details, eventName, rawDetails);
+            if (rawDetails == null || rawDetails.isEmpty()) {
+                return sanitized;
+            }
+            LinkedHashMap<String, Object> withCoreFields = new LinkedHashMap<>(sanitized);
+            if ("heartbeat".equalsIgnoreCase(eventName)) {
+                Object playersOnline = rawDetails.get("playersOnline");
+                if (playersOnline instanceof Number) {
+                    withCoreFields.putIfAbsent("playersOnline", playersOnline);
+                }
+            } else if ("chart_sample".equalsIgnoreCase(eventName)) {
+                putCoreChartField(withCoreFields, rawDetails, "chartId");
+                putCoreChartField(withCoreFields, rawDetails, "value");
+            }
+            return Map.copyOf(withCoreFields);
+        }
+
+        private static void putCoreChartField(@Nonnull Map<String, Object> destination,
+                                              @Nonnull Map<String, Object> rawDetails,
+                                              @Nonnull String key) {
+            Object value = rawDetails.get(key);
+            if (value instanceof String || value instanceof Number || value instanceof Boolean) {
+                destination.putIfAbsent(key, value);
+            }
+        }
+    }
+
+    /**
      * Optional custom UI presentation hints for consent and diagnostics pages.
      */
     public record UiOptions(@Nullable String iconTexturePath) {
@@ -600,6 +651,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
+        private StatsDocument stats;
         private UiDocument ui;
         private DefaultsDocument defaults;
         private HostedDocument hosted;
@@ -642,6 +694,12 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     private static final class UsageDocument {
+        private Boolean enabled;
+        private List<String> allowedEvents;
+        private Map<String, DetailRulesDocument> details;
+    }
+
+    private static final class StatsDocument {
         private Boolean enabled;
         private List<String> allowedEvents;
         private Map<String, DetailRulesDocument> details;

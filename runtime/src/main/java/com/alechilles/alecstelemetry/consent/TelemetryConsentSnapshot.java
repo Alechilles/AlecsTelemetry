@@ -9,5 +9,6 @@ public record TelemetryConsentSnapshot(boolean projectEnabled,
                                        boolean lifecycleEnabled,
                                        boolean performanceEnabled,
                                        boolean usageEnabled,
+                                       boolean statsEnabled,
                                        boolean breadcrumbsEnabled) {
 }

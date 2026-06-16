@@ -504,7 +504,7 @@ class TelemetryRuntimeServiceTest {
         assertEquals(List.of(registration), service.unreviewedConsentProjects());
         assertTrue(service.applyConsent(
                 "example-mod",
-                new TelemetryConsentSnapshot(false, false, false, false, false, false, false)
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
         ));
         assertFalse(service.isProjectEnabled("example-mod"));
         assertFalse(service.projectDiagnostics("example-mod").crashEnabled());
@@ -512,6 +512,7 @@ class TelemetryRuntimeServiceTest {
         assertFalse(service.projectDiagnostics("example-mod").lifecycleEnabled());
         assertFalse(service.projectDiagnostics("example-mod").performanceEnabled());
         assertFalse(service.projectDiagnostics("example-mod").usageEnabled());
+        assertFalse(service.projectDiagnostics("example-mod").statsEnabled());
         assertFalse(service.projectDiagnostics("example-mod").breadcrumbsEnabled());
 
         TelemetryProjectOverride override = new TelemetryProjectOverrideStore(null)
@@ -612,7 +613,7 @@ class TelemetryRuntimeServiceTest {
 
         assertTrue(service.applyConsent(
                 "embedded-mod",
-                new TelemetryConsentSnapshot(false, false, false, false, false, false, false)
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
         ));
 
         TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = service.projectDiagnostics("embedded-mod");
@@ -622,6 +623,7 @@ class TelemetryRuntimeServiceTest {
         assertFalse(diagnostics.lifecycleEnabled());
         assertFalse(diagnostics.performanceEnabled());
         assertFalse(diagnostics.usageEnabled());
+        assertFalse(diagnostics.statsEnabled());
         assertFalse(diagnostics.breadcrumbsEnabled());
 
         TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);

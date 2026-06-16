@@ -17,4 +17,15 @@ class TelemetryEventContextTest {
         assertEquals(42, context.details().get("kept"));
         assertFalse(context.details().containsKey("missing"));
     }
+
+    @Test
+    void statsBuilderCreatesStatsContext() {
+        TelemetryEventContext context = TelemetryEventContext.stats()
+                .detail("playersOnline", 7)
+                .detail("serverImplementation", "Hytale")
+                .build();
+
+        assertEquals(7, context.details().get("playersOnline"));
+        assertEquals("Hytale", context.details().get("serverImplementation"));
+    }
 }

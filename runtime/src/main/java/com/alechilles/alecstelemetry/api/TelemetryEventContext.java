@@ -60,6 +60,11 @@ public record TelemetryEventContext(@Nullable String detail,
     }
 
     @Nonnull
+    public static Builder stats() {
+        return builder();
+    }
+
+    @Nonnull
     public TelemetryEventContext normalize() {
         return new TelemetryEventContext(
                 normalizeNullable(detail, 500),

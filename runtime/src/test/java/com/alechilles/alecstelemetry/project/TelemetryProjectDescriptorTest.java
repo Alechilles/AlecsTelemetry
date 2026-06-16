@@ -112,6 +112,49 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
+    void parsesStatsOptionsSeparatelyFromUsageOptions() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "stats-mod",
+                  "displayName": "Stats Mod",
+                  "usage": {
+                    "enabled": false,
+                    "allowedEvents": ["settings_page_opened"]
+                  },
+                  "stats": {
+                    "enabled": true,
+                    "allowedEvents": ["heartbeat", "chart_sample"],
+                    "details": {
+                      "heartbeat": {
+                        "allowedFields": {
+                          "playersOnline": { "type": "number" },
+                          "hytaleVersion": { "type": "string", "maxLength": 24 }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.usage().enabled());
+        assertTrue(!descriptor.usage().allows("settings_page_opened"));
+        assertTrue(descriptor.stats().enabled());
+        assertTrue(descriptor.stats().allows("heartbeat"));
+        assertTrue(descriptor.stats().allows("chart_sample"));
+        assertEquals(4, descriptor.stats().sanitizeDetails(
+                "heartbeat",
+                java.util.Map.of("playersOnline", 4, "hytaleVersion", "update-6", "ignored", true)
+        ).get("playersOnline"));
+        assertEquals("update-6", descriptor.stats().sanitizeDetails(
+                "heartbeat",
+                java.util.Map.of("hytaleVersion", "update-6")
+        ).get("hytaleVersion"));
+    }
+
+    @Test
     void parsesUiIconTexturePath() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """

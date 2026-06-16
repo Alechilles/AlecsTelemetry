@@ -4,8 +4,13 @@ import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.stats.TelemetryPlayerCounter;
+import com.alechilles.alecstelemetry.stats.TelemetryStatsHeartbeatService;
+import com.alechilles.alecstelemetry.stats.TelemetryStatsRuntime;
+import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
+import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
@@ -22,6 +27,8 @@ public final class AlecsTelemetry extends JavaPlugin {
 
     private TelemetryRuntimeService runtimeService;
     private TelemetryConsentCoordinator consentCoordinator;
+    private TelemetryPlayerCounter playerCounter;
+    private TelemetryStatsHeartbeatService statsHeartbeatService;
 
     public AlecsTelemetry(@Nonnull JavaPluginInit init) {
         super(init);
@@ -33,15 +40,25 @@ public final class AlecsTelemetry extends JavaPlugin {
         try {
             runtimeService = TelemetryRuntimeService.create(this);
             consentCoordinator = new TelemetryConsentCoordinator(runtimeService, getLogger());
+            playerCounter = new TelemetryPlayerCounter();
+            statsHeartbeatService = new TelemetryStatsHeartbeatService(
+                    TelemetryStatsRuntime.from(runtimeService),
+                    playerCounter,
+                    HytaleServer.SCHEDULED_EXECUTOR,
+                    getLogger()
+            );
             TelemetryRuntimeLocator.register(runtimeService.api());
             getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
-            getEventRegistry().registerGlobal(PlayerReadyEvent.class, consentCoordinator::onPlayerReady);
+            getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
+            getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnected);
         } catch (Exception ex) {
             getLogger().at(Level.WARNING).withCause(ex).log(
                     "Failed to initialize Alec's Telemetry runtime; continuing without crash telemetry capture."
             );
             runtimeService = null;
             consentCoordinator = null;
+            playerCounter = null;
+            statsHeartbeatService = null;
             TelemetryRuntimeLocator.clear();
         }
         if (getCommandRegistry() != null) {
@@ -53,6 +70,9 @@ public final class AlecsTelemetry extends JavaPlugin {
     protected void start() {
         if (runtimeService != null) {
             runtimeService.start();
+            if (statsHeartbeatService != null) {
+                statsHeartbeatService.start();
+            }
             getLogger().at(Level.INFO).log(
                     "Alec's Telemetry enabled. Registered projects=" + runtimeService.registeredProjectCount()
             );
@@ -64,10 +84,15 @@ public final class AlecsTelemetry extends JavaPlugin {
     @Override
     protected void shutdown() {
         if (runtimeService != null) {
+            if (statsHeartbeatService != null) {
+                statsHeartbeatService.shutdown();
+            }
             runtimeService.shutdown();
             runtimeService = null;
         }
         consentCoordinator = null;
+        playerCounter = null;
+        statsHeartbeatService = null;
         TelemetryRuntimeLocator.clear();
         instance = null;
         getLogger().at(Level.INFO).log("Alec's Telemetry disabled.");
@@ -78,6 +103,21 @@ public final class AlecsTelemetry extends JavaPlugin {
             return;
         }
         runtimeService.captureExceptionalWorldRemoval(event.getWorld(), event.getRemovalReason());
+    }
+
+    private void onPlayerReady(@Nonnull PlayerReadyEvent event) {
+        if (playerCounter != null) {
+            playerCounter.onPlayerReady(event);
+        }
+        if (consentCoordinator != null) {
+            consentCoordinator.onPlayerReady(event);
+        }
+    }
+
+    private void onPlayerDisconnected(@Nonnull PlayerDisconnectEvent event) {
+        if (playerCounter != null) {
+            playerCounter.onPlayerDisconnect(event);
+        }
     }
 
     @Nullable

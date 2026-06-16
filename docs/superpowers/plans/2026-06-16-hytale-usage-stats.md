@@ -4,6 +4,8 @@
 
 **Goal:** Add HStats/bStats-style anonymous Hytale mod usage statistics to Alec's Telemetry, starting with a shippable heartbeat, aggregate stats store, public stats API, embeds, and chart definitions.
 
+**Implementation status:** Hosted stats ingest/storage/API, separate runtime stats consent, heartbeat emission, custom chart helpers, and documentation are implemented and verified. Commit checklist items remain open because this Codex sandbox can read `.git` but cannot create `.git/index.lock`.
+
 **Architecture:** Runtime mods emit bounded `stats` events through the existing `TelemetryEventEnvelope` transport: `eventName: "heartbeat"` for built-in server/player activity and `eventName: "chart_sample"` for custom chart values. The hosted prototype accepts `/ingest/event`, validates stats payloads against project config, appends accepted stats observations to a file-backed event log, and derives current counts, records, time-series charts, and categorical breakdowns from that log. Public stats endpoints remain read-only and separate from crash/error/usage diagnostics.
 
 **Tech Stack:** Java 25 runtime modules, Hytale server plugin API, TypeScript hosted prototype, Node 20, zod, vitest, Maven/JUnit.
@@ -122,7 +124,7 @@ This plan does not implement account login, project self-registration UI, projec
 - Create: `hosted/src/contract/event-envelope.ts`
 - Test: `hosted/tests/event-envelope.test.ts`
 
-- [ ] **Step 1: Write the failing schema tests**
+- [x] **Step 1: Write the failing schema tests**
 
 Create `hosted/tests/event-envelope.test.ts`:
 
@@ -224,7 +226,7 @@ describe('telemetryEventEnvelopeSchema', () => {
 })
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -235,7 +237,7 @@ npm test -- event-envelope.test.ts
 
 Expected: TypeScript module resolution fails because `../src/contract/event-envelope.js` does not exist.
 
-- [ ] **Step 3: Add the event envelope schema**
+- [x] **Step 3: Add the event envelope schema**
 
 Create `hosted/src/contract/event-envelope.ts`:
 
@@ -306,7 +308,7 @@ export const telemetryEventEnvelopeSchema = z.object({
 export type TelemetryEventEnvelope = z.infer<typeof telemetryEventEnvelopeSchema>
 ```
 
-- [ ] **Step 4: Run the contract tests**
+- [x] **Step 4: Run the contract tests**
 
 Run:
 
@@ -332,7 +334,7 @@ git commit -m "Feat: add hosted event envelope contract"
 - Modify: `hosted/src/projects/project-registry.ts`
 - Test: `hosted/tests/project-registry.test.ts`
 
-- [ ] **Step 1: Write failing project registry tests**
+- [x] **Step 1: Write failing project registry tests**
 
 Create `hosted/tests/project-registry.test.ts`:
 
@@ -385,7 +387,7 @@ describe('HostedProjectRegistry stats config', () => {
 })
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -396,7 +398,7 @@ npm test -- project-registry.test.ts
 
 Expected: compile failure because `stats` is not part of `HostedProjectConfig`.
 
-- [ ] **Step 3: Add chart config schemas**
+- [x] **Step 3: Add chart config schemas**
 
 Modify `hosted/src/projects/project-registry.ts` by adding these schemas above `hostedProjectConfigSchema`:
 
@@ -441,7 +443,7 @@ export type StatsChartConfig = z.infer<typeof statsChartConfigSchema>
 export type StatsProjectConfig = z.infer<typeof statsProjectConfigSchema>
 ```
 
-- [ ] **Step 4: Run the project registry tests**
+- [x] **Step 4: Run the project registry tests**
 
 Run:
 
@@ -468,7 +470,7 @@ git commit -m "Feat: add stats chart project config"
 - Create: `hosted/src/stats/stats-event-log.ts`
 - Test: `hosted/tests/stats-event-log.test.ts`
 
-- [ ] **Step 1: Write failing event log tests**
+- [x] **Step 1: Write failing event log tests**
 
 Create `hosted/tests/stats-event-log.test.ts`:
 
@@ -551,7 +553,7 @@ describe('StatsEventLog', () => {
 })
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -562,7 +564,7 @@ npm test -- stats-event-log.test.ts
 
 Expected: compile failure because the stats files do not exist.
 
-- [ ] **Step 3: Add stats model types**
+- [x] **Step 3: Add stats model types**
 
 Create `hosted/src/stats/stats-model.ts`:
 
@@ -606,7 +608,7 @@ export interface StatsSummary {
 }
 ```
 
-- [ ] **Step 4: Add the JSONL event log**
+- [x] **Step 4: Add the JSONL event log**
 
 Create `hosted/src/stats/stats-event-log.ts`:
 
@@ -668,7 +670,7 @@ export class StatsEventLog {
 }
 ```
 
-- [ ] **Step 5: Run the event log tests**
+- [x] **Step 5: Run the event log tests**
 
 Run:
 
@@ -694,7 +696,7 @@ git commit -m "Feat: add stats observation log"
 - Create: `hosted/src/stats/stats-aggregator.ts`
 - Test: `hosted/tests/stats-aggregator.test.ts`
 
-- [ ] **Step 1: Write failing aggregation tests**
+- [x] **Step 1: Write failing aggregation tests**
 
 Create `hosted/tests/stats-aggregator.test.ts`:
 
@@ -762,7 +764,7 @@ describe('StatsAggregator', () => {
 })
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -773,7 +775,7 @@ npm test -- stats-aggregator.test.ts
 
 Expected: compile failure because `stats-aggregator.ts` does not exist.
 
-- [ ] **Step 3: Implement aggregation**
+- [x] **Step 3: Implement aggregation**
 
 Create `hosted/src/stats/stats-aggregator.ts`:
 
@@ -879,7 +881,7 @@ export class StatsAggregator {
 }
 ```
 
-- [ ] **Step 4: Run the aggregation tests**
+- [x] **Step 4: Run the aggregation tests**
 
 Run:
 
@@ -907,7 +909,7 @@ git commit -m "Feat: aggregate public stats"
 - Test: `hosted/tests/stats-service.test.ts`
 - Test: `hosted/tests/telemetry-ingest-service.test.ts`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Create `hosted/tests/stats-service.test.ts`:
 
@@ -995,7 +997,7 @@ describe('StatsService', () => {
 })
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -1006,7 +1008,7 @@ npm test -- stats-service.test.ts
 
 Expected: compile failure because `stats-service.ts` does not exist.
 
-- [ ] **Step 3: Implement stats event conversion**
+- [x] **Step 3: Implement stats event conversion**
 
 Create `hosted/src/stats/stats-service.ts`:
 
@@ -1079,7 +1081,7 @@ export class StatsService {
 }
 ```
 
-- [ ] **Step 4: Add event ingest to the existing service**
+- [x] **Step 4: Add event ingest to the existing service**
 
 Modify `hosted/src/ingest/telemetry-ingest-service.ts`:
 
@@ -1160,7 +1162,7 @@ After rate limiting and before crash-specific parsing, branch on event kind:
 
 Update every existing test call to `service.ingest` with `kind: 'crash'`.
 
-- [ ] **Step 5: Add event ingest test**
+- [x] **Step 5: Add event ingest test**
 
 Append to `hosted/tests/telemetry-ingest-service.test.ts`:
 
@@ -1215,7 +1217,7 @@ Append to `hosted/tests/telemetry-ingest-service.test.ts`:
 
 Update the local `createService` helper signature to pass the optional `statsService` into `TelemetryIngestService`.
 
-- [ ] **Step 6: Run ingest tests**
+- [x] **Step 6: Run ingest tests**
 
 Run:
 
@@ -1245,7 +1247,7 @@ git commit -m "Feat: accept stats event ingest"
 - Test: `hosted/tests/stats-api.test.ts`
 - Test: `hosted/tests/server-stats.test.ts`
 
-- [ ] **Step 1: Write stats API tests**
+- [x] **Step 1: Write stats API tests**
 
 Create `hosted/tests/stats-api.test.ts`:
 
@@ -1312,7 +1314,7 @@ describe('StatsApi', () => {
 })
 ```
 
-- [ ] **Step 2: Implement read-only API helper**
+- [x] **Step 2: Implement read-only API helper**
 
 Create `hosted/src/stats/stats-api.ts`:
 
@@ -1373,7 +1375,7 @@ Add this method to `HostedProjectRegistry`:
   }
 ```
 
-- [ ] **Step 3: Route stats API and event ingest in `server.ts`**
+- [x] **Step 3: Route stats API and event ingest in `server.ts`**
 
 Modify `hosted/src/server.ts` options:
 
@@ -1415,7 +1417,7 @@ Replace the hard-coded crash route check:
 
 Pass `kind: ingestKind` into `options.ingestService.ingest`.
 
-- [ ] **Step 4: Add config and index wiring**
+- [x] **Step 4: Add config and index wiring**
 
 Modify `hosted/src/config.ts`:
 
@@ -1447,11 +1449,11 @@ Construct services:
 
 Pass `statsService` to `TelemetryIngestService` and `statsApi` to `createHostedServer`.
 
-- [ ] **Step 5: Add server route tests**
+- [x] **Step 5: Add server route tests**
 
 Create `hosted/tests/server-stats.test.ts` with one test for `POST /ingest/event` and one for `GET /api/v1/projects/example-mod/summary`. Use the same server bootstrapping pattern as `hosted/tests/server.test.ts`, but pass a real `StatsService` backed by a temporary `StatsEventLog`.
 
-- [ ] **Step 6: Run hosted tests**
+- [x] **Step 6: Run hosted tests**
 
 Run:
 
@@ -1496,7 +1498,7 @@ git commit -m "Feat: expose public stats API"
 - Test: `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounterTest.java`
 - Test: `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatServiceTest.java`
 
-- [ ] **Step 1: Verify Hytale event classes before coding**
+- [x] **Step 1: Verify Hytale event classes before coding**
 
 Run:
 
@@ -1506,7 +1508,7 @@ javap -classpath "C:\Users\22ale\AppData\Roaming\Hytale\install\release\package\
 
 Expected: `PlayerReadyEvent.getPlayerRef()`, `PlayerDisconnectEvent.getPlayerRef()`, and `PlayerRef.getUuid()` are present.
 
-- [ ] **Step 2: Add failing tests for the stats consent model**
+- [x] **Step 2: Add failing tests for the stats consent model**
 
 Add this test to `runtime/src/test/java/com/alechilles/alecstelemetry/project/TelemetryProjectDescriptorTest.java`:
 
@@ -1594,7 +1596,7 @@ Run:
 
 Expected: tests fail because `stats()` descriptor options, `statsEnabled()`, and `TelemetryEventContext.stats()` do not exist.
 
-- [ ] **Step 3: Implement stats consent model and runtime gate**
+- [x] **Step 3: Implement stats consent model and runtime gate**
 
 Implement these concrete changes:
 
@@ -1699,7 +1701,7 @@ Update consent persistence methods so `TelemetryConsentCategory.STATS` writes an
 
 Update `TelemetryConsentViewModel` and `TelemetryConsentPage` to add a separate stats checkbox. Keep `usage` visible as feature usage telemetry and label stats as anonymous public stats.
 
-- [ ] **Step 4: Run stats consent model tests**
+- [x] **Step 4: Run stats consent model tests**
 
 Run:
 
@@ -1710,7 +1712,7 @@ Run:
 
 Expected: tests pass.
 
-- [ ] **Step 5: Add player counter tests**
+- [x] **Step 5: Add player counter tests**
 
 Create `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounterTest.java`:
 
@@ -1748,7 +1750,7 @@ class TelemetryPlayerCounterTest {
 }
 ```
 
-- [ ] **Step 6: Implement player counter**
+- [x] **Step 6: Implement player counter**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryPlayerCounter.java`:
 
@@ -1800,7 +1802,7 @@ public final class TelemetryPlayerCounter {
 }
 ```
 
-- [ ] **Step 7: Add heartbeat service tests**
+- [x] **Step 7: Add heartbeat service tests**
 
 Create `standalone/src/test/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatServiceTest.java`:
 
@@ -1875,7 +1877,7 @@ class TelemetryStatsHeartbeatServiceTest {
 }
 ```
 
-- [ ] **Step 8: Implement runtime adapter**
+- [x] **Step 8: Implement runtime adapter**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsRuntime.java`:
 
@@ -1916,7 +1918,7 @@ public interface TelemetryStatsRuntime {
 }
 ```
 
-- [ ] **Step 9: Implement heartbeat service**
+- [x] **Step 9: Implement heartbeat service**
 
 Create `standalone/src/main/java/com/alechilles/alecstelemetry/stats/TelemetryStatsHeartbeatService.java`:
 
@@ -1977,7 +1979,7 @@ public final class TelemetryStatsHeartbeatService implements AutoCloseable {
 }
 ```
 
-- [ ] **Step 10: Wire standalone plugin events**
+- [x] **Step 10: Wire standalone plugin events**
 
 Modify `standalone/src/main/java/com/alechilles/alecstelemetry/AlecsTelemetry.java`:
 
@@ -2004,7 +2006,7 @@ if (statsHeartbeatService != null) {
 }
 ```
 
-- [ ] **Step 11: Run runtime tests**
+- [x] **Step 11: Run runtime tests**
 
 Run:
 
@@ -2033,7 +2035,7 @@ git commit -m "Feat: emit stats heartbeats"
 - Modify: `runtime/src/main/java/com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryService.java`
 - Modify: `standalone/src/test/java/com/alechilles/alecstelemetry/api/TelemetryProjectHandleCompatibilityTest.java`
 
-- [ ] **Step 1: Add compatibility test calls**
+- [x] **Step 1: Add compatibility test calls**
 
 Append calls to `TelemetryProjectHandleCompatibilityTest.compatibilityImplementationsCompile()`:
 
@@ -2043,7 +2045,7 @@ handle.recordNumericStatChart("active_npcs", 12);
 handle.recordStatsWithContext("chart_sample", TelemetryEventContext.stats().detail("chartId", "language").detail("value", "English").build());
 ```
 
-- [ ] **Step 2: Add dependency-mode stats event methods and default chart helpers**
+- [x] **Step 2: Add dependency-mode stats event methods and default chart helpers**
 
 Modify `TelemetryProjectHandle`:
 
@@ -2103,7 +2105,7 @@ public void recordStats(@Nonnull String eventName, @Nullable String detail) {
 }
 ```
 
-- [ ] **Step 3: Add embedded-mode matching helpers**
+- [x] **Step 3: Add embedded-mode matching helpers**
 
 Add the same `recordStats`, `recordStatsWithContext`, `recordSimpleStatChart`, and `recordNumericStatChart` methods to `EmbeddedTelemetryHandle`.
 
@@ -2123,7 +2125,7 @@ public void recordStatsWithContext(@Nonnull String eventName, @Nullable Telemetr
 }
 ```
 
-- [ ] **Step 4: Run compatibility tests**
+- [x] **Step 4: Run compatibility tests**
 
 Run:
 
@@ -2151,7 +2153,7 @@ git commit -m "Feat: add custom stats chart helpers"
 - Create: `docs/usage-stats.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Document event ingest**
+- [x] **Step 1: Document event ingest**
 
 Update `docs/hosted-ingest-contract.md` endpoint section to include:
 
@@ -2167,7 +2169,7 @@ Update `docs/hosted-ingest-contract.md` endpoint section to include:
 or configured field names from hosted project config.
 ```
 
-- [ ] **Step 2: Document project stats config**
+- [x] **Step 2: Document project stats config**
 
 Update `docs/project-descriptor.md` with a separate `stats` category example:
 
@@ -2193,7 +2195,7 @@ Update `docs/project-descriptor.md` with a separate `stats` category example:
 }
 ```
 
-- [ ] **Step 3: Add usage stats guide**
+- [x] **Step 3: Add usage stats guide**
 
 Create `docs/usage-stats.md`:
 
@@ -2237,7 +2239,7 @@ Each custom chart must be declared in hosted project config before the public AP
 will expose it.
 ```
 
-- [ ] **Step 4: Update README feature list**
+- [x] **Step 4: Update README feature list**
 
 Add one bullet to `README.md` near existing telemetry categories:
 
@@ -2246,7 +2248,7 @@ Add one bullet to `README.md` near existing telemetry categories:
   breakdowns, and descriptor-validated custom charts.
 ```
 
-- [ ] **Step 5: Run doc checks**
+- [x] **Step 5: Run doc checks**
 
 Run:
 
@@ -2270,7 +2272,7 @@ git commit -m "Docs: describe Hytale usage stats"
 **Files:**
 - No new files required.
 
-- [ ] **Step 1: Run hosted verification**
+- [x] **Step 1: Run hosted verification**
 
 Run:
 
@@ -2282,7 +2284,7 @@ npm run check
 
 Expected: all hosted tests pass and TypeScript check completes with no errors.
 
-- [ ] **Step 2: Run Java verification**
+- [x] **Step 2: Run Java verification**
 
 Run:
 
@@ -2292,7 +2294,7 @@ Run:
 
 Expected: runtime and standalone Maven test suites pass.
 
-- [ ] **Step 3: Verify event ingest manually**
+- [x] **Step 3: Verify event ingest manually**
 
 Start hosted service:
 
@@ -2353,7 +2355,7 @@ Expected response:
 }
 ```
 
-- [ ] **Step 4: Verify public summary manually**
+- [x] **Step 4: Verify public summary manually**
 
 Run:
 

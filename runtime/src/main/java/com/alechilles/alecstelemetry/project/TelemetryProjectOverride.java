@@ -18,6 +18,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                                         @Nullable EventsOverride events,
                                         @Nullable PerformanceOverride performance,
                                         @Nullable UsageOverride usage,
+                                        @Nullable StatsOverride stats,
                                         @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
                                         @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
 
@@ -58,6 +59,12 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                         safe.usage.enabled,
                         normalizeNonBlankList(safe.usage.allowedEvents, 120)
                 ),
+                safe.stats == null
+                        ? null
+                        : new StatsOverride(
+                        safe.stats.enabled,
+                        normalizeNonBlankList(safe.stats.allowedEvents, 120)
+                ),
                 new TelemetryProjectDescriptor.HostedDestination(
                         normalizeNullable(safe.hosted == null ? null : safe.hosted.endpoint),
                         normalizeNullable(safe.hosted == null ? null : safe.hosted.eventEndpoint),
@@ -79,6 +86,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                 || events != null && events.hasAnyValue()
                 || performance != null
                 || usage != null
+                || stats != null
                 || hosted.endpoint() != null
                 || hosted.eventEndpoint() != null
                 || hosted.projectKey() != null
@@ -155,6 +163,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
+        private StatsDocument stats;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
     }
@@ -191,12 +200,21 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         private java.util.List<String> allowedEvents;
     }
 
+    private static final class StatsDocument {
+        private Boolean enabled;
+        private java.util.List<String> allowedEvents;
+    }
+
     public record PerformanceOverride(@Nullable Boolean enabled,
                                       @Nullable Double sampleRate,
                                       @Nullable Integer thresholdMs) {
     }
 
     public record UsageOverride(@Nullable Boolean enabled,
+                                @Nonnull java.util.List<String> allowedEvents) {
+    }
+
+    public record StatsOverride(@Nullable Boolean enabled,
                                 @Nonnull java.util.List<String> allowedEvents) {
     }
 

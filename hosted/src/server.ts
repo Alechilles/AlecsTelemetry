@@ -3,8 +3,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Logger } from 'pino'
 
 import type { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
+import type { StatsApi } from './stats/stats-api.js'
 
-function writeJson(response: ServerResponse, status: number, body: Record<string, unknown>): void {
+function writeJson(response: ServerResponse, status: number, body: object): void {
   const payload = JSON.stringify(body)
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -33,6 +34,7 @@ async function readJsonBody(request: IncomingMessage, maxBytes: number): Promise
 
 export function createHostedServer(options: {
   readonly ingestService: TelemetryIngestService
+  readonly statsApi?: StatsApi
   readonly logger: Logger
   readonly maxRequestBodyBytes: number
 }): Server {
@@ -42,7 +44,23 @@ export function createHostedServer(options: {
       return
     }
 
-    if (request.method !== 'POST' || request.url !== '/ingest/crash') {
+    if (request.url?.startsWith('/api/')) {
+      const statsResponse = await options.statsApi?.handle(request.method ?? 'GET', request.url)
+      if (statsResponse) {
+        writeJson(response, statsResponse.status, statsResponse.body)
+        return
+      }
+      writeJson(response, 404, { error: 'not_found' })
+      return
+    }
+
+    const ingestKind = request.url === '/ingest/crash'
+      ? 'crash'
+      : request.url === '/ingest/event'
+        ? 'event'
+        : null
+
+    if (request.method !== 'POST' || ingestKind === null) {
       writeJson(response, 404, { error: 'not_found' })
       return
     }
@@ -58,6 +76,7 @@ export function createHostedServer(options: {
       const projectKeyHeader = request.headers['x-telemetry-project-key']
       const projectKey = Array.isArray(projectKeyHeader) ? projectKeyHeader[0] ?? null : projectKeyHeader ?? null
       const result = await options.ingestService.ingest({
+        kind: ingestKind,
         projectKey,
         payload,
         bodyBytes,

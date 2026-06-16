@@ -124,6 +124,18 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
       }
     }
   },
+  "stats": {
+    "enabled": true,
+    "allowedEvents": ["heartbeat", "chart_sample"],
+    "details": {
+      "chart_sample": {
+        "allowedFields": {
+          "chartId": { "type": "string", "maxLength": 80 },
+          "value": { "type": "string", "maxLength": 120 }
+        }
+      }
+    }
+  },
   "ui": {
     "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
   },
@@ -158,6 +170,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `events`
 - `performance`
 - `usage`
+- `stats`
 - `ui`
 - `defaults`
 - `hosted`
@@ -203,6 +216,42 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `details`
   - optional per-event allowlist for custom mod-specific detail fields
 
+### `stats`
+
+- `enabled`
+  - controls anonymous public stats separately from feature usage telemetry
+- `allowedEvents`
+  - stats event names that this descriptor permits
+  - use `heartbeat` for runtime server/player observations
+  - use `chart_sample` for custom chart helper submissions
+- `details`
+  - optional per-event allowlist for custom stats fields
+
+Core stats fields are always sanitized by the runtime when their event is allowed:
+
+- `heartbeat.details.playersOnline`
+- `chart_sample.details.chartId`
+- `chart_sample.details.value`
+
+Example:
+
+```json
+{
+  "stats": {
+    "enabled": true,
+    "allowedEvents": ["heartbeat", "chart_sample"],
+    "details": {
+      "chart_sample": {
+        "allowedFields": {
+          "chartId": { "type": "string", "maxLength": 80 },
+          "value": { "type": "string", "maxLength": 120 }
+        }
+      }
+    }
+  }
+}
+```
+
 ### `ui`
 
 - `iconTexturePath`
@@ -230,7 +279,7 @@ Common/UI/Custom/ExampleMod/Telemetry/ExampleModConsentIcon.png
 ### Detail allowlists
 
 Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`,
-and `performance.details` are intentionally descriptor-declared. Runtime code can
+`stats.details`, and `performance.details` are intentionally descriptor-declared. Runtime code can
 send only fields that are listed for that event name.
 
 Supported field types:
@@ -253,6 +302,7 @@ Consumer mods can attach typed context to explicit non-crash events with:
 - `recordLifecycleWithContext`
 - `recordPerformanceWithContext`
 - `recordUsageWithContext`
+- `recordStatsWithContext`
 
 `TelemetryEventContext` supports these standardized fields:
 
@@ -314,6 +364,7 @@ Alec's Telemetry shows a first-run consent UI when an operator installs a teleme
 - `events.lifecycle.enabled` controls the default lifecycle telemetry category.
 - `performance.enabled` controls the default performance telemetry category.
 - `usage.enabled` controls the default usage telemetry category.
+- `stats.enabled` controls the default anonymous public stats category.
 - `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
 
 Server owners can override each value in the consent UI or through `Settings/projects/<project-id>.json`. Descriptor defaults are used until an override exists.

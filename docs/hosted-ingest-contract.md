@@ -67,6 +67,7 @@ Normal event envelopes use:
   - `lifecycle`
   - `performance`
   - `usage`
+  - `stats`
 - `eventName`
 - `eventId`
 - `projectId`
@@ -96,6 +97,25 @@ For issue-producing events, the hosted portal may aggregate scalar, low-cardinal
 `details` values into Context Breakdowns using generic `field_key` / `field_value`
 rollups. The wire field remains `details` for compatibility; portal UI should label
 these values as Event Context.
+
+`/ingest/event` also accepts public aggregate statistics as `eventType: "stats"`.
+Stats events are Hytale-only and use the same project key as the rest of the
+project's telemetry.
+
+Supported stats event names:
+
+- `heartbeat`
+  - emitted by the standalone runtime every `statsHeartbeatIntervalSeconds`
+  - includes `details.playersOnline` as a non-negative integer
+  - derives plugin version, Hytale build, Java version, OS, architecture, loaded
+    mods, server id, and session id from the normal event runtime metadata
+- `chart_sample`
+  - emitted by custom chart helpers such as `recordSimpleStatChart`
+  - includes `details.chartId`
+  - includes `details.value` as a string, number, or boolean
+
+The hosted public stats API must not expose raw `serverId`, `sessionId`, IP
+addresses, player names, chat, coordinates, secrets, or unsanitized config data.
 
 ## Validation Rules
 

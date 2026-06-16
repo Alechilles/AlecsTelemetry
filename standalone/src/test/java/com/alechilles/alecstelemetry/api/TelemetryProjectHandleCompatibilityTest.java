@@ -12,6 +12,9 @@ class TelemetryProjectHandleCompatibilityTest {
         TelemetryProjectHandle handle = new NoopTelemetryProjectHandle();
 
         handle.recordUsage("usage_event", null);
+        handle.recordStats("stats_event", null);
+        handle.recordSimpleStatChart("language", "English");
+        handle.recordNumericStatChart("active_npcs", 12);
         handle.recordError("error_event", null, null);
         handle.recordLifecycle("lifecycle_event", 0, true, null);
         handle.recordPerformance("performance_event", 0, null, null);
@@ -25,6 +28,7 @@ class TelemetryProjectHandleCompatibilityTest {
                 .build();
 
         handle.recordUsageWithContext("usage_event", context);
+        handle.recordStatsWithContext("stats_event", TelemetryEventContext.stats().detail("playersOnline", 3).build());
         handle.recordErrorWithContext("error_event", null, context);
         handle.recordLifecycleWithContext("lifecycle_event", 0, true, context);
         handle.recordPerformanceWithContext("performance_event", 0, null, context);
@@ -74,6 +78,10 @@ class TelemetryProjectHandleCompatibilityTest {
 
         @Override
         public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
+        }
+
+        @Override
+        public void recordStats(@Nonnull String eventName, @Nullable String detail) {
         }
 
         @Override

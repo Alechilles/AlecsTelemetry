@@ -21,6 +21,8 @@ broke.
   telemetry bootstrap directly.
 - Captures attributed crashes and startup/setup failures, queues reports locally,
   and flushes them to the configured destination.
+- Emits anonymous Hytale usage statistics for active servers, active players,
+  environment breakdowns, and descriptor-validated custom charts.
 - Uses your mod metadata as fallback where possible, so many mods only need one
   small descriptor file to get started.
 
@@ -125,6 +127,9 @@ Need something more custom than the default hosted dependency-mode flow?
 - The optional runtime API is available for richer breadcrumbs, explicit
   lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
   `usage` events with typed `TelemetryEventContext` fields.
+- Stats are a separate consent category from usage. Runtime heartbeats use
+  `eventType: "stats"` and custom charts can be emitted with
+  `recordSimpleStatChart` or `recordNumericStatChart`.
 - Admin commands are available for inspection and manual testing:
   `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`,
   `/telemetry flush [project-id]`, `/telemetry test <project-id> [detail]`
@@ -150,6 +155,7 @@ Minimal custom-endpoint example:
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
 - [Embedded mode guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
 - [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+- [Usage stats guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/usage-stats.md)
 - [Hosted key operations](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-key-operations.md)
 - [Hosted ingest contract](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-ingest-contract.md)
 - [Example consumer mod](https://github.com/Alechilles/AlecsTelemetry/tree/main/examples/ExampleConsumerMod)

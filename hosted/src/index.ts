@@ -9,21 +9,29 @@ import { RequestRateLimiter } from './ingest/request-rate-limiter.js'
 import { TelemetryIngestService } from './ingest/telemetry-ingest-service.js'
 import { HostedProjectRegistry } from './projects/project-registry.js'
 import { createHostedServer } from './server.js'
+import { StatsApi } from './stats/stats-api.js'
+import { StatsEventLog } from './stats/stats-event-log.js'
+import { StatsService } from './stats/stats-service.js'
 
 async function main(): Promise<void> {
   const config = loadHostedServiceConfig()
   const logger = pino({ level: config.logLevel })
   const registry = await HostedProjectRegistry.loadFromFile(config.projectsFile)
   const router = new DiscordAlertRouter(config.discordBotToken, logger)
+  const statsLog = new StatsEventLog(config.statsFile)
+  const statsService = new StatsService(statsLog)
+  const statsApi = new StatsApi(registry, statsService)
   const ingestService = new TelemetryIngestService(
     registry,
     router,
     new RequestRateLimiter(),
     new DuplicateAlertSuppressor(),
     logger,
+    statsService,
   )
   const server = createHostedServer({
     ingestService,
+    statsApi,
     logger,
     maxRequestBodyBytes: config.maxRequestBodyBytes,
   })
@@ -34,6 +42,7 @@ async function main(): Promise<void> {
         host: config.host,
         port: config.port,
         projectsFile: config.projectsFile,
+        statsFile: config.statsFile,
       },
       'Alec\'s Telemetry hosted ingest service listening.',
     )

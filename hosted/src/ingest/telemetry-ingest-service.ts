@@ -3,12 +3,17 @@ import { ZodError } from 'zod'
 
 import type { CrashAlertRouter } from '../alerts/alert-router.js'
 import { telemetryCrashEnvelopeSchema, type TelemetryCrashEnvelope } from '../contract/crash-envelope.js'
+import { telemetryEventEnvelopeSchema } from '../contract/event-envelope.js'
 import type { HostedProjectConfig } from '../projects/project-registry.js'
 import type { HostedProjectRegistry } from '../projects/project-registry.js'
+import type { StatsService } from '../stats/stats-service.js'
 import type { DuplicateAlertSuppressor } from './duplicate-alert-suppressor.js'
 import type { RequestRateLimiter } from './request-rate-limiter.js'
 
+export type TelemetryIngestKind = 'crash' | 'event'
+
 export interface TelemetryIngestRequest {
+  readonly kind?: TelemetryIngestKind
   readonly projectKey: string | null
   readonly payload: unknown
   readonly bodyBytes: number
@@ -35,6 +40,7 @@ export class TelemetryIngestService {
     private readonly rateLimiter: RequestRateLimiter,
     private readonly suppressor: DuplicateAlertSuppressor,
     private readonly logger: Logger,
+    private readonly statsService: Pick<StatsService, 'acceptEvent'> | null = null,
   ) {}
 
   async ingest(request: TelemetryIngestRequest): Promise<TelemetryIngestResponse> {
@@ -77,6 +83,60 @@ export class TelemetryIngestService {
           error: 'project_payload_too_large',
           projectId: project.projectId,
           maxPayloadBytes: project.maxPayloadBytes,
+        },
+      }
+    }
+
+    const kind = request.kind ?? 'crash'
+    if (kind === 'event') {
+      const parsedEvent = telemetryEventEnvelopeSchema.safeParse(request.payload)
+      if (!parsedEvent.success) {
+        return {
+          status: 400,
+          body: {
+            accepted: false,
+            error: 'invalid_payload',
+            issues: formatValidationIssues(parsedEvent.error),
+          },
+        }
+      }
+
+      const event = parsedEvent.data
+      if (event.projectId !== project.projectId) {
+        return {
+          status: 403,
+          body: {
+            accepted: false,
+            error: 'project_id_mismatch',
+            expectedProjectId: project.projectId,
+            providedProjectId: event.projectId,
+          },
+        }
+      }
+
+      const nowMs = request.receivedAt.getTime()
+      if (!this.rateLimiter.allow(project.projectId, project.rateLimitPerMinute, nowMs)) {
+        this.logger.warn({ projectId: project.projectId, remoteAddress: request.remoteAddress }, 'Telemetry project exceeded ingest rate limit.')
+        return {
+          status: 429,
+          body: {
+            accepted: false,
+            error: 'rate_limited',
+            projectId: project.projectId,
+          },
+        }
+      }
+
+      const statsResult = await this.statsService?.acceptEvent(event, 'unknown')
+      return {
+        status: 202,
+        body: {
+          accepted: true,
+          projectId: project.projectId,
+          eventId: event.eventId,
+          eventType: event.eventType,
+          eventName: event.eventName,
+          storedStatsObservation: statsResult?.storedObservation ?? false,
         },
       }
     }
@@ -174,7 +234,10 @@ export class TelemetryIngestService {
   }
 }
 
-export function createExampleCrashEnvelope(project: HostedProjectConfig, overrides: Partial<TelemetryCrashEnvelope> = {}): TelemetryCrashEnvelope {
+export function createExampleCrashEnvelope(
+  project: Pick<HostedProjectConfig, 'projectId' | 'displayName'>,
+  overrides: Partial<TelemetryCrashEnvelope> = {},
+): TelemetryCrashEnvelope {
   return {
     schemaVersion: 1,
     eventType: 'crash',

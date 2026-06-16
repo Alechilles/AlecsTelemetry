@@ -54,5 +54,37 @@ public interface TelemetryProjectHandle {
         recordUsage(eventName, context == null ? null : context.detail());
     }
 
+    void recordStats(@Nonnull String eventName, @Nullable String detail);
+
+    default void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        recordStats(eventName, context == null ? null : context.detail());
+    }
+
+    default void recordSimpleStatChart(@Nonnull String chartId, @Nonnull String value) {
+        recordStatsWithContext(
+                "chart_sample",
+                TelemetryEventContext.stats()
+                        .featureKey("stats")
+                        .entryPoint("custom_chart")
+                        .runtimeSide("server")
+                        .detail("chartId", chartId)
+                        .detail("value", value)
+                        .build()
+        );
+    }
+
+    default void recordNumericStatChart(@Nonnull String chartId, double value) {
+        recordStatsWithContext(
+                "chart_sample",
+                TelemetryEventContext.stats()
+                        .featureKey("stats")
+                        .entryPoint("custom_chart")
+                        .runtimeSide("server")
+                        .detail("chartId", chartId)
+                        .detail("value", value)
+                        .build()
+        );
+    }
+
     boolean requestFlush();
 }

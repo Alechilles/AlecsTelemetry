@@ -28,6 +28,10 @@
       }
     }
   },
+  "stats": {
+    "enabled": true,
+    "allowedEvents": ["heartbeat", "chart_sample"]
+  },
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }

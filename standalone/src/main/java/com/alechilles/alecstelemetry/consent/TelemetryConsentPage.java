@@ -44,6 +44,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             "lifecycle",
             "performance",
             "usage",
+            "stats",
             "breadcrumbs"
     };
     private final TelemetryRuntimeService runtimeService;
@@ -147,6 +148,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         commands.set(categoryCheckSelector(index, "lifecycle") + ".Value", consent.lifecycleEnabled());
         commands.set(categoryCheckSelector(index, "performance") + ".Value", consent.performanceEnabled());
         commands.set(categoryCheckSelector(index, "usage") + ".Value", consent.usageEnabled());
+        commands.set(categoryCheckSelector(index, "stats") + ".Value", consent.statsEnabled());
         commands.set(categoryCheckSelector(index, "breadcrumbs") + ".Value", consent.breadcrumbsEnabled());
     }
 
@@ -208,6 +210,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 enabled,
                 enabled,
                 enabled,
+                enabled,
                 enabled
         ));
     }
@@ -227,6 +230,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                         current.lifecycleEnabled(),
                         current.performanceEnabled(),
                         current.usageEnabled(),
+                        current.statsEnabled(),
                         current.breadcrumbsEnabled()
                 )
         );
@@ -239,12 +243,13 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         }
         TelemetryConsentSnapshot current = snapshot(project);
         TelemetryConsentSnapshot updated = switch (category) {
-            case "crash" -> new TelemetryConsentSnapshot(current.projectEnabled(), enabled, current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.breadcrumbsEnabled());
-            case "error" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), enabled, current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.breadcrumbsEnabled());
-            case "lifecycle" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), enabled, current.performanceEnabled(), current.usageEnabled(), current.breadcrumbsEnabled());
-            case "performance" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), enabled, current.usageEnabled(), current.breadcrumbsEnabled());
-            case "usage" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), enabled, current.breadcrumbsEnabled());
-            case "breadcrumbs" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), enabled);
+            case "crash" -> new TelemetryConsentSnapshot(current.projectEnabled(), enabled, current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "error" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), enabled, current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "lifecycle" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), enabled, current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "performance" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), enabled, current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "usage" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), enabled, current.statsEnabled(), current.breadcrumbsEnabled());
+            case "stats" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), enabled, current.breadcrumbsEnabled());
+            case "breadcrumbs" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), enabled);
             default -> current;
         };
         runtimeService.applyConsent(project.projectId(), updated);
@@ -274,6 +279,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 project.lifecycleEnabled(),
                 project.performanceEnabled(),
                 project.usageEnabled(),
+                project.statsEnabled(),
                 project.breadcrumbsEnabled()
         );
     }

@@ -56,6 +56,7 @@ public record TelemetryEventEnvelope(int schemaVersion,
     public static final String TYPE_LIFECYCLE = "lifecycle";
     public static final String TYPE_PERFORMANCE = "performance";
     public static final String TYPE_USAGE = "usage";
+    public static final String TYPE_STATS = "stats";
     public static final String SEVERITY_INFO = "info";
     public static final String SEVERITY_WARNING = "warning";
     public static final String SEVERITY_ERROR = "error";
@@ -195,6 +196,43 @@ public record TelemetryEventEnvelope(int schemaVersion,
                                                @Nonnull CrashReportEnvelope.RuntimeMetadata runtime) {
         return create(
                 TYPE_USAGE,
+                eventName,
+                projectId,
+                projectDisplayName,
+                source,
+                sessionId,
+                serverId,
+                pluginIdentifier,
+                pluginVersion,
+                worldName,
+                SEVERITY_INFO,
+                null,
+                null,
+                environment,
+                attributes,
+                details,
+                context,
+                runtime
+        );
+    }
+
+    @Nonnull
+    public static TelemetryEventEnvelope stats(@Nonnull String projectId,
+                                               @Nonnull String projectDisplayName,
+                                               @Nonnull String source,
+                                               @Nonnull String sessionId,
+                                               @Nonnull String serverId,
+                                               @Nonnull String eventName,
+                                               @Nonnull String pluginIdentifier,
+                                               @Nonnull String pluginVersion,
+                                               @Nullable String worldName,
+                                               @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
+                                               @Nonnull Map<String, Object> attributes,
+                                               @Nonnull Map<String, Object> details,
+                                               @Nonnull TelemetryEventContext context,
+                                               @Nonnull CrashReportEnvelope.RuntimeMetadata runtime) {
+        return create(
+                TYPE_STATS,
                 eventName,
                 projectId,
                 projectDisplayName,
@@ -372,6 +410,9 @@ public record TelemetryEventEnvelope(int schemaVersion,
         }
         if (TYPE_USAGE.equalsIgnoreCase(normalized)) {
             return TYPE_USAGE;
+        }
+        if (TYPE_STATS.equalsIgnoreCase(normalized)) {
+            return TYPE_STATS;
         }
         return TYPE_ERROR;
     }

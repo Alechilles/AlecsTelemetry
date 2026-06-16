@@ -1,5 +1,5 @@
 import pino from 'pino'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { CrashAlertRouteResult, HostedCrashAlert } from '../src/alerts/alert-router.js'
 import type { CrashAlertRouter } from '../src/alerts/alert-router.js'
@@ -7,6 +7,7 @@ import { DuplicateAlertSuppressor } from '../src/ingest/duplicate-alert-suppress
 import { RequestRateLimiter } from '../src/ingest/request-rate-limiter.js'
 import { TelemetryIngestService, createExampleCrashEnvelope } from '../src/ingest/telemetry-ingest-service.js'
 import { HostedProjectRegistry, type HostedProjectConfig } from '../src/projects/project-registry.js'
+import type { StatsService } from '../src/stats/stats-service.js'
 
 class FakeCrashAlertRouter implements CrashAlertRouter {
   readonly alerts: HostedCrashAlert[] = []
@@ -21,7 +22,7 @@ class FakeCrashAlertRouter implements CrashAlertRouter {
 }
 
 function createProject(overrides: Partial<HostedProjectConfig> = {}): HostedProjectConfig {
-  return {
+  const project: HostedProjectConfig = {
     projectId: 'example-mod',
     displayName: 'Example Mod',
     publicProjectKey: 'pub_example_mod',
@@ -33,11 +34,24 @@ function createProject(overrides: Partial<HostedProjectConfig> = {}): HostedProj
       channelId: '123456789',
       guildId: '987654321',
     },
+    stats: {
+      public: false,
+      charts: [],
+    },
+  }
+  return {
+    ...project,
     ...overrides,
+    discord: overrides.discord ?? project.discord,
+    stats: overrides.stats ?? project.stats,
   }
 }
 
-function createService(project: HostedProjectConfig, router = new FakeCrashAlertRouter()): {
+function createService(
+  project: HostedProjectConfig,
+  router = new FakeCrashAlertRouter(),
+  statsService: Pick<StatsService, 'acceptEvent'> | null = null,
+): {
   readonly service: TelemetryIngestService
   readonly router: FakeCrashAlertRouter
 } {
@@ -48,6 +62,7 @@ function createService(project: HostedProjectConfig, router = new FakeCrashAlert
       new RequestRateLimiter(),
       new DuplicateAlertSuppressor(),
       pino({ enabled: false }),
+      statsService,
     ),
     router,
   }
@@ -153,5 +168,52 @@ describe('TelemetryIngestService', () => {
     expect(first.status).toBe(202)
     expect(second.status).toBe(429)
     expect(second.body.error).toBe('rate_limited')
+  })
+
+  it('accepts event envelopes and stores stats observations', async () => {
+    const project = createProject()
+    const statsService = {
+      acceptEvent: vi.fn().mockResolvedValue({ accepted: true, storedObservation: true }),
+    }
+    const { service } = createService(project, new FakeCrashAlertRouter(), statsService)
+
+    const result = await service.ingest({
+      kind: 'event',
+      projectKey: project.publicProjectKey,
+      payload: {
+        schemaVersion: 2,
+        eventType: 'stats',
+        eventName: 'heartbeat',
+        eventId: 'event-1',
+        projectId: project.projectId,
+        projectDisplayName: project.displayName,
+        source: 'runtime',
+        sessionId: 'session-1',
+        serverId: 'server-1',
+        capturedAtUtc: '2026-06-16T20:00:00.000Z',
+        pluginIdentifier: `Example:${project.displayName}`,
+        pluginVersion: '1.0.0',
+        severity: 'info',
+        attributes: {},
+        details: { playersOnline: 2 },
+        runtime: {
+          javaVersion: '25',
+          runtimeVersion: '25+0',
+          osName: 'Windows 11',
+          osVersion: '10.0',
+          osArch: 'amd64',
+          hytaleBuild: '2026.06.16-test',
+          serverVersion: '2026.06.16-test',
+          loadedMods: [],
+        },
+      },
+      bodyBytes: 1024,
+      remoteAddress: null,
+      receivedAt: new Date('2026-06-16T20:00:00.000Z'),
+    })
+
+    expect(result.status).toBe(202)
+    expect(result.body.storedStatsObservation).toBe(true)
+    expect(statsService.acceptEvent).toHaveBeenCalledOnce()
   })
 })

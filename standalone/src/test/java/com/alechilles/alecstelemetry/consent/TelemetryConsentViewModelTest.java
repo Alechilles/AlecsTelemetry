@@ -41,8 +41,10 @@ class TelemetryConsentViewModelTest {
         assertFalse(viewModel.projects().get(0).overridePresent());
         assertFalse(viewModel.projects().get(0).consent().projectEnabled());
         assertFalse(viewModel.projects().get(0).consent().crashEnabled());
+        assertFalse(viewModel.projects().get(0).consent().statsEnabled());
         assertEquals("zeta-mod", viewModel.projects().get(1).projectId());
         assertTrue(viewModel.projects().get(1).consent().projectEnabled());
+        assertTrue(viewModel.projects().get(1).consent().statsEnabled());
         assertTrue(viewModel.explanationLines().contains(
                 "Each mod controls its suggested defaults, and you can override them here."
         ));
@@ -122,6 +124,7 @@ class TelemetryConsentViewModelTest {
                 categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,
+                categoriesEnabled,
                 categoriesEnabled
         );
     }
@@ -158,6 +161,7 @@ class TelemetryConsentViewModelTest {
                 iconTexturePath,
                 List.of("com.example." + projectId.replace("-", "")),
                 "dependency",
+                categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,
