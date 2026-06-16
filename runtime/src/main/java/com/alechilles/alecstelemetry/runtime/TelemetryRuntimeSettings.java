@@ -24,6 +24,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        int maxPendingEventsPerProject,
                                        int maxUploadsPerFlush,
                                        int maxBreadcrumbsPerProject,
+                                       @Nonnull ManualReportSettings manualReports,
                                        @Nonnull String hostedIngestEndpoint,
                                        @Nonnull String hostedEventIngestEndpoint) {
 
@@ -31,6 +32,8 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
             "https://telemetry.alecsmods.com/ingest/crash";
     public static final String DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT =
             "https://telemetry.alecsmods.com/ingest/event";
+    public static final String DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT =
+            "https://telemetry.alecsmods.com/ingest/report";
 
     private static final int CURRENT_VERSION = 1;
     private static final boolean DEFAULT_ENABLED = true;
@@ -41,6 +44,16 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     private static final int DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT = 500;
     private static final int DEFAULT_MAX_UPLOADS_PER_FLUSH = 10;
     private static final int DEFAULT_MAX_BREADCRUMBS_PER_PROJECT = 30;
+    private static final boolean DEFAULT_MANUAL_REPORTS_ENABLED = true;
+    private static final boolean DEFAULT_MANUAL_REVIEW_REQUIRED = false;
+    private static final boolean DEFAULT_ALLOW_REPORT_CONTACT = true;
+    private static final boolean DEFAULT_ALLOW_RESOLUTION_UPDATES = true;
+    private static final boolean DEFAULT_ALLOW_CURRENT_SERVER_LOG = true;
+    private static final boolean DEFAULT_ALLOW_PREVIOUS_SERVER_LOG = true;
+    private static final boolean DEFAULT_ALLOW_LOADED_MOD_LIST = true;
+    private static final boolean DEFAULT_ALLOW_DIAGNOSTICS = true;
+    private static final int DEFAULT_MAX_LOG_ATTACHMENT_BYTES = 262144;
+    private static final int DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT = 200;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
     @Nonnull
@@ -57,6 +70,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(parsed.maxPendingEventsPerProject, DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT, 1, 10000),
                 clamp(parsed.maxUploadsPerFlush, DEFAULT_MAX_UPLOADS_PER_FLUSH, 1, 500),
                 clamp(parsed.maxBreadcrumbsPerProject, DEFAULT_MAX_BREADCRUMBS_PER_PROJECT, 1, 200),
+                normalizeManualReportSettings(parsed.manualReports),
                 parsed.hostedIngestEndpoint == null || parsed.hostedIngestEndpoint.isBlank()
                         ? DEFAULT_HOSTED_INGEST_ENDPOINT
                         : parsed.hostedIngestEndpoint.trim(),
@@ -105,6 +119,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         safe.maxPendingEventsPerProject = DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT;
         safe.maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         safe.maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
+        safe.manualReports = ManualReportSettingsDocument.defaults();
         safe.hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         safe.hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;
         try {
@@ -134,6 +149,40 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         return Math.max(min, Math.min(max, safe));
     }
 
+    @Nonnull
+    private static ManualReportSettings normalizeManualReportSettings(@Nullable ManualReportSettingsDocument document) {
+        ManualReportSettingsDocument safe = document == null ? new ManualReportSettingsDocument() : document;
+        String endpoint = safe.hostedReportIngestEndpoint == null || safe.hostedReportIngestEndpoint.isBlank()
+                ? DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT
+                : safe.hostedReportIngestEndpoint.trim();
+        return new ManualReportSettings(
+                safe.enabled == null ? DEFAULT_MANUAL_REPORTS_ENABLED : safe.enabled,
+                safe.manualReviewRequired == null ? DEFAULT_MANUAL_REVIEW_REQUIRED : safe.manualReviewRequired,
+                safe.allowContact == null ? DEFAULT_ALLOW_REPORT_CONTACT : safe.allowContact,
+                safe.allowResolutionUpdates == null ? DEFAULT_ALLOW_RESOLUTION_UPDATES : safe.allowResolutionUpdates,
+                safe.allowCurrentServerLog == null ? DEFAULT_ALLOW_CURRENT_SERVER_LOG : safe.allowCurrentServerLog,
+                safe.allowPreviousServerLog == null ? DEFAULT_ALLOW_PREVIOUS_SERVER_LOG : safe.allowPreviousServerLog,
+                safe.allowLoadedModList == null ? DEFAULT_ALLOW_LOADED_MOD_LIST : safe.allowLoadedModList,
+                safe.allowDiagnostics == null ? DEFAULT_ALLOW_DIAGNOSTICS : safe.allowDiagnostics,
+                clamp(safe.maxLogAttachmentBytes, DEFAULT_MAX_LOG_ATTACHMENT_BYTES, 0, 1048576),
+                clamp(safe.maxPendingManualReportsPerProject, DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT, 1, 5000),
+                endpoint
+        );
+    }
+
+    public record ManualReportSettings(boolean enabled,
+                                       boolean manualReviewRequired,
+                                       boolean allowContact,
+                                       boolean allowResolutionUpdates,
+                                       boolean allowCurrentServerLog,
+                                       boolean allowPreviousServerLog,
+                                       boolean allowLoadedModList,
+                                       boolean allowDiagnostics,
+                                       int maxLogAttachmentBytes,
+                                       int maxPendingManualReportsPerProject,
+                                       @Nonnull String hostedReportIngestEndpoint) {
+    }
+
     private static final class SettingsDocument {
         private Integer version;
         private Boolean enabled;
@@ -144,7 +193,27 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         private Integer maxPendingEventsPerProject = DEFAULT_MAX_PENDING_EVENTS_PER_PROJECT;
         private Integer maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         private Integer maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
+        private ManualReportSettingsDocument manualReports = ManualReportSettingsDocument.defaults();
         private String hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         private String hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;
+    }
+
+    private static final class ManualReportSettingsDocument {
+        private Boolean enabled = DEFAULT_MANUAL_REPORTS_ENABLED;
+        private Boolean manualReviewRequired = DEFAULT_MANUAL_REVIEW_REQUIRED;
+        private Boolean allowContact = DEFAULT_ALLOW_REPORT_CONTACT;
+        private Boolean allowResolutionUpdates = DEFAULT_ALLOW_RESOLUTION_UPDATES;
+        private Boolean allowCurrentServerLog = DEFAULT_ALLOW_CURRENT_SERVER_LOG;
+        private Boolean allowPreviousServerLog = DEFAULT_ALLOW_PREVIOUS_SERVER_LOG;
+        private Boolean allowLoadedModList = DEFAULT_ALLOW_LOADED_MOD_LIST;
+        private Boolean allowDiagnostics = DEFAULT_ALLOW_DIAGNOSTICS;
+        private Integer maxLogAttachmentBytes = DEFAULT_MAX_LOG_ATTACHMENT_BYTES;
+        private Integer maxPendingManualReportsPerProject = DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT;
+        private String hostedReportIngestEndpoint = DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT;
+
+        @Nonnull
+        private static ManualReportSettingsDocument defaults() {
+            return new ManualReportSettingsDocument();
+        }
     }
 }
