@@ -61,6 +61,30 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must include a fallback placeholder for mods without icons"
         );
         assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Width: 88)"),
+                "TelemetryConsentPage.ui must reserve a square 88px icon area for each consent row"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88)"),
+                "TelemetryConsentPage.ui must let project icons fill the square area without padding"
+        );
+        assertTrue(
+                !consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Width: 72)"),
+                "TelemetryConsentPage.ui must not use the old padded 72px icon frame"
+        );
+        assertTrue(
+                !consentPage.contains("#TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56)"),
+                "TelemetryConsentPage.ui must not shrink project icons into the old 56px image box"
+        );
+        assertTrue(
+                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must keep the crash checkbox close to its label"
+        );
+        assertTrue(
+                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 506, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must use the compact telemetry category layout"
+        );
+        assertTrue(
                 !consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"),
                 "TelemetryConsentPage.ui must not use the unresolved asset-pack path for the logo texture"
         );
