@@ -29,6 +29,47 @@
       }
     }
   },
+  "reports": {
+    "enabled": true,
+    "issue": {
+      "enabled": true,
+      "fields": {
+        "severity": {
+          "type": "enum",
+          "label": "Severity",
+          "required": true,
+          "values": ["minor", "moderate", "major", "blocking"]
+        },
+        "steps": {
+          "type": "text",
+          "label": "Steps to reproduce",
+          "maxLength": 2000
+        }
+      }
+    },
+    "suggestion": {
+      "enabled": true,
+      "fields": {
+        "category": {
+          "type": "enum",
+          "label": "Category",
+          "values": ["balance", "content", "quality_of_life", "other"]
+        }
+      }
+    },
+    "attachments": {
+      "currentServerLog": true,
+      "previousServerLog": true,
+      "maxBytes": 262144
+    },
+    "contact": {
+      "enabled": true,
+      "maxLength": 160
+    },
+    "resolutionUpdates": {
+      "enabled": true
+    }
+  },
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }

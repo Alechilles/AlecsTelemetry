@@ -27,9 +27,13 @@ The long-term hosted backend is Alec's Telemetry Platform. The `hosted/` package
 ```text
 POST /ingest/crash
 POST /ingest/event
+POST /ingest/report
+POST /reports/status
 ```
 
 `/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the canonical hosted endpoint for both crash envelopes and normal event envelopes.
+`/ingest/report` accepts manual player issue and suggestion reports. `/reports/status`
+checks a local player receipt using `reportId` plus the raw follow-up token.
 
 ## Required Headers
 
@@ -106,6 +110,41 @@ Normal `eventType` values include:
 - `usage`
 
 `details` is reserved for descriptor-validated custom Event Context fields and bounded debug context such as breadcrumbs on error or failed lifecycle events. Standardized context fields are first-class event envelope fields; custom `detail(key, value)` entries are uploaded only after descriptor allowlist validation.
+
+## Manual Report Body
+
+Manual reports use `eventType: "manual_report"` and `reportKind: "issue"` or
+`"suggestion"`. Important fields include:
+
+- `reportId`
+- `followUpTokenHash`
+- `projectId`
+- `projectDisplayName`
+- `submittedAtUtc`
+- `sessionId`
+- `serverId`
+- `pluginIdentifier`
+- `pluginVersion`
+- `title`
+- `description`
+- `contact`
+- `formValues`
+- `attachmentManifests`
+- `attachments`
+- `context`
+- `environment`
+- `runtime`
+
+Status lookup posts:
+
+```json
+{
+  "reportId": "uuid",
+  "followUpToken": "raw-local-token"
+}
+```
+
+The status response does not expose contact information or the full report payload.
 
 ## Validation Rules
 

@@ -80,6 +80,33 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 }
 ```
 
+## Example: server-owner manual report controls
+
+These settings live in `Settings/runtime.json`, not per-project override files:
+
+```json
+{
+  "manualReports": {
+    "enabled": true,
+    "manualReviewRequired": true,
+    "allowContact": true,
+    "allowResolutionUpdates": true,
+    "allowCurrentServerLog": false,
+    "allowPreviousServerLog": false,
+    "allowLoadedModList": true,
+    "allowDiagnostics": true,
+    "maxLogAttachmentBytes": 262144,
+    "maxPendingManualReportsPerProject": 200,
+    "hostedReportIngestEndpoint": "https://telemetry.alecsmods.com/ingest/report"
+  }
+}
+```
+
+Manual report settings can disable reports entirely, require local review before
+upload, disable logs, disable installed-mod lists, disable diagnostics, disable
+contact fields, and disable resolution updates. Log attachments are clipped to
+`maxLogAttachmentBytes` and redacted before local storage or upload.
+
 ## Supported Override Fields
 
 - `enabled`

@@ -24,10 +24,15 @@ be treated as the long-term production backend.
 ```text
 POST /ingest/crash
 POST /ingest/event
+POST /ingest/report
+POST /reports/status
 ```
 
 `/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the
 canonical hosted endpoint for both crash envelopes and normal event envelopes.
+`/ingest/report` accepts player-submitted manual issue and suggestion reports.
+`/reports/status` lets a player check a locally stored receipt without exposing
+the full report payload.
 
 ## Required Headers
 
@@ -96,6 +101,46 @@ For issue-producing events, the hosted portal may aggregate scalar, low-cardinal
 `details` values into Context Breakdowns using generic `field_key` / `field_value`
 rollups. The wire field remains `details` for compatibility; portal UI should label
 these values as Event Context.
+
+Manual report envelopes use:
+
+- `schemaVersion`
+- `eventType`
+  - must be `manual_report`
+- `reportId`
+- `followUpTokenHash`
+- `reportKind`
+  - `issue`
+  - `suggestion`
+- `projectId`
+- `projectDisplayName`
+- `submittedAtUtc`
+- `source`
+- `sessionId`
+- `serverId`
+- `pluginIdentifier`
+- `pluginVersion`
+- `title`
+- `description`
+- `contact`
+- `formValues`
+- `attachmentManifests`
+- `attachments`
+- `context`
+- `environment`
+- `runtime`
+
+Manual report status lookup uses:
+
+```json
+{
+  "reportId": "uuid",
+  "followUpToken": "raw-local-token"
+}
+```
+
+The hosted service hashes the raw token and returns only status data, not contact
+information or the full report.
 
 ## Validation Rules
 

@@ -68,6 +68,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `events`
 - `performance`
 - `usage`
+- `reports`
 - `ui`
 - `defaults`
 - `hosted`
@@ -114,6 +115,48 @@ Supported detail field types:
 - `enum` with required `values`
 
 Unknown fields, wrong types, blank strings, and enum values outside the declared set are dropped before upload.
+
+## Manual Report Fields
+
+`reports` lets players submit issue and suggestion reports in-game.
+
+```json
+{
+  "reports": {
+    "enabled": true,
+    "issue": {
+      "enabled": true,
+      "fields": {
+        "severity": {
+          "type": "enum",
+          "label": "Severity",
+          "required": true,
+          "values": ["minor", "moderate", "major", "blocking"]
+        }
+      }
+    },
+    "suggestion": {
+      "enabled": true
+    },
+    "attachments": {
+      "currentServerLog": true,
+      "previousServerLog": true,
+      "maxBytes": 262144
+    },
+    "contact": {
+      "enabled": true,
+      "maxLength": 160
+    },
+    "resolutionUpdates": {
+      "enabled": true
+    }
+  }
+}
+```
+
+Report fields support `string`, `text`, `boolean`, `enum`, and `number`. Server-owner
+`manualReports` settings can still disable reports, logs, installed mod lists,
+diagnostics, contact, resolution updates, or force manual review.
 
 ## UI Fields
 
