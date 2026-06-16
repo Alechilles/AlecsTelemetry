@@ -1,13 +1,57 @@
 package com.alechilles.alecstelemetry.report;
 
 import javax.annotation.Nonnull;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Locale;
+import java.util.UUID;
 
 /**
- * Manual report attachment metadata.
+ * Manual report attachment content plus metadata.
  */
-public final class ManualReportAttachment {
+public record ManualReportAttachment(@Nonnull Manifest manifest,
+                                     @Nonnull String content) {
 
-    private ManualReportAttachment() {
+    public ManualReportAttachment {
+        manifest = manifest == null
+                ? new Manifest("unknown-attachment", "unknown", "attachment.dat", "application/octet-stream", 0, "unknown")
+                : manifest;
+        content = content == null ? "" : content;
+    }
+
+    @Nonnull
+    public static ManualReportAttachment text(@Nonnull String kind,
+                                              @Nonnull String fileName,
+                                              @Nonnull String content) {
+        String safeContent = content == null ? "" : content;
+        byte[] bytes = safeContent.getBytes(StandardCharsets.UTF_8);
+        return new ManualReportAttachment(
+                new Manifest(
+                        UUID.randomUUID().toString(),
+                        kind,
+                        fileName,
+                        "text/plain",
+                        bytes.length,
+                        sha256(bytes)
+                ),
+                safeContent
+        );
+    }
+
+    @Nonnull
+    private static String sha256(@Nonnull byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(bytes);
+            StringBuilder out = new StringBuilder(hash.length * 2);
+            for (byte b : hash) {
+                out.append(String.format(Locale.ROOT, "%02x", b));
+            }
+            return out.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is unavailable", ex);
+        }
     }
 
     public record Manifest(@Nonnull String attachmentId,
