@@ -103,7 +103,6 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         List<TelemetryConsentViewModel.ProjectRow> projects = viewModel.projects();
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
 
-        commands.set("#TelemetryConsentTitle.Text", "Alec's Telemetry");
         commands.set("#TelemetryConsentSummary.Text", String.join("\n", viewModel.explanationLines()));
         commands.set("#TelemetryConsentAllEnabled.Value", viewModel.allEnabled());
         commands.set("#TelemetryConsentPrimary.Text", firstRun ? "Save choices" : "Save");

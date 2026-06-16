@@ -23,6 +23,10 @@ class TelemetryConsentAssetPackTest {
                 getClass().getClassLoader().getResource("Common/UI/Custom/TelemetryConsentPage.ui"),
                 "TelemetryConsentPage.ui must be packaged for the client custom UI document index"
         );
+        assertNotNull(
+                getClass().getClassLoader().getResource("Common/UI/Custom/AlecsTelemetryLogo.png"),
+                "AlecsTelemetryLogo.png must be packaged for the consent page header"
+        );
     }
 
     private String resourceText(String path) throws IOException {
