@@ -8,14 +8,20 @@ import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportKind;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 
@@ -29,6 +35,140 @@ class TelemetryRuntimeServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void manualReportSubmissionReturnsValidationErrorWhenGloballyDisabled() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("""
+                {
+                  "manualReports": {
+                    "enabled": false
+                  }
+                }
+                """);
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, true, client);
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertFalse(result.accepted());
+        assertTrue(result.validationErrors().contains("manual_reports_disabled"));
+        assertEquals(0, service.pendingReports("example-mod"));
+        assertEquals(0, client.calls);
+    }
+
+    @Test
+    void manualReportSubmissionReturnsValidationErrorWhenProjectReportsAreDisabled() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, false, client);
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertFalse(result.accepted());
+        assertTrue(result.validationErrors().contains("project_reports_disabled"));
+        assertEquals(0, service.pendingReports("example-mod"));
+        assertEquals(0, client.calls);
+    }
+
+    @Test
+    void manualReviewRequiredStoresReportForReviewAndSkipsFlushUpload() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("""
+                {
+                  "manualReports": {
+                    "manualReviewRequired": true
+                  }
+                }
+                """);
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, true, client);
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(0, service.pendingReports("example-mod"));
+        assertEquals(1, fileCount(dataPaths.reviewManualReportsDirectory("example-mod")));
+        assertEquals(0, service.flushPendingReportsNow("manual-review", "example-mod").attempted());
+        assertEquals(0, client.calls);
+    }
+
+    @Test
+    void manualReviewDisabledQueuesAndFlushesManualReports() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        Files.writeString(tempDir.resolve("latest.log"), "server booted\ncontact admin@example.com\n");
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, true, client);
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(true),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(1, service.pendingReports("example-mod"));
+        TelemetryRuntimeService.FlushSummary summary = service.flushPendingReportsNow("manual-upload", "example-mod");
+        assertEquals(1, summary.attempted());
+        assertEquals(1, summary.uploaded());
+        assertEquals(0, summary.pendingAfter());
+        assertEquals(1, client.calls);
+
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("manual_report", payload.get("eventType").getAsString());
+        assertEquals("issue", payload.get("reportKind").getAsString());
+        assertEquals("example-mod", payload.get("projectId").getAsString());
+        assertEquals(false, payload.getAsJsonObject("context").get("singleplayer").getAsBoolean());
+        assertEquals(7, payload.getAsJsonObject("context").get("onlinePlayerCount").getAsInt());
+        UUID.fromString(payload.get("serverId").getAsString());
+        assertTrue(payload.get("sessionId").getAsString().length() > 10);
+        assertEquals(1, payload.getAsJsonArray("attachments").size());
+        String attachmentContent = payload.getAsJsonArray("attachments")
+                .get(0)
+                .getAsJsonObject()
+                .get("content")
+                .getAsString();
+        assertTrue(attachmentContent.contains("server booted"));
+        assertFalse(attachmentContent.contains("admin@example.com"));
+        assertEquals(0, fileCount(dataPaths.pendingManualReportsDirectory("example-mod")));
+        assertEquals(1, Files.readAllLines(dataPaths.submittedManualReportsLog()).size());
+    }
+
+    @Test
+    void failedManualReportUploadLeavesPendingReportForRetry() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.failure(500, "server error"));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, true, client);
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        TelemetryRuntimeService.FlushSummary summary = service.flushPendingReportsNow("manual-fail", "example-mod");
+        assertEquals(1, summary.attempted());
+        assertEquals(0, summary.uploaded());
+        assertEquals(1, summary.pendingAfter());
+        assertEquals("server error", summary.lastFailure());
+        assertEquals(1, fileCount(dataPaths.pendingManualReportsDirectory("example-mod")));
+    }
 
     @Test
     void explicitCapturePersistsAndFlushRetainsFailuresForRetry() {
@@ -639,6 +779,133 @@ class TelemetryRuntimeServiceTest {
         assertEquals(false, embeddedOverride.events().errors().enabled());
         assertEquals(0, service.flushPendingReportsNow("embedded-consent").attempted());
         assertEquals(0, client.calls);
+    }
+
+    private TelemetryRuntimeSettings manualReportSettings(String rawJson) throws Exception {
+        Path settingsFile = tempDir.resolve("Settings").resolve("manual-report-runtime.json");
+        Files.createDirectories(settingsFile.getParent());
+        Files.writeString(settingsFile, rawJson);
+        return TelemetryRuntimeSettings.load(settingsFile, null);
+    }
+
+    private TelemetryDataPaths manualReportPaths(TelemetryRuntimeSettings settings) {
+        return new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+    }
+
+    private TelemetryRuntimeService manualReportService(TelemetryRuntimeSettings settings,
+                                                       TelemetryDataPaths dataPaths,
+                                                       boolean reportsEnabled,
+                                                       SequencedClient client) {
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor(reportsEnabled),
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod")
+        );
+        List<CrashReportEnvelope.LoadedModMetadata> loadedMods = List.of(
+                new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3"),
+                new CrashReportEnvelope.LoadedModMetadata("Other:Compat Mod", "4.5.6")
+        );
+        return new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                loadedMods,
+                client,
+                null,
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor manualReportDescriptor(boolean reportsEnabled) {
+        String reports = reportsEnabled
+                ? """
+                  "reports": {
+                    "enabled": true,
+                    "issue": {
+                      "enabled": true,
+                      "fields": {
+                        "severity": {
+                          "type": "enum",
+                          "label": "Severity",
+                          "required": true,
+                          "values": ["minor", "major", "blocking"]
+                        }
+                      }
+                    },
+                    "suggestion": {
+                      "enabled": true
+                    },
+                    "contact": {
+                      "enabled": true
+                    }
+                  },
+                """
+                : "";
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                """ + reports + """
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+    }
+
+    private static ManualReportSubmission issueSubmission() {
+        return issueSubmission(false);
+    }
+
+    private static ManualReportSubmission issueSubmission(boolean includeCurrentServerLog) {
+        return new ManualReportSubmission(
+                ManualReportKind.ISSUE,
+                "Config screen does not save",
+                "Opening the config screen and pressing Save leaves old values in place.",
+                "discord: example",
+                Map.of("severity", "major"),
+                includeCurrentServerLog,
+                false,
+                true,
+                true,
+                true
+        );
+    }
+
+    private static PlayerReportRuntimeContext playerContext() {
+        return new PlayerReportRuntimeContext(
+                false,
+                7,
+                "test-world",
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3"))
+        );
+    }
+
+    private static long fileCount(Path directory) throws Exception {
+        if (!Files.isDirectory(directory)) {
+            return 0;
+        }
+        try (var files = Files.list(directory)) {
+            return files.filter(Files::isRegularFile).count();
+        }
     }
 
     private static final class SequencedClient implements CrashReportClient {

@@ -77,6 +77,18 @@ public final class ManualReportStore {
         }
     }
 
+    public int pendingCount(@Nonnull String projectId) {
+        Path directory = paths.pendingManualReportsDirectory(projectId);
+        if (!Files.isDirectory(directory)) {
+            return 0;
+        }
+        try (Stream<Path> files = Files.list(directory)) {
+            return (int) files.filter(Files::isRegularFile).count();
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
     public void appendSubmittedAudit(@Nonnull ManualReportEnvelope envelope,
                                      @Nonnull String reviewState,
                                      boolean uploaded) {

@@ -13,6 +13,9 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -316,6 +319,13 @@ public final class TelemetryRuntimeService {
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
         engine.captureExceptionalWorldRemoval(world, removalReason);
+    }
+
+    @Nonnull
+    public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
+                                                                @Nonnull ManualReportSubmission submission,
+                                                                @Nullable PlayerReportRuntimeContext playerContext) {
+        return engine.submitManualReport(projectId, submission, playerContext);
     }
 
     @Nonnull

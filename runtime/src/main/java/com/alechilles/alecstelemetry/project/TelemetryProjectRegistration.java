@@ -258,6 +258,48 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         return endpoint == null ? null : new CrashReportClient.DeliveryTarget(endpoint, headers);
     }
 
+    @Nullable
+    public CrashReportClient.DeliveryTarget resolveReportDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
+        if ("custom".equalsIgnoreCase(destinationMode())) {
+            String url = firstNonBlank(
+                    override == null ? null : override.customEndpoint().eventUrl(),
+                    descriptor.customEndpoint().eventUrl(),
+                    override == null ? null : override.customEndpoint().url(),
+                    descriptor.customEndpoint().url()
+            );
+            if (url == null) {
+                return null;
+            }
+            return new CrashReportClient.DeliveryTarget(
+                    url,
+                    mergeHeaders(
+                            descriptor.customEndpoint().headers(),
+                            override == null ? Map.of() : override.customEndpoint().headers()
+                    )
+            );
+        }
+
+        String endpoint = firstNonBlank(
+                settings.manualReports().hostedReportIngestEndpoint(),
+                override == null ? null : override.hosted().endpoint(),
+                descriptor.hosted().endpoint(),
+                override == null ? null : override.hosted().eventEndpoint(),
+                descriptor.hosted().eventEndpoint()
+        );
+        LinkedHashMap<String, String> headers = new LinkedHashMap<>(mergeHeaders(
+                descriptor.hosted().headers(),
+                override == null ? Map.of() : override.hosted().headers()
+        ));
+        String projectKey = firstNonBlank(
+                override == null ? null : override.hosted().projectKey(),
+                descriptor.hosted().projectKey()
+        );
+        if (projectKey != null) {
+            headers.put(TelemetryProjectDescriptor.PROJECT_KEY_HEADER, projectKey);
+        }
+        return endpoint == null ? null : new CrashReportClient.DeliveryTarget(endpoint, headers);
+    }
+
     @Nonnull
     public TelemetryProjectRegistration withOverride(@Nullable TelemetryProjectOverride override) {
         return new TelemetryProjectRegistration(descriptor, pluginIdentifier, pluginVersion, sourcePath, override);

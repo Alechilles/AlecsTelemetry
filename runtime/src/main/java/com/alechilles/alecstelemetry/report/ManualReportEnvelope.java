@@ -41,6 +41,7 @@ public record ManualReportEnvelope(int schemaVersion,
                                    @Nonnull Contact contact,
                                    @Nonnull Map<String, Object> formValues,
                                    @Nonnull List<ManualReportAttachment.Manifest> attachmentManifests,
+                                   @Nonnull List<ManualReportAttachment> attachments,
                                    @Nonnull ManualReportContextSnapshot context,
                                    @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
                                    @Nonnull CrashReportEnvelope.RuntimeMetadata runtime) {
@@ -58,6 +59,80 @@ public record ManualReportEnvelope(int schemaVersion,
                                       @Nonnull List<ManualReportAttachment.Manifest> attachments,
                                       @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
                                       @Nonnull CrashReportEnvelope.RuntimeMetadata runtime) {
+        return create(
+                project,
+                settings,
+                submission,
+                context,
+                attachments,
+                environment,
+                runtime,
+                UUID.randomUUID().toString(),
+                "unknown-server",
+                List.of()
+        );
+    }
+
+    @Nonnull
+    public static CreateResult create(@Nonnull TelemetryProjectRegistration project,
+                                      @Nonnull TelemetryRuntimeSettings settings,
+                                      @Nonnull ManualReportSubmission submission,
+                                      @Nonnull ManualReportContextSnapshot context,
+                                      @Nonnull List<ManualReportAttachment.Manifest> attachments,
+                                      @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
+                                      @Nonnull CrashReportEnvelope.RuntimeMetadata runtime,
+                                      @Nonnull String sessionId,
+                                      @Nonnull String serverId) {
+        return create(
+                project,
+                settings,
+                submission,
+                context,
+                attachments,
+                environment,
+                runtime,
+                sessionId,
+                serverId,
+                List.of()
+        );
+    }
+
+    @Nonnull
+    public static CreateResult createWithAttachments(@Nonnull TelemetryProjectRegistration project,
+                                                     @Nonnull TelemetryRuntimeSettings settings,
+                                                     @Nonnull ManualReportSubmission submission,
+                                                     @Nonnull ManualReportContextSnapshot context,
+                                                     @Nonnull List<ManualReportAttachment> attachments,
+                                                     @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
+                                                     @Nonnull CrashReportEnvelope.RuntimeMetadata runtime,
+                                                     @Nonnull String sessionId,
+                                                     @Nonnull String serverId) {
+        List<ManualReportAttachment> safeAttachments = List.copyOf(attachments == null ? List.of() : attachments);
+        return create(
+                project,
+                settings,
+                submission,
+                context,
+                safeAttachments.stream().map(ManualReportAttachment::manifest).toList(),
+                environment,
+                runtime,
+                sessionId,
+                serverId,
+                safeAttachments
+        );
+    }
+
+    @Nonnull
+    private static CreateResult create(@Nonnull TelemetryProjectRegistration project,
+                                       @Nonnull TelemetryRuntimeSettings settings,
+                                       @Nonnull ManualReportSubmission submission,
+                                       @Nonnull ManualReportContextSnapshot context,
+                                       @Nonnull List<ManualReportAttachment.Manifest> attachments,
+                                       @Nonnull CrashReportEnvelope.EnvironmentSnapshot environment,
+                                       @Nonnull CrashReportEnvelope.RuntimeMetadata runtime,
+                                       @Nonnull String sessionId,
+                                       @Nonnull String serverId,
+                                       @Nonnull List<ManualReportAttachment> fullAttachments) {
         ArrayList<String> errors = new ArrayList<>();
         if (!settings.manualReports().enabled()) {
             errors.add("manual_reports_disabled");
@@ -98,8 +173,8 @@ public record ManualReportEnvelope(int schemaVersion,
                 normalizeNonBlank(project.displayName(), project.projectId()),
                 Instant.now().toString(),
                 "player_ui",
-                UUID.randomUUID().toString(),
-                "unknown-server",
+                normalizeNonBlank(sessionId, "unknown-session"),
+                normalizeNonBlank(serverId, "unknown-server"),
                 normalizeNonBlank(project.pluginIdentifier(), "unknown"),
                 normalizeNonBlank(project.pluginVersion(), "unknown"),
                 title,
@@ -107,11 +182,17 @@ public record ManualReportEnvelope(int schemaVersion,
                 contact(reportOptions, settings, submission.contact()),
                 formValues,
                 List.copyOf(attachments == null ? List.of() : attachments),
+                List.copyOf(fullAttachments == null ? List.of() : fullAttachments),
                 context,
                 environment.normalize(),
                 runtime.normalize()
         );
         return new CreateResult(envelope, List.of());
+    }
+
+    @Nonnull
+    public static ManualReportEnvelope fromJson(@Nonnull String payloadJson) {
+        return GSON.fromJson(payloadJson, ManualReportEnvelope.class);
     }
 
     @Nonnull
