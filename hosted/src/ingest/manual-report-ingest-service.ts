@@ -1,6 +1,7 @@
 import type { Logger } from 'pino'
 import { ZodError } from 'zod'
 
+import type { CrashAlertRouter } from '../alerts/alert-router.js'
 import { manualReportEnvelopeSchema, type ManualReportEnvelope } from '../contract/manual-report-envelope.js'
 import type { HostedProjectConfig, HostedProjectRegistry } from '../projects/project-registry.js'
 import type { ManualReportRepository } from '../reports/manual-report-repository.js'
@@ -18,6 +19,7 @@ export class ManualReportIngestService {
   constructor(
     private readonly registry: HostedProjectRegistry,
     private readonly repository: ManualReportRepository,
+    private readonly router: CrashAlertRouter,
     private readonly rateLimiter: RequestRateLimiter,
     private readonly logger: Logger,
   ) {}
@@ -105,11 +107,32 @@ export class ManualReportIngestService {
     }
 
     this.repository.save(envelope, request.receivedAt)
+    let alertDispatched = false
+    let alertDetail = 'Report accepted.'
+    try {
+      const routeResult = await this.router.routeManualReportAlert({
+        project,
+        envelope,
+      })
+      alertDispatched = routeResult.dispatched
+      alertDetail = routeResult.detail
+    } catch (error) {
+      this.logger.warn(
+        {
+          error,
+          projectId: project.projectId,
+          reportId: envelope.reportId,
+        },
+        'Manual report alert routing failed after ingest acceptance.',
+      )
+      alertDetail = 'Alert routing failed after ingest acceptance.'
+    }
     this.logger.info(
       {
         projectId: project.projectId,
         reportId: envelope.reportId,
         reportKind: envelope.reportKind,
+        alertDispatched,
         remoteAddress: request.remoteAddress,
       },
       'Accepted telemetry manual report.',
@@ -122,8 +145,8 @@ export class ManualReportIngestService {
         projectId: project.projectId,
         reportId: envelope.reportId,
         reportKind: envelope.reportKind,
-        alertDispatched: false,
-        detail: 'Report accepted.',
+        alertDispatched,
+        detail: alertDetail,
       },
     }
   }

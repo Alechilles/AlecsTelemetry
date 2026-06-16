@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 
-import type { CrashAlertRouteResult, HostedCrashAlert } from '../src/alerts/alert-router.js'
+import type { CrashAlertRouteResult, HostedCrashAlert, HostedManualReportAlert } from '../src/alerts/alert-router.js'
 import type { CrashAlertRouter } from '../src/alerts/alert-router.js'
 import { DuplicateAlertSuppressor } from '../src/ingest/duplicate-alert-suppressor.js'
 import { RequestRateLimiter } from '../src/ingest/request-rate-limiter.js'
@@ -19,6 +19,13 @@ class CapturingAlertRouter implements CrashAlertRouter {
     return {
       dispatched: true,
       detail: 'captured',
+    }
+  }
+
+  async routeManualReportAlert(_alert: HostedManualReportAlert): Promise<CrashAlertRouteResult> {
+    return {
+      dispatched: false,
+      detail: 'not used',
     }
   }
 }

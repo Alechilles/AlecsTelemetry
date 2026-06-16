@@ -27,6 +27,7 @@ async function main(): Promise<void> {
   const manualReportIngestService = new ManualReportIngestService(
     registry,
     new ManualReportRepository(),
+    router,
     new RequestRateLimiter(),
     logger,
   )

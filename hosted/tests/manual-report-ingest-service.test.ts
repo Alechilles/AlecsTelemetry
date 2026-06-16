@@ -1,10 +1,31 @@
 import pino from 'pino'
 import { describe, expect, it } from 'vitest'
 
+import type { CrashAlertRouteResult, HostedCrashAlert, HostedManualReportAlert } from '../src/alerts/alert-router.js'
+import type { CrashAlertRouter } from '../src/alerts/alert-router.js'
 import { ManualReportIngestService, createExampleManualReportEnvelope } from '../src/ingest/manual-report-ingest-service.js'
 import { RequestRateLimiter } from '../src/ingest/request-rate-limiter.js'
 import { HostedProjectRegistry, type HostedProjectConfig } from '../src/projects/project-registry.js'
 import { ManualReportRepository } from '../src/reports/manual-report-repository.js'
+
+class FakeManualReportAlertRouter implements CrashAlertRouter {
+  readonly reports: HostedManualReportAlert[] = []
+
+  async routeCrashAlert(_alert: HostedCrashAlert): Promise<CrashAlertRouteResult> {
+    return {
+      dispatched: false,
+      detail: 'not used',
+    }
+  }
+
+  async routeManualReportAlert(alert: HostedManualReportAlert): Promise<CrashAlertRouteResult> {
+    this.reports.push(alert)
+    return {
+      dispatched: true,
+      detail: 'sent',
+    }
+  }
+}
 
 function createProject(overrides: Partial<HostedProjectConfig> = {}): HostedProjectConfig {
   return {
@@ -26,16 +47,20 @@ function createProject(overrides: Partial<HostedProjectConfig> = {}): HostedProj
 function createService(project: HostedProjectConfig): {
   readonly service: ManualReportIngestService
   readonly repository: ManualReportRepository
+  readonly router: FakeManualReportAlertRouter
 } {
   const repository = new ManualReportRepository()
+  const router = new FakeManualReportAlertRouter()
   return {
     service: new ManualReportIngestService(
       HostedProjectRegistry.fromProjects([project]),
       repository,
+      router,
       new RequestRateLimiter(),
       pino({ enabled: false }),
     ),
     repository,
+    router,
   }
 }
 
@@ -141,7 +166,7 @@ describe('ManualReportIngestService', () => {
 
   it('accepts valid issue and suggestion reports', async () => {
     const project = createProject()
-    const { service, repository } = createService(project)
+    const { service, repository, router } = createService(project)
 
     const issue = await service.ingest({
       projectKey: project.publicProjectKey,
@@ -164,9 +189,11 @@ describe('ManualReportIngestService', () => {
     expect(issue.status).toBe(202)
     expect(issue.body.accepted).toBe(true)
     expect(issue.body.reportKind).toBe('issue')
+    expect(issue.body.alertDispatched).toBe(true)
     expect(suggestion.status).toBe(202)
     expect(suggestion.body.reportKind).toBe('suggestion')
     expect(repository.listByProject(project.projectId)).toHaveLength(2)
+    expect(router.reports).toHaveLength(2)
   })
 
   it('rate limits accepted projects', async () => {

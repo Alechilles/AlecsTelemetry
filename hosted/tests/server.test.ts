@@ -98,6 +98,7 @@ describe('hosted server', () => {
     const manualReportIngestService = new ManualReportIngestService(
       registry,
       new ManualReportRepository(),
+      new NoopCrashAlertRouter(),
       new RequestRateLimiter(),
       pino({ enabled: false }),
     )
