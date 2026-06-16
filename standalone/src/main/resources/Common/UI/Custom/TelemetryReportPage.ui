@@ -4,9 +4,23 @@ $C.@PageOverlay {
   LayoutMode: Middle;
 
   $C.@DecoratedContainer #TelemetryReportRoot {
-    Anchor: (Width: 720, Height: 680);
+    @TitleHeight = 96;
+
+    Anchor: (Width: 720, Height: 780);
+
+    #Title {
+      Anchor: (Height: 96, Top: 0);
+      Background: "TelemetryConsentHeader.png";
+      Padding: (Top: 8, Bottom: 8);
+
+      Group #TelemetryReportLogo {
+        Anchor: (Width: 221, Height: 80);
+        Background: "AlecsTelemetryLogo.png";
+      }
+    }
 
     #Content {
+      Anchor: (Top: 96);
       LayoutMode: Top;
       Padding: (Left: 14, Right: 14, Top: 14, Bottom: 12);
 
@@ -40,25 +54,25 @@ $C.@PageOverlay {
       }
 
       Label { Anchor: (Height: 18); Text: "Title"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
-      Label #TelemetryReportTitle { Anchor: (Height: 30); Text: ""; Background: #0f1e30; Style: (FontSize: 13, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+      TextField #TelemetryReportTitle { Anchor: (Height: 30); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 10); PlaceholderText: "Short summary"; MaxLength: 120; }
 
       Label { Anchor: (Height: 18); Text: "Description"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
-      Label #TelemetryReportDescription { Anchor: (Height: 68); Text: ""; Background: #0f1e30; Style: (FontSize: 13, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Start, Wrap: true); }
+      MultilineTextField #TelemetryReportDescription { Anchor: (Height: 68); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; AutoGrow: false; Padding: (Horizontal: 10, Vertical: 8); PlaceholderText: "What happened? What were you doing?"; MaxLength: 4000; }
 
       Group #TelemetryReportContactRow { Anchor: (Height: 48); LayoutMode: Top;
         Label { Anchor: (Height: 18); Text: "Contact"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); }
-        Label #TelemetryReportContact { Anchor: (Height: 28); Text: ""; Background: #0f1e30; Style: (FontSize: 13, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+        TextField #TelemetryReportContact { Anchor: (Height: 28); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 10); PlaceholderText: "Discord, email, or other contact"; MaxLength: 160; }
       }
 
       Group #TelemetryReportFields { Anchor: (Height: 218); LayoutMode: Top;
-        Group #TelemetryReportFieldRow0 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow1 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow2 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow3 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow4 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow5 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow6 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
-        Group #TelemetryReportFieldRow7 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } Label #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Text: ""; Background: #0f1e30; Style: (FontSize: 12, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center); } }
+        Group #TelemetryReportFieldRow0 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow1 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow2 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow3 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow4 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow5 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow6 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
+        Group #TelemetryReportFieldRow7 { Anchor: (Height: 26); Label #TelemetryReportFieldLabel { Anchor: (Left: 0, Width: 220, Height: 24); Text: ""; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } TextField #TelemetryReportFieldValue { Anchor: (Left: 230, Right: 0, Height: 24); Style: $C.@DefaultInputFieldStyle; PlaceholderStyle: $C.@DefaultInputFieldPlaceholderStyle; Background: $C.@InputBoxBackground; Padding: (Horizontal: 8); } }
       }
 
       Group #TelemetryReportCurrentLogRow { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 210, Height: 24); Text: "Current server log"; Style: (FontSize: 12, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryReportCurrentLog { Anchor: (Left: 216, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } }

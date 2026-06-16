@@ -117,6 +117,14 @@ public final class TelemetryReportProjectSelectPage
             TelemetryProjectRegistration project = projects.get(index);
             commands.set(row + " #TelemetryReportProjectSelectName.Text", project.displayName());
             commands.set(row + " #TelemetryReportProjectSelectMeta.Text", project.projectId() + " | " + project.pluginIdentifier());
+            String iconTexturePath = project.descriptor().ui().iconTexturePath();
+            if (iconTexturePath != null && !iconTexturePath.isBlank()) {
+                commands.set(row + " #TelemetryReportProjectSelectIconImage.Background", iconTexturePath);
+                commands.set(row + " #TelemetryReportProjectSelectIconPlaceholder.Visible", false);
+            } else {
+                commands.set(row + " #TelemetryReportProjectSelectIconImage.Background", "#203a5a");
+                commands.set(row + " #TelemetryReportProjectSelectIconPlaceholder.Visible", true);
+            }
         }
     }
 
