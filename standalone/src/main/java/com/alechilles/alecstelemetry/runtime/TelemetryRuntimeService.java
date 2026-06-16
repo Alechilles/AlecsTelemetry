@@ -16,6 +16,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
+import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -333,12 +334,18 @@ public final class TelemetryRuntimeService {
         return engine.submitManualReport(projectId, submission, playerContext);
     }
 
+    @Nonnull
+    public TelemetryRuntimeSettings.ManualReportSettings manualReportSettings() {
+        return settings.manualReports();
+    }
+
     public boolean openReportPage(@Nonnull String projectId,
                                   @Nonnull Ref<EntityStore> playerEntityRef,
                                   @Nonnull Store<EntityStore> store,
                                   @Nonnull PlayerRef playerRef,
                                   @Nonnull TelemetryReportOpenRequest request) {
-        return false;
+        return new TelemetryReportCoordinator(this, logger)
+                .openReportPage(projectId, playerEntityRef, store, playerRef, request);
     }
 
     @Nonnull
