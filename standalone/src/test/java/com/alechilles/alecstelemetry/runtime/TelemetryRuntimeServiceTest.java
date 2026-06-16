@@ -105,6 +105,38 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void manualReportProjectsOnlyIncludesReportEnabledProjects() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration enabled = new TelemetryProjectRegistration(
+                manualReportDescriptor("enabled-mod", "Enabled Mod", true),
+                "Example:Enabled Mod",
+                "1.0.0",
+                tempDir.resolve("Enabled Mod")
+        );
+        TelemetryProjectRegistration disabled = new TelemetryProjectRegistration(
+                manualReportDescriptor("disabled-mod", "Disabled Mod", false),
+                "Example:Disabled Mod",
+                "1.0.0",
+                tempDir.resolve("Disabled Mod")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(enabled, disabled),
+                List.of(),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        assertEquals(
+                List.of("enabled-mod"),
+                service.manualReportProjects().stream().map(TelemetryProjectRegistration::projectId).toList()
+        );
+    }
+
+    @Test
     void manualReviewRequiredStoresReportForReviewAndSkipsFlushUpload() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("""
                 {
@@ -857,6 +889,12 @@ class TelemetryRuntimeServiceTest {
     }
 
     private static TelemetryProjectDescriptor manualReportDescriptor(boolean reportsEnabled) {
+        return manualReportDescriptor("example-mod", "Example Mod", reportsEnabled);
+    }
+
+    private static TelemetryProjectDescriptor manualReportDescriptor(String projectId,
+                                                                    String displayName,
+                                                                    boolean reportsEnabled) {
         String reports = reportsEnabled
                 ? """
                   "reports": {
@@ -884,11 +922,11 @@ class TelemetryRuntimeServiceTest {
         return TelemetryProjectDescriptor.fromJson(
                 """
                 {
-                  "projectId": "example-mod",
-                  "displayName": "Example Mod",
-                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example.telemetry"],
-                """ + reports + """
+                """.formatted(projectId, displayName, displayName) + reports + """
                   "defaults": {
                     "destinationMode": "custom"
                   },

@@ -13,6 +13,19 @@ if (project != null) {
 }
 ```
 
+Players with the `telemetry.command.telemetry.report` permission can also open the
+same UI directly:
+
+```text
+/telemetry report
+/telemetry report issue
+/telemetry report suggestion
+/telemetry report <project-id> [issue|suggestion]
+```
+
+When the project id is omitted, the command opens a compact project selector
+before showing the report form.
+
 The player receives a local receipt with a stable `reportId`. The uploaded envelope
 contains `followUpTokenHash`; the raw follow-up token remains local for status
 checks.

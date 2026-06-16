@@ -20,6 +20,7 @@ public final class TelemetryCommandRoot extends AbstractCommandCollection {
         addSubCommand(new TelemetryProjectsCommand(plugin));
         addSubCommand(new TelemetryProjectCommand(plugin));
         addSubCommand(new TelemetryConsentCommand(plugin));
+        addSubCommand(new TelemetryReportCommand(plugin));
         addSubCommand(new TelemetryReportReviewCommand(plugin));
         addSubCommand(new TelemetryFlushCommand(plugin));
         addSubCommand(new TelemetryTestCommand(plugin));

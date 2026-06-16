@@ -52,6 +52,7 @@ public final class TelemetryRuntimeService {
     private final HytaleLogger logger;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
+    private final List<TelemetryProjectRegistration> projects;
     private List<TelemetryProjectRegistration> consentProjects;
 
     @Nonnull
@@ -136,6 +137,7 @@ public final class TelemetryRuntimeService {
         this.logger = logger;
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
+        this.projects = List.copyOf(projects);
         this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
@@ -398,6 +400,17 @@ public final class TelemetryRuntimeService {
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         return engine.findProject(projectId);
+    }
+
+    @Nonnull
+    public List<TelemetryProjectRegistration> manualReportProjects() {
+        ArrayList<TelemetryProjectRegistration> reportProjects = new ArrayList<>();
+        for (TelemetryProjectRegistration project : projects) {
+            if (project.isEnabled() && project.descriptor().reports().enabled()) {
+                reportProjects.add(project);
+            }
+        }
+        return List.copyOf(reportProjects);
     }
 
     @Nonnull
