@@ -51,7 +51,7 @@ public final class TelemetryRuntimeService {
         TelemetryDataPaths dataPaths = TelemetryDataPaths.from(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
         TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(logger)
-                .discover(dataPaths.modsDirectory());
+                .discover(dataPaths.descriptorDirectories());
         Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
                 .loadAll(dataPaths.projectSettingsDirectory());
         Map<String, TelemetryProjectOverride> consentOverrides = loadConsentOverrides(

@@ -16,6 +16,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,63 +44,60 @@ public final class TelemetryProjectDiscovery {
         if (modsDirectory == null || !Files.isDirectory(modsDirectory)) {
             return new DiscoveryResult(List.of(), List.of(), List.of(), List.of());
         }
+        return discover(List.of(modsDirectory));
+    }
 
-        ArrayList<Path> entries = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(modsDirectory)) {
-            for (Path entry : stream) {
-                entries.add(entry);
-            }
-        } catch (Exception ex) {
-            warn("Failed to scan mods directory for telemetry descriptors: " + modsDirectory, ex);
-            return new DiscoveryResult(List.of(), List.of(), List.of(), List.of());
-        }
-
-        entries.sort(Comparator.comparing(path -> {
-            Path fileName = path.getFileName();
-            return fileName == null ? "" : fileName.toString().toLowerCase(Locale.ROOT);
-        }));
-
+    @Nonnull
+    public DiscoveryResult discover(@Nonnull Collection<Path> modsDirectories) {
         LinkedHashMap<String, TelemetryProjectRegistration> registrations = new LinkedHashMap<>();
         LinkedHashMap<String, TelemetryProjectRegistration> consentRegistrations = new LinkedHashMap<>();
         LinkedHashMap<String, CrashReportEnvelope.LoadedModMetadata> loadedMods = new LinkedHashMap<>();
         ArrayList<String> skippedRegistrationWarnings = new ArrayList<>();
-        for (Path entry : entries) {
-            try {
-                EntryData data = Files.isDirectory(entry) ? readFolderEntry(entry) : readArchiveEntry(entry);
-                if (data == null) {
-                    continue;
-                }
-                if (data.manifest() != null) {
-                    String manifestId = data.manifest().identifier();
-                    loadedMods.putIfAbsent(
-                            manifestId.toLowerCase(Locale.ROOT),
-                            new CrashReportEnvelope.LoadedModMetadata(manifestId, data.manifest().version())
-                    );
-                }
-                if (data.registration() != null) {
-                    String projectIdKey = data.registration().projectId().toLowerCase(Locale.ROOT);
-                    consentRegistrations.putIfAbsent(projectIdKey, data.registration());
-                    if (data.registration().isEmbeddedMode()) {
-                        skippedRegistrationWarnings.add(
-                                "Discovered embedded telemetry project "
-                                        + data.registration().projectId()
-                                        + "; standalone runtime will expose consent controls but will not capture or upload for it."
-                        );
+        for (Path modsDirectory : modsDirectories) {
+            if (modsDirectory == null || !Files.isDirectory(modsDirectory)) {
+                continue;
+            }
+            for (Path entry : sortedEntries(modsDirectory)) {
+                try {
+                    EntryData data = Files.isDirectory(entry) ? readFolderEntry(entry) : readArchiveEntry(entry);
+                    if (data == null) {
                         continue;
                     }
-                    if (registrations.containsKey(projectIdKey)) {
-                        warn(
-                                "Duplicate telemetry project id discovered; keeping first registration for "
-                                        + data.registration().projectId()
-                                        + ".",
-                                null
+                    if (data.manifest() != null) {
+                        String manifestId = data.manifest().identifier();
+                        loadedMods.putIfAbsent(
+                                manifestId.toLowerCase(Locale.ROOT),
+                                new CrashReportEnvelope.LoadedModMetadata(manifestId, data.manifest().version())
                         );
-                        continue;
                     }
-                    registrations.put(projectIdKey, data.registration());
+                    if (data.registration() != null) {
+                        String projectIdKey = data.registration().projectId().toLowerCase(Locale.ROOT);
+                        boolean newConsentProject = !consentRegistrations.containsKey(projectIdKey);
+                        consentRegistrations.putIfAbsent(projectIdKey, data.registration());
+                        if (data.registration().isEmbeddedMode()) {
+                            if (newConsentProject) {
+                                skippedRegistrationWarnings.add(
+                                        "Discovered embedded telemetry project "
+                                                + data.registration().projectId()
+                                                + "; standalone runtime will expose consent controls but will not capture or upload for it."
+                                );
+                            }
+                            continue;
+                        }
+                        if (registrations.containsKey(projectIdKey)) {
+                            warn(
+                                    "Duplicate telemetry project id discovered; keeping first registration for "
+                                            + data.registration().projectId()
+                                            + ".",
+                                    null
+                            );
+                            continue;
+                        }
+                        registrations.put(projectIdKey, data.registration());
+                    }
+                } catch (Exception ex) {
+                    warn("Failed to inspect telemetry project entry " + entry, ex);
                 }
-            } catch (Exception ex) {
-                warn("Failed to inspect telemetry project entry " + entry, ex);
             }
         }
 
@@ -109,6 +107,25 @@ public final class TelemetryProjectDiscovery {
                 List.copyOf(loadedMods.values()),
                 List.copyOf(skippedRegistrationWarnings)
         );
+    }
+
+    @Nonnull
+    private List<Path> sortedEntries(@Nonnull Path modsDirectory) {
+        ArrayList<Path> entries = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(modsDirectory)) {
+            for (Path entry : stream) {
+                entries.add(entry);
+            }
+        } catch (Exception ex) {
+            warn("Failed to scan mods directory for telemetry descriptors: " + modsDirectory, ex);
+            return List.of();
+        }
+
+        entries.sort(Comparator.comparing(path -> {
+            Path fileName = path.getFileName();
+            return fileName == null ? "" : fileName.toString().toLowerCase(Locale.ROOT);
+        }));
+        return List.copyOf(entries);
     }
 
     @Nullable

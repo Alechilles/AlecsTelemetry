@@ -3,8 +3,12 @@ package com.alechilles.alecstelemetry.project;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.annotation.Nonnull;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -84,5 +88,52 @@ class TelemetryProjectDiscoveryTest {
         assertEquals(1, result.loadedMods().size());
         assertEquals(1, result.skippedRegistrationWarnings().size());
         assertFalse(result.skippedRegistrationWarnings().getFirst().isBlank());
+    }
+
+    @Test
+    void discoversEmbeddedDescriptorFromAdditionalInstalledModsDirectory() throws Exception {
+        Path saveModsDirectory = tempDir.resolve("data").resolve("pre-release").resolve("Saves")
+                .resolve("Demo World").resolve("mods");
+        Files.createDirectories(saveModsDirectory.resolve("Alechilles_Alec's Telemetry"));
+        Path installedModsDirectory = tempDir.resolve("UserData").resolve("Mods");
+        Files.createDirectories(installedModsDirectory);
+        writeJar(
+                installedModsDirectory.resolve("Alec's Tamework! v2.14.1.jar"),
+                """
+                {
+                  "Group": "Alechilles",
+                  "Name": "Alec's Tamework!",
+                  "Version": "2.14.1",
+                  "Main": "com.alechilles.alecstamework.Tamework"
+                }
+                """,
+                """
+                {
+                  "projectId": "alecs-tamework",
+                  "displayName": "Alec's Tamework!",
+                  "runtimeMode": "embedded"
+                }
+                """
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null)
+                .discover(List.of(saveModsDirectory, installedModsDirectory));
+
+        assertTrue(result.projects().isEmpty());
+        assertEquals(1, result.consentProjects().size());
+        assertEquals("alecs-tamework", result.consentProjects().getFirst().projectId());
+        assertEquals("Alechilles:Alec's Tamework!", result.consentProjects().getFirst().pluginIdentifier());
+        assertEquals(1, result.loadedMods().size());
+    }
+
+    private static void writeJar(@Nonnull Path jarPath, @Nonnull String manifest, @Nonnull String descriptor) throws Exception {
+        try (ZipOutputStream stream = new ZipOutputStream(Files.newOutputStream(jarPath))) {
+            stream.putNextEntry(new ZipEntry("manifest.json"));
+            stream.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            stream.closeEntry();
+            stream.putNextEntry(new ZipEntry("telemetry/project.json"));
+            stream.write(descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            stream.closeEntry();
+        }
     }
 }
