@@ -381,6 +381,7 @@ public final class TelemetryRuntimeService {
                 project.pluginIdentifier(),
                 project.pluginVersion(),
                 project.sourcePath() == null ? null : project.sourcePath().toString(),
+                project.descriptor().ui().iconTexturePath(),
                 project.packagePrefixes(),
                 project.runtimeMode(),
                 registeredForStandaloneRuntime ? engine.isCrashEnabled(project.projectId()) : project.isCrashTelemetryEnabled(),

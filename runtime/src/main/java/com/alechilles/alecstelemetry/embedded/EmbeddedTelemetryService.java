@@ -280,6 +280,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                         com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.EventOptions.defaults(),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.PerformanceOptions(false, 1.0d, 100, java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UsageOptions(false, java.util.List.of(), java.util.Map.of()),
+                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UiOptions(null),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.Defaults(false, "hosted"),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.HostedDestination(null, null, null, java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.CustomEndpoint(null, null, java.util.Map.of())

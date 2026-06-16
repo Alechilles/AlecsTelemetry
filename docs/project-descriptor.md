@@ -124,6 +124,9 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
       }
     }
   },
+  "ui": {
+    "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
+  },
   "defaults": {
     "enabled": true,
     "destinationMode": "hosted"
@@ -155,6 +158,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `events`
 - `performance`
 - `usage`
+- `ui`
 - `defaults`
 - `hosted`
 - `customEndpoint`
@@ -198,6 +202,30 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
   - usage event names that this descriptor permits
 - `details`
   - optional per-event allowlist for custom mod-specific detail fields
+
+### `ui`
+
+- `iconTexturePath`
+  - optional project icon texture path for the first-run consent UI
+  - must be a relative custom UI texture path using forward slashes
+  - the PNG must be packaged under the mod's `Common/UI/Custom/...` asset tree
+  - root mod icons such as `icon-256.png` are not used automatically because Hytale custom UI documents cannot reliably resolve them
+
+Example:
+
+```json
+{
+  "ui": {
+    "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
+  }
+}
+```
+
+Package that texture at:
+
+```text
+Common/UI/Custom/ExampleMod/Telemetry/ExampleModConsentIcon.png
+```
 
 ### Detail allowlists
 

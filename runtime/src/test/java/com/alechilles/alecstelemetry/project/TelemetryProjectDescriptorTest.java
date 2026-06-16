@@ -10,6 +10,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TelemetryProjectDescriptorTest {
 
@@ -108,6 +109,42 @@ class TelemetryProjectDescriptorTest {
         assertTrue(descriptor.usage().enabled());
         assertTrue(descriptor.usage().allows("settings_page_opened"));
         assertEquals("https://example.com/ingest/event", descriptor.hosted().eventEndpoint());
+    }
+
+    @Test
+    void parsesUiIconTexturePath() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ui": {
+                    "iconTexturePath": "Tamework/Telemetry/TameworkConsentIcon.png"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertEquals("Tamework/Telemetry/TameworkConsentIcon.png", descriptor.ui().iconTexturePath());
+    }
+
+    @Test
+    void dropsUnsafeUiIconTexturePath() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ui": {
+                    "iconTexturePath": "../icon-256.png"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertNull(descriptor.ui().iconTexturePath());
     }
 
     @Test

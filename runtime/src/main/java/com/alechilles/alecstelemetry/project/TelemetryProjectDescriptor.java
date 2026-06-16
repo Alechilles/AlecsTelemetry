@@ -26,6 +26,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull EventOptions events,
                                          @Nonnull PerformanceOptions performance,
                                          @Nonnull UsageOptions usage,
+                                         @Nonnull UiOptions ui,
                                          @Nonnull Defaults defaults,
                                          @Nonnull HostedDestination hosted,
                                          @Nonnull CustomEndpoint customEndpoint) {
@@ -92,6 +93,10 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 normalizeDetailRules(safe.usage.details)
         );
 
+        UiOptions ui = safe.ui == null
+                ? new UiOptions(null)
+                : new UiOptions(normalizeUiTexturePath(safe.ui.iconTexturePath));
+
         EventOptions events = safe.events == null
                 ? EventOptions.defaults()
                 : new EventOptions(
@@ -139,6 +144,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 events,
                 performance,
                 usage,
+                ui,
                 defaults,
                 hosted,
                 customEndpoint
@@ -325,6 +331,25 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             return null;
         }
         return value.trim();
+    }
+
+    @Nullable
+    private static String normalizeUiTexturePath(@Nullable String value) {
+        String normalized = normalizeNullable(value);
+        if (normalized == null
+                || normalized.startsWith("/")
+                || normalized.startsWith("\\")
+                || normalized.contains("\\")
+                || normalized.contains(":")
+                || normalized.contains("//")) {
+            return null;
+        }
+        for (String segment : normalized.split("/")) {
+            if (segment.isBlank() || ".".equals(segment) || "..".equals(segment)) {
+                return null;
+            }
+        }
+        return normalized;
     }
 
     @Nonnull
@@ -524,6 +549,12 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         }
     }
 
+    /**
+     * Optional custom UI presentation hints for consent and diagnostics pages.
+     */
+    public record UiOptions(@Nullable String iconTexturePath) {
+    }
+
     public record DetailRules(@Nonnull Map<String, DetailFieldRule> allowedFields) {
     }
 
@@ -569,6 +600,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
+        private UiDocument ui;
         private DefaultsDocument defaults;
         private HostedDocument hosted;
         private CustomEndpointDocument customEndpoint;
@@ -613,6 +645,10 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private Boolean enabled;
         private List<String> allowedEvents;
         private Map<String, DetailRulesDocument> details;
+    }
+
+    private static final class UiDocument {
+        private String iconTexturePath;
     }
 
     private static final class DetailRulesDocument {

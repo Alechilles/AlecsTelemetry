@@ -68,6 +68,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `events`
 - `performance`
 - `usage`
+- `ui`
 - `defaults`
 - `hosted`
 - `customEndpoint`
@@ -113,6 +114,30 @@ Supported detail field types:
 - `enum` with required `values`
 
 Unknown fields, wrong types, blank strings, and enum values outside the declared set are dropped before upload.
+
+## UI Fields
+
+`ui.iconTexturePath` optionally controls the project icon shown in the first-run consent UI.
+
+The value must be a relative custom UI texture path using forward slashes. The PNG must be packaged under the mod's `Common/UI/Custom/...` asset tree.
+
+Example descriptor value:
+
+```json
+{
+  "ui": {
+    "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
+  }
+}
+```
+
+Package that texture at:
+
+```text
+Common/UI/Custom/ExampleMod/Telemetry/ExampleModConsentIcon.png
+```
+
+Root mod icons such as `icon-256.png` are not used automatically because Hytale custom UI documents cannot reliably resolve them.
 
 ## Runtime API Event Context
 

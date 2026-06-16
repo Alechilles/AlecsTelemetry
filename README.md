@@ -78,6 +78,9 @@ shipped in the descriptor, not treated like hidden operator secrets.
 ```json
 {
   "runtimeMode": "dependency",
+  "ui": {
+    "iconTexturePath": "YourMod/Telemetry/YourModConsentIcon.png"
+  },
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }
@@ -91,6 +94,10 @@ telemetry/project.json
 ```
 
 Then package it with your mod.
+
+If you want your mod logo in the consent UI, package the texture under
+`Common/UI/Custom/...` and set `ui.iconTexturePath` to that custom UI texture
+path. Root mod icons such as `icon-256.png` are not used automatically.
 
 ## Hosted Platform Highlights
 
