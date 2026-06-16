@@ -319,7 +319,6 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                                         @Nonnull String selector,
                                         @Nonnull EventData eventData) {
         events.addEventBinding(CustomUIEventBindingType.ValueChanged, selector, eventData, false);
-        events.addEventBinding(CustomUIEventBindingType.Validating, selector, eventData, false);
     }
 
     @Nonnull
