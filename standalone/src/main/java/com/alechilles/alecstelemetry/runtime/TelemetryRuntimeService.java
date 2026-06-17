@@ -3,6 +3,11 @@ package com.alechilles.alecstelemetry.runtime;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
@@ -30,12 +35,14 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
@@ -43,12 +50,17 @@ import java.util.logging.Level;
  */
 public final class TelemetryRuntimeService {
 
+    private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
+
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
     private final List<TelemetryProjectCollisionDetector.Collision> collisions;
     private final List<String> registrationWarnings;
     private final TelemetryRuntimeApi api;
     private final TelemetryCoreEngine engine;
+    private final TelemetryRuntimeCandidate candidate;
+    private final TelemetryCoordinatorService coordinatorService;
+    private final StandaloneCoordinatorBridge coordinatorBridge;
     private final HytaleLogger logger;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
@@ -86,7 +98,8 @@ public final class TelemetryRuntimeService {
                 registrationWarnings,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
-                HytaleServer.SCHEDULED_EXECUTOR
+                HytaleServer.SCHEDULED_EXECUTOR,
+                standaloneCandidate(plugin, dataPaths)
         );
     }
 
@@ -109,7 +122,8 @@ public final class TelemetryRuntimeService {
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
-                executor
+                executor,
+                standaloneCandidate(dataPaths)
         );
     }
 
@@ -142,7 +156,8 @@ public final class TelemetryRuntimeService {
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
-                executor
+                executor,
+                standaloneCandidate(dataPaths)
         );
     }
 
@@ -156,7 +171,8 @@ public final class TelemetryRuntimeService {
                                     @Nonnull List<String> registrationWarnings,
                                     @Nonnull CrashReportClient client,
                                     @Nullable HytaleLogger logger,
-                                    @Nullable ScheduledExecutorService executor) {
+                                    @Nullable ScheduledExecutorService executor,
+                                    @Nonnull TelemetryRuntimeCandidate candidate) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.collisions = List.copyOf(collisions);
@@ -166,6 +182,7 @@ public final class TelemetryRuntimeService {
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.projects = List.copyOf(projects);
         this.loadedModSnapshotProvider = loadedModSnapshotProvider;
+        this.candidate = candidate;
         this.engine = new TelemetryCoreEngine(
                 settings,
                 dataPaths,
@@ -176,17 +193,39 @@ public final class TelemetryRuntimeService {
                 logger,
                 executor
         );
+        this.coordinatorService = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                projects,
+                manualReportRuntimeProjects(projects, consentProjects),
+                loadedMods,
+                client,
+                logger,
+                executor
+        );
+        this.coordinatorBridge = new StandaloneCoordinatorBridge(candidate, coordinatorService);
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
         logRegistrationWarnings();
     }
 
     public void start() {
-        engine.start();
+        TelemetryCoordinatorRegistry.register(coordinatorBridge);
     }
 
     public void shutdown() {
-        engine.shutdown();
+        TelemetryCoordinatorRegistry.unregister(candidate.providerId());
+    }
+
+    public boolean ownsActiveCoordinator() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active != null && active.providerId().equals(candidate.providerId());
+    }
+
+    @Nullable
+    public String activeCoordinatorProviderId() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? null : active.providerId();
     }
 
     public boolean isEnabled() {
@@ -670,5 +709,197 @@ public final class TelemetryRuntimeService {
      * One flush pass summary.
      */
     record FlushSummary(int attempted, int uploaded, int pendingAfter, @Nullable String lastFailure) {
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeCandidate standaloneCandidate(@Nonnull TelemetryDataPaths dataPaths) {
+        return new TelemetryRuntimeCandidate(
+                "standalone:Alechilles:Alec's Telemetry",
+                TelemetryRuntimeOrigin.STANDALONE,
+                resolveRuntimeVersion(),
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Alechilles:Alec's Telemetry",
+                resolveRuntimeVersion(),
+                dataPaths.runtimeRoot(),
+                dataPaths.runtimeRoot()
+        );
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeCandidate standaloneCandidate(@Nonnull JavaPlugin plugin,
+                                                                @Nonnull TelemetryDataPaths dataPaths) {
+        String pluginIdentifier = plugin.getIdentifier() == null ? "Alechilles:Alec's Telemetry" : plugin.getIdentifier().toString();
+        String pluginVersion = plugin.getManifest() == null || plugin.getManifest().getVersion() == null
+                ? resolveRuntimeVersion()
+                : plugin.getManifest().getVersion().toString();
+        Path sourcePath;
+        try {
+            sourcePath = plugin.getFile() == null ? dataPaths.runtimeRoot() : plugin.getFile().toAbsolutePath().normalize();
+        } catch (Exception ignored) {
+            sourcePath = dataPaths.runtimeRoot();
+        }
+        return new TelemetryRuntimeCandidate(
+                "standalone:" + pluginIdentifier,
+                TelemetryRuntimeOrigin.STANDALONE,
+                resolveRuntimeVersion(),
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                dataPaths.runtimeRoot()
+        );
+    }
+
+    @Nonnull
+    private static String resolveRuntimeVersion() {
+        Package runtimePackage = TelemetryRuntimeService.class.getPackage();
+        String implementationVersion = runtimePackage == null ? null : runtimePackage.getImplementationVersion();
+        return implementationVersion == null || implementationVersion.isBlank()
+                ? FALLBACK_RUNTIME_VERSION
+                : implementationVersion.trim();
+    }
+
+    private static final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private final TelemetryCoordinatorService service;
+        private final AtomicBoolean active = new AtomicBoolean(false);
+
+        private StandaloneCoordinatorBridge(@Nonnull TelemetryRuntimeCandidate candidate,
+                                            @Nonnull TelemetryCoordinatorService service) {
+            this.candidate = candidate;
+            this.service = service;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active.set(true);
+        }
+
+        @Override
+        public void deactivate() {
+            active.set(false);
+        }
+
+        @Override
+        public boolean isActive() {
+            return active.get();
+        }
+
+        @Override
+        public void start() {
+            service.start();
+        }
+
+        @Override
+        public void shutdown() {
+            service.shutdown();
+        }
+
+        @Override
+        public boolean recordBreadcrumb(@Nonnull String projectId,
+                                        @Nonnull String category,
+                                        @Nonnull String detail) {
+            return service.recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
+        public boolean captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return service.captureSetupFailure(projectId, throwable);
+        }
+
+        @Override
+        public boolean captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return service.captureStartFailure(projectId, throwable);
+        }
+
+        @Override
+        public boolean recordError(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nullable Throwable throwable,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordError(projectId, eventName, throwable, details);
+        }
+
+        @Override
+        public boolean recordLifecycle(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       int durationMs,
+                                       boolean success,
+                                       @Nonnull Map<String, Object> details) {
+            return service.recordLifecycle(projectId, eventName, durationMs, success, details);
+        }
+
+        @Override
+        public boolean recordPerformance(@Nonnull String projectId,
+                                         @Nonnull String eventName,
+                                         int durationMs,
+                                         @Nullable Double metricValue,
+                                         @Nonnull Map<String, Object> details) {
+            return service.recordPerformance(projectId, eventName, durationMs, metricValue, details);
+        }
+
+        @Override
+        public boolean recordUsage(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordUsage(projectId, eventName, details);
+        }
+
+        @Override
+        public boolean recordStats(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordStats(projectId, eventName, details);
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            return service.requestFlush(projectId);
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+            return service.captureTestReport(projectId, detail);
+        }
     }
 }

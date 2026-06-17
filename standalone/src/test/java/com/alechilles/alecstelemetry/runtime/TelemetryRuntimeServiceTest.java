@@ -1,5 +1,9 @@
 package com.alechilles.alecstelemetry.runtime;
 
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
@@ -16,6 +20,7 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -37,6 +42,51 @@ class TelemetryRuntimeServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @AfterEach
+    void clearCoordinatorRegistry() {
+        TelemetryCoordinatorRegistry.clearForTests();
+    }
+
+    @Test
+    void standaloneRuntimeServiceReportsPassiveWhenNewerEmbeddedCoordinatorWins() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(embedded);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        assertFalse(service.ownsActiveCoordinator());
+        assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
+
+        service.shutdown();
+    }
 
     @Test
     void manualReportSubmissionReturnsValidationErrorWhenGloballyDisabled() throws Exception {
@@ -1260,6 +1310,70 @@ class TelemetryRuntimeServiceTest {
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
+        }
+    }
+
+    private static final class RecordingCoordinatorBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private boolean active;
+
+        private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
+            this.candidate = candidate;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active = true;
+        }
+
+        @Override
+        public void deactivate() {
+            active = false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
         }
     }
 }
