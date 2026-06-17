@@ -54,6 +54,32 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public static TelemetryDataPaths forSharedCoordinator(@Nonnull JavaPlugin plugin) {
+        return forSharedCoordinatorDataDirectory(plugin.getDataDirectory());
+    }
+
+    @Nonnull
+    static TelemetryDataPaths forSharedCoordinatorDataDirectory(@Nonnull Path dataDirectory) {
+        Path normalizedDataDirectory = dataDirectory.toAbsolutePath().normalize();
+        Path modsDirectory = resolveModsDirectory(normalizedDataDirectory);
+        Path userDataDirectory = modsDirectory == null ? null : modsDirectory.getParent();
+        Path runtimeRoot = userDataDirectory == null
+                ? normalizedDataDirectory.resolve("TelemetryCoordinator").toAbsolutePath().normalize()
+                : userDataDirectory.resolve("Telemetry").toAbsolutePath().normalize();
+        Path telemetryRoot = runtimeRoot.resolve("Telemetry");
+        Path settingsRoot = runtimeRoot.resolve("Settings");
+        return new TelemetryDataPaths(
+                runtimeRoot,
+                settingsRoot.resolve("runtime.json"),
+                settingsRoot.resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                modsDirectory
+        );
+    }
+
+    @Nonnull
     public Path pendingDirectory(@Nonnull String projectId) {
         return crashReportsRoot.resolve(projectId).resolve("pending");
     }

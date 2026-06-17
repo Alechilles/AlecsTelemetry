@@ -42,6 +42,24 @@ class TelemetryDataPathsTest {
     }
 
     @Test
+    void sharedCoordinatorRootUsesGlobalUserDataTelemetryDirectory() throws Exception {
+        Path hytaleRoot = tempDir.resolve("Hytale");
+        Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Mods").resolve("Alechilles_Alec's Tamework!");
+        Files.createDirectories(pluginDataDirectory);
+
+        TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(pluginDataDirectory);
+
+        assertEquals(
+                hytaleRoot.resolve("UserData").resolve("Telemetry").toAbsolutePath().normalize(),
+                paths.runtimeRoot()
+        );
+        assertEquals(paths.runtimeRoot().resolve("Settings").resolve("runtime.json"), paths.settingsFile());
+        assertEquals(paths.runtimeRoot().resolve("Settings").resolve("projects"), paths.projectSettingsDirectory());
+        assertEquals(paths.runtimeRoot().resolve("Telemetry"), paths.telemetryRoot());
+        assertEquals(hytaleRoot.resolve("UserData").resolve("Mods").toAbsolutePath().normalize(), paths.modsDirectory());
+    }
+
+    @Test
     void defaultsManualReportRuntimeSettings() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null);
 
