@@ -105,10 +105,22 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                                 @Nonnull ReportEventData data) {
         switch (data.action == null ? "" : data.action) {
             case ACTION_SET_KIND -> selectedKind = "suggestion".equalsIgnoreCase(data.kind) ? "suggestion" : "issue";
-            case ACTION_TOGGLE_CURRENT_LOG -> includeCurrentServerLog = data.enabledOr(!includeCurrentServerLog);
-            case ACTION_TOGGLE_PREVIOUS_LOG -> includePreviousServerLog = data.enabledOr(!includePreviousServerLog);
-            case ACTION_TOGGLE_LOADED_MODS -> includeLoadedMods = data.enabledOr(!includeLoadedMods);
-            case ACTION_TOGGLE_DIAGNOSTICS -> includeDiagnostics = data.enabledOr(!includeDiagnostics);
+            case ACTION_TOGGLE_CURRENT_LOG -> {
+                includeCurrentServerLog = data.enabledOr(!includeCurrentServerLog);
+                return;
+            }
+            case ACTION_TOGGLE_PREVIOUS_LOG -> {
+                includePreviousServerLog = data.enabledOr(!includePreviousServerLog);
+                return;
+            }
+            case ACTION_TOGGLE_LOADED_MODS -> {
+                includeLoadedMods = data.enabledOr(!includeLoadedMods);
+                return;
+            }
+            case ACTION_TOGGLE_DIAGNOSTICS -> {
+                includeDiagnostics = data.enabledOr(!includeDiagnostics);
+                return;
+            }
             case ACTION_UPDATE_TITLE -> {
                 title = normalizeInput(data.title, title, true);
                 return;
@@ -305,7 +317,19 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 false
         );
         events.addEventBinding(
+                CustomUIEventBindingType.FocusLost,
+                "#TelemetryReportTitle",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_TITLE).append(KEY_TITLE, valueSelector("#TelemetryReportTitle")),
+                false
+        );
+        events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
+                "#TelemetryReportDescription",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_DESCRIPTION).append(KEY_DESCRIPTION, valueSelector("#TelemetryReportDescription")),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.FocusLost,
                 "#TelemetryReportDescription",
                 EventData.of(KEY_ACTION, ACTION_UPDATE_DESCRIPTION).append(KEY_DESCRIPTION, valueSelector("#TelemetryReportDescription")),
                 false
@@ -318,6 +342,12 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         );
         events.addEventBinding(
                 CustomUIEventBindingType.Validating,
+                "#TelemetryReportContact",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_CONTACT).append(KEY_CONTACT, valueSelector("#TelemetryReportContact")),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.FocusLost,
                 "#TelemetryReportContact",
                 EventData.of(KEY_ACTION, ACTION_UPDATE_CONTACT).append(KEY_CONTACT, valueSelector("#TelemetryReportContact")),
                 false
@@ -347,6 +377,14 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 );
                 events.addEventBinding(
                         CustomUIEventBindingType.Validating,
+                        row + " #TelemetryReportFieldTextValue",
+                        EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
+                                .append(KEY_FIELD_INDEX, String.valueOf(index))
+                                .append(KEY_FIELD_VALUE, valueSelector(row, "#TelemetryReportFieldTextValue")),
+                        false
+                );
+                events.addEventBinding(
+                        CustomUIEventBindingType.FocusLost,
                         row + " #TelemetryReportFieldTextValue",
                         EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
                                 .append(KEY_FIELD_INDEX, String.valueOf(index))
@@ -531,13 +569,13 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
 
     @Nonnull
     private static String valueSelector(@Nonnull String elementSelector) {
-        return "#TelemetryReportRoot " + elementSelector + ".Value";
+        return elementSelector + ".Value";
     }
 
     @Nonnull
     private static String valueSelector(@Nonnull String rowSelector,
                                         @Nonnull String elementSelector) {
-        return "#TelemetryReportRoot " + rowSelector + " " + elementSelector + ".Value";
+        return rowSelector + " " + elementSelector + ".Value";
     }
 
     @Nullable

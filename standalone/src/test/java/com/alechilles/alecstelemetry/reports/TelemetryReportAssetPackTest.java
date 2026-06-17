@@ -104,8 +104,16 @@ class TelemetryReportAssetPackTest {
                 "Title text must be buffered from ValueChanged events"
         );
         assertTrue(
+                reportPageSource.contains("CustomUIEventBindingType.FocusLost,\n                \"#TelemetryReportTitle\""),
+                "Title text must also be buffered when focus leaves the field"
+        );
+        assertTrue(
                 reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportDescription\""),
                 "Description text must be buffered from ValueChanged events"
+        );
+        assertTrue(
+                reportPageSource.contains("CustomUIEventBindingType.FocusLost,\n                \"#TelemetryReportDescription\""),
+                "Long description text must also be buffered when focus leaves the field"
         );
         assertTrue(
                 reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportContact\""),
@@ -130,6 +138,10 @@ class TelemetryReportAssetPackTest {
         assertTrue(
                 reportPageSource.contains("ManualReportInputSanitizer.isTelemetrySelector"),
                 "Selector literals returned by the UI binding layer must not overwrite buffered player text"
+        );
+        assertTrue(
+                reportPageSource.contains("case ACTION_TOGGLE_LOADED_MODS -> {\n                includeLoadedMods = data.enabledOr(!includeLoadedMods);\n                return;\n            }"),
+                "Checkbox toggles must not refresh the full page and wipe client-side text controls"
         );
     }
 
