@@ -125,7 +125,6 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 return;
             }
             case ACTION_SUBMIT -> {
-                captureSubmittedInputs(data);
                 submit(ref, store, data);
                 return;
             }
@@ -275,6 +274,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 EventData.of(KEY_ACTION, ACTION_TOGGLE_DIAGNOSTICS).append(KEY_ENABLED, "#TelemetryReportDiagnostics.Value"),
                 false
         );
+        bindTextInputEvents(events);
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryReportSubmit",
@@ -289,23 +289,55 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         );
     }
 
-    @Nonnull
-    private EventData submitEventData() {
-        EventData eventData = EventData.of(KEY_ACTION, ACTION_SUBMIT)
-                .append(KEY_TITLE, "#TelemetryReportTitle.Value")
-                .append(KEY_DESCRIPTION, "#TelemetryReportDescription.Value")
-                .append(KEY_CONTACT, "#TelemetryReportContact.Value");
+    private void bindTextInputEvents(@Nonnull UIEventBuilder events) {
+        events.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                "#TelemetryReportTitle",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_TITLE).append(KEY_TITLE, "#TelemetryReportTitle.Value"),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                "#TelemetryReportDescription",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_DESCRIPTION).append(KEY_DESCRIPTION, "#TelemetryReportDescription.Value"),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                "#TelemetryReportContact",
+                EventData.of(KEY_ACTION, ACTION_UPDATE_CONTACT).append(KEY_CONTACT, "#TelemetryReportContact.Value"),
+                false
+        );
         TelemetryReportViewModel viewModel = viewModel();
         int visibleRows = Math.min(MAX_CUSTOM_FIELDS, viewModel.fields().size());
         for (int index = 0; index < visibleRows; index++) {
             TelemetryReportViewModel.FieldRow field = viewModel.fields().get(index);
             String row = "#TelemetryReportFieldRow" + index;
-            String valueSelector = isDropdownField(field)
-                    ? row + " #TelemetryReportFieldDropdownValue.Value"
-                    : row + " #TelemetryReportFieldTextValue.Value";
-            eventData = eventData.append(fieldValueKey(index), valueSelector);
+            if (isDropdownField(field)) {
+                events.addEventBinding(
+                        CustomUIEventBindingType.ValueChanged,
+                        row + " #TelemetryReportFieldDropdownValue",
+                        EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
+                                .append(KEY_FIELD_INDEX, String.valueOf(index))
+                                .append(KEY_FIELD_VALUE, row + " #TelemetryReportFieldDropdownValue.Value"),
+                        false
+                );
+            } else {
+                events.addEventBinding(
+                        CustomUIEventBindingType.ValueChanged,
+                        row + " #TelemetryReportFieldTextValue",
+                        EventData.of(KEY_ACTION, ACTION_UPDATE_FIELD)
+                                .append(KEY_FIELD_INDEX, String.valueOf(index))
+                                .append(KEY_FIELD_VALUE, row + " #TelemetryReportFieldTextValue.Value"),
+                        false
+                );
+            }
         }
-        return eventData;
+    }
+
+    @Nonnull
+    private EventData submitEventData() {
+        return EventData.of(KEY_ACTION, ACTION_SUBMIT);
     }
 
     @Nonnull
@@ -360,15 +392,6 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private void updateFieldInput(@Nonnull ReportEventData data) {
         int index = parseFieldIndex(data.fieldIndex);
         updateFieldInput(index, data.fieldValue);
-    }
-
-    private void captureSubmittedInputs(@Nonnull ReportEventData data) {
-        title = normalizeInput(data.title);
-        description = normalizeInput(data.description);
-        contact = normalizeInput(data.contact);
-        for (int index = 0; index < MAX_CUSTOM_FIELDS; index++) {
-            updateFieldInput(index, data.fieldValue(index));
-        }
     }
 
     private void updateFieldInput(int index,

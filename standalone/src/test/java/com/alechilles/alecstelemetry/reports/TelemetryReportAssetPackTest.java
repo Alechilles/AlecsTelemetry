@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -86,6 +88,53 @@ class TelemetryReportAssetPackTest {
                 selectorPage.contains("#TelemetryReportProjectSelectRow5"),
                 "TelemetryReportProjectSelectPage.ui must not define unrendered rows with default buttons"
         );
+    }
+
+    @Test
+    void reportPageBuffersTextInputChangesInsteadOfCapturingSelectorsOnSubmit() throws IOException {
+        String reportPageSource = Files.readString(Path.of("src/main/java/com/alechilles/alecstelemetry/reports/TelemetryReportPage.java"));
+        String submitEventData = sourceSlice(
+                reportPageSource,
+                "private EventData submitEventData()",
+                "private static String fieldValueKey"
+        );
+
+        assertTrue(
+                reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportTitle\""),
+                "Title text must be buffered from ValueChanged events"
+        );
+        assertTrue(
+                reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportDescription\""),
+                "Description text must be buffered from ValueChanged events"
+        );
+        assertTrue(
+                reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportContact\""),
+                "Contact text must be buffered from ValueChanged events"
+        );
+        assertTrue(
+                reportPageSource.contains("row + \" #TelemetryReportFieldTextValue\""),
+                "Dynamic text fields must be buffered from their own ValueChanged events"
+        );
+        assertFalse(
+                submitEventData.contains(".append(KEY_TITLE, \"#TelemetryReportTitle.Value\")"),
+                "Submit must not overwrite buffered title text with a selector literal"
+        );
+        assertFalse(
+                submitEventData.contains(".append(KEY_DESCRIPTION, \"#TelemetryReportDescription.Value\")"),
+                "Submit must not overwrite buffered description text with a selector literal"
+        );
+        assertFalse(
+                submitEventData.contains(".append(KEY_CONTACT, \"#TelemetryReportContact.Value\")"),
+                "Submit must not overwrite buffered contact text with a selector literal"
+        );
+    }
+
+    private static String sourceSlice(String source, String startMarker, String endMarker) {
+        int start = source.indexOf(startMarker);
+        int end = source.indexOf(endMarker, start);
+        assertTrue(start >= 0, "Expected source marker: " + startMarker);
+        assertTrue(end > start, "Expected source marker: " + endMarker);
+        return source.substring(start, end);
     }
 
     private String resourceText(String path) throws IOException {
