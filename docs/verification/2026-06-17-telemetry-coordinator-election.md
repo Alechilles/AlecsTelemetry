@@ -17,24 +17,43 @@ Date: 2026-06-17
   - `com/alechilles/alecstelemetry/coordinator/TelemetryCoordinatorService.class`
   - `com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class`
   - `com/alechilles/alecstelemetry/AlecsTelemetry.class`
-- Installed Tamework jar contains:
+- Installed Tamework jar from `UserData\Mods` contains:
   - `telemetry/project.json`
   - `com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class`
 - Installed Tamework descriptor declares:
   - `"projectId": "alecs-tamework"`
   - `"runtimeMode": "embedded"`
+- Rebuilt Tamework jar from `alecstamework\target` after installing this branch's runtime locally contains:
+  - `telemetry/project.json`
+  - `com/alechilles/alecstelemetry/coordinator/TelemetryCoordinatorBridge.class`
+  - `com/alechilles/alecstelemetry/coordinator/TelemetryCoordinatorRegistry.class`
+  - `com/alechilles/alecstelemetry/coordinator/TelemetryCoordinatorService.class`
+  - `com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class`
 
 ## Manual Server
 
-Not run in this pass. Remaining manual signal after installing a standalone build with a lower runtime version than an embedded runtime candidate:
+Ran an isolated Hytale dedicated server with:
+
+- Rebuilt Tamework jar from `alecstamework\target`, embedding this branch's runtime.
+- Temporary standalone telemetry jar with its fallback runtime version bytecode-patched from `0.1.3` to `0.1.2`, so the embedded runtime should win deterministically.
+- Working directory `artifacts\telemetry-coordinator-server-check\isolated-server-workdir-command-check-defaultmods`.
+- Logs:
+  - `artifacts\telemetry-coordinator-server-check\server-command-check-defaultmods.out.log`
+  - `artifacts\telemetry-coordinator-server-check\server-command-check-defaultmods.err.log`
+
+Observed runtime election:
 
 ```text
-Alec's Telemetry enabled. Active coordinator=embedded:<provider>, standaloneOwnsRuntime=false
+[Alec's Telemetry|P] Alec's Telemetry enabled. Active coordinator=embedded:Alechilles:Alec's Tamework!, standaloneOwnsRuntime=false, registered projects=1
 ```
 
-Expected `/telemetry status` behavior:
+Observed command availability from the live server console:
 
-- Command remains available if standalone is installed.
-- Status names the active coordinator provider.
-- Embedded projects appear in registered telemetry projects.
-- Flush requests route to the active coordinator.
+```text
+[CommandManager] Console executed command: telemetry status
+[CommandManager] Console executed command: telemetry status
+[CommandManager] Console executed command: telemetry flush alecs-tamework
+[CommandManager] Console executed command: telemetry flush alecs-tamework
+```
+
+The command manager logs strip the leading slash, so the two `status` lines represent `telemetry status` and `/telemetry status`, and the two `flush` lines represent `telemetry flush alecs-tamework` and `/telemetry flush alecs-tamework`. No telemetry command errors were emitted; stderr only contained the known SLF4J no-binding and native reallocation warnings.
