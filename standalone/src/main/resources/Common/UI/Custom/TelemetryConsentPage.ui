@@ -79,7 +79,7 @@ $C.@PageOverlay {
         Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
 
         Group #TelemetryConsentGridHeader {
-          Anchor: (Height: 64, Left: 0, Right: 0);
+          Anchor: (Width: 740, Height: 64);
           Background: #172b45;
           Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
           Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -109,6 +109,13 @@ $C.@PageOverlay {
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
           }
+          TextButton #TelemetryConsentAllToggleButton {
+            Anchor: (Left: 300, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Enables or disables all telemetry categories for every listed mod.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
+          }
 
           Label {
             Anchor: (Left: 355, Width: 55, Top: 5, Height: 24);
@@ -122,6 +129,13 @@ $C.@PageOverlay {
             Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
+          }
+          TextButton #TelemetryConsentCrashAllToggleButton {
+            Anchor: (Left: 355, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Crash reports, uncaught exceptions, setup failures, start failures, and exceptional world removals.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
           }
 
           Label {
@@ -137,6 +151,13 @@ $C.@PageOverlay {
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
           }
+          TextButton #TelemetryConsentErrorAllToggleButton {
+            Anchor: (Left: 410, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Handled errors that did not crash the game, with descriptor-allowed context.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
+          }
 
           Label {
             Anchor: (Left: 465, Width: 55, Top: 5, Height: 24);
@@ -150,6 +171,13 @@ $C.@PageOverlay {
             Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
+          }
+          TextButton #TelemetryConsentLifecycleAllToggleButton {
+            Anchor: (Left: 465, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Lifecycle events such as setup, start, reload, and other timed mod operations.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
           }
 
           Label {
@@ -165,6 +193,13 @@ $C.@PageOverlay {
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
           }
+          TextButton #TelemetryConsentPerformanceAllToggleButton {
+            Anchor: (Left: 520, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Performance timings and slow operation measurements.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
+          }
 
           Label {
             Anchor: (Left: 575, Width: 55, Top: 5, Height: 24);
@@ -178,6 +213,13 @@ $C.@PageOverlay {
             Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
+          }
+          TextButton #TelemetryConsentUsageAllToggleButton {
+            Anchor: (Left: 575, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Feature and command usage events declared by the mod.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
           }
 
           Label {
@@ -193,6 +235,13 @@ $C.@PageOverlay {
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
           }
+          TextButton #TelemetryConsentStatsAllToggleButton {
+            Anchor: (Left: 630, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Low-frequency aggregate stats such as heartbeat and player-count style observations.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
+          }
 
           Label {
             Anchor: (Left: 685, Width: 55, Top: 5, Height: 24);
@@ -207,6 +256,13 @@ $C.@PageOverlay {
             Padding: (Full: 4);
             Style: $C.@DefaultCheckBoxStyle;
           }
+          TextButton #TelemetryConsentBreadcrumbsAllToggleButton {
+            Anchor: (Left: 685, Width: 55, Top: 0, Height: 64);
+            Text: "";
+            TooltipText: "Recent breadcrumbs attached to crash or error reports to explain what happened before failure.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+            Style: @TelemetryConsentInvisibleButtonStyle;
+          }
         }
 
         Group #TelemetryConsentViewport {
@@ -218,9 +274,9 @@ $C.@PageOverlay {
 
           Group #TelemetryConsentRows {
             LayoutMode: Top;
-            Anchor: (Left: 0, Right: 0, Bottom: 0);
+            Anchor: (Width: 740, Bottom: 0);
 
-            Group #TelemetryConsentProjectRow0 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow0 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -234,15 +290,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow1 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow1 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -256,15 +320,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow2 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow2 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -278,15 +350,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow3 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow3 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -300,15 +380,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow4 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow4 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -322,15 +410,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow5 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow5 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -344,15 +440,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow6 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow6 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -366,15 +470,23 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
-            Group #TelemetryConsentProjectRow7 { Anchor: (Left: 0, Right: 0, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow7 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -388,13 +500,21 @@ $C.@PageOverlay {
               Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 228, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 228, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
               CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 300, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentCrashToggleButton { Anchor: (Left: 355, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 426, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 410, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 481, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 465, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 536, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 520, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 591, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 575, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 630, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
             }
           }
         }

@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,7 +87,7 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must apply the shared tooltip styling to consent category hints"
         );
         assertTrue(
-                consentPage.contains("Anchor: (Height: 64, Left: 0, Right: 0)"),
+                consentPage.contains("Anchor: (Width: 740, Height: 64)"),
                 "TelemetryConsentPage.ui must give the grid header enough height to keep labels clear of checkboxes"
         );
         assertTrue(
@@ -97,8 +99,16 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must not offset project rows inside the scrolling viewport"
         );
         assertTrue(
-                consentPage.contains("Group #TelemetryConsentProjectRow0 { Anchor: (Left: 0, Right: 0, Height: 56)"),
+                consentPage.contains("Group #TelemetryConsentProjectRow0 { Anchor: (Width: 740, Height: 56)"),
                 "TelemetryConsentPage.ui must make project rows span the same full width as the header"
+        );
+        assertTrue(
+                consentPage.contains("TextButton #TelemetryConsentAllToggleButton"),
+                "TelemetryConsentPage.ui must include a reliable hit target for the all-toggle header checkbox"
+        );
+        assertTrue(
+                consentPage.contains("TextButton #TelemetryConsentUsageAllToggleButton"),
+                "TelemetryConsentPage.ui must include reliable hit targets for category header checkboxes"
         );
         assertTrue(
                 consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 0, Width: 56, Height: 56)"),
@@ -145,6 +155,36 @@ class TelemetryConsentAssetPackTest {
         assertTrue(
                 !consentPage.contains("Background: #203b5a"),
                 "TelemetryConsentPage.ui must not fall back to the unframed flat title fill"
+        );
+    }
+
+    @Test
+    void consentPageBindsHeaderToggleButtonsToDeterministicServerActions() throws IOException {
+        String source = Files.readString(Path.of("src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java"));
+
+        assertTrue(
+                source.contains("CustomUIEventBindingType.Activating,\n                \"#TelemetryConsentAllToggleButton\""),
+                "The all-toggle header hit target must use Activating so it cannot depend on CheckBox ValueChanged behavior"
+        );
+        assertTrue(
+                source.contains(".append(KEY_ENABLED_LITERAL, Boolean.toString(!allTelemetryEnabled(projects)))"),
+                "The all-toggle header hit target must send the next aggregate state explicitly"
+        );
+        assertTrue(
+                source.contains("globalCategoryToggleSelector(category)"),
+                "Category header hit targets must be bound for every telemetry category"
+        );
+        assertTrue(
+                source.contains(".append(KEY_ENABLED_LITERAL, Boolean.toString(!categoryAllEnabled(projects, category)))"),
+                "Category header hit targets must send the next aggregate category state explicitly"
+        );
+        assertTrue(
+                source.contains("projectToggleSelector(index)"),
+                "Project row hit targets must use deterministic Activating bindings"
+        );
+        assertTrue(
+                source.contains("categoryToggleSelector(index, category)"),
+                "Project category hit targets must use deterministic Activating bindings"
         );
     }
 
