@@ -329,12 +329,6 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                 false
         );
         events.addEventBinding(
-                CustomUIEventBindingType.FocusLost,
-                "#TelemetryReportDescription",
-                EventData.of(KEY_ACTION, ACTION_UPDATE_DESCRIPTION).append(KEY_DESCRIPTION, valueSelector("#TelemetryReportDescription")),
-                false
-        );
-        events.addEventBinding(
                 CustomUIEventBindingType.ValueChanged,
                 "#TelemetryReportContact",
                 EventData.of(KEY_ACTION, ACTION_UPDATE_CONTACT).append(KEY_CONTACT, valueSelector("#TelemetryReportContact")),

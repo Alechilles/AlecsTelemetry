@@ -111,9 +111,9 @@ class TelemetryReportAssetPackTest {
                 reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportDescription\""),
                 "Description text must be buffered from ValueChanged events"
         );
-        assertTrue(
+        assertFalse(
                 reportPageSource.contains("CustomUIEventBindingType.FocusLost,\n                \"#TelemetryReportDescription\""),
-                "Long description text must also be buffered when focus leaves the field"
+                "MultilineTextField does not support FocusLost bindings"
         );
         assertTrue(
                 reportPageSource.contains("CustomUIEventBindingType.ValueChanged,\n                \"#TelemetryReportContact\""),
