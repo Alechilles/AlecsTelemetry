@@ -552,7 +552,7 @@ flowchart TD
 
 **Intent:** Prove both local repositories pass focused checks before deploying to dev.
 
-- [ ] Run Java tests for runtime and standalone report changes.
+- [x] Run Java tests for runtime and standalone report changes.
 
   From:
 
@@ -561,7 +561,7 @@ flowchart TD
   mvn -pl runtime,standalone test
   ```
 
-- [ ] Run hosted AlecsTelemetry tests for the lightweight ingest service.
+- [x] Run hosted AlecsTelemetry tests for the lightweight ingest service.
 
   From:
 
@@ -571,7 +571,7 @@ flowchart TD
   npm run build
   ```
 
-- [ ] Run platform tests and type checks.
+- [x] Run platform tests and type checks.
 
   From:
 
@@ -598,7 +598,7 @@ flowchart TD
   10. Promote the report to an issue.
   11. Confirm the issue appears on the Issues page and links back to the report.
 
-- [ ] Deploy platform dev only after checks pass.
+- [x] Deploy platform dev only after checks pass.
 
   Use the repo's existing dev deployment process from:
 
@@ -613,6 +613,11 @@ flowchart TD
   - `npm run build` fails
   - manual report ingest still creates a normal issue for every report
   - report detail cannot show submitted form values
+
+  Dev deployment smoke result:
+
+  - `https://telemetry-dev.alecsmods.com/portal` returned `200`.
+  - `POST https://telemetry-dev.alecsmods.com/ingest/report` with no project key returned `401 {"error":"missing_project_key"}`, confirming the public route reaches the ingest handler instead of `404`.
 
 ---
 
