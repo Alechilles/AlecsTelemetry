@@ -82,7 +82,25 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    default boolean recordStats(@Nonnull String projectId,
+                                @Nonnull String eventName,
+                                @Nonnull Map<String, Object> details) {
+        return false;
+    }
+
+    default boolean captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        return false;
+    }
+
+    default boolean captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        return false;
+    }
+
     default boolean requestFlush(@Nullable String projectId) {
+        return false;
+    }
+
+    default boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return false;
     }
 }

@@ -332,11 +332,54 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean recordStats(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            return invokeBoolean(
+                    "recordStats",
+                    new Class<?>[]{String.class, String.class, Map.class},
+                    projectId,
+                    eventName,
+                    details
+            );
+        }
+
+        @Override
+        public boolean captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return invokeBoolean(
+                    "captureSetupFailure",
+                    new Class<?>[]{String.class, Throwable.class},
+                    projectId,
+                    throwable
+            );
+        }
+
+        @Override
+        public boolean captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return invokeBoolean(
+                    "captureStartFailure",
+                    new Class<?>[]{String.class, Throwable.class},
+                    projectId,
+                    throwable
+            );
+        }
+
+        @Override
         public boolean requestFlush(@Nullable String projectId) {
             return invokeBoolean(
                     "requestFlush",
                     new Class<?>[]{String.class},
                     projectId
+            );
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+            return invokeBoolean(
+                    "captureTestReport",
+                    new Class<?>[]{String.class, String.class},
+                    projectId,
+                    detail
             );
         }
 
