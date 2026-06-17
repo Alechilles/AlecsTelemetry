@@ -294,12 +294,19 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
             );
         }
 
+        String configuredReportEndpoint = settings.manualReports().hostedReportIngestEndpoint();
+        boolean explicitReportEndpoint = !TelemetryRuntimeSettings.DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT.equals(configuredReportEndpoint);
         String endpoint = firstNonBlank(
-                settings.manualReports().hostedReportIngestEndpoint(),
+                explicitReportEndpoint ? configuredReportEndpoint : null,
+                reportEndpointFromHostedEndpoint(override == null ? null : override.hosted().eventEndpoint()),
+                reportEndpointFromHostedEndpoint(descriptor.hosted().eventEndpoint()),
+                reportEndpointFromHostedEndpoint(override == null ? null : override.hosted().endpoint()),
+                reportEndpointFromHostedEndpoint(descriptor.hosted().endpoint()),
                 override == null ? null : override.hosted().endpoint(),
                 descriptor.hosted().endpoint(),
                 override == null ? null : override.hosted().eventEndpoint(),
-                descriptor.hosted().eventEndpoint()
+                descriptor.hosted().eventEndpoint(),
+                configuredReportEndpoint
         );
         LinkedHashMap<String, String> headers = new LinkedHashMap<>(mergeHeaders(
                 descriptor.hosted().headers(),
@@ -334,6 +341,24 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
             if (value != null && !value.isBlank()) {
                 return value.trim();
             }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static String reportEndpointFromHostedEndpoint(@Nullable String endpoint) {
+        String normalized = firstNonBlank(endpoint);
+        if (normalized == null) {
+            return null;
+        }
+        if (normalized.endsWith("/ingest/report")) {
+            return normalized;
+        }
+        if (normalized.endsWith("/ingest/event")) {
+            return normalized.substring(0, normalized.length() - "/ingest/event".length()) + "/ingest/report";
+        }
+        if (normalized.endsWith("/ingest/crash")) {
+            return normalized.substring(0, normalized.length() - "/ingest/crash".length()) + "/ingest/report";
         }
         return null;
     }

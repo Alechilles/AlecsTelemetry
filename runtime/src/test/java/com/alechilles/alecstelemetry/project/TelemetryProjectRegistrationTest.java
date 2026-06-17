@@ -80,6 +80,78 @@ class TelemetryProjectRegistrationTest {
     }
 
     @Test
+    void reportTargetDerivesFromHostedEventEndpoint() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "hosted-mod",
+                  "displayName": "Hosted Mod",
+                  "ownerPluginIdentifiers": ["Example:Hosted Mod"],
+                  "packagePrefixes": ["com.example.hosted"],
+                  "hosted": {
+                    "eventEndpoint": "https://telemetry-dev.example.com/ingest/event",
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Hosted Mod",
+                "1.0.0",
+                null
+        );
+
+        var target = registration.resolveReportDeliveryTarget(TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null));
+
+        assertNotNull(target);
+        assertEquals("https://telemetry-dev.example.com/ingest/report", target.endpoint());
+        assertEquals("public-key", target.headers().get(TelemetryProjectDescriptor.PROJECT_KEY_HEADER));
+    }
+
+    @Test
+    void explicitRuntimeReportEndpointOverridesDerivedHostedEndpoint() throws Exception {
+        Path settingsFile = tempDir.resolve("explicit-runtime.json");
+        java.nio.file.Files.writeString(
+                settingsFile,
+                """
+                {
+                  "manualReports": {
+                    "hostedReportIngestEndpoint": "https://reports.example.com/custom-report"
+                  }
+                }
+                """
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "hosted-mod",
+                  "displayName": "Hosted Mod",
+                  "ownerPluginIdentifiers": ["Example:Hosted Mod"],
+                  "packagePrefixes": ["com.example.hosted"],
+                  "hosted": {
+                    "eventEndpoint": "https://telemetry-dev.example.com/ingest/event",
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Hosted Mod",
+                "1.0.0",
+                null
+        );
+
+        var target = registration.resolveReportDeliveryTarget(TelemetryRuntimeSettings.load(settingsFile, null));
+
+        assertNotNull(target);
+        assertEquals("https://reports.example.com/custom-report", target.endpoint());
+    }
+
+    @Test
     void consentSnapshotReflectsDescriptorDefaults() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
