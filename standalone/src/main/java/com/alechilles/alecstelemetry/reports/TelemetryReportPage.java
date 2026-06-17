@@ -173,7 +173,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         player.getPageManager().openCustomPage(
                 ref,
                 store,
-                new TelemetryReportReceiptPage(playerRef, envelope, status)
+                new TelemetryReportReceiptPage(playerRef, runtimeService, envelope, status)
         );
     }
 

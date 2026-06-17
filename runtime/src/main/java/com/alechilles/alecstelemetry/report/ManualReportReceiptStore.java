@@ -12,6 +12,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Local player receipt history for submitted manual reports.
@@ -63,6 +64,44 @@ public final class ManualReportReceiptStore {
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    @Nonnull
+    public Optional<Receipt> findReceipt(@Nonnull Path file, @Nonnull String reportId) {
+        String normalizedReportId = normalizeNonBlank(reportId, "");
+        if (normalizedReportId.isBlank()) {
+            return Optional.empty();
+        }
+        for (Receipt receipt : loadAll(file)) {
+            if (normalizedReportId.equals(receipt.reportId())) {
+                return Optional.of(receipt);
+            }
+        }
+        return Optional.empty();
+    }
+
+    public boolean updateStatus(@Nonnull Path file,
+                                @Nonnull String reportId,
+                                @Nonnull String status,
+                                @Nullable String checkedAtUtc) {
+        Optional<Receipt> existing = findReceipt(file, reportId);
+        if (existing.isEmpty()) {
+            return false;
+        }
+        Receipt receipt = existing.get();
+        return saveReceipt(
+                file,
+                new Receipt(
+                        receipt.reportId(),
+                        receipt.projectId(),
+                        receipt.reportKind(),
+                        receipt.title(),
+                        receipt.submittedAtUtc(),
+                        receipt.followUpToken(),
+                        status,
+                        checkedAtUtc
+                )
+        );
     }
 
     @Nonnull

@@ -26,6 +26,7 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
@@ -655,6 +656,13 @@ public final class TelemetryCoreEngine {
     }
 
     @Nonnull
+    public String manualReportReceiptStatus(@Nonnull String reportId) {
+        return manualReportReceiptStore.findReceipt(dataPaths.manualReportReceiptsFile(), reportId)
+                .map(ManualReportReceiptStore.Receipt::lastKnownStatus)
+                .orElse("queued");
+    }
+
+    @Nonnull
     public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
         ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
         for (TelemetryProjectRegistration project : manualReportProjects) {
@@ -841,15 +849,18 @@ public final class TelemetryCoreEngine {
                     ManualReportStore manualStore = manualReportStoreFor(project);
                     for (ManualReportStore.PendingReport pending : manualStore.listPendingReports(project.projectId(), settings.maxUploadsPerFlush())) {
                         attempted++;
+                        ManualReportEnvelope envelope = parseManualReport(pending.payload());
                         CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
                         if (uploadResult.success()) {
                             if (manualStore.delete(pending.path())) {
                                 uploaded++;
+                                updateManualReportReceiptStatus(envelope, "uploaded");
                                 appendManualReportAudit(manualStore, pending.payload(), true);
                             } else {
                                 lastFailure = "Uploaded but failed to remove local manual report file " + pending.path().getFileName();
                             }
                         } else {
+                            updateManualReportReceiptStatus(envelope, "upload_failed");
                             lastFailure = uploadResult.detail() == null
                                     ? "HTTP status " + uploadResult.statusCode()
                                     : uploadResult.detail();
@@ -1132,6 +1143,19 @@ public final class TelemetryCoreEngine {
         } catch (Exception ignored) {
             // Malformed local payloads should not break the rest of the flush pass.
         }
+    }
+
+    private void updateManualReportReceiptStatus(@Nullable ManualReportEnvelope envelope,
+                                                 @Nonnull String status) {
+        if (envelope == null) {
+            return;
+        }
+        manualReportReceiptStore.updateStatus(
+                dataPaths.manualReportReceiptsFile(),
+                envelope.reportId(),
+                status,
+                Instant.now().toString()
+        );
     }
 
     @Nullable

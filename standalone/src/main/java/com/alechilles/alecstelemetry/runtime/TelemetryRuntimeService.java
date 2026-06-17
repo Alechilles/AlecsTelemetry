@@ -423,6 +423,11 @@ public final class TelemetryRuntimeService {
         return engine.pendingReports(projectId);
     }
 
+    @Nonnull
+    public String manualReportReceiptStatus(@Nonnull String reportId) {
+        return engine.manualReportReceiptStatus(reportId);
+    }
+
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         return engine.findProject(projectId);

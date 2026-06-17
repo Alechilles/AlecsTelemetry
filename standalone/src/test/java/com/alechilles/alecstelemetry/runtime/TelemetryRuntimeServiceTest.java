@@ -294,7 +294,8 @@ class TelemetryRuntimeServiceTest {
                 .loadAll(dataPaths.manualReportReceiptsFile());
         assertEquals(1, receipts.size());
         assertEquals(result.envelope().reportId(), receipts.getFirst().reportId());
-        assertEquals("queued", receipts.getFirst().lastKnownStatus());
+        assertEquals("uploaded", receipts.getFirst().lastKnownStatus());
+        assertEquals("uploaded", service.manualReportReceiptStatus(result.envelope().reportId()));
         assertTrue(receipts.getFirst().followUpToken().length() > 10);
     }
 
@@ -318,6 +319,7 @@ class TelemetryRuntimeServiceTest {
         assertEquals(1, summary.pendingAfter());
         assertEquals("server error", summary.lastFailure());
         assertEquals(1, fileCount(dataPaths.pendingManualReportsDirectory("example-mod")));
+        assertEquals("upload_failed", service.manualReportReceiptStatus(result.envelope().reportId()));
     }
 
     @Test

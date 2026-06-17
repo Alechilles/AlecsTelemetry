@@ -31,6 +31,7 @@ $C.@PageOverlay {
       Group { FlexWeight: 1; }
 
       Group { Anchor: (Height: 42); LayoutMode: Right;
+        $C.@SmallSecondaryTextButton #TelemetryReportReceiptRefresh { @Sounds = $C.@ButtonSounds; @Text = "Refresh"; @Anchor = (MinWidth: 96); }
         $C.@SmallSecondaryTextButton #TelemetryReportReceiptClose { @Sounds = $C.@ButtonSounds; @Text = "Close"; @Anchor = (MinWidth: 96); }
       }
     }

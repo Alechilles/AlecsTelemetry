@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.reports;
 
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -26,14 +27,18 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
 
     private static final String KEY_ACTION = "Action";
     private static final String ACTION_CLOSE = "close";
+    private static final String ACTION_REFRESH = "refresh";
 
+    private final TelemetryRuntimeService runtimeService;
     private final ManualReportEnvelope envelope;
     private final String status;
 
     public TelemetryReportReceiptPage(@Nonnull PlayerRef playerRef,
+                                      @Nonnull TelemetryRuntimeService runtimeService,
                                       @Nonnull ManualReportEnvelope envelope,
                                       @Nonnull String status) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, ReceiptEventData.CODEC);
+        this.runtimeService = runtimeService;
         this.envelope = envelope;
         this.status = status;
     }
@@ -44,10 +49,32 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
                       @Nonnull UIEventBuilder events,
                       @Nonnull Store<EntityStore> store) {
         commands.append(UI_PATH);
+        render(commands);
+        bindEvents(events);
+    }
+
+    private void refreshUi() {
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+        render(commands);
+        bindEvents(events);
+        sendUpdate(commands, events, false);
+    }
+
+    private void render(@Nonnull UICommandBuilder commands) {
         commands.set("#TelemetryReportReceiptProject.Text", envelope.projectDisplayName());
         commands.set("#TelemetryReportReceiptKind.Text", envelope.reportKind());
-        commands.set("#TelemetryReportReceiptStatus.Text", status);
+        commands.set("#TelemetryReportReceiptStatus.Text", displayStatus());
         commands.set("#TelemetryReportReceiptId.Text", envelope.reportId());
+    }
+
+    private void bindEvents(@Nonnull UIEventBuilder events) {
+        events.addEventBinding(
+                CustomUIEventBindingType.Activating,
+                "#TelemetryReportReceiptRefresh",
+                EventData.of(KEY_ACTION, ACTION_REFRESH),
+                false
+        );
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryReportReceiptClose",
@@ -60,9 +87,26 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
     public void handleDataEvent(@Nonnull Ref<EntityStore> ref,
                                 @Nonnull Store<EntityStore> store,
                                 @Nonnull ReceiptEventData data) {
-        if (ACTION_CLOSE.equals(data.action)) {
-            close();
+        switch (data.action) {
+            case ACTION_REFRESH -> {
+                runtimeService.triggerFlushAsync(envelope.projectId());
+                refreshUi();
+            }
+            case ACTION_CLOSE -> close();
+            default -> {
+            }
         }
+    }
+
+    @Nonnull
+    private String displayStatus() {
+        String storedStatus = runtimeService.manualReportReceiptStatus(envelope.reportId());
+        return switch (storedStatus) {
+            case "uploaded" -> "Uploaded";
+            case "review" -> "Waiting for server owner review";
+            case "upload_failed" -> "Upload failed; queued for retry";
+            default -> status;
+        };
     }
 
     public static final class ReceiptEventData {
