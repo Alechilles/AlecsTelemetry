@@ -145,6 +145,7 @@ public final class TelemetryCoreEngine {
         if (scheduledFuture != null) {
             scheduledFuture.cancel(false);
         }
+        flushPendingOnShutdown();
         uninstallUncaughtExceptionHandler();
         started.set(false);
     }
@@ -1043,6 +1044,19 @@ public final class TelemetryCoreEngine {
             flushInProgress.set(false);
             logWarning("Crash telemetry flush scheduling failed.", ex);
             return false;
+        }
+    }
+
+    private void flushPendingOnShutdown() {
+        if (!enabled.get()
+                || (projects.isEmpty() && manualReportProjects.isEmpty())) {
+            return;
+        }
+        flushInProgress.set(true);
+        try {
+            flushPendingReportsNow("shutdown", null);
+        } finally {
+            flushInProgress.set(false);
         }
     }
 

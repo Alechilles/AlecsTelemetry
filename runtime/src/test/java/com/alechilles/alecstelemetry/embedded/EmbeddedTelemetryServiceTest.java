@@ -16,6 +16,11 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -199,6 +204,50 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void shutdownFlushesQueuedStatsHeartbeatWhenAsyncFlushHasNotRun() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptorWithStats(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        QueuedScheduledExecutor executor = new QueuedScheduledExecutor();
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                executor,
+                new EmbeddedTelemetryPlayerCounter()
+        );
+
+        service.emitStatsHeartbeatNow();
+
+        assertEquals(1, service.pendingReports());
+        assertEquals(1, executor.queuedTasks());
+        assertEquals(0, client.calls);
+
+        service.shutdown();
+
+        assertEquals(1, client.calls);
+        assertEquals(0, service.pendingReports());
+    }
+
+    @Test
     void embeddedProjectEnabledControlPersistsAndBlocksCaptureImmediately() throws Exception {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -355,5 +404,74 @@ class EmbeddedTelemetryServiceTest {
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
         }
+    }
+
+    private static final class QueuedScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
+        private final Queue<Runnable> tasks = new ArrayDeque<>();
+        private boolean shutdown;
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            shutdown = true;
+            List<Runnable> pending = List.copyOf(tasks);
+            tasks.clear();
+            return pending;
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return shutdown && tasks.isEmpty();
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return isTerminated();
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            tasks.add(command);
+        }
+
+        int queuedTasks() {
+            return tasks.size();
+        }
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
+                                                      long initialDelay,
+                                                      long period,
+                                                      TimeUnit unit) {
+            throw new UnsupportedOperationException("scheduleAtFixedRate");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command,
+                                                         long initialDelay,
+                                                         long delay,
+                                                         TimeUnit unit) {
+            throw new UnsupportedOperationException("scheduleWithFixedDelay");
+        }
+
     }
 }
