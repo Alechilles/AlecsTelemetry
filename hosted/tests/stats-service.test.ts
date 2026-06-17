@@ -78,4 +78,19 @@ describe('StatsService', () => {
     expect(result.storedObservation).toBe(false)
     expect(append).not.toHaveBeenCalled()
   })
+
+  it('ignores custom stats chart samples without writing observations', async () => {
+    const append = vi.fn()
+    const service = new StatsService({ append, readAll: vi.fn() })
+
+    const result = await service.acceptEvent(event({
+      eventName: 'chart_sample',
+      entryPoint: 'custom_chart',
+      details: { chartId: 'language', value: 'English' },
+    }), 'unknown')
+
+    expect(result.accepted).toBe(true)
+    expect(result.storedObservation).toBe(false)
+    expect(append).not.toHaveBeenCalled()
+  })
 })

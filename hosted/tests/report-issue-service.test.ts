@@ -16,7 +16,6 @@ const project: HostedProjectConfig = {
   duplicateAlertWindowSeconds: 300,
   stats: {
     public: false,
-    charts: [],
   },
 }
 

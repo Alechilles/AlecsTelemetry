@@ -156,6 +156,49 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void embeddedStatsHeartbeatQueuesStandardStatsEvent() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptorWithStats(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
+        playerCounter.markReady(UUID.randomUUID());
+        playerCounter.markReady(UUID.randomUUID());
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null,
+                playerCounter
+        );
+
+        service.emitStatsHeartbeatNow();
+
+        assertEquals(1, service.flushPendingReportsNow("embedded-stats-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+        assertEquals(2, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+    }
+
+    @Test
     void embeddedProjectEnabledControlPersistsAndBlocksCaptureImmediately() throws Exception {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -254,6 +297,31 @@ class EmbeddedTelemetryServiceTest {
                   "customEndpoint": {
                     "url": "https://example.invalid/telemetry",
                     "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """,
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor descriptorWithStats() {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Example:Embedded Mod"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  },
+                  "stats": {
+                    "enabled": true
                   }
                 }
                 """,

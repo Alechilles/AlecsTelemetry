@@ -41,7 +41,6 @@ describe('hosted server', () => {
       },
       stats: {
         public: false,
-        charts: [],
       },
     }
     const ingestService = new TelemetryIngestService(
@@ -93,7 +92,6 @@ describe('hosted server', () => {
       },
       stats: {
         public: false,
-        charts: [],
       },
     }
     const registry = HostedProjectRegistry.fromProjects([project])

@@ -112,7 +112,7 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
-    void parsesStatsOptionsSeparatelyFromUsageOptions() {
+    void statsEnabledAllowsStandardHeartbeatWithoutCustomEvents() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
                 {
@@ -124,7 +124,6 @@ class TelemetryProjectDescriptorTest {
                   },
                   "stats": {
                     "enabled": true,
-                    "allowedEvents": ["heartbeat", "chart_sample"],
                     "details": {
                       "heartbeat": {
                         "allowedFields": {
@@ -143,7 +142,7 @@ class TelemetryProjectDescriptorTest {
         assertTrue(!descriptor.usage().allows("settings_page_opened"));
         assertTrue(descriptor.stats().enabled());
         assertTrue(descriptor.stats().allows("heartbeat"));
-        assertTrue(descriptor.stats().allows("chart_sample"));
+        assertTrue(!descriptor.stats().allows("chart_sample"));
         assertEquals(4, descriptor.stats().sanitizeDetails(
                 "heartbeat",
                 java.util.Map.of("playersOnline", 4, "hytaleVersion", "update-6", "ignored", true)

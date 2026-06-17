@@ -128,8 +128,8 @@ Need something more custom than the default hosted dependency-mode flow?
   lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
   `usage` events with typed `TelemetryEventContext` fields.
 - Stats are a separate consent category from usage. Runtime heartbeats use
-  `eventType: "stats"` and custom charts can be emitted with
-  `recordSimpleStatChart` or `recordNumericStatChart`.
+  `eventType: "stats"` and are controlled by the project descriptor's
+  `stats.enabled` toggle.
 - Admin commands are available for inspection and manual testing:
   `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`,
   `/telemetry flush [project-id]`, `/telemetry test <project-id> [detail]`

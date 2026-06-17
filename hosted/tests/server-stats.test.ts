@@ -74,7 +74,7 @@ describe('hosted stats server routes', () => {
       rateLimitPerMinute: 60,
       maxPayloadBytes: 262_144,
       duplicateAlertWindowSeconds: 0,
-      stats: { public: true, slug: 'example-mod', charts: [] },
+      stats: { public: true, slug: 'example-mod' },
     }
     const registry = HostedProjectRegistry.fromProjects([project])
     const statsService = new StatsService(new StatsEventLog(join(dir, 'stats.jsonl')))

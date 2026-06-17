@@ -110,14 +110,13 @@ project's telemetry.
 Supported stats event names:
 
 - `heartbeat`
-  - emitted by the standalone runtime every 5 minutes
+  - emitted by standalone and embedded runtimes every 5 minutes
   - includes `details.playersOnline` as a non-negative integer
   - derives plugin version, Hytale build, Java version, OS, architecture, loaded
     mods, server id, and session id from the normal event runtime metadata
-- `chart_sample`
-  - emitted by custom chart helpers such as `recordSimpleStatChart`
-  - includes `details.chartId`
-  - includes `details.value` as a string, number, or boolean
+
+Custom stats events are intentionally not stored yet. Stats reporting is a
+project-level on/off toggle for the standard heartbeat fields.
 
 The hosted public stats API must not expose raw `serverId`, `sessionId`, IP
 addresses, player names, chat, coordinates, secrets, or unsanitized config data.

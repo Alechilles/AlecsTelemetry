@@ -125,16 +125,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
     }
   },
   "stats": {
-    "enabled": true,
-    "allowedEvents": ["heartbeat", "chart_sample"],
-    "details": {
-      "chart_sample": {
-        "allowedFields": {
-          "chartId": { "type": "string", "maxLength": 80 },
-          "value": { "type": "string", "maxLength": 120 }
-        }
-      }
-    }
+    "enabled": true
   },
   "ui": {
     "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
@@ -221,18 +212,14 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 
 - `enabled`
   - controls anonymous public stats separately from feature usage telemetry
-- `allowedEvents`
-  - stats event names that this descriptor permits
-  - use `heartbeat` for runtime server/player observations
-  - use `chart_sample` for custom chart helper submissions
 - `details`
-  - optional per-event allowlist for custom stats fields
+  - optional heartbeat detail allowlist for future standard stats fields
 
-Core stats fields are always sanitized by the runtime when their event is allowed:
+Stats are intentionally not customizable yet. When `stats.enabled` is true, the
+runtime can emit the standard `heartbeat` stats event. Core stats fields are
+always sanitized by the runtime:
 
 - `heartbeat.details.playersOnline`
-- `chart_sample.details.chartId`
-- `chart_sample.details.value`
 
 Example:
 
@@ -240,12 +227,10 @@ Example:
 {
   "stats": {
     "enabled": true,
-    "allowedEvents": ["heartbeat", "chart_sample"],
     "details": {
-      "chart_sample": {
+      "heartbeat": {
         "allowedFields": {
-          "chartId": { "type": "string", "maxLength": 80 },
-          "value": { "type": "string", "maxLength": 120 }
+          "hytaleVersion": { "type": "string", "maxLength": 24 }
         }
       }
     }

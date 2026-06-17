@@ -33,7 +33,7 @@ export class StatsService {
   constructor(private readonly log: Pick<StatsEventLog, 'append' | 'readAll'>) {}
 
   async acceptEvent(event: TelemetryEventEnvelope, countryCode: string | null): Promise<StatsAcceptResult> {
-    if (event.eventType !== 'stats' || (event.eventName !== 'heartbeat' && event.eventName !== 'chart_sample')) {
+    if (event.eventType !== 'stats' || event.eventName !== 'heartbeat') {
       return { accepted: true, storedObservation: false }
     }
 

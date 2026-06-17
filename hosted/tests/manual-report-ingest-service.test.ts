@@ -42,7 +42,6 @@ function createProject(overrides: Partial<HostedProjectConfig> = {}): HostedProj
     },
     stats: {
       public: false,
-      charts: [],
     },
   }
   return {

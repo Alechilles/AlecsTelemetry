@@ -67,8 +67,7 @@ class TelemetryStatsHeartbeatServiceTest {
                     "eventUrl": "https://example.invalid/telemetry/event"
                   },
                   "stats": {
-                    "enabled": true,
-                    "allowedEvents": ["heartbeat"]
+                    "enabled": true
                   }
                 }
                 """,
@@ -107,7 +106,7 @@ class TelemetryStatsHeartbeatServiceTest {
     }
 
     @Test
-    void simpleChartHelperQueuesChartSampleStatsEvent() {
+    void projectHandleDoesNotQueueCustomChartSamples() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
                 tempDir,
@@ -133,8 +132,7 @@ class TelemetryStatsHeartbeatServiceTest {
                     "eventUrl": "https://example.invalid/telemetry/event"
                   },
                   "stats": {
-                    "enabled": true,
-                    "allowedEvents": ["chart_sample"]
+                    "enabled": true
                   }
                 }
                 """,
@@ -158,14 +156,19 @@ class TelemetryStatsHeartbeatServiceTest {
         );
 
         TelemetryProjectHandle handle = runtimeService.api().findProject("example-mod");
-        handle.recordSimpleStatChart("language", "English");
+        handle.recordStatsWithContext(
+                "chart_sample",
+                com.alechilles.alecstelemetry.api.TelemetryEventContext.stats()
+                        .featureKey("stats")
+                        .entryPoint("custom_chart")
+                        .runtimeSide("server")
+                        .detail("chartId", "language")
+                        .detail("value", "English")
+                        .build()
+        );
 
-        assertEquals(1, runtimeService.flushPendingReportsNow("test-chart-sample").attempted());
-        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
-        assertEquals("stats", payload.get("eventType").getAsString());
-        assertEquals("chart_sample", payload.get("eventName").getAsString());
-        assertEquals("language", payload.getAsJsonObject("details").get("chartId").getAsString());
-        assertEquals("English", payload.getAsJsonObject("details").get("value").getAsString());
+        assertEquals(0, runtimeService.flushPendingReportsNow("test-chart-sample").attempted());
+        assertEquals(0, client.payloads.size());
     }
 
     private static final class CapturingClient implements CrashReportClient {

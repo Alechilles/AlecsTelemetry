@@ -29,7 +29,7 @@ describe('StatsApi', () => {
       projectId: 'example-mod',
       displayName: 'Example Mod',
       publicProjectKey: 'key',
-      stats: { public: true, slug: 'example-mod', charts: [] },
+      stats: { public: true, slug: 'example-mod' },
     }])
     const api = new StatsApi(registry, { observations: async () => observations }, Date.parse('2026-06-16T20:15:00.000Z'))
 
@@ -48,7 +48,7 @@ describe('StatsApi', () => {
       projectId: 'example-mod',
       displayName: 'Example Mod',
       publicProjectKey: 'key',
-      stats: { public: false, charts: [] },
+      stats: { public: false },
     }])
     const api = new StatsApi(registry, { observations: async () => observations }, Date.parse('2026-06-16T20:15:00.000Z'))
 

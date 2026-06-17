@@ -43,8 +43,7 @@ class TelemetryStatsHeartbeatServiceTest {
                   "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example"],
                   "stats": {
-                    "enabled": true,
-                    "allowedEvents": ["heartbeat", "chart_sample"]
+                    "enabled": true
                   }
                 }
                 """.formatted(projectId, displayName, displayName),

@@ -17,7 +17,6 @@ const project: HostedProjectConfig = {
   },
   stats: {
     public: false,
-    charts: [],
   },
 }
 

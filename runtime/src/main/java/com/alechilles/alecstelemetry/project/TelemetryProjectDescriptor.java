@@ -672,9 +672,11 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                @Nonnull List<String> allowedEvents,
                                @Nonnull Map<String, DetailRules> details) {
 
+        private static final String EVENT_HEARTBEAT = "heartbeat";
+
         public boolean allows(@Nonnull String eventName) {
             String normalized = normalizeNullable(eventName);
-            return enabled() && normalized != null && allowedEvents().stream().anyMatch(normalized::equalsIgnoreCase);
+            return enabled() && EVENT_HEARTBEAT.equalsIgnoreCase(normalized);
         }
 
         @Nonnull
@@ -684,25 +686,13 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 return sanitized;
             }
             LinkedHashMap<String, Object> withCoreFields = new LinkedHashMap<>(sanitized);
-            if ("heartbeat".equalsIgnoreCase(eventName)) {
+            if (EVENT_HEARTBEAT.equalsIgnoreCase(eventName)) {
                 Object playersOnline = rawDetails.get("playersOnline");
                 if (playersOnline instanceof Number) {
                     withCoreFields.putIfAbsent("playersOnline", playersOnline);
                 }
-            } else if ("chart_sample".equalsIgnoreCase(eventName)) {
-                putCoreChartField(withCoreFields, rawDetails, "chartId");
-                putCoreChartField(withCoreFields, rawDetails, "value");
             }
             return Map.copyOf(withCoreFields);
-        }
-
-        private static void putCoreChartField(@Nonnull Map<String, Object> destination,
-                                              @Nonnull Map<String, Object> rawDetails,
-                                              @Nonnull String key) {
-            Object value = rawDetails.get(key);
-            if (value instanceof String || value instanceof Number || value instanceof Boolean) {
-                destination.putIfAbsent(key, value);
-            }
         }
     }
 

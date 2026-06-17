@@ -13,6 +13,8 @@ import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.common.semver.Semver;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
+import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
+import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 
 import javax.annotation.Nonnull;
@@ -73,6 +75,8 @@ public final class EmbeddedTelemetryBootstrap {
                 pluginVersion,
                 resolvePluginSourcePath(plugin)
         ).withOverride(override);
+        EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
+        registerPlayerCounter(plugin, playerCounter, logger);
         return new EmbeddedTelemetryService(
                 settings,
                 dataPaths,
@@ -80,8 +84,27 @@ public final class EmbeddedTelemetryBootstrap {
                 List.of(new CrashReportEnvelope.LoadedModMetadata(pluginIdentifier, pluginVersion)),
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
-                HytaleServer.SCHEDULED_EXECUTOR
+                HytaleServer.SCHEDULED_EXECUTOR,
+                playerCounter
         );
+    }
+
+    private static void registerPlayerCounter(@Nonnull JavaPlugin plugin,
+                                              @Nonnull EmbeddedTelemetryPlayerCounter playerCounter,
+                                              @Nullable HytaleLogger logger) {
+        if (plugin.getEventRegistry() == null) {
+            return;
+        }
+        try {
+            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, playerCounter::onPlayerReady);
+            plugin.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, playerCounter::onPlayerDisconnect);
+        } catch (RuntimeException ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log(
+                        "Embedded telemetry stats player counter could not register player events."
+                );
+            }
+        }
     }
 
     @Nullable

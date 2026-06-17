@@ -17,8 +17,6 @@ class TelemetryProjectHandleCompatibilityTest {
 
         handle.recordUsage("usage_event", null);
         handle.recordStats("stats_event", null);
-        handle.recordSimpleStatChart("language", "English");
-        handle.recordNumericStatChart("active_npcs", 12);
         handle.recordError("error_event", null, null);
         handle.recordLifecycle("lifecycle_event", 0, true, null);
         handle.recordPerformance("performance_event", 0, null, null);

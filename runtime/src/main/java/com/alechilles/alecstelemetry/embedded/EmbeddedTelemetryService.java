@@ -28,6 +28,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryRuntimeSettings settings;
     private final TelemetryCoreEngine engine;
+    private final EmbeddedTelemetryStatsHeartbeat statsHeartbeat;
     private final HytaleLogger logger;
     private final String disabledReason;
 
@@ -38,11 +39,23 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                              @Nonnull CrashReportClient client,
                              @Nullable HytaleLogger logger,
                              @Nullable ScheduledExecutorService executor) {
+        this(settings, dataPaths, project, loadedMods, client, logger, executor, new EmbeddedTelemetryPlayerCounter());
+    }
+
+    EmbeddedTelemetryService(@Nonnull TelemetryRuntimeSettings settings,
+                             @Nonnull TelemetryDataPaths dataPaths,
+                             @Nonnull TelemetryProjectRegistration project,
+                             @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                             @Nonnull CrashReportClient client,
+                             @Nullable HytaleLogger logger,
+                             @Nullable ScheduledExecutorService executor,
+                             @Nonnull EmbeddedTelemetryPlayerCounter playerCounter) {
         this.project = project;
         this.dataPaths = dataPaths;
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.settings = settings;
         this.engine = new TelemetryCoreEngine(settings, dataPaths, List.of(project), loadedMods, client, logger, executor);
+        this.statsHeartbeat = new EmbeddedTelemetryStatsHeartbeat(project.projectId(), engine, playerCounter, executor, logger);
         this.logger = logger;
         this.disabledReason = null;
     }
@@ -56,6 +69,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         this.overrideStore = null;
         this.settings = null;
         this.engine = null;
+        this.statsHeartbeat = null;
         this.logger = logger;
         this.disabledReason = disabledReason;
         if (logger != null) {
@@ -118,12 +132,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     public void start() {
         if (engine != null) {
             engine.start();
+            statsHeartbeat.start();
         }
     }
 
     @Override
     public void shutdown() {
         if (engine != null) {
+            statsHeartbeat.shutdown();
             engine.shutdown();
         }
     }
@@ -222,6 +238,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
         if (engine != null) {
             engine.recordStatsWithContext(project.projectId(), eventName, context);
+        }
+    }
+
+    void emitStatsHeartbeatNow() {
+        if (statsHeartbeat != null) {
+            statsHeartbeat.emitHeartbeatNow();
         }
     }
 

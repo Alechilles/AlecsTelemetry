@@ -7,7 +7,8 @@ keys.
 ## Default Stats
 
 The standalone runtime emits a `stats` `heartbeat` event for each dependency-mode
-project every 5 minutes. The hosted stats surface derives:
+project every 5 minutes. Embedded telemetry runtimes emit the same heartbeat for
+their owning project. The hosted stats surface derives:
 
 - active servers
 - active players
@@ -35,8 +36,7 @@ In `telemetry/project.json`, opt in with:
 ```json
 {
   "stats": {
-    "enabled": true,
-    "allowedEvents": ["heartbeat", "chart_sample"]
+    "enabled": true
   }
 }
 ```
@@ -51,26 +51,5 @@ The hosted service may use `serverId` internally to compute active and record
 server counts, but public responses should expose only aggregate counts and
 breakdowns.
 
-## Custom Charts
-
-Mods can emit custom chart values through the runtime API:
-
-```java
-TelemetryProjectHandle handle = TelemetryRuntimeLocator.get()
-        .findProject("example-mod");
-
-if (handle != null) {
-    handle.recordSimpleStatChart("language", "English");
-    handle.recordNumericStatChart("active_npcs", 12);
-}
-```
-
-Custom chart samples are sent as:
-
-- `eventType: "stats"`
-- `eventName: "chart_sample"`
-- `details.chartId`
-- `details.value`
-
-Each public custom chart must also be declared in hosted project config before
-the public API exposes it.
+Stats are intentionally not customizable yet. Enabling stats reports the
+standard heartbeat/environment fields only.

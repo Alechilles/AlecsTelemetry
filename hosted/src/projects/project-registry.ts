@@ -7,34 +7,10 @@ const discordTargetSchema = z.object({
   guildId: z.string().min(1).optional(),
 })
 
-const statsChartTypeSchema = z.enum([
-  'simple_pie',
-  'advanced_pie',
-  'drilldown_pie',
-  'single_line',
-  'multi_line',
-  'simple_bar',
-  'advanced_bar',
-])
-
-const statsChartConfigSchema = z.object({
-  chartId: z.string().regex(/^[a-z0-9_:-]{1,80}$/),
-  title: z.string().min(1).max(120),
-  type: statsChartTypeSchema,
-  sourceEvent: z.string().min(1).max(120).default('chart_sample'),
-  valueField: z.string().min(1).max(80).optional(),
-  seriesField: z.string().min(1).max(80).optional(),
-  groupField: z.string().min(1).max(80).optional(),
-  subGroupField: z.string().min(1).max(80).optional(),
-  countField: z.string().min(1).max(80).optional(),
-  position: z.number().int().min(0).max(1000).default(100),
-})
-
 const statsProjectConfigSchema = z.object({
   public: z.boolean().default(false),
   slug: z.string().regex(/^[a-z0-9-]{1,120}$/).optional(),
   description: z.string().max(500).optional(),
-  charts: z.array(statsChartConfigSchema).default([]),
 }).default({})
 
 export const hostedProjectConfigSchema = z.object({
@@ -55,7 +31,6 @@ const hostedProjectRegistrySchema = z.object({
 
 export type HostedProjectConfig = z.infer<typeof hostedProjectConfigSchema>
 export type HostedProjectInput = z.input<typeof hostedProjectConfigSchema>
-export type StatsChartConfig = z.infer<typeof statsChartConfigSchema>
 export type StatsProjectConfig = z.infer<typeof statsProjectConfigSchema>
 
 export class HostedProjectRegistry {
