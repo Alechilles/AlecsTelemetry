@@ -1909,7 +1909,7 @@ git commit -m "Feat: proxy standalone telemetry API to active coordinator"
 In each docs file, replace text equivalent to:
 
 ```markdown
-If a mod declares embedded mode, the standalone runtime ignores that mod.
+If a mod declares embedded mode, the legacy behavior was for standalone to skip that mod.
 ```
 
 with:
@@ -1940,7 +1940,7 @@ The active coordinator handles descriptors from all installed enabled mods, incl
 Run:
 
 ```powershell
-rg -n "standalone runtime ignores|owning mod only|global project registry|local ownership|Default: no shared commands" README.md docs wiki
+rg -n -f docs/verification/telemetry-coordinator-stale-patterns.txt README.md docs wiki
 ```
 
 Expected: no stale statements remain unless they are explicitly marked as historical notes.

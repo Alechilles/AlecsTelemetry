@@ -29,7 +29,18 @@ Embedded mode uses the same `telemetry/project.json` descriptor as dependency mo
 }
 ```
 
-When the standalone runtime scans installed mods, it skips descriptors that declare `runtimeMode: "embedded"`.
+Every installed copy of Alec's Telemetry, standalone or embedded, registers as a runtime coordinator candidate. The latest compatible runtime version wins. Non-winning copies become passive clients and forward telemetry operations to the active coordinator. If standalone is installed but an embedded copy is newer, standalone can still provide commands and UI while the newer embedded runtime owns capture, queueing, and upload.
+
+## Runtime Precedence
+
+Runtime ownership is selected per server process:
+
+1. Only coordinator candidates with the current coordinator protocol are eligible.
+2. The highest telemetry runtime version wins.
+3. If versions match, standalone wins over embedded.
+4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
+
+The active coordinator handles descriptors from all installed enabled mods, including descriptors marked `runtimeMode: "embedded"`. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
 
 ## Minimal Hosted Example
 
@@ -107,13 +118,17 @@ The `*WithContext` helpers accept `TelemetryEventContext` so embedded mods can a
 
 ## Storage Layout
 
-Embedded mode stores telemetry under the owning mod's data directory:
+An embedded owner keeps its local project override files under the owning mod's data directory:
 
 ```text
 <ConsumerModDataDir>/Telemetry/
 ```
 
-This avoids using the standalone runtime's shared storage folder.
+The elected active coordinator stores runtime settings, queues, server identity, and uploads under the shared telemetry coordinator root:
+
+```text
+<HytaleUserData>/Telemetry/
+```
 
 ## Important Rule
 

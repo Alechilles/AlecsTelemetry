@@ -215,7 +215,7 @@ Consumer mods can attach typed context to explicit non-crash events with:
 ## Runtime Mode
 
 - `dependency`: default when omitted. The standalone Alec's Telemetry runtime may discover and manage the project.
-- `embedded`: the owning mod is expected to bootstrap embedded telemetry itself. The standalone runtime skips this project if it sees this mode.
+- `embedded`: the owning mod is expected to bootstrap embedded telemetry itself. The active telemetry coordinator still discovers and handles this project; non-winning embedded or standalone copies forward operations to that coordinator.
 
 ## Destination Fields
 
