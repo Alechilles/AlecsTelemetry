@@ -67,6 +67,23 @@ class CrashReportEnvelopeTest {
         assertTrue(json.getAsJsonObject("environment").has("snapshotKey"));
         assertTrue(json.getAsJsonObject("throwable").has("stack"));
         assertTrue(json.getAsJsonObject("runtime").has("loadedMods"));
+        assertTrue(json.getAsJsonObject("runtime").get("cpuCores").getAsInt() >= 1);
+        assertTrue(json.getAsJsonObject("runtime").has("serverHostingMode"));
+    }
+
+    @Test
+    void runtimeMetadataCapturesParityStatsFields() {
+        String originalHostingMode = System.getProperty("alecs.telemetry.serverHostingMode");
+        try {
+            System.setProperty("alecs.telemetry.serverHostingMode", "local_client");
+
+            CrashReportEnvelope.RuntimeMetadata metadata = CrashReportEnvelope.RuntimeMetadata.capture(List.of());
+
+            assertTrue(metadata.cpuCores() >= 1);
+            assertEquals("local_client", metadata.serverHostingMode());
+        } finally {
+            restoreProperty("alecs.telemetry.serverHostingMode", originalHostingMode);
+        }
     }
 
     @Test

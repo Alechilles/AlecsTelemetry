@@ -112,8 +112,30 @@ Supported stats event names:
 - `heartbeat`
   - emitted by standalone and embedded runtimes every 5 minutes
   - includes `details.playersOnline` as a non-negative integer
-  - derives plugin version, Hytale build, Java version, OS, architecture, loaded
-    mods, server id, and session id from the normal event runtime metadata
+  - derives plugin version, Hytale build, Hytale server version, Java version,
+    Java runtime version, OS name/version, architecture, CPU cores, server
+    hosting mode, loaded mods, server id, and session id from the normal event
+    runtime metadata
+
+The public stats API exposes these standard chart ids:
+
+- `servers`
+- `players`
+- `plugin_version`
+- `hytale_build`
+- `server_version`
+- `java_version`
+- `runtime_version`
+- `operating_system`
+- `os_version`
+- `system_arch`
+- `cpu_cores`
+- `server_location`
+- `server_hosting_mode`
+- `loaded_mods`
+
+`server_hosting_mode` is the Hytale-specific replacement for bStats' Minecraft
+online-mode chart. Values are `local_client`, `dedicated`, or `unknown`.
 
 Custom stats events are intentionally not stored yet. Stats reporting is a
 project-level on/off toggle for the standard heartbeat fields.

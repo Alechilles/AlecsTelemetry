@@ -15,8 +15,12 @@ export interface StatsObservation {
   readonly hytaleBuild: string
   readonly serverVersion: string
   readonly javaVersion: string
+  readonly runtimeVersion: string
   readonly osName: string
+  readonly osVersion: string
   readonly osArch: string
+  readonly cpuCores: number
+  readonly serverHostingMode: 'local_client' | 'dedicated' | 'unknown'
   readonly countryCode: string
   readonly loadedMods: readonly LoadedModSummary[]
   readonly custom: Record<string, string | number | boolean>

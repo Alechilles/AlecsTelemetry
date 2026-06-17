@@ -14,8 +14,10 @@ export const runtimeMetadataSchema = z.object({
   osName: z.string().min(1),
   osVersion: z.string().min(1),
   osArch: z.string().min(1),
+  cpuCores: z.number().int().min(1).default(1),
   hytaleBuild: z.string().min(1),
   serverVersion: z.string().min(1),
+  serverHostingMode: z.enum(['local_client', 'dedicated', 'unknown']).default('unknown'),
   loadedMods: z.array(runtimeLoadedModSchema).default([]),
 })
 

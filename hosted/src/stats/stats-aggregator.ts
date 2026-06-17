@@ -1,4 +1,4 @@
-import type { StatsObservation, StatsSummary } from './stats-model.js'
+import type { StatsLinePoint, StatsObservation, StatsSummary } from './stats-model.js'
 
 export interface CategoryPoint {
   readonly name: string
@@ -47,7 +47,11 @@ export class StatsAggregator {
     const counts = new Map<string, { servers: number; players: number }>()
     for (const observation of this.latestActive(projectId).values()) {
       const raw = observation[field]
-      const name = typeof raw === 'string' && raw.length > 0 ? raw : 'unknown'
+      const name = typeof raw === 'string' && raw.length > 0
+        ? raw
+        : typeof raw === 'number' && Number.isFinite(raw)
+          ? String(raw)
+          : 'unknown'
       const current = counts.get(name) ?? { servers: 0, players: 0 }
       current.servers += 1
       current.players += observation.playersOnline
@@ -56,6 +60,37 @@ export class StatsAggregator {
     return Array.from(counts.entries())
       .map(([name, value]) => ({ name, ...value }))
       .sort((left, right) => right.servers - left.servers || right.players - left.players || left.name.localeCompare(right.name))
+  }
+
+  loadedMods(projectId: string): CategoryPoint[] {
+    const counts = new Map<string, { servers: number; players: number }>()
+    for (const observation of this.latestActive(projectId).values()) {
+      for (const mod of observation.loadedMods) {
+        const name = `${mod.identifier} ${mod.version}`.trim()
+        const current = counts.get(name) ?? { servers: 0, players: 0 }
+        current.servers += 1
+        current.players += observation.playersOnline
+        counts.set(name, current)
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((left, right) => left.name.localeCompare(right.name))
+  }
+
+  series(projectId: string, metric: 'servers' | 'players'): StatsLinePoint[] {
+    const buckets = this.bucketedLatest(projectId)
+    return Array.from(buckets.entries())
+      .sort(([left], [right]) => left - right)
+      .map(([bucket, bucketServers]) => {
+        const values = Array.from(bucketServers.values())
+        return {
+          timestamp: bucket,
+          value: metric === 'servers'
+            ? values.length
+            : values.reduce((sum, item) => sum + item.playersOnline, 0),
+        }
+      })
   }
 
   private latestActive(projectId: string): Map<string, StatsObservation> {
@@ -74,6 +109,18 @@ export class StatsAggregator {
   }
 
   private records(projectId: string): { recordServers: number; recordPlayers: number } {
+    const buckets = this.bucketedLatest(projectId)
+    let recordServers = 0
+    let recordPlayers = 0
+    for (const bucketServers of buckets.values()) {
+      const values = Array.from(bucketServers.values())
+      recordServers = Math.max(recordServers, values.length)
+      recordPlayers = Math.max(recordPlayers, values.reduce((sum, item) => sum + item.playersOnline, 0))
+    }
+    return { recordServers, recordPlayers }
+  }
+
+  private bucketedLatest(projectId: string): Map<number, Map<string, StatsObservation>> {
     const buckets = new Map<number, Map<string, StatsObservation>>()
     for (const observation of this.observations) {
       if (observation.projectId !== projectId) {
@@ -87,13 +134,6 @@ export class StatsAggregator {
       }
       buckets.set(bucket, bucketServers)
     }
-    let recordServers = 0
-    let recordPlayers = 0
-    for (const bucketServers of buckets.values()) {
-      const values = Array.from(bucketServers.values())
-      recordServers = Math.max(recordServers, values.length)
-      recordPlayers = Math.max(recordPlayers, values.reduce((sum, item) => sum + item.playersOnline, 0))
-    }
-    return { recordServers, recordPlayers }
+    return buckets
   }
 }

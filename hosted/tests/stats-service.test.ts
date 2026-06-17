@@ -43,8 +43,10 @@ function event(overrides: Partial<TelemetryEventEnvelope> = {}): TelemetryEventE
       osName: 'Windows 11',
       osVersion: '10.0',
       osArch: 'amd64',
+      cpuCores: 8,
       hytaleBuild: '2026.06.16-test',
       serverVersion: '2026.06.16-test',
+      serverHostingMode: 'local_client',
       loadedMods: [{ identifier: 'example:Example Mod', version: '1.2.3' }],
     },
     ...overrides,
@@ -65,6 +67,10 @@ describe('StatsService', () => {
       playersOnline: 4,
       pluginVersion: '1.2.3',
       countryCode: 'unknown',
+      runtimeVersion: '25+0',
+      osVersion: '10.0',
+      cpuCores: 8,
+      serverHostingMode: 'local_client',
     }))
   })
 

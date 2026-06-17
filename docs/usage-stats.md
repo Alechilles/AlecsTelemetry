@@ -14,12 +14,24 @@ their owning project. The hosted stats surface derives:
 - active players
 - record servers
 - record players
+- server/player history over 30-minute buckets
 - plugin version breakdown
 - Hytale build breakdown
+- Hytale server version breakdown
 - Java version breakdown
+- Java runtime version breakdown
 - operating system breakdown
+- operating system version breakdown
 - system architecture breakdown
+- CPU core count breakdown
+- server location breakdown
+- server hosting mode breakdown (`local_client`, `dedicated`, or `unknown`)
 - loaded mod breakdowns
+
+`serverHostingMode` is the Hytale replacement for Minecraft-specific online mode
+charts. Local client worlds are reported as `local_client` when the Hytale server
+is launched with its singleplayer mode; normal external servers are reported as
+`dedicated`.
 
 The heartbeat interval is fixed at 5 minutes. It is intentionally not exposed in
 runtime settings so servers cannot accidentally or deliberately report at an

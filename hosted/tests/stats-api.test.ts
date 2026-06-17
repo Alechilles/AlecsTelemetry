@@ -16,10 +16,14 @@ const observations: StatsObservation[] = [{
   hytaleBuild: '2026.06.16-test',
   serverVersion: '2026.06.16-test',
   javaVersion: '25',
+  runtimeVersion: '25+0',
   osName: 'Windows 11',
+  osVersion: '10.0',
   osArch: 'amd64',
+  cpuCores: 8,
+  serverHostingMode: 'local_client',
   countryCode: 'unknown',
-  loadedMods: [],
+  loadedMods: [{ identifier: 'example:Dependency', version: '1.0.0' }],
   custom: {},
 }]
 
@@ -56,5 +60,44 @@ describe('StatsApi', () => {
 
     expect(response.status).toBe(404)
     expect(response.body).toMatchObject({ error: 'not_found' })
+  })
+
+  it('returns standard parity chart payloads', async () => {
+    const registry = HostedProjectRegistry.fromProjects([{
+      projectId: 'example-mod',
+      displayName: 'Example Mod',
+      publicProjectKey: 'key',
+      stats: { public: true, slug: 'example-mod' },
+    }])
+    const api = new StatsApi(registry, { observations: async () => observations }, Date.parse('2026-06-16T20:15:00.000Z'))
+
+    await expect(api.handle('GET', '/api/v1/projects/example-mod/charts/servers')).resolves.toMatchObject({
+      status: 200,
+      body: { chartId: 'servers', type: 'line' },
+    })
+    await expect(api.handle('GET', '/api/v1/projects/example-mod/charts/server_hosting_mode')).resolves.toMatchObject({
+      status: 200,
+      body: {
+        chartId: 'server_hosting_mode',
+        type: 'simple_pie',
+        data: [{ name: 'local_client', servers: 1, players: 5 }],
+      },
+    })
+    await expect(api.handle('GET', '/api/v1/projects/example-mod/charts/cpu_cores')).resolves.toMatchObject({
+      status: 200,
+      body: {
+        chartId: 'cpu_cores',
+        type: 'simple_pie',
+        data: [{ name: '8', servers: 1, players: 5 }],
+      },
+    })
+    await expect(api.handle('GET', '/api/v1/projects/example-mod/charts/loaded_mods')).resolves.toMatchObject({
+      status: 200,
+      body: {
+        chartId: 'loaded_mods',
+        type: 'simple_pie',
+        data: [{ name: 'example:Dependency 1.0.0', servers: 1, players: 5 }],
+      },
+    })
   })
 })

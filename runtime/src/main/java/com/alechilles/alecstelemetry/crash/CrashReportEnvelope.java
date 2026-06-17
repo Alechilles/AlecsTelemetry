@@ -432,8 +432,10 @@ public record CrashReportEnvelope(int schemaVersion,
                                   @Nonnull String osName,
                                   @Nonnull String osVersion,
                                   @Nonnull String osArch,
+                                  int cpuCores,
                                   @Nonnull String hytaleBuild,
                                   @Nonnull String serverVersion,
+                                  @Nonnull String serverHostingMode,
                                   @Nonnull List<LoadedModMetadata> loadedMods) {
 
         @Nonnull
@@ -444,6 +446,7 @@ public record CrashReportEnvelope(int schemaVersion,
                     systemProperty("os.name"),
                     systemProperty("os.version"),
                     systemProperty("os.arch"),
+                    Math.max(1, Runtime.getRuntime().availableProcessors()),
                     firstNonBlank(
                             systemProperty("hytale.build"),
                             systemProperty("hytale.build.id"),
@@ -458,6 +461,7 @@ public record CrashReportEnvelope(int schemaVersion,
                             hytaleManifestVersion(),
                             "unknown"
                     ),
+                    detectServerHostingMode(),
                     normalizeLoadedMods(loadedMods)
             );
         }
@@ -470,8 +474,10 @@ public record CrashReportEnvelope(int schemaVersion,
                     normalizeNonBlank(osName(), "unknown"),
                     normalizeNonBlank(osVersion(), "unknown"),
                     normalizeNonBlank(osArch(), "unknown"),
+                    Math.max(1, cpuCores()),
                     normalizeNonBlank(hytaleBuild(), "unknown"),
                     normalizeNonBlank(serverVersion(), "unknown"),
+                    normalizeHostingMode(serverHostingMode()),
                     normalizeLoadedMods(loadedMods())
             );
         }
@@ -567,6 +573,51 @@ public record CrashReportEnvelope(int schemaVersion,
                 return "";
             }
             return value.trim();
+        }
+
+        @Nonnull
+        private static String detectServerHostingMode() {
+            String configured = normalizeHostingMode(systemProperty("alecs.telemetry.serverHostingMode"));
+            if (!"unknown".equals(configured)) {
+                return configured;
+            }
+            if (hytaleSingleplayerOptionSet()) {
+                return "local_client";
+            }
+            String command = systemProperty("sun.java.command").toLowerCase(Locale.ROOT);
+            if (command.contains("--singleplayer")) {
+                return "local_client";
+            }
+            return "dedicated";
+        }
+
+        private static boolean hytaleSingleplayerOptionSet() {
+            try {
+                Class<?> optionsClass = Class.forName("com.hypixel.hytale.server.core.Options");
+                Object optionSet = optionsClass.getMethod("getOptionSet").invoke(null);
+                Object singleplayer = optionsClass.getField("SINGLEPLAYER").get(null);
+                if (optionSet == null || singleplayer == null) {
+                    return false;
+                }
+                return (boolean) optionSet.getClass().getMethod("has", Class.forName("joptsimple.OptionSpec")).invoke(optionSet, singleplayer);
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+
+        @Nonnull
+        private static String normalizeHostingMode(@Nullable String value) {
+            String normalized = normalizeNullable(value);
+            if (normalized == null) {
+                return "unknown";
+            }
+            String compact = normalized.toLowerCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
+            return switch (compact) {
+                case "local", "client", "local_client", "singleplayer", "single_player", "integrated", "integrated_server" -> "local_client";
+                case "dedicated", "real", "server", "remote", "multiplayer" -> "dedicated";
+                case "unknown" -> "unknown";
+                default -> "unknown";
+            };
         }
     }
 

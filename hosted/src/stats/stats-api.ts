@@ -1,6 +1,7 @@
 import type { HostedProjectRegistry } from '../projects/project-registry.js'
 import { StatsAggregator } from './stats-aggregator.js'
 import type { StatsService } from './stats-service.js'
+import type { StatsObservation } from './stats-model.js'
 
 export interface StatsApiResponse {
   readonly status: number
@@ -9,6 +10,20 @@ export interface StatsApiResponse {
 
 function pathParts(url: string): string[] {
   return url.split('?')[0]?.split('/').filter(Boolean) ?? []
+}
+
+const categoryCharts: Record<string, keyof StatsObservation> = {
+  plugin_version: 'pluginVersion',
+  hytale_build: 'hytaleBuild',
+  server_version: 'serverVersion',
+  java_version: 'javaVersion',
+  runtime_version: 'runtimeVersion',
+  operating_system: 'osName',
+  os_version: 'osVersion',
+  system_arch: 'osArch',
+  cpu_cores: 'cpuCores',
+  server_location: 'countryCode',
+  server_hosting_mode: 'serverHostingMode',
 }
 
 export class StatsApi {
@@ -52,13 +67,38 @@ export class StatsApi {
       return { status: 200, body: aggregator.summary(project.projectId) }
     }
 
-    if (parts[4] === 'charts' && parts[5] === 'plugin_version') {
+    if (parts[4] === 'charts') {
+      const chartId = parts[5]
+      if (chartId === 'servers' || chartId === 'players') {
+        return {
+          status: 200,
+          body: {
+            chartId,
+            type: 'line',
+            data: aggregator.series(project.projectId, chartId),
+          },
+        }
+      }
+      if (chartId === 'loaded_mods') {
+        return {
+          status: 200,
+          body: {
+            chartId,
+            type: 'simple_pie',
+            data: aggregator.loadedMods(project.projectId),
+          },
+        }
+      }
+      const field = chartId ? categoryCharts[chartId] : undefined
+      if (!field) {
+        return { status: 404, body: { error: 'not_found' } }
+      }
       return {
         status: 200,
         body: {
-          chartId: 'plugin_version',
+          chartId,
           type: 'simple_pie',
-          data: aggregator.category(project.projectId, 'pluginVersion'),
+          data: aggregator.category(project.projectId, field),
         },
       }
     }
