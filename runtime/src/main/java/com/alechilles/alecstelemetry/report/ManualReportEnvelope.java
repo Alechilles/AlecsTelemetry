@@ -148,14 +148,11 @@ public record ManualReportEnvelope(int schemaVersion,
             errors.add("report_kind_disabled:" + submission.kind().key());
         }
 
-        String title = truncate(normalizeNonBlank(submission.title(), ""), 120);
-        if (title.isBlank()) {
-            errors.add("title_required");
-        }
-        String description = truncate(normalizeNonBlank(submission.description(), ""), 4000);
-        if (description.isBlank()) {
-            errors.add("description_required");
-        }
+        String title = truncate(
+                ManualReportInputSanitizer.sanitizeText(submission.title(), fallbackTitle(submission.kind())),
+                120
+        );
+        String description = truncate(ManualReportInputSanitizer.sanitizeText(submission.description(), ""), 4000);
 
         Map<String, Object> formValues = sanitizeFormValues(form, submission.formValues(), errors);
         if (!errors.isEmpty()) {
@@ -280,7 +277,7 @@ public record ManualReportEnvelope(int schemaVersion,
         if (!(rawValue instanceof CharSequence text)) {
             return null;
         }
-        String normalized = normalizeNullable(text.toString());
+        String normalized = ManualReportInputSanitizer.sanitizeText(text.toString());
         if (normalized == null) {
             return null;
         }
@@ -291,11 +288,16 @@ public record ManualReportEnvelope(int schemaVersion,
     private static Contact contact(@Nonnull TelemetryProjectDescriptor.ManualReportOptions reportOptions,
                                    @Nonnull TelemetryRuntimeSettings settings,
                                    @Nullable String rawContact) {
-        String normalized = normalizeNullable(rawContact);
+        String normalized = ManualReportInputSanitizer.sanitizeText(rawContact);
         if (normalized == null || !settings.manualReports().allowContact() || !reportOptions.contact().enabled()) {
             return new Contact(false, null);
         }
         return new Contact(true, truncate(normalized, reportOptions.contact().maxLength()));
+    }
+
+    @Nonnull
+    private static String fallbackTitle(@Nonnull ManualReportKind kind) {
+        return kind == ManualReportKind.SUGGESTION ? "Untitled suggestion report" : "Untitled issue report";
     }
 
     @Nullable

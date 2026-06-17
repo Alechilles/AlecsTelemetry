@@ -52,7 +52,7 @@ flowchart TD
 
 **Intent:** Fix the current `#TelemetryReportTitle.Value`/selector-literal leak and make submitted form values visible in the payload before changing portal workflow.
 
-- [ ] Add focused tests for selector literal rejection and title fallback.
+- [x] Add focused tests for selector literal rejection and title fallback.
 
   Create or update:
 
@@ -67,7 +67,7 @@ flowchart TD
   assertThat(sanitized.formValues()).doesNotContainValue("#TelemetryReportFieldValue.Value");
   ```
 
-- [ ] Add a small report input sanitizer instead of spreading selector checks through UI code.
+- [x] Add a small report input sanitizer instead of spreading selector checks through UI code.
 
   Add:
 
@@ -82,7 +82,7 @@ flowchart TD
   - Apply the sanitizer before writing `ManualReportEnvelope`.
   - Use `Untitled issue report` and `Untitled suggestion report` only when the title is empty after sanitizing.
 
-- [ ] Fix the Hytale UI event binding so real text field values are posted.
+- [x] Fix the Hytale UI event binding so real text field values are posted.
 
   Modify:
 
@@ -101,7 +101,7 @@ flowchart TD
   - Keep the sanitizer as a defensive guard so a future UI binding regression cannot pollute stored reports.
   - Verify title, description, contact, and dynamic schema fields with in-game manual submission.
 
-- [ ] Add or update a hosted ingest test that rejects selector literals in persisted reports.
+- [x] Add or update a hosted ingest test that rejects selector literals in persisted reports.
 
   Modify:
 
@@ -163,7 +163,7 @@ flowchart TD
   - This class can continue scanning installed mod folders for report-capable telemetry projects.
   - Do not use its discovered project list as the report's loaded-mod context.
 
-- [ ] Update player-facing labels.
+- [x] Update player-facing labels.
 
   Modify:
 

@@ -204,6 +204,39 @@ describe('ManualReportIngestService', () => {
     expect(router.reports).toHaveLength(2)
   })
 
+  it('sanitizes ui selector literals before saving accepted reports', async () => {
+    const project = createProject()
+    const { service, repository } = createService(project)
+
+    const result = await service.ingest({
+      projectKey: project.publicProjectKey,
+      payload: createExampleManualReportEnvelope(project, {
+        title: '#TelemetryReportTitle.Value',
+        description: '#TelemetryReportDescription.Value',
+        contact: {
+          provided: true,
+          value: '#TelemetryReportContact.Value',
+        },
+        formValues: {
+          area: '#TelemetryReportFieldTextValue.Value',
+          severity: 'major',
+        },
+      }),
+      bodyBytes: 100,
+      remoteAddress: '127.0.0.1',
+      receivedAt: new Date('2026-06-16T20:00:00Z'),
+    })
+
+    const record = repository.findByReportId('manual-report-123')
+
+    expect(result.status).toBe(202)
+    expect(record?.title).toBe('Untitled issue report')
+    expect(record?.envelope.description).toBe('')
+    expect(record?.envelope.contact.provided).toBe(false)
+    expect(record?.envelope.formValues.area).toBeUndefined()
+    expect(record?.envelope.formValues.severity).toBe('major')
+  })
+
   it('rate limits accepted projects', async () => {
     const project = createProject({ rateLimitPerMinute: 1 })
     const { service } = createService(project)

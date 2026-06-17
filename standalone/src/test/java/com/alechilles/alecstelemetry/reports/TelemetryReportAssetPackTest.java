@@ -52,6 +52,10 @@ class TelemetryReportAssetPackTest {
                 reportPage.contains("Background: \"TelemetryConsentHeader.png\""),
                 "TelemetryReportPage.ui must use the branded header texture"
         );
+        assertTrue(
+                reportPage.contains("Text: \"Loaded mods\""),
+                "TelemetryReportPage.ui must label the optional mod snapshot as loaded mods, not installed mods"
+        );
     }
 
     @Test

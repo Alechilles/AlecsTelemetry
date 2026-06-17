@@ -115,6 +115,41 @@ class ManualReportEnvelopeTest {
         assertFalse(result.envelope().contact().provided());
     }
 
+    @Test
+    void removesUiSelectorLiteralsBeforeCreatingEnvelope() {
+        ManualReportEnvelope.CreateResult result = ManualReportEnvelope.create(
+                registration(),
+                TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null),
+                new ManualReportSubmission(
+                        ManualReportKind.ISSUE,
+                        "#TelemetryReportTitle.Value",
+                        "#TelemetryReportDescription.Value",
+                        "#TelemetryReportContact.Value",
+                        Map.of(
+                                "severity", "major",
+                                "steps", "#TelemetryReportFieldTextValue.Value"
+                        ),
+                        false,
+                        false,
+                        true,
+                        true,
+                        true
+                ),
+                context(),
+                List.of(),
+                environment(),
+                runtime()
+        );
+
+        assertTrue(result.accepted());
+        ManualReportEnvelope envelope = result.envelope();
+        assertNotNull(envelope);
+        assertEquals("Untitled issue report", envelope.title());
+        assertEquals("", envelope.description());
+        assertFalse(envelope.contact().provided());
+        assertFalse(envelope.formValues().containsKey("steps"));
+    }
+
     private static TelemetryProjectRegistration registration() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
