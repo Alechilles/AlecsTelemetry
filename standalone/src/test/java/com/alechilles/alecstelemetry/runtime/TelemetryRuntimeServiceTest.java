@@ -24,6 +24,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -84,6 +86,12 @@ class TelemetryRuntimeServiceTest {
 
         assertFalse(service.ownsActiveCoordinator());
         assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
+        assertTrue(service.triggerFlushAsync("embedded-mod"));
+        service.recordUsage("embedded-mod", "settings_opened", "from standalone api");
+        assertEquals("embedded-mod", embedded.lastFlushProjectId);
+        assertEquals("embedded-mod", embedded.lastProjectId);
+        assertEquals("settings_opened", embedded.lastEventName);
+        assertEquals("from standalone api", embedded.lastDetails.get("detail"));
 
         service.shutdown();
     }
@@ -1316,6 +1324,10 @@ class TelemetryRuntimeServiceTest {
     private static final class RecordingCoordinatorBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private boolean active;
+        private String lastFlushProjectId;
+        private String lastProjectId;
+        private String lastEventName;
+        private Map<String, Object> lastDetails = Map.of();
 
         private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -1374,6 +1386,22 @@ class TelemetryRuntimeServiceTest {
         @Override
         public boolean isActive() {
             return active;
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            lastFlushProjectId = projectId;
+            return true;
+        }
+
+        @Override
+        public boolean recordUsage(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            lastProjectId = projectId;
+            lastEventName = eventName;
+            lastDetails = details;
+            return true;
         }
     }
 }

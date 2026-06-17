@@ -341,24 +341,47 @@ public final class TelemetryRuntimeService {
     }
 
     public boolean triggerFlushAsync() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestFlush(null);
+        }
         return engine.triggerFlushAsync();
     }
 
     public boolean triggerFlushAsync(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestFlush(projectId);
+        }
         return engine.triggerFlushAsync(projectId);
     }
 
     public void recordBreadcrumb(@Nonnull String projectId,
                                  @Nonnull String category,
                                  @Nonnull String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordBreadcrumb(projectId, category, detail);
+            return;
+        }
         engine.recordBreadcrumb(projectId, category, detail);
     }
 
     public void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureSetupFailure(projectId, throwable);
+            return;
+        }
         engine.captureSetupFailure(projectId, throwable);
     }
 
     public void captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureStartFailure(projectId, throwable);
+            return;
+        }
         engine.captureStartFailure(projectId, throwable);
     }
 
@@ -366,6 +389,11 @@ public final class TelemetryRuntimeService {
                             @Nonnull String eventName,
                             @Nullable Throwable throwable,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordError(projectId, eventName, throwable, detailsFrom(detail));
+            return;
+        }
         engine.recordError(projectId, eventName, throwable, detail);
     }
 
@@ -373,6 +401,11 @@ public final class TelemetryRuntimeService {
                                        @Nonnull String eventName,
                                        @Nullable Throwable throwable,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordError(projectId, eventName, throwable, detailsFrom(context));
+            return;
+        }
         engine.recordErrorWithContext(projectId, eventName, throwable, context);
     }
 
@@ -381,6 +414,11 @@ public final class TelemetryRuntimeService {
                                 int durationMs,
                                 boolean success,
                                 @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordLifecycle(projectId, eventName, durationMs, success, detailsFrom(detail));
+            return;
+        }
         engine.recordLifecycle(projectId, eventName, durationMs, success, detail);
     }
 
@@ -389,6 +427,11 @@ public final class TelemetryRuntimeService {
                                            int durationMs,
                                            boolean success,
                                            @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordLifecycle(projectId, eventName, durationMs, success, detailsFrom(context));
+            return;
+        }
         engine.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
@@ -397,6 +440,11 @@ public final class TelemetryRuntimeService {
                                   int durationMs,
                                   @Nullable Double metricValue,
                                   @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordPerformance(projectId, eventName, durationMs, metricValue, detailsFrom(detail));
+            return;
+        }
         engine.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
     }
 
@@ -405,34 +453,63 @@ public final class TelemetryRuntimeService {
                                              int durationMs,
                                              @Nullable Double metricValue,
                                              @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordPerformance(projectId, eventName, durationMs, metricValue, detailsFrom(context));
+            return;
+        }
         engine.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
     }
 
     public void recordUsage(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordUsage(projectId, eventName, detailsFrom(detail));
+            return;
+        }
         engine.recordUsage(projectId, eventName, detail);
     }
 
     public void recordUsageWithContext(@Nonnull String projectId,
                                        @Nonnull String eventName,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordUsage(projectId, eventName, detailsFrom(context));
+            return;
+        }
         engine.recordUsageWithContext(projectId, eventName, context);
     }
 
     public void recordStats(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordStats(projectId, eventName, detailsFrom(detail));
+            return;
+        }
         engine.recordStats(projectId, eventName, detail);
     }
 
     public void recordStatsWithContext(@Nonnull String projectId,
                                        @Nonnull String eventName,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordStats(projectId, eventName, detailsFrom(context));
+            return;
+        }
         engine.recordStatsWithContext(projectId, eventName, context);
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.captureTestReport(projectId, detail);
+        }
         return engine.captureTestReport(projectId, detail);
     }
 
@@ -757,6 +834,45 @@ public final class TelemetryRuntimeService {
         return implementationVersion == null || implementationVersion.isBlank()
                 ? FALLBACK_RUNTIME_VERSION
                 : implementationVersion.trim();
+    }
+
+    @Nonnull
+    private static Map<String, Object> detailsFrom(@Nullable String detail) {
+        return detail == null || detail.isBlank() ? Map.of() : Map.of("detail", detail);
+    }
+
+    @Nonnull
+    private static Map<String, Object> detailsFrom(@Nullable TelemetryEventContext context) {
+        if (context == null) {
+            return Map.of();
+        }
+        TelemetryEventContext normalized = context.normalize();
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>(normalized.details());
+        putIfPresent(details, "detail", normalized.detail());
+        putIfPresent(details, "severity", normalized.severity());
+        putIfPresent(details, "fingerprint", normalized.fingerprint());
+        putIfPresent(details, "subsystem", normalized.subsystem());
+        putIfPresent(details, "phase", normalized.phase());
+        putIfPresent(details, "operation", normalized.operation());
+        putIfPresent(details, "target", normalized.target());
+        putIfPresent(details, "featureKey", normalized.featureKey());
+        putIfPresent(details, "entryPoint", normalized.entryPoint());
+        putIfPresent(details, "runtimeSide", normalized.runtimeSide());
+        putIfPresent(details, "entityType", normalized.entityType());
+        putIfPresent(details, "itemId", normalized.itemId());
+        putIfPresent(details, "blockId", normalized.blockId());
+        putIfPresent(details, "biomeId", normalized.biomeId());
+        putIfPresent(details, "commandName", normalized.commandName());
+        putIfPresent(details, "worldName", normalized.worldName());
+        return Map.copyOf(details);
+    }
+
+    private static void putIfPresent(@Nonnull Map<String, Object> details,
+                                     @Nonnull String key,
+                                     @Nullable String value) {
+        if (value != null && !value.isBlank()) {
+            details.put(key, value);
+        }
     }
 
     private static final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
