@@ -7,6 +7,22 @@ $C = "Common.ui";
   Padding: 12
 );
 
+@TelemetryConsentHeaderLabel = LabelStyle(
+  FontSize: 10,
+  TextColor: #bfd0e5,
+  HorizontalAlignment: Center,
+  VerticalAlignment: Center,
+  Wrap: false
+);
+
+@TelemetryConsentProjectHeaderLabel = LabelStyle(
+  FontSize: 11,
+  TextColor: #dce9f8,
+  HorizontalAlignment: Start,
+  VerticalAlignment: Center,
+  Wrap: false
+);
+
 @TelemetryConsentInvisibleButtonStyle = TextButtonStyle(
   Default: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000)),
   Hovered: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000)),
@@ -44,89 +60,268 @@ $C.@PageOverlay {
         Style: (FontSize: 13, TextColor: #dce9f8, HorizontalAlignment: Start, VerticalAlignment: Start, Wrap: true);
       }
 
-      Group {
-        Anchor: (Height: 32);
-
-        Label {
-          Anchor: (Left: 0, Width: 142, Height: 28);
-          Text: "Enable all projects";
-          Style: (FontSize: 13, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center);
-        }
-
-        CheckBox #TelemetryConsentAllEnabled {
-          Anchor: (Top: 3, Left: 148, Width: 22, Height: 22);
-          Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
-          Padding: (Full: 4);
-          Style: $C.@DefaultCheckBoxStyle;
-        }
-
-        Label #TelemetryConsentOverflow {
-          Anchor: (Left: 184, Right: 0, Height: 28);
-          Text: "";
-          Style: (FontSize: 12, TextColor: #ffcf77, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: true);
-        }
-      }
-
       Label #TelemetryConsentEmpty {
         Anchor: (Height: 30);
         Text: "No telemetry-enabled projects are currently registered.";
         Style: (FontSize: 13, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: true);
       }
 
+      Label #TelemetryConsentOverflow {
+        Anchor: (Height: 22);
+        Text: "";
+        Style: (FontSize: 12, TextColor: #ffcf77, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: true);
+      }
+
       Group {
         FlexWeight: 1;
+        LayoutMode: Top;
         Background: #13243a;
         Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
 
+        Group #TelemetryConsentGridHeader {
+          Anchor: (Height: 54, Left: 0, Right: 0);
+          Background: #172b45;
+
+          Label {
+            Anchor: (Left: 8, Width: 236, Height: 26);
+            Text: "Project";
+            Style: @TelemetryConsentProjectHeaderLabel;
+          }
+
+          Label {
+            Anchor: (Left: 244, Width: 66, Height: 24);
+            Text: "Enable";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Enables or disables all telemetry categories for every listed mod.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentAllEnabled {
+            Anchor: (Top: 28, Left: 266, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 306, Width: 52, Height: 24);
+            Text: "Crash";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Crash reports, uncaught exceptions, setup failures, start failures, and exceptional world removals.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentCrashAllEnabled {
+            Anchor: (Top: 28, Left: 326, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 366, Width: 52, Height: 24);
+            Text: "Error";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Handled errors that did not crash the game, with descriptor-allowed context.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentErrorAllEnabled {
+            Anchor: (Top: 28, Left: 386, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 426, Width: 52, Height: 24);
+            Text: "Life";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Lifecycle events such as setup, start, reload, and other timed mod operations.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentLifecycleAllEnabled {
+            Anchor: (Top: 28, Left: 446, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 488, Width: 58, Height: 24);
+            Text: "Perf";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Performance timings and slow operation measurements.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentPerformanceAllEnabled {
+            Anchor: (Top: 28, Left: 508, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 548, Width: 66, Height: 24);
+            Text: "Usage";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Feature and command usage events declared by the mod.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentUsageAllEnabled {
+            Anchor: (Top: 28, Left: 570, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 612, Width: 60, Height: 24);
+            Text: "Stats";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Low-frequency aggregate stats such as heartbeat and player-count style observations.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentStatsAllEnabled {
+            Anchor: (Top: 28, Left: 632, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+
+          Label {
+            Anchor: (Left: 672, Width: 64, Height: 24);
+            Text: "Crumbs";
+            Style: @TelemetryConsentHeaderLabel;
+            TooltipText: "Recent breadcrumbs attached to crash or error reports to explain what happened before failure.";
+            TextTooltipStyle: @TelemetryConsentHintStyle;
+          }
+          CheckBox #TelemetryConsentBreadcrumbsAllEnabled {
+            Anchor: (Top: 28, Left: 696, Width: 22, Height: 22);
+            Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7);
+            Padding: (Full: 4);
+            Style: $C.@DefaultCheckBoxStyle;
+          }
+        }
+
         Group #TelemetryConsentViewport {
-          Anchor: (Top: 0, Left: 0, Right: 0, Bottom: 0);
+          FlexWeight: 1;
           LayoutMode: TopScrolling;
           KeepScrollPosition: true;
           ScrollbarStyle: $C.@DefaultScrollbarStyle;
-          Padding: (Left: 4, Right: 0, Top: 2, Bottom: 2);
+          Padding: (Left: 4, Right: 0, Top: 6, Bottom: 2);
 
           Group #TelemetryConsentRows {
             LayoutMode: Top;
             Anchor: (Left: 0, Right: 0, Bottom: 0);
 
-            Group #TelemetryConsentProjectRow0 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow0 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow1 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow1 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow2 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow2 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow3 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow3 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow4 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow4 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow5 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow5 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow6 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow6 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
 
-            Group #TelemetryConsentProjectRow7 { Anchor: (Height: 104); LayoutMode: Left; Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
-              Group #TelemetryConsentProjectIconFrame { Anchor: (Width: 88); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 88, Height: 88); Text: "?"; Style: (FontSize: 24, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
-              Group { LayoutMode: Top; FlexWeight: 1; Padding: (Left: 8); Group { Anchor: (Height: 26); Label #TelemetryConsentProjectName { Anchor: (Left: 0, Right: 38, Height: 24); Text: ""; Style: (FontSize: 15, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 1, Right: 8, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } Label #TelemetryConsentProjectMeta { Anchor: (Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); } Group { Anchor: (Height: 4); } Group { Anchor: (Height: 28); Label { Anchor: (Left: 0, Width: 36, Height: 24); Text: "Crash"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 74, Width: 32, Height: 24); Text: "Error"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 1, Left: 108, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 144, Width: 54, Height: 24); Text: "Lifecycle"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 1, Left: 200, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 236, Width: 76, Height: 24); Text: "Performance"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 1, Left: 314, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 350, Width: 38, Height: 24); Text: "Usage"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 1, Left: 390, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 426, Width: 32, Height: 24); Text: "Stats"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } Label { Anchor: (Left: 496, Width: 78, Height: 24); Text: "Breadcrumbs"; Style: (FontSize: 11, TextColor: #bfd0e5, HorizontalAlignment: Start, VerticalAlignment: Center); } CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; } } }
+            Group #TelemetryConsentProjectRow7 { Anchor: (Height: 70); Background: #0f1e30; Padding: (Left: 8, Right: 8, Top: 7, Bottom: 7);
+              Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+              Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 11, Width: 172, Height: 24); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 34, Width: 172, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+              CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 24, Left: 386, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 24, Left: 446, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 24, Left: 508, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 24, Left: 570, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+              CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
             }
           }
         }

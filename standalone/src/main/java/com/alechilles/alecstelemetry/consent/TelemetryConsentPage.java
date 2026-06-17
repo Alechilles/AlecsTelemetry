@@ -28,6 +28,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     public static final String UI_PATH = "TelemetryConsentPage.ui";
 
     static final String ACTION_TOGGLE_ALL = "toggle_all";
+    static final String ACTION_TOGGLE_GLOBAL_CATEGORY = "toggle_global_category";
     static final String ACTION_TOGGLE_PROJECT = "toggle_project";
     static final String ACTION_TOGGLE_CATEGORY = "toggle_category";
     static final String ACTION_SAVE = "save";
@@ -74,6 +75,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                                 @Nonnull ConsentEventData data) {
         switch (data.action == null ? "" : data.action) {
             case ACTION_TOGGLE_ALL -> toggleAll(data.enabled);
+            case ACTION_TOGGLE_GLOBAL_CATEGORY -> toggleGlobalCategory(data.category, data.enabled);
             case ACTION_TOGGLE_PROJECT -> toggleProject(data.projectId, data.enabled);
             case ACTION_TOGGLE_CATEGORY -> toggleCategory(data.projectId, data.category, data.enabled);
             case ACTION_SAVE -> {
@@ -105,7 +107,10 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
 
         commands.set("#TelemetryConsentSummary.Text", String.join("\n", viewModel.explanationLines()));
-        commands.set("#TelemetryConsentAllEnabled.Value", viewModel.allEnabled());
+        commands.set("#TelemetryConsentAllEnabled.Value", allTelemetryEnabled(projects));
+        for (String category : CATEGORIES) {
+            commands.set(globalCategoryCheckSelector(category) + ".Value", categoryAllEnabled(projects, category));
+        }
         commands.set("#TelemetryConsentPrimary.Text", firstRun ? "Save choices" : "Save");
         commands.set("#TelemetryConsentSecondary.Text", firstRun ? "Not now" : "Close");
         commands.set("#TelemetryConsentEmpty.Visible", projects.isEmpty());
@@ -130,11 +135,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                                @Nonnull TelemetryConsentViewModel.ProjectRow project) {
         TelemetryConsentSnapshot consent = project.consent();
         commands.set(rowSelector(index) + " #TelemetryConsentProjectName.Text", project.displayName());
-        commands.set(rowSelector(index) + " #TelemetryConsentProjectMeta.Text", project.projectId()
-                + " | " + project.pluginIdentifier()
-                + " | " + project.pluginVersion()
-                + " | " + project.destinationMode()
-                + (project.overridePresent() ? " | override" : ""));
+        commands.set(rowSelector(index) + " #TelemetryConsentProjectMeta.Text", project.pluginVersion());
         if (project.hasIconTexture()) {
             commands.set(rowSelector(index) + " #TelemetryConsentProjectIconImage.Background", project.iconTexturePath());
             commands.set(rowSelector(index) + " #TelemetryConsentProjectIconPlaceholder.Visible", false);
@@ -162,6 +163,17 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 EventData.of(KEY_ACTION, ACTION_TOGGLE_ALL).append(KEY_ENABLED, "#TelemetryConsentAllEnabled.Value"),
                 false
         );
+        for (String category : CATEGORIES) {
+            String categoryCheck = globalCategoryCheckSelector(category);
+            events.addEventBinding(
+                    CustomUIEventBindingType.ValueChanged,
+                    categoryCheck,
+                    EventData.of(KEY_ACTION, ACTION_TOGGLE_GLOBAL_CATEGORY)
+                            .append(KEY_CATEGORY, category)
+                            .append(KEY_ENABLED, categoryCheck + ".Value"),
+                    false
+            );
+        }
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryConsentPrimary",
@@ -236,22 +248,24 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         );
     }
 
+    private void toggleGlobalCategory(@Nullable String category, boolean enabled) {
+        if (category == null) {
+            return;
+        }
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.diagnostics().projects()) {
+            TelemetryConsentSnapshot current = snapshot(project);
+            TelemetryConsentSnapshot updated = withCategory(current, category, enabled);
+            runtimeService.applyConsent(project.projectId(), updated);
+        }
+    }
+
     private void toggleCategory(@Nullable String projectId, @Nullable String category, boolean enabled) {
         TelemetryRuntimeDiagnostics.ProjectDiagnostics project = diagnostics(projectId);
         if (project == null || category == null) {
             return;
         }
         TelemetryConsentSnapshot current = snapshot(project);
-        TelemetryConsentSnapshot updated = switch (category) {
-            case "crash" -> new TelemetryConsentSnapshot(current.projectEnabled(), enabled, current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "error" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), enabled, current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "lifecycle" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), enabled, current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "performance" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), enabled, current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "usage" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), enabled, current.statsEnabled(), current.breadcrumbsEnabled());
-            case "stats" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), enabled, current.breadcrumbsEnabled());
-            case "breadcrumbs" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), enabled);
-            default -> current;
-        };
+        TelemetryConsentSnapshot updated = withCategory(current, category, enabled);
         runtimeService.applyConsent(project.projectId(), updated);
     }
 
@@ -284,6 +298,54 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         );
     }
 
+    private static boolean allTelemetryEnabled(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects) {
+        return !projects.isEmpty() && projects.stream().allMatch(project -> {
+            TelemetryConsentSnapshot consent = project.consent();
+            return consent.projectEnabled()
+                    && consent.crashEnabled()
+                    && consent.errorEnabled()
+                    && consent.lifecycleEnabled()
+                    && consent.performanceEnabled()
+                    && consent.usageEnabled()
+                    && consent.statsEnabled()
+                    && consent.breadcrumbsEnabled();
+        });
+    }
+
+    private static boolean categoryAllEnabled(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects,
+                                              @Nonnull String category) {
+        return !projects.isEmpty() && projects.stream().allMatch(project -> categoryEnabled(project.consent(), category));
+    }
+
+    private static boolean categoryEnabled(@Nonnull TelemetryConsentSnapshot consent, @Nonnull String category) {
+        return switch (category) {
+            case "crash" -> consent.crashEnabled();
+            case "error" -> consent.errorEnabled();
+            case "lifecycle" -> consent.lifecycleEnabled();
+            case "performance" -> consent.performanceEnabled();
+            case "usage" -> consent.usageEnabled();
+            case "stats" -> consent.statsEnabled();
+            case "breadcrumbs" -> consent.breadcrumbsEnabled();
+            default -> false;
+        };
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot withCategory(@Nonnull TelemetryConsentSnapshot current,
+                                                         @Nonnull String category,
+                                                         boolean enabled) {
+        return switch (category) {
+            case "crash" -> new TelemetryConsentSnapshot(current.projectEnabled(), enabled, current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "error" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), enabled, current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "lifecycle" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), enabled, current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "performance" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), enabled, current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
+            case "usage" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), enabled, current.statsEnabled(), current.breadcrumbsEnabled());
+            case "stats" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), enabled, current.breadcrumbsEnabled());
+            case "breadcrumbs" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), enabled);
+            default -> current;
+        };
+    }
+
     @Nonnull
     private static String rowSelector(int index) {
         return "#TelemetryConsentProjectRow" + index;
@@ -297,6 +359,11 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     @Nonnull
     private static String categoryCheckSelector(int index, @Nonnull String category) {
         return rowSelector(index) + " #TelemetryConsent" + capitalize(category) + "Enabled";
+    }
+
+    @Nonnull
+    private static String globalCategoryCheckSelector(@Nonnull String category) {
+        return "#TelemetryConsent" + capitalize(category) + "AllEnabled";
     }
 
     @Nonnull

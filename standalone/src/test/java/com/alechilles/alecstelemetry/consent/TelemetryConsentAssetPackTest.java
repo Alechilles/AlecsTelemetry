@@ -61,32 +61,56 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must include a fallback placeholder for mods without icons"
         );
         assertTrue(
-                consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Width: 88)"),
-                "TelemetryConsentPage.ui must reserve a square 88px icon area for each consent row"
+                consentPage.contains("#TelemetryConsentGridHeader"),
+                "TelemetryConsentPage.ui must include a grid header for global consent toggles"
         );
         assertTrue(
-                consentPage.contains("#TelemetryConsentProjectIconImage { Anchor: (Width: 88, Height: 88)"),
+                consentPage.contains("#TelemetryConsentCrashAllEnabled"),
+                "TelemetryConsentPage.ui must expose a global crash consent checkbox"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentStatsAllEnabled"),
+                "TelemetryConsentPage.ui must expose a global stats consent checkbox"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentBreadcrumbsAllEnabled"),
+                "TelemetryConsentPage.ui must expose a global breadcrumbs consent checkbox"
+        );
+        assertTrue(
+                consentPage.contains("TooltipText: \"Crash reports, uncaught exceptions"),
+                "TelemetryConsentPage.ui must explain crash telemetry through a tooltip"
+        );
+        assertTrue(
+                consentPage.contains("TextTooltipStyle: @TelemetryConsentHintStyle"),
+                "TelemetryConsentPage.ui must apply the shared tooltip styling to consent category hints"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56)"),
+                "TelemetryConsentPage.ui must reserve a perfectly square 56px icon area for each consent row"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56)"),
                 "TelemetryConsentPage.ui must let project icons fill the square area without padding"
         );
         assertTrue(
-                !consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Width: 72)"),
-                "TelemetryConsentPage.ui must not use the old padded 72px icon frame"
+                consentPage.contains("Padding: (Full: 0); Group #TelemetryConsentProjectIconImage"),
+                "TelemetryConsentPage.ui must not pad project icons within their square slot"
         );
         assertTrue(
-                !consentPage.contains("#TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56)"),
-                "TelemetryConsentPage.ui must not shrink project icons into the old 56px image box"
+                consentPage.contains("CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must align each project checkbox under the global enable column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 1, Left: 38, Width: 22, Height: 22)"),
-                "TelemetryConsentPage.ui must keep the crash checkbox close to its label"
+                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must align crash checkboxes under the crash column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 1, Left: 460, Width: 22, Height: 22)"),
-                "TelemetryConsentPage.ui must expose the separate stats consent category"
+                consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must align stats checkboxes under the stats column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 1, Left: 576, Width: 22, Height: 22)"),
-                "TelemetryConsentPage.ui must keep the compact telemetry category layout with stats"
+                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must align breadcrumbs checkboxes under the breadcrumbs column"
         );
         assertTrue(
                 !consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"),
