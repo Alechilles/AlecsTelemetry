@@ -67,8 +67,8 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must include a grid header for global consent toggles"
         );
         assertTrue(
-                consentPage.contains("#TelemetryConsentCrashAllEnabled"),
-                "TelemetryConsentPage.ui must expose a global crash consent checkbox"
+                consentPage.contains("#TelemetryConsentCaptureAllEnabled"),
+                "TelemetryConsentPage.ui must expose a global crash consent checkbox with a safe selector token"
         );
         assertTrue(
                 consentPage.contains("#TelemetryConsentStatsAllEnabled"),
@@ -138,13 +138,17 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must align each project checkbox under the global enable column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentCrashAllEnabled {\r\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)")
-                        || consentPage.contains("CheckBox #TelemetryConsentCrashAllEnabled {\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentCaptureAllEnabled {\r\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)")
+                        || consentPage.contains("CheckBox #TelemetryConsentCaptureAllEnabled {\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must place the header crash checkbox in the same column as row crash checkboxes"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentCaptureEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must align crash checkboxes under the crash column"
+        );
+        assertTrue(
+                !consentPage.contains("TelemetryConsentCrash"),
+                "TelemetryConsentPage.ui must avoid Crash in selector ids because those controls do not reliably activate in-client"
         );
         assertTrue(
                 consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22)"),
@@ -191,6 +195,10 @@ class TelemetryConsentAssetPackTest {
         assertTrue(
                 source.contains("categoryToggleSelector(index, category)"),
                 "Project category hit targets must use deterministic Activating bindings"
+        );
+        assertTrue(
+                source.contains("if (\"crash\".equals(category)) {\n            return \"Capture\";"),
+                "Crash runtime category must use a safe UI selector token while still sending the crash category to the runtime"
         );
         assertTrue(
                 source.contains("CustomUIEventBindingType.ValueChanged,\n                    categoryCheck,"),

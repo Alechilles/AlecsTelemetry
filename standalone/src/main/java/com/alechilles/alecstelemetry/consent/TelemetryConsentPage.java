@@ -363,22 +363,30 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
 
     @Nonnull
     private static String categoryCheckSelector(int index, @Nonnull String category) {
-        return rowSelector(index) + " #TelemetryConsent" + capitalize(category) + "Enabled";
+        return rowSelector(index) + " #TelemetryConsent" + selectorToken(category) + "Enabled";
     }
 
     @Nonnull
     private static String categoryToggleSelector(int index, @Nonnull String category) {
-        return rowSelector(index) + " #TelemetryConsent" + capitalize(category) + "ToggleButton";
+        return rowSelector(index) + " #TelemetryConsent" + selectorToken(category) + "ToggleButton";
     }
 
     @Nonnull
     private static String globalCategoryCheckSelector(@Nonnull String category) {
-        return "#TelemetryConsent" + capitalize(category) + "AllEnabled";
+        return "#TelemetryConsent" + selectorToken(category) + "AllEnabled";
     }
 
     @Nonnull
     private static String globalCategoryToggleSelector(@Nonnull String category) {
-        return "#TelemetryConsent" + capitalize(category) + "AllToggleButton";
+        return "#TelemetryConsent" + selectorToken(category) + "AllToggleButton";
+    }
+
+    @Nonnull
+    private static String selectorToken(@Nonnull String category) {
+        if ("crash".equals(category)) {
+            return "Capture";
+        }
+        return capitalize(category);
     }
 
     @Nonnull
