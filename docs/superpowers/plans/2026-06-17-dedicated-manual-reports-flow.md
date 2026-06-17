@@ -470,7 +470,7 @@ flowchart TD
 
 **Intent:** Let reports become issue evidence without forcing every report into the issue workflow.
 
-- [ ] Define promoted manual issue IDs.
+- [x] Define promoted manual issue IDs.
 
   Use a stable issue ID encoding:
 
@@ -484,7 +484,7 @@ flowchart TD
   - Linking a single report to an existing crash/event issue should preserve the target issue ID instead.
   - Promoting with `includeGroup: true` links all reports in the same project/reportKind/groupKey to the promoted issue.
 
-- [ ] Update issue repository to include promoted manual report issues.
+- [x] Update issue repository to include promoted manual report issues.
 
   Modify:
 
@@ -497,7 +497,7 @@ flowchart TD
   - Manual reports with `issue_id = manual-report:<kind>:<groupKey>` appear as one issue.
   - Manual reports linked to a crash/event issue appear as linked evidence on that issue detail, not as a duplicate issue.
 
-- [ ] Show linked reports on issue detail.
+- [x] Show linked reports on issue detail.
 
   Modify:
 
