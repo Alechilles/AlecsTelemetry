@@ -124,16 +124,24 @@ class TelemetryReportAssetPackTest {
                 "Dynamic text fields must be buffered from their own ValueChanged events"
         );
         assertTrue(
-                submitEventData.contains(".append(KEY_TITLE, valueSelector(\"#TelemetryReportTitle\"))"),
+                submitEventData.contains(".append(KEY_TITLE_VALUE, valueSelector(\"#TelemetryReportTitle\"))"),
                 "Submit should capture title text as a fallback"
         );
         assertTrue(
-                submitEventData.contains(".append(KEY_DESCRIPTION, valueSelector(\"#TelemetryReportDescription\"))"),
+                submitEventData.contains(".append(KEY_DESCRIPTION_VALUE, valueSelector(\"#TelemetryReportDescription\"))"),
                 "Submit should capture description text as a fallback"
         );
         assertTrue(
-                submitEventData.contains(".append(KEY_CONTACT, valueSelector(\"#TelemetryReportContact\"))"),
+                submitEventData.contains(".append(KEY_CONTACT_VALUE, valueSelector(\"#TelemetryReportContact\"))"),
                 "Submit should capture contact text as a fallback"
+        );
+        assertTrue(
+                reportPageSource.contains("KEY_TITLE_VALUE = \"@Title\""),
+                "Selector-backed title values must use a bindable CustomUI event data key"
+        );
+        assertTrue(
+                reportPageSource.contains("KEY_FIELD_VALUE_PREFIX = \"@FieldValue\""),
+                "Selector-backed custom field values must use bindable CustomUI event data keys"
         );
         assertTrue(
                 reportPageSource.contains("ManualReportInputSanitizer.isTelemetrySelector"),

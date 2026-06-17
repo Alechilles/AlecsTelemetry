@@ -14,4 +14,13 @@ class TelemetryReportPageEventDataTest {
         assertNull(TelemetryReportPage.parseUiBoolean("#TelemetryReportRoot #TelemetryReportLoadedMods.Value"));
         assertNull(TelemetryReportPage.parseUiBoolean(""));
     }
+
+    @Test
+    void doesNotDefaultMissingEnumInputToFirstOption() {
+        assertNull(TelemetryReportPage.normalizeSubmittedFieldValue(null));
+        assertEquals("major", TelemetryReportPage.normalizeSubmittedFieldValue("major"));
+        assertEquals("major", TelemetryReportPage.normalizeSubmittedFieldValue("  major  "));
+        assertNull(TelemetryReportPage.normalizeSubmittedFieldValue(""));
+        assertNull(TelemetryReportPage.normalizeSubmittedFieldValue("#TelemetryReportFieldRow0 #TelemetryReportFieldDropdownValue.Value"));
+    }
 }
