@@ -38,6 +38,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     private static final String KEY_ACTION = "Action";
     private static final String KEY_PROJECT_ID = "ProjectId";
     private static final String KEY_CATEGORY = "Category";
+    private static final String KEY_ENABLED = "Enabled";
     private static final String KEY_ENABLED_LITERAL = "EnabledLiteral";
     private static final String[] CATEGORIES = {
             "crash",
@@ -158,6 +159,12 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         List<TelemetryConsentViewModel.ProjectRow> projects = viewModel.projects();
 
         events.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                "#TelemetryConsentAllEnabled",
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_ALL).append(KEY_ENABLED, "#TelemetryConsentAllEnabled.Value"),
+                false
+        );
+        events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryConsentAllToggleButton",
                 EventData.of(KEY_ACTION, ACTION_TOGGLE_ALL)
@@ -165,6 +172,15 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 false
         );
         for (String category : CATEGORIES) {
+            String categoryCheck = globalCategoryCheckSelector(category);
+            events.addEventBinding(
+                    CustomUIEventBindingType.ValueChanged,
+                    categoryCheck,
+                    EventData.of(KEY_ACTION, ACTION_TOGGLE_GLOBAL_CATEGORY)
+                            .append(KEY_CATEGORY, category)
+                            .append(KEY_ENABLED, categoryCheck + ".Value"),
+                    false
+            );
             events.addEventBinding(
                     CustomUIEventBindingType.Activating,
                     globalCategoryToggleSelector(category),
@@ -190,6 +206,15 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
         for (int index = 0; index < visibleRows; index++) {
             TelemetryConsentViewModel.ProjectRow project = projects.get(index);
+            String projectCheck = projectCheckSelector(index);
+            events.addEventBinding(
+                    CustomUIEventBindingType.ValueChanged,
+                    projectCheck,
+                    EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
+                            .append(KEY_PROJECT_ID, project.projectId())
+                            .append(KEY_ENABLED, projectCheck + ".Value"),
+                    false
+            );
             events.addEventBinding(
                     CustomUIEventBindingType.Activating,
                     projectToggleSelector(index),
@@ -199,6 +224,16 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                     false
             );
             for (String category : CATEGORIES) {
+                String categoryCheck = categoryCheckSelector(index, category);
+                events.addEventBinding(
+                        CustomUIEventBindingType.ValueChanged,
+                        categoryCheck,
+                        EventData.of(KEY_ACTION, ACTION_TOGGLE_CATEGORY)
+                                .append(KEY_PROJECT_ID, project.projectId())
+                                .append(KEY_CATEGORY, category)
+                                .append(KEY_ENABLED, categoryCheck + ".Value"),
+                        false
+                );
                 events.addEventBinding(
                         CustomUIEventBindingType.Activating,
                         categoryToggleSelector(index, category),
@@ -359,6 +394,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 .addField(new KeyedCodec<>(KEY_ACTION, Codec.STRING), (data, value) -> data.action = value, data -> data.action)
                 .addField(new KeyedCodec<>(KEY_PROJECT_ID, Codec.STRING), (data, value) -> data.projectId = value, data -> data.projectId)
                 .addField(new KeyedCodec<>(KEY_CATEGORY, Codec.STRING), (data, value) -> data.category = value, data -> data.category)
+                .addField(new KeyedCodec<>(KEY_ENABLED, Codec.BOOLEAN), (data, value) -> data.enabled = value, data -> data.enabled)
                 .addField(new KeyedCodec<>(KEY_ENABLED_LITERAL, Codec.STRING), (data, value) -> data.enabledLiteral = value, data -> data.enabledLiteral)
                 .build();
 
@@ -366,9 +402,12 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         private String projectId = "";
         private String category = "";
         private String enabledLiteral = "";
+        private boolean enabled;
 
         private boolean enabledValue() {
-            return Boolean.parseBoolean(enabledLiteral);
+            return enabledLiteral == null || enabledLiteral.isBlank()
+                    ? enabled
+                    : Boolean.parseBoolean(enabledLiteral);
         }
     }
 }

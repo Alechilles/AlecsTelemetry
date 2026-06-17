@@ -192,6 +192,14 @@ class TelemetryConsentAssetPackTest {
                 source.contains("categoryToggleSelector(index, category)"),
                 "Project category hit targets must use deterministic Activating bindings"
         );
+        assertTrue(
+                source.contains("CustomUIEventBindingType.ValueChanged,\n                    categoryCheck,"),
+                "Project category checkboxes must keep ValueChanged bindings when the checkbox wins hit testing over the transparent button"
+        );
+        assertTrue(
+                source.contains("EventData.of(KEY_ACTION, ACTION_TOGGLE_GLOBAL_CATEGORY)\n                            .append(KEY_CATEGORY, category)\n                            .append(KEY_ENABLED, categoryCheck + \".Value\")"),
+                "Global category checkboxes must keep ValueChanged bindings for direct checkbox clicks"
+        );
     }
 
     private String resourceText(String path) throws IOException {
