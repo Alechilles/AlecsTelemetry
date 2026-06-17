@@ -1,5 +1,10 @@
 package com.alechilles.alecstelemetry.embedded;
 
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
@@ -31,6 +36,7 @@ import java.util.logging.Level;
 public final class EmbeddedTelemetryBootstrap {
 
     private static final String DESCRIPTOR_RESOURCE = "telemetry/project.json";
+    private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
 
     private EmbeddedTelemetryBootstrap() {
     }
@@ -65,18 +71,38 @@ public final class EmbeddedTelemetryBootstrap {
         }
 
         TelemetryDataPaths dataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
+        TelemetryDataPaths sharedDataPaths = TelemetryDataPaths.forSharedCoordinator(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
+        TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
         TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
                 .load(dataPaths.projectOverrideFile(descriptor.projectId()));
         String pluginVersion = resolvePluginVersion(plugin);
+        Path sourcePath = resolvePluginSourcePath(plugin);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
                 descriptor,
                 pluginIdentifier,
                 pluginVersion,
-                resolvePluginSourcePath(plugin)
+                sourcePath
         ).withOverride(override);
         EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
         registerPlayerCounter(plugin, playerCounter, logger);
+        CrashReportClient client = new HttpCrashReportClient(sharedSettings.connectTimeoutMs(), sharedSettings.readTimeoutMs(), logger);
+        TelemetryCoordinatorService coordinatorService = TelemetryCoordinatorService.discover(
+                sharedDataPaths,
+                client,
+                logger,
+                HytaleServer.SCHEDULED_EXECUTOR
+        );
+        TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
+                "embedded:" + pluginIdentifier,
+                TelemetryRuntimeOrigin.EMBEDDED,
+                resolveRuntimeVersion(),
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath == null ? plugin.getDataDirectory().toAbsolutePath().normalize() : sourcePath,
+                sharedDataPaths.runtimeRoot()
+        );
         return new EmbeddedTelemetryService(
                 settings,
                 dataPaths,
@@ -85,8 +111,19 @@ public final class EmbeddedTelemetryBootstrap {
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
-                playerCounter
+                playerCounter,
+                candidate,
+                coordinatorService
         );
+    }
+
+    @Nonnull
+    private static String resolveRuntimeVersion() {
+        Package runtimePackage = EmbeddedTelemetryBootstrap.class.getPackage();
+        String implementationVersion = runtimePackage == null ? null : runtimePackage.getImplementationVersion();
+        return implementationVersion == null || implementationVersion.isBlank()
+                ? FALLBACK_RUNTIME_VERSION
+                : implementationVersion.trim();
     }
 
     private static void registerPlayerCounter(@Nonnull JavaPlugin plugin,

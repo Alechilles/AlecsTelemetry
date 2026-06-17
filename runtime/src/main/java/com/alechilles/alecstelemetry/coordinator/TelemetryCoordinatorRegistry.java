@@ -55,7 +55,7 @@ public final class TelemetryCoordinatorRegistry {
         return bridge == null ? null : new ReflectiveBridge(bridge, winner);
     }
 
-    static void clearForTests() {
+    public static void clearForTests() {
         ConcurrentHashMap<String, Object> existing = registry();
         for (Map.Entry<String, Object> entry : existing.entrySet()) {
             TelemetryRuntimeCandidate candidate = candidateFrom(entry.getValue());
