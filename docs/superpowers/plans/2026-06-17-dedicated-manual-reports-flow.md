@@ -279,7 +279,7 @@ flowchart TD
 
 **Intent:** Give the portal an API surface that treats manual reports as reports, not as synthetic issue occurrences.
 
-- [ ] Add API response contracts.
+- [x] Add API response contracts.
 
   Add:
 
@@ -318,7 +318,7 @@ flowchart TD
   - `runtime`
   - `rawJson`
 
-- [ ] Add portal routes.
+- [x] Add portal routes.
 
   Modify or add:
 
@@ -353,7 +353,7 @@ flowchart TD
   });
   ```
 
-- [ ] Add repository methods for report actions.
+- [x] Add repository methods for report actions.
 
   Modify:
 
