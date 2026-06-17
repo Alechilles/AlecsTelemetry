@@ -95,8 +95,9 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must draw visible grid lines between telemetry columns"
         );
         assertTrue(
-                consentPage.contains("Padding: (Left: 0, Right: 0, Top: 0, Bottom: 0)"),
-                "TelemetryConsentPage.ui must not offset project rows inside the scrolling viewport"
+                consentPage.contains("Group #TelemetryConsentRows {\r\n            LayoutMode: Top;\r\n            Anchor: (Left: 8, Width: 740, Bottom: 0);")
+                        || consentPage.contains("Group #TelemetryConsentRows {\n            LayoutMode: Top;\n            Anchor: (Left: 8, Width: 740, Bottom: 0);"),
+                "TelemetryConsentPage.ui must offset scrolling rows to align with the padded header grid"
         );
         assertTrue(
                 consentPage.contains("Group #TelemetryConsentProjectRow0 { Anchor: (Width: 740, Height: 56)"),
