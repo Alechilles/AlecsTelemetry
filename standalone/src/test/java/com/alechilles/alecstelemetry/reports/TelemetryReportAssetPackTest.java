@@ -91,7 +91,7 @@ class TelemetryReportAssetPackTest {
     }
 
     @Test
-    void reportPageBuffersTextInputChangesInsteadOfCapturingSelectorsOnSubmit() throws IOException {
+    void reportPageBuffersTextInputChangesAndSanitizesSubmitFallbackSelectors() throws IOException {
         String reportPageSource = Files.readString(Path.of("src/main/java/com/alechilles/alecstelemetry/reports/TelemetryReportPage.java"));
         String submitEventData = sourceSlice(
                 reportPageSource,
@@ -115,17 +115,21 @@ class TelemetryReportAssetPackTest {
                 reportPageSource.contains("row + \" #TelemetryReportFieldTextValue\""),
                 "Dynamic text fields must be buffered from their own ValueChanged events"
         );
-        assertFalse(
-                submitEventData.contains(".append(KEY_TITLE, \"#TelemetryReportTitle.Value\")"),
-                "Submit must not overwrite buffered title text with a selector literal"
+        assertTrue(
+                submitEventData.contains(".append(KEY_TITLE, valueSelector(\"#TelemetryReportTitle\"))"),
+                "Submit should capture title text as a fallback"
         );
-        assertFalse(
-                submitEventData.contains(".append(KEY_DESCRIPTION, \"#TelemetryReportDescription.Value\")"),
-                "Submit must not overwrite buffered description text with a selector literal"
+        assertTrue(
+                submitEventData.contains(".append(KEY_DESCRIPTION, valueSelector(\"#TelemetryReportDescription\"))"),
+                "Submit should capture description text as a fallback"
         );
-        assertFalse(
-                submitEventData.contains(".append(KEY_CONTACT, \"#TelemetryReportContact.Value\")"),
-                "Submit must not overwrite buffered contact text with a selector literal"
+        assertTrue(
+                submitEventData.contains(".append(KEY_CONTACT, valueSelector(\"#TelemetryReportContact\"))"),
+                "Submit should capture contact text as a fallback"
+        );
+        assertTrue(
+                reportPageSource.contains("ManualReportInputSanitizer.isTelemetrySelector"),
+                "Selector literals returned by the UI binding layer must not overwrite buffered player text"
         );
     }
 
