@@ -9,10 +9,12 @@ export class DiscordAlertRouter implements CrashAlertRouter {
   private readonly botToken: string | null
   private readonly logger: Logger
   private readonly rest: REST | null
+  private readonly portalBaseUrl: string | null
 
-  constructor(botToken: string | null, logger: Logger) {
+  constructor(botToken: string | null, logger: Logger, portalBaseUrl: string | null = null) {
     this.botToken = botToken
     this.logger = logger
+    this.portalBaseUrl = portalBaseUrl
     this.rest = botToken ? new REST({ version: '10' }).setToken(botToken) : null
   }
 
@@ -21,7 +23,10 @@ export class DiscordAlertRouter implements CrashAlertRouter {
   }
 
   async routeManualReportAlert(alert: HostedManualReportAlert): Promise<CrashAlertRouteResult> {
-    return this.routeDiscordMessage(alert.project.projectId, alert.project.discord?.channelId, formatReportAlert(alert))
+    return this.routeDiscordMessage(alert.project.projectId, alert.project.discord?.channelId, formatReportAlert({
+      ...alert,
+      portalBaseUrl: alert.portalBaseUrl ?? this.portalBaseUrl,
+    }))
   }
 
   private async routeDiscordMessage(projectId: string, channelId: string | undefined, content: string): Promise<CrashAlertRouteResult> {

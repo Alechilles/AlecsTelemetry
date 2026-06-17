@@ -520,7 +520,7 @@ flowchart TD
 
 **Intent:** Manual report notifications should send modders to the full report, not to an auto-created issue.
 
-- [ ] Update manual report alert formatting.
+- [x] Update manual report alert formatting.
 
   Modify:
 
@@ -544,7 +544,7 @@ flowchart TD
   - Contact provided yes/no
   - Loaded mod count when included
 
-- [ ] Keep issue notification behavior unchanged for crash and automated issue alerts.
+- [x] Keep issue notification behavior unchanged for crash and automated issue alerts.
 
 ---
 

@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   const config = loadHostedServiceConfig()
   const logger = pino({ level: config.logLevel })
   const registry = await HostedProjectRegistry.loadFromFile(config.projectsFile)
-  const router = new DiscordAlertRouter(config.discordBotToken, logger)
+  const router = new DiscordAlertRouter(config.discordBotToken, logger, config.portalPublicOrigin)
   const statsLog = new StatsEventLog(config.statsFile)
   const statsService = new StatsService(statsLog)
   const statsApi = new StatsApi(registry, statsService)

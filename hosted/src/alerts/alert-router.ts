@@ -10,6 +10,7 @@ export interface HostedCrashAlert {
 export interface HostedManualReportAlert {
   readonly project: HostedProjectConfig
   readonly envelope: ManualReportEnvelope
+  readonly portalBaseUrl?: string | null
 }
 
 export interface CrashAlertRouteResult {

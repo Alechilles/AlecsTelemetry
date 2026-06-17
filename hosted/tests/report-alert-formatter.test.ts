@@ -25,6 +25,10 @@ describe('formatReportAlert', () => {
     const content = formatReportAlert({
       project,
       envelope: createExampleManualReportEnvelope(project, {
+        formValues: {
+          area: 'Config',
+          severity: 'major',
+        },
         attachmentManifests: [
           {
             attachmentId: 'attachment-1',
@@ -36,13 +40,18 @@ describe('formatReportAlert', () => {
           },
         ],
       }),
+      portalBaseUrl: 'https://telemetry.alecsmods.com/portal/',
     })
 
     expect(content).toContain('Example Mod')
     expect(content).toContain('player issue report')
     expect(content).toContain('Report ID: `manual-report-123`')
+    expect(content).toContain('Report: https://telemetry.alecsmods.com/portal/projects/example-mod/manual-reports/manual-report-123')
     expect(content).toContain('Title: Config screen does not save')
+    expect(content).toContain('Area: `Config`')
     expect(content).toContain('Severity: `major`')
+    expect(content).toContain('Contact provided: `yes`')
+    expect(content).toContain('Loaded mods: `1`')
     expect(content).toContain('Attachments: `current_server_log`')
     expect(content).toContain('Players online: `12`')
     expect(content.length).toBeLessThanOrEqual(1900)
