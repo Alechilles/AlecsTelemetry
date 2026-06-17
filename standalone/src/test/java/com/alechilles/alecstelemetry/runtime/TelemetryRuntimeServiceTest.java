@@ -879,6 +879,66 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void applyConsentToAllUpdatesEveryProjectAndTelemetryCategory() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectRegistration first = new TelemetryProjectRegistration(
+                telemetryCategoryDescriptor("first-mod", "First Mod"),
+                "Example:First Mod",
+                "1.0.0",
+                tempDir.resolve("First Mod")
+        );
+        TelemetryProjectRegistration second = new TelemetryProjectRegistration(
+                telemetryCategoryDescriptor("second-mod", "Second Mod"),
+                "Example:Second Mod",
+                "2.0.0",
+                tempDir.resolve("Second Mod")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(first, second),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:First Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Second Mod", "2.0.0")
+                ),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        assertTrue(service.applyConsentToAll(new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : service.diagnostics().projects()) {
+            assertAllTelemetryDisabled(project);
+        }
+
+        assertTrue(service.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : service.diagnostics().projects()) {
+            assertAllTelemetryEnabled(project);
+        }
+
+        assertTrue(service.applyConsentCategoryToAll("usage", false));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : service.diagnostics().projects()) {
+            assertTrue(project.enabled());
+            assertTrue(project.crashEnabled());
+            assertTrue(project.errorEnabled());
+            assertTrue(project.lifecycleEnabled());
+            assertTrue(project.performanceEnabled());
+            assertFalse(project.usageEnabled());
+            assertTrue(project.statsEnabled());
+            assertTrue(project.breadcrumbsEnabled());
+        }
+    }
+
+    @Test
     void embeddedConsentProjectIsVisibleAndMirrorsOverridesToOwnerSettings() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         Path modsDir = tempDir.resolve("mods");
@@ -1081,6 +1141,69 @@ class TelemetryRuntimeServiceTest {
                 """,
                 null
         );
+    }
+
+    private static TelemetryProjectDescriptor telemetryCategoryDescriptor(String projectId, String displayName) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true
+                  },
+                  "usage": {
+                    "enabled": true
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, displayName),
+                null
+        );
+    }
+
+    private static void assertAllTelemetryEnabled(TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
+        assertTrue(project.enabled());
+        assertTrue(project.crashEnabled());
+        assertTrue(project.errorEnabled());
+        assertTrue(project.lifecycleEnabled());
+        assertTrue(project.performanceEnabled());
+        assertTrue(project.usageEnabled());
+        assertTrue(project.statsEnabled());
+        assertTrue(project.breadcrumbsEnabled());
+    }
+
+    private static void assertAllTelemetryDisabled(TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
+        assertFalse(project.enabled());
+        assertFalse(project.crashEnabled());
+        assertFalse(project.errorEnabled());
+        assertFalse(project.lifecycleEnabled());
+        assertFalse(project.performanceEnabled());
+        assertFalse(project.usageEnabled());
+        assertFalse(project.statsEnabled());
+        assertFalse(project.breadcrumbsEnabled());
     }
 
     private static ManualReportSubmission issueSubmission() {

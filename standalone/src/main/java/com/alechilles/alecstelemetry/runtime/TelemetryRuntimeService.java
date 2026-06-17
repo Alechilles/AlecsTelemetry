@@ -229,6 +229,25 @@ public final class TelemetryRuntimeService {
         return appliedAll;
     }
 
+    public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+        boolean appliedAll = true;
+        for (TelemetryProjectRegistration project : consentProjects) {
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
+            TelemetryConsentSnapshot current = new TelemetryConsentSnapshot(
+                    diagnostics.enabled(),
+                    diagnostics.crashEnabled(),
+                    diagnostics.errorEnabled(),
+                    diagnostics.lifecycleEnabled(),
+                    diagnostics.performanceEnabled(),
+                    diagnostics.usageEnabled(),
+                    diagnostics.statsEnabled(),
+                    diagnostics.breadcrumbsEnabled()
+            );
+            appliedAll &= applyConsent(project.projectId(), current.withCategory(category, enabled));
+        }
+        return appliedAll;
+    }
+
     public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryProjectRegistration project = findConsentProject(projectId);
         if (project == null) {

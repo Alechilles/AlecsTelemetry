@@ -85,7 +85,23 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must apply the shared tooltip styling to consent category hints"
         );
         assertTrue(
-                consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 7, Width: 56, Height: 56)"),
+                consentPage.contains("Anchor: (Height: 64, Left: 0, Right: 0)"),
+                "TelemetryConsentPage.ui must give the grid header enough height to keep labels clear of checkboxes"
+        );
+        assertTrue(
+                consentPage.contains("Background: #28415f"),
+                "TelemetryConsentPage.ui must draw visible grid lines between telemetry columns"
+        );
+        assertTrue(
+                consentPage.contains("Padding: (Left: 0, Right: 0, Top: 0, Bottom: 0)"),
+                "TelemetryConsentPage.ui must not offset project rows inside the scrolling viewport"
+        );
+        assertTrue(
+                consentPage.contains("Group #TelemetryConsentProjectRow0 { Anchor: (Left: 0, Right: 0, Height: 56)"),
+                "TelemetryConsentPage.ui must make project rows span the same full width as the header"
+        );
+        assertTrue(
+                consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 0, Width: 56, Height: 56)"),
                 "TelemetryConsentPage.ui must reserve a perfectly square 56px icon area for each consent row"
         );
         assertTrue(
@@ -97,19 +113,29 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must not pad project icons within their square slot"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 24, Left: 266, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentAllEnabled {\r\n            Anchor: (Top: 34, Left: 316, Width: 22, Height: 22)")
+                        || consentPage.contains("CheckBox #TelemetryConsentAllEnabled {\n            Anchor: (Top: 34, Left: 316, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must place the header enable checkbox in the same column as project row checkboxes"
+        );
+        assertTrue(
+                consentPage.contains("CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 316, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must align each project checkbox under the global enable column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 24, Left: 326, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentCrashAllEnabled {\r\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)")
+                        || consentPage.contains("CheckBox #TelemetryConsentCrashAllEnabled {\n            Anchor: (Top: 34, Left: 371, Width: 22, Height: 22)"),
+                "TelemetryConsentPage.ui must place the header crash checkbox in the same column as row crash checkboxes"
+        );
+        assertTrue(
+                consentPage.contains("CheckBox #TelemetryConsentCrashEnabled { Anchor: (Top: 17, Left: 371, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must align crash checkboxes under the crash column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 24, Left: 632, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 646, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must align stats checkboxes under the stats column"
         );
         assertTrue(
-                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 24, Left: 696, Width: 22, Height: 22)"),
+                consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22)"),
                 "TelemetryConsentPage.ui must align breadcrumbs checkboxes under the breadcrumbs column"
         );
         assertTrue(

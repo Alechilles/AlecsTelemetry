@@ -249,14 +249,10 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void toggleGlobalCategory(@Nullable String category, boolean enabled) {
-        if (category == null) {
+        if (category == null || category.isBlank()) {
             return;
         }
-        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.diagnostics().projects()) {
-            TelemetryConsentSnapshot current = snapshot(project);
-            TelemetryConsentSnapshot updated = withCategory(current, category, enabled);
-            runtimeService.applyConsent(project.projectId(), updated);
-        }
+        runtimeService.applyConsentCategoryToAll(category, enabled);
     }
 
     private void toggleCategory(@Nullable String projectId, @Nullable String category, boolean enabled) {
@@ -265,7 +261,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             return;
         }
         TelemetryConsentSnapshot current = snapshot(project);
-        TelemetryConsentSnapshot updated = withCategory(current, category, enabled);
+        TelemetryConsentSnapshot updated = current.withCategory(category, enabled);
         runtimeService.applyConsent(project.projectId(), updated);
     }
 
@@ -314,36 +310,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
 
     private static boolean categoryAllEnabled(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects,
                                               @Nonnull String category) {
-        return !projects.isEmpty() && projects.stream().allMatch(project -> categoryEnabled(project.consent(), category));
-    }
-
-    private static boolean categoryEnabled(@Nonnull TelemetryConsentSnapshot consent, @Nonnull String category) {
-        return switch (category) {
-            case "crash" -> consent.crashEnabled();
-            case "error" -> consent.errorEnabled();
-            case "lifecycle" -> consent.lifecycleEnabled();
-            case "performance" -> consent.performanceEnabled();
-            case "usage" -> consent.usageEnabled();
-            case "stats" -> consent.statsEnabled();
-            case "breadcrumbs" -> consent.breadcrumbsEnabled();
-            default -> false;
-        };
-    }
-
-    @Nonnull
-    private static TelemetryConsentSnapshot withCategory(@Nonnull TelemetryConsentSnapshot current,
-                                                         @Nonnull String category,
-                                                         boolean enabled) {
-        return switch (category) {
-            case "crash" -> new TelemetryConsentSnapshot(current.projectEnabled(), enabled, current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "error" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), enabled, current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "lifecycle" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), enabled, current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "performance" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), enabled, current.usageEnabled(), current.statsEnabled(), current.breadcrumbsEnabled());
-            case "usage" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), enabled, current.statsEnabled(), current.breadcrumbsEnabled());
-            case "stats" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), enabled, current.breadcrumbsEnabled());
-            case "breadcrumbs" -> new TelemetryConsentSnapshot(current.projectEnabled(), current.crashEnabled(), current.errorEnabled(), current.lifecycleEnabled(), current.performanceEnabled(), current.usageEnabled(), current.statsEnabled(), enabled);
-            default -> current;
-        };
+        return !projects.isEmpty() && projects.stream().allMatch(project -> project.consent().categoryEnabled(category));
     }
 
     @Nonnull
