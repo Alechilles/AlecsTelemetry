@@ -198,7 +198,7 @@ flowchart TD
 
 **Intent:** Persist manual reports as first-class records with nullable issue links. Stop automatically mixing every manual report into the normal issue list.
 
-- [ ] Add or confirm nullable issue link migration.
+- [x] Add or confirm nullable issue link migration.
 
   Modify or add a migration under:
 
@@ -218,7 +218,7 @@ flowchart TD
     WHERE issue_id IS NOT NULL;
   ```
 
-- [ ] Make manual report persistence accept no issue.
+- [x] Make manual report persistence accept no issue.
 
   Modify:
 
@@ -243,7 +243,7 @@ flowchart TD
   - Existing duplicate reports keep a non-null issue link if already linked.
   - `listReports(projectId, { issueId })` still returns linked reports.
 
-- [ ] Stop automatic issue production for manual reports.
+- [x] Stop automatic issue production for manual reports.
 
   Modify:
 
@@ -259,7 +259,7 @@ flowchart TD
 
   If manual report occurrences are still useful for global occurrence history, keep the occurrence row but make it non-issue-producing.
 
-- [ ] Remove unlinked manual reports from the normal Issues list.
+- [x] Remove unlinked manual reports from the normal Issues list.
 
   Modify:
 
