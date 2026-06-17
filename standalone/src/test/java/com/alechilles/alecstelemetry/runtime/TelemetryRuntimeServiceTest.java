@@ -300,6 +300,49 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void manualReportRuntimeContextUsesActiveLoadedModsSnapshot() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor(true),
+                "Example:Example Mod",
+                "1.2.3",
+                tempDir.resolve("Example Mod")
+        );
+        List<CrashReportEnvelope.LoadedModMetadata> discoveredInstalledMods = List.of(
+                new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3"),
+                new CrashReportEnvelope.LoadedModMetadata("Installed:Disabled Mod", "9.9.9")
+        );
+        List<CrashReportEnvelope.LoadedModMetadata> activeLoadedMods = List.of(
+                new CrashReportEnvelope.LoadedModMetadata("Example:Example Mod", "1.2.3")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                discoveredInstalledMods,
+                () -> activeLoadedMods,
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                service.currentPlayerReportRuntimeContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(
+                List.of("Example:Example Mod"),
+                result.envelope().runtime().loadedMods().stream()
+                        .map(CrashReportEnvelope.LoadedModMetadata::identifier)
+                        .toList()
+        );
+    }
+
+    @Test
     void failedManualReportUploadLeavesPendingReportForRetry() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("{}");
         TelemetryDataPaths dataPaths = manualReportPaths(settings);

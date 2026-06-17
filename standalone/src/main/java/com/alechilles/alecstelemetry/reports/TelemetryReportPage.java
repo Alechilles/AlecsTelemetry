@@ -5,7 +5,6 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
-import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
@@ -158,7 +157,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                         includeDiagnostics,
                         true
                 ),
-                PlayerReportRuntimeContext.UNKNOWN
+                runtimeService.currentPlayerReportRuntimeContext()
         );
         if (!result.accepted()) {
             validationErrors = result.validationErrors();

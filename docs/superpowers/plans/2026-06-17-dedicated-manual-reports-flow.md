@@ -122,7 +122,7 @@ flowchart TD
 
 **Intent:** The player report context should describe the running server. Project discovery can still scan installed projects for the selector UI, but report context must not reuse that scan as the loaded-mod list.
 
-- [ ] Introduce a runtime loaded-mod snapshot boundary.
+- [x] Introduce a runtime loaded-mod snapshot boundary.
 
   Add:
 
@@ -136,7 +136,7 @@ flowchart TD
   }
   ```
 
-- [ ] Wire the provider into report submission context.
+- [x] Wire the provider into report submission context.
 
   Modify:
 
@@ -152,7 +152,7 @@ flowchart TD
     - world name when available
     - active loaded mods from `TelemetryLoadedModSnapshotProvider`
 
-- [ ] Keep project discovery separate from runtime loaded mods.
+- [x] Keep project discovery separate from runtime loaded mods.
 
   Modify only if labels or method names are confusing:
 
@@ -175,7 +175,7 @@ flowchart TD
   - `Installed mod list` to `Loaded mods`
   - Any payload/help copy that implies inactive installed mods are included
 
-- [ ] Add regression tests for context precedence.
+- [x] Add regression tests for context precedence.
 
   Modify:
 

@@ -53,6 +53,7 @@ public final class TelemetryRuntimeService {
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
     private final List<TelemetryProjectRegistration> projects;
+    private final TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider;
     private List<TelemetryProjectRegistration> consentProjects;
 
     @Nonnull
@@ -80,6 +81,7 @@ public final class TelemetryRuntimeService {
                 resolvedProjects,
                 resolvedConsentProjects,
                 discoveryResult.loadedMods(),
+                TelemetryLoadedModSnapshotProvider.hytalePluginManager(discoveryResult.loadedMods(), logger),
                 collisions,
                 registrationWarnings,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
@@ -102,6 +104,7 @@ public final class TelemetryRuntimeService {
                 projects,
                 consentProjects,
                 loadedMods,
+                TelemetryLoadedModSnapshotProvider.fixed(loadedMods),
                 TelemetryProjectCollisionDetector.detect(projects),
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
@@ -120,11 +123,35 @@ public final class TelemetryRuntimeService {
         this(settings, dataPaths, projects, projects, loadedMods, client, logger, executor);
     }
 
+    TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
+                            @Nonnull TelemetryDataPaths dataPaths,
+                            @Nonnull List<TelemetryProjectRegistration> projects,
+                            @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                            @Nonnull TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider,
+                            @Nonnull CrashReportClient client,
+                            @Nullable HytaleLogger logger,
+                            @Nullable ScheduledExecutorService executor) {
+        this(
+                settings,
+                dataPaths,
+                projects,
+                projects,
+                loadedMods,
+                loadedModSnapshotProvider,
+                TelemetryProjectCollisionDetector.detect(projects),
+                buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
+                client,
+                logger,
+                executor
+        );
+    }
+
     private TelemetryRuntimeService(@Nonnull TelemetryRuntimeSettings settings,
                                     @Nonnull TelemetryDataPaths dataPaths,
                                     @Nonnull List<TelemetryProjectRegistration> projects,
                                     @Nonnull List<TelemetryProjectRegistration> consentProjects,
                                     @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                    @Nonnull TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider,
                                     @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
                                     @Nonnull List<String> registrationWarnings,
                                     @Nonnull CrashReportClient client,
@@ -138,6 +165,7 @@ public final class TelemetryRuntimeService {
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.projects = List.copyOf(projects);
+        this.loadedModSnapshotProvider = loadedModSnapshotProvider;
         this.engine = new TelemetryCoreEngine(
                 settings,
                 dataPaths,
@@ -360,6 +388,16 @@ public final class TelemetryRuntimeService {
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
         return engine.submitManualReport(projectId, submission, playerContext);
+    }
+
+    @Nonnull
+    public PlayerReportRuntimeContext currentPlayerReportRuntimeContext() {
+        return new PlayerReportRuntimeContext(
+                false,
+                0,
+                null,
+                loadedModSnapshotProvider.snapshotLoadedMods()
+        );
     }
 
     @Nonnull
