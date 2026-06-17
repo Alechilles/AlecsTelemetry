@@ -375,7 +375,7 @@ flowchart TD
 
 **Intent:** Add a dedicated UI where modders can inspect raw submitted reports and then triage them into issues.
 
-- [ ] Add client API helpers.
+- [x] Add client API helpers.
 
   Add:
 
@@ -391,7 +391,7 @@ flowchart TD
   updateManualReportStatus(projectId: string, reportId: string, status: ManualReportStatus): Promise<PortalManualReportDetailResponse>
   ```
 
-- [ ] Add routes and nav.
+- [x] Add routes and nav.
 
   Modify:
 
@@ -410,7 +410,7 @@ flowchart TD
   - Add `Reports` beside `Issues`.
   - Keep `/projects/:projectId` landing on Issues unless there is a product decision to make Reports the landing page.
 
-- [ ] Build the report inbox page.
+- [x] Build the report inbox page.
 
   Add:
 
@@ -435,7 +435,7 @@ flowchart TD
   - Status: received, triaged, resolved, rejected
   - Linked: all, unlinked, linked
 
-- [ ] Build the report detail page.
+- [x] Build the report detail page.
 
   Add:
 
@@ -454,7 +454,7 @@ flowchart TD
   - Actions: mark triaged, mark resolved, link issue, promote to issue, reject.
   - Raw JSON: collapsible preformatted payload.
 
-- [ ] Ensure crash report detail keeps its existing route.
+- [x] Ensure crash report detail keeps its existing route.
 
   Current crash/report route:
 
