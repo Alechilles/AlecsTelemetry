@@ -267,14 +267,12 @@ $C.@PageOverlay {
 
         Group #TelemetryConsentViewport {
           FlexWeight: 1;
-          LayoutMode: TopScrolling;
-          KeepScrollPosition: true;
-          ScrollbarStyle: $C.@DefaultScrollbarStyle;
+          LayoutMode: Top;
           Padding: (Left: 0, Right: 0, Top: 0, Bottom: 0);
 
           Group #TelemetryConsentRows {
             LayoutMode: Top;
-            Anchor: (Left: 8, Width: 740, Bottom: 0);
+            Anchor: (Width: 740, Bottom: 0);
 
             Group #TelemetryConsentProjectRow0 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
