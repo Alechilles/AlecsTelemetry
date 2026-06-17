@@ -92,6 +92,18 @@ class TelemetryRuntimeServiceTest {
         assertEquals("embedded-mod", embedded.lastProjectId);
         assertEquals("settings_opened", embedded.lastEventName);
         assertEquals("from standalone api", embedded.lastDetails.get("detail"));
+        assertTrue(service.applyConsent(
+                "embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+        ));
+        assertFalse(embedded.projectEnabled);
+        assertFalse(embedded.crashEnabled);
+        assertFalse(embedded.errorEventsEnabled);
+        assertFalse(embedded.lifecycleEventsEnabled);
+        assertFalse(embedded.performanceEnabled);
+        assertFalse(embedded.usageEnabled);
+        assertFalse(embedded.statsEnabled);
+        assertFalse(embedded.breadcrumbsEnabled);
 
         service.shutdown();
     }
@@ -1327,6 +1339,14 @@ class TelemetryRuntimeServiceTest {
         private String lastFlushProjectId;
         private String lastProjectId;
         private String lastEventName;
+        private boolean projectEnabled = true;
+        private boolean crashEnabled = true;
+        private boolean errorEventsEnabled = true;
+        private boolean lifecycleEventsEnabled = true;
+        private boolean performanceEnabled = true;
+        private boolean usageEnabled = true;
+        private boolean statsEnabled = true;
+        private boolean breadcrumbsEnabled = true;
         private Map<String, Object> lastDetails = Map.of();
 
         private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
@@ -1391,6 +1411,59 @@ class TelemetryRuntimeServiceTest {
         @Override
         public boolean requestFlush(@Nullable String projectId) {
             lastFlushProjectId = projectId;
+            return true;
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return projectEnabled;
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            projectEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            crashEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            errorEventsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            lifecycleEventsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            performanceEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            usageEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            statsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            breadcrumbsEnabled = enabled;
             return true;
         }
 

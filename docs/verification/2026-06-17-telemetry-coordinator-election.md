@@ -4,12 +4,10 @@ Date: 2026-06-17
 
 ## Automated
 
-- `.\mvnw.cmd -pl runtime test`: passed, 68 tests.
-- `.\mvnw.cmd -pl standalone -am "-Dtest=TelemetryRuntimeServiceTest,TelemetryCommandRootTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`: passed, 20 tests.
-- `.\mvnw.cmd -pl standalone -am test`: failed only on the two pre-existing standalone UI asset tests:
-  - `TelemetryConsentAssetPackTest.consentPageBindsHeaderToggleButtonsToDeterministicServerActions`
-  - `TelemetryReportAssetPackTest.reportPageBuffersTextInputChangesAndSanitizesSubmitFallbackSelectors`
-- `.\mvnw.cmd -pl standalone -am -DskipTests package`: passed.
+- `.\mvnw.cmd -pl runtime "-Dtest=TelemetryCoordinatorRegistryTest,EmbeddedTelemetryServiceTest" test`: passed, 10 tests.
+- `.\mvnw.cmd -pl standalone -am "-Dtest=TelemetryRuntimeServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test`: passed, 19 tests.
+- `.\mvnw.cmd -pl standalone -am test`: passed, 68 runtime tests and 47 standalone tests.
+- `.\mvnw.cmd -pl standalone -am package`: passed, including 68 runtime tests and 47 standalone tests.
 - Stale docs scan for old embedded skip/local-only wording: passed.
 
 ## Package Inspection
@@ -28,7 +26,7 @@ Date: 2026-06-17
 
 ## Manual Server
 
-Not run in this pass. Expected manual signal after installing a standalone build with a lower runtime version than an embedded runtime candidate:
+Not run in this pass. Remaining manual signal after installing a standalone build with a lower runtime version than an embedded runtime candidate:
 
 ```text
 Alec's Telemetry enabled. Active coordinator=embedded:<provider>, standaloneOwnsRuntime=false

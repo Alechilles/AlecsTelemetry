@@ -64,7 +64,7 @@ Allowed values:
   - means the standalone `Alec's Telemetry` mod may discover and manage this mod
 - `embedded`
   - means the mod manages telemetry internally through the embedded bootstrap
-  - the standalone runtime must skip this mod if it sees the descriptor
+  - the descriptor participates in coordinator discovery; the active elected runtime handles it
 
 ### Why this is the right shape
 
@@ -319,7 +319,7 @@ The embedded API should remain local to the owning mod and forward through the c
 2. Keep package names stable where possible to minimize churn.
 3. Make `TelemetryRuntimeService` depend on core abstractions instead of owning all logic directly.
 
-### Phase 3: standalone skip behavior
+### Phase 3: coordinator discovery behavior
 
 1. Update `TelemetryProjectDiscovery` / registration flow to include `runtimeMode=embedded`.
 2. Add diagnostics/logging so coordinator ownership is visible.
@@ -379,7 +379,7 @@ The rest of the descriptor stays the same.
 ### Unit tests
 
 - descriptor parsing with `runtimeMode`
-- standalone skip logic
+- coordinator discovery and proxy behavior
 - embedded bootstrap descriptor loading
 - embedded local storage path selection
 
@@ -400,7 +400,7 @@ The rest of the descriptor stays the same.
 ## Recommended Execution Order
 
 1. add `runtimeMode`
-2. add standalone skip behavior
+2. add coordinator discovery behavior
 3. extract `core` boundary
 4. add embedded bootstrap
 5. add embedded sample mod

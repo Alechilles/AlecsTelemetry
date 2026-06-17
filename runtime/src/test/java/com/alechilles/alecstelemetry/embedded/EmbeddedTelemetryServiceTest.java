@@ -267,6 +267,12 @@ class EmbeddedTelemetryServiceTest {
         );
 
         service.start();
+        assertTrue(service.setProjectEnabled(false));
+        assertFalse(service.isEnabled());
+        service.recordError("disabled_event", null, "Should not queue while disabled.");
+        assertEquals(0, service.flushPendingReportsNow("embedded-disabled").attempted());
+        assertTrue(service.setProjectEnabled(true));
+        assertTrue(service.isEnabled());
         service.recordError("embedded_event", null, "Forwarded through coordinator bridge.");
 
         assertEquals("embedded:Example:Embedded Mod", TelemetryCoordinatorRegistry.activeBridge().providerId());

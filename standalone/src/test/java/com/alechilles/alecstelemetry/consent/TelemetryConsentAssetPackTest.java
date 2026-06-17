@@ -170,7 +170,7 @@ class TelemetryConsentAssetPackTest {
 
     @Test
     void consentPageBindsHeaderToggleButtonsToDeterministicServerActions() throws IOException {
-        String source = Files.readString(Path.of("src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java"));
+        String source = sourceText("src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java");
 
         assertTrue(
                 source.contains("CustomUIEventBindingType.Activating,\n                \"#TelemetryConsentAllToggleButton\""),
@@ -215,5 +215,9 @@ class TelemetryConsentAssetPackTest {
             assertNotNull(input, path + " must be present on the standalone artifact classpath");
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    private static String sourceText(String path) throws IOException {
+        return Files.readString(Path.of(path)).replace("\r\n", "\n");
     }
 }

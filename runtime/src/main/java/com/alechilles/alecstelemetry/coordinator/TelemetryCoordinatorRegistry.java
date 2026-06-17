@@ -257,6 +257,95 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return invokeBoolean(
+                    "isProjectEnabled",
+                    new Class<?>[]{String.class},
+                    projectId
+            );
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setProjectEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setCrashEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setErrorEventsEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setLifecycleEventsEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setPerformanceEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setUsageEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setStatsEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setBreadcrumbsEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
         public boolean recordBreadcrumb(@Nonnull String projectId,
                                         @Nonnull String category,
                                         @Nonnull String detail) {

@@ -320,19 +320,35 @@ public final class TelemetryRuntimeService {
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        if (findProject(project.projectId()) != null || findManualReportProject(project.projectId()) != null) {
-            engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
-        }
-        if (findProject(project.projectId()) != null) {
-            engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
-            engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
-            engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
-            engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
-            engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
-            engine.setStatsEnabled(project.projectId(), snapshot.statsEnabled());
-            engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
-        }
+        applyRuntimeConsent(project.projectId(), snapshot);
         return true;
+    }
+
+    private void applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.setProjectEnabled(projectId, snapshot.projectEnabled());
+            active.setCrashEnabled(projectId, snapshot.crashEnabled());
+            active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            active.setUsageEnabled(projectId, snapshot.usageEnabled());
+            active.setStatsEnabled(projectId, snapshot.statsEnabled());
+            active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return;
+        }
+        if (findProject(projectId) != null || findManualReportProject(projectId) != null) {
+            engine.setProjectEnabled(projectId, snapshot.projectEnabled());
+        }
+        if (findProject(projectId) != null) {
+            engine.setCrashEnabled(projectId, snapshot.crashEnabled());
+            engine.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            engine.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            engine.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            engine.setUsageEnabled(projectId, snapshot.usageEnabled());
+            engine.setStatsEnabled(projectId, snapshot.statsEnabled());
+            engine.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+        }
     }
 
     public boolean markConsentReviewed(@Nonnull String projectId) {
@@ -949,6 +965,51 @@ public final class TelemetryRuntimeService {
         @Override
         public void shutdown() {
             service.shutdown();
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return service.isProjectEnabled(projectId);
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setProjectEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setCrashEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setErrorEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setLifecycleEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setPerformanceEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setUsageEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setStatsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setBreadcrumbsEnabled(projectId, enabled);
         }
 
         @Override

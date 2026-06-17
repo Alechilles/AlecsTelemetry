@@ -394,7 +394,7 @@ messages when a field is intended for breakdowns.
   - standalone `Alec's Telemetry` runtime may discover and manage the project
 - `embedded`
   - the owning mod is expected to bootstrap embedded telemetry itself
-  - standalone runtime will skip the project if it sees this mode
+  - the active elected telemetry coordinator discovers and manages the project, whether the winning runtime is standalone or embedded
 
 ### `defaults`
 

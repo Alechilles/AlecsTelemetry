@@ -92,7 +92,7 @@ class TelemetryReportAssetPackTest {
 
     @Test
     void reportPageBuffersTextInputChangesAndSanitizesSubmitFallbackSelectors() throws IOException {
-        String reportPageSource = Files.readString(Path.of("src/main/java/com/alechilles/alecstelemetry/reports/TelemetryReportPage.java"));
+        String reportPageSource = sourceText("src/main/java/com/alechilles/alecstelemetry/reports/TelemetryReportPage.java");
         String submitEventData = sourceSlice(
                 reportPageSource,
                 "private EventData submitEventData()",
@@ -166,5 +166,9 @@ class TelemetryReportAssetPackTest {
             assertNotNull(input, path + " must be present on the standalone artifact classpath");
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         }
+    }
+
+    private static String sourceText(String path) throws IOException {
+        return Files.readString(Path.of(path)).replace("\r\n", "\n");
     }
 }

@@ -128,8 +128,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
 
     @Override
     public boolean isEnabled() {
-        return (engine != null && engine.isProjectEnabled(project.projectId()))
-                || (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null);
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.isProjectEnabled(project.projectId());
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.isProjectEnabled(project.projectId());
+        }
+        return engine != null && engine.isProjectEnabled(project.projectId());
     }
 
     @Nullable
@@ -140,26 +146,50 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
 
     @Override
     public boolean setProjectEnabled(boolean enabled) {
-        if (engine == null || dataPaths == null || overrideStore == null) {
+        if (dataPaths == null || overrideStore == null) {
             return false;
         }
         boolean saved = overrideStore.saveProjectEnabled(dataPaths.projectOverrideFile(project.projectId()), enabled);
-        if (engine != null) {
-            engine.setProjectEnabled(project.projectId(), enabled);
-        }
-        return saved;
+        return saved && applyProjectEnabled(enabled);
     }
 
     @Override
     public boolean setBreadcrumbsEnabled(boolean enabled) {
-        if (engine == null || dataPaths == null || overrideStore == null) {
+        if (dataPaths == null || overrideStore == null) {
             return false;
         }
         boolean saved = overrideStore.saveBreadcrumbsEnabled(dataPaths.projectOverrideFile(project.projectId()), enabled);
+        return saved && applyBreadcrumbsEnabled(enabled);
+    }
+
+    private boolean applyProjectEnabled(boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.setProjectEnabled(project.projectId(), enabled);
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.setProjectEnabled(project.projectId(), enabled);
+        }
+        if (engine != null) {
+            engine.setProjectEnabled(project.projectId(), enabled);
+            return true;
+        }
+        return false;
+    }
+
+    private boolean applyBreadcrumbsEnabled(boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.setBreadcrumbsEnabled(project.projectId(), enabled);
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.setBreadcrumbsEnabled(project.projectId(), enabled);
+        }
         if (engine != null) {
             engine.setBreadcrumbsEnabled(project.projectId(), enabled);
+            return true;
         }
-        return saved;
+        return false;
     }
 
     @Override
@@ -509,6 +539,51 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         @Override
         public void shutdown() {
             service.shutdown();
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return service.isProjectEnabled(projectId);
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setProjectEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setCrashEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setErrorEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setLifecycleEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setPerformanceEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setUsageEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setStatsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setBreadcrumbsEnabled(projectId, enabled);
         }
 
         @Override

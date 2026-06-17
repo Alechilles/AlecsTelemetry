@@ -37,10 +37,14 @@ class TelemetryCoordinatorRegistryTest {
 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         assertTrue(active.recordUsage("alecs-tamework", "settings_page_opened", Map.of("source", "api")));
+        assertTrue(active.setProjectEnabled("alecs-tamework", false));
+        assertTrue(active.setBreadcrumbsEnabled("alecs-tamework", false));
 
         assertEquals("alecs-tamework", embedded.lastProjectId);
         assertEquals("settings_page_opened", embedded.lastEventName);
         assertEquals("api", embedded.lastDetails.get("source"));
+        assertFalse(embedded.projectEnabled);
+        assertFalse(embedded.breadcrumbsEnabled);
     }
 
     @Test
@@ -157,6 +161,8 @@ class TelemetryCoordinatorRegistryTest {
         private boolean active;
         private String lastProjectId;
         private String lastEventName;
+        private boolean projectEnabled = true;
+        private boolean breadcrumbsEnabled = true;
         private Map<String, Object> lastDetails = Map.of();
 
         private ForeignBridge(TelemetryRuntimeCandidate candidate) {
@@ -205,6 +211,20 @@ class TelemetryCoordinatorRegistryTest {
 
         public boolean isActive() {
             return active;
+        }
+
+        public boolean isProjectEnabled(String projectId) {
+            return projectEnabled;
+        }
+
+        public boolean setProjectEnabled(String projectId, boolean enabled) {
+            projectEnabled = enabled;
+            return true;
+        }
+
+        public boolean setBreadcrumbsEnabled(String projectId, boolean enabled) {
+            breadcrumbsEnabled = enabled;
+            return true;
         }
 
         public boolean recordUsage(String projectId, String eventName, Map<String, Object> details) {

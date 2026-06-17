@@ -47,6 +47,42 @@ public interface TelemetryCoordinatorBridge {
     default void shutdown() {
     }
 
+    default boolean isProjectEnabled(@Nonnull String projectId) {
+        return false;
+    }
+
+    default boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
+    default boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
     default boolean recordBreadcrumb(@Nonnull String projectId,
                                      @Nonnull String category,
                                      @Nonnull String detail) {

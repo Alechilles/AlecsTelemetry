@@ -2076,7 +2076,7 @@ git commit -m "Test: document telemetry coordinator verification"
 - The registry must stay reflection-first. Do not replace reflective bridge access with direct `instanceof TelemetryCoordinatorBridge` checks, because shaded runtime copies can load the same class name through different plugin classloaders.
 - `System.getProperties()` stores object values even though `setProperty` is string-only. Use `putIfAbsent`, not `setProperty`.
 - Do not let passive candidates call `TelemetryCoreEngine.start()`.
-- Do not let old standalone skip embedded descriptors for runtime capture after `TelemetryCoordinatorService` is introduced.
+- Do not let old standalone descriptor filtering exclude embedded projects from runtime capture after `TelemetryCoordinatorService` is introduced.
 - Keep coordinator protocol version explicit so a future breaking embedded runtime cannot accidentally be selected by older code.
 
 ## Self-Review

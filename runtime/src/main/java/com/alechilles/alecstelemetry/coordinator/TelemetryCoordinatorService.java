@@ -88,6 +88,10 @@ public final class TelemetryCoordinatorService {
         return engine.isEnabled();
     }
 
+    public boolean isProjectEnabled(@Nonnull String projectId) {
+        return engine.isProjectEnabled(projectId);
+    }
+
     public int registeredProjectCount() {
         return engine.projects().size();
     }
@@ -129,6 +133,70 @@ public final class TelemetryCoordinatorService {
             return false;
         }
         engine.recordBreadcrumb(projectId, category, detail);
+        return true;
+    }
+
+    public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null && engine.findManualReportProject(projectId) == null) {
+            return false;
+        }
+        engine.setProjectEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setCrashEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setErrorEventsEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setLifecycleEventsEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setPerformanceEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setUsageEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setStatsEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setBreadcrumbsEnabled(projectId, enabled);
         return true;
     }
 
