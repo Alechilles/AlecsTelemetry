@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.IntSupplier;
 
 /**
  * Active runtime coordinator that owns telemetry capture, queueing, and upload for all projects.
@@ -33,6 +34,7 @@ public final class TelemetryCoordinatorService {
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
     private final TelemetryCoreEngine engine;
+    private final TelemetryCoordinatorStatsHeartbeat statsHeartbeat;
 
     public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
                                        @Nonnull TelemetryDataPaths dataPaths,
@@ -42,6 +44,18 @@ public final class TelemetryCoordinatorService {
                                        @Nonnull CrashReportClient client,
                                        @Nullable HytaleLogger logger,
                                        @Nullable ScheduledExecutorService executor) {
+        this(settings, dataPaths, projects, manualReportProjects, loadedMods, client, logger, executor, null);
+    }
+
+    public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
+                                       @Nonnull TelemetryDataPaths dataPaths,
+                                       @Nonnull List<TelemetryProjectRegistration> projects,
+                                       @Nonnull List<TelemetryProjectRegistration> manualReportProjects,
+                                       @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                       @Nonnull CrashReportClient client,
+                                       @Nullable HytaleLogger logger,
+                                       @Nullable ScheduledExecutorService executor,
+                                       @Nullable IntSupplier onlinePlayers) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.engine = new TelemetryCoreEngine(
@@ -54,6 +68,9 @@ public final class TelemetryCoordinatorService {
                 logger,
                 executor
         );
+        this.statsHeartbeat = onlinePlayers == null
+                ? null
+                : new TelemetryCoordinatorStatsHeartbeat(engine, onlinePlayers, executor, logger);
     }
 
     @Nonnull
@@ -61,6 +78,15 @@ public final class TelemetryCoordinatorService {
                                                        @Nonnull CrashReportClient client,
                                                        @Nullable HytaleLogger logger,
                                                        @Nullable ScheduledExecutorService executor) {
+        return discover(dataPaths, client, logger, executor, null);
+    }
+
+    @Nonnull
+    public static TelemetryCoordinatorService discover(@Nonnull TelemetryDataPaths dataPaths,
+                                                       @Nonnull CrashReportClient client,
+                                                       @Nullable HytaleLogger logger,
+                                                       @Nullable ScheduledExecutorService executor,
+                                                       @Nullable IntSupplier onlinePlayers) {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
         TelemetryProjectDiscovery.DiscoveryResult discovery = new TelemetryProjectDiscovery(logger)
                 .discover(dataPaths.descriptorDirectories());
@@ -76,15 +102,22 @@ public final class TelemetryCoordinatorService {
                 discovery.loadedMods(),
                 client,
                 logger,
-                executor
+                executor,
+                onlinePlayers
         );
     }
 
     public void start() {
         engine.start();
+        if (statsHeartbeat != null) {
+            statsHeartbeat.start();
+        }
     }
 
     public void shutdown() {
+        if (statsHeartbeat != null) {
+            statsHeartbeat.shutdown();
+        }
         engine.shutdown();
     }
 
@@ -304,6 +337,12 @@ public final class TelemetryCoordinatorService {
 
     public int pendingReports(@Nullable String projectId) {
         return engine.pendingReports(projectId);
+    }
+
+    void emitStatsHeartbeatNow() {
+        if (statsHeartbeat != null) {
+            statsHeartbeat.emitHeartbeatNow();
+        }
     }
 
     public boolean flushInProgress() {

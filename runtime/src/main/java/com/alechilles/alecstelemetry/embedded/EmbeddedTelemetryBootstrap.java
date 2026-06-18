@@ -91,7 +91,8 @@ public final class EmbeddedTelemetryBootstrap {
                 sharedDataPaths,
                 client,
                 logger,
-                HytaleServer.SCHEDULED_EXECUTOR
+                HytaleServer.SCHEDULED_EXECUTOR,
+                playerCounter::onlinePlayers
         );
         TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
                 "embedded:" + pluginIdentifier,

@@ -138,6 +138,62 @@ class TelemetryCoordinatorServiceTest {
         assertEquals("Example:Embedded Mod", payload.get("worldFailurePluginIdentifier").getAsString());
     }
 
+    @Test
+    void coordinatorStatsHeartbeatPersistsForEveryStatsProject() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        TelemetryProjectRegistration dependency = new TelemetryProjectRegistration(
+                statsDescriptor("dependency-mod", "Dependency Mod", "dependency"),
+                "Example:Dependency Mod",
+                "4.5.6",
+                tempDir.resolve("Dependency.jar")
+        );
+        SequencedClient client = new SequencedClient(
+                CrashReportClient.UploadResult.success(204),
+                CrashReportClient.UploadResult.success(204)
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded, dependency),
+                List.of(embedded, dependency),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Dependency Mod", "4.5.6")
+                ),
+                client,
+                null,
+                null,
+                () -> 3
+        );
+
+        service.emitStatsHeartbeatNow();
+
+        assertEquals(1, service.flushPendingReportsNow("test", "embedded-mod").attempted());
+        assertEquals(1, service.flushPendingReportsNow("test", "dependency-mod").attempted());
+        assertEquals(2, client.payloads.size());
+
+        JsonObject embeddedPayload = JsonParser.parseString(client.payloads.get(0)).getAsJsonObject();
+        JsonObject dependencyPayload = JsonParser.parseString(client.payloads.get(1)).getAsJsonObject();
+        assertEquals("embedded-mod", embeddedPayload.get("projectId").getAsString());
+        assertEquals("dependency-mod", dependencyPayload.get("projectId").getAsString());
+        assertEquals("runtime_api", embeddedPayload.get("source").getAsString());
+        assertEquals("runtime_api", dependencyPayload.get("source").getAsString());
+        assertEquals("heartbeat", embeddedPayload.get("eventName").getAsString());
+        assertEquals("heartbeat", dependencyPayload.get("eventName").getAsString());
+        assertEquals(3, embeddedPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        assertEquals(3, dependencyPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
+    }
+
     private TelemetryDataPaths dataPaths(TelemetryRuntimeSettings settings) {
         return new TelemetryDataPaths(
                 tempDir,
@@ -169,6 +225,32 @@ class TelemetryCoordinatorServiceTest {
                         }
                       }
                     }
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor statsDescriptor(String projectId, String displayName, String runtimeMode) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "stats": {
+                    "enabled": true,
+                    "allowedEvents": ["heartbeat"]
                   },
                   "defaults": {
                     "destinationMode": "custom"
