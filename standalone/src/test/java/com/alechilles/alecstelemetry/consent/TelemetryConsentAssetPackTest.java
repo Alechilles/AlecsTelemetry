@@ -123,6 +123,17 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must include reliable hit targets for category header checkboxes"
         );
         assertTrue(
+                consentPage.contains("TextButton #TelemetryConsentPrivacyDisclaimerButton"),
+                "TelemetryConsentPage.ui must include a bottom privacy disclaimer button"
+        );
+        assertTrue(
+                consentPage.contains("Group #TelemetryConsentPrivacyDisclaimerPopup")
+                        && consentPage.contains("Visible: false")
+                        && consentPage.contains("Label #TelemetryConsentPrivacyDisclaimerBody")
+                        && consentPage.contains("TextButton #TelemetryConsentPrivacyDisclaimerClose"),
+                "TelemetryConsentPage.ui must include a hidden privacy disclaimer popup with body text and a close button"
+        );
+        assertTrue(
                 consentPage.contains("#TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 0, Width: 56, Height: 56)"),
                 "TelemetryConsentPage.ui must reserve a perfectly square 56px icon area for each consent row"
         );
@@ -213,6 +224,21 @@ class TelemetryConsentAssetPackTest {
         assertTrue(
                 source.contains("EventData.of(KEY_ACTION, ACTION_TOGGLE_GLOBAL_CATEGORY)\n                            .append(KEY_CATEGORY, category)\n                            .append(KEY_ENABLED, categoryCheck + \".Value\")"),
                 "Global category checkboxes must keep ValueChanged bindings for direct checkbox clicks"
+        );
+        assertTrue(
+                source.contains("ACTION_SHOW_PRIVACY_DISCLAIMER = \"show_privacy_disclaimer\"")
+                        && source.contains("ACTION_HIDE_PRIVACY_DISCLAIMER = \"hide_privacy_disclaimer\""),
+                "The consent page must expose deterministic actions for opening and closing the privacy disclaimer popup"
+        );
+        assertTrue(
+                source.contains("commands.set(\"#TelemetryConsentPrivacyDisclaimerBody.Text\", PRIVACY_DISCLAIMER_TEXT)")
+                        && source.contains("directly to Alec at discord.gg/uP5bNTVSze and it will be promptly investigated."),
+                "The consent page must populate the privacy disclaimer popup with the approved reporting language"
+        );
+        assertTrue(
+                source.contains("CustomUIEventBindingType.Activating,\n                \"#TelemetryConsentPrivacyDisclaimerButton\"")
+                        && source.contains("CustomUIEventBindingType.Activating,\n                \"#TelemetryConsentPrivacyDisclaimerClose\""),
+                "The consent page must bind the privacy disclaimer button and close button to Activating events"
         );
     }
 

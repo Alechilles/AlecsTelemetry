@@ -31,10 +31,17 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     static final String ACTION_TOGGLE_GLOBAL_CATEGORY = "toggle_global_category";
     static final String ACTION_TOGGLE_PROJECT = "toggle_project";
     static final String ACTION_TOGGLE_CATEGORY = "toggle_category";
+    static final String ACTION_SHOW_PRIVACY_DISCLAIMER = "show_privacy_disclaimer";
+    static final String ACTION_HIDE_PRIVACY_DISCLAIMER = "hide_privacy_disclaimer";
     static final String ACTION_SAVE = "save";
     static final String ACTION_CLOSE = "close";
 
     private static final int MAX_PROJECT_ROWS = 8;
+    private static final String PRIVACY_DISCLAIMER_TEXT = String.join("\n\n",
+            "Alec's Telemetry is designed to report anonymous usage data. Under its default configuration, and in officially sanctioned mods such as other mods in the Alec's mod line, it does not report personally identifiable information.",
+            "However, Alec's Telemetry includes highly customizable reporting systems. Because third-party mod authors can configure those systems themselves, Alec cannot guarantee that every mod using Alec's Telemetry follows the intended privacy standards.",
+            "Reporting non-optional personally identifiable information through Alec's Telemetry is against Alec's Telemetry policy. If you believe a mod author is using Alec's Telemetry to collect identifiable user information without a clear, optional choice, please report it directly to Alec at discord.gg/uP5bNTVSze and it will be promptly investigated."
+    );
     private static final String KEY_ACTION = "Action";
     private static final String KEY_PROJECT_ID = "ProjectId";
     private static final String KEY_CATEGORY = "Category";
@@ -51,6 +58,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     };
     private final TelemetryConsentRuntime runtimeService;
     private final boolean firstRun;
+    private boolean privacyDisclaimerVisible;
 
     public TelemetryConsentPage(@Nonnull PlayerRef playerRef,
                                 @Nonnull TelemetryConsentRuntime runtimeService,
@@ -79,6 +87,8 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             case ACTION_TOGGLE_GLOBAL_CATEGORY -> toggleGlobalCategory(data.category, data.enabledValue());
             case ACTION_TOGGLE_PROJECT -> toggleProject(data.projectId, data.enabledValue());
             case ACTION_TOGGLE_CATEGORY -> toggleCategory(data.projectId, data.category, data.enabledValue());
+            case ACTION_SHOW_PRIVACY_DISCLAIMER -> privacyDisclaimerVisible = true;
+            case ACTION_HIDE_PRIVACY_DISCLAIMER -> privacyDisclaimerVisible = false;
             case ACTION_SAVE -> {
                 saveAndClose();
                 return;
@@ -118,6 +128,8 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         }
         commands.set("#TelemetryConsentPrimary.Text", firstRun ? "Save choices" : "Save");
         commands.set("#TelemetryConsentSecondary.Text", firstRun ? "Not now" : "Close");
+        commands.set("#TelemetryConsentPrivacyDisclaimerPopup.Visible", privacyDisclaimerVisible);
+        commands.set("#TelemetryConsentPrivacyDisclaimerBody.Text", PRIVACY_DISCLAIMER_TEXT);
         commands.set("#TelemetryConsentEmpty.Visible", projects.isEmpty());
         commands.set("#TelemetryConsentOverflow.Visible", projects.size() > MAX_PROJECT_ROWS);
         commands.set("#TelemetryConsentOverflow.Text", projects.size() > MAX_PROJECT_ROWS
@@ -207,6 +219,18 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                     false
             );
         }
+        events.addEventBinding(
+                CustomUIEventBindingType.Activating,
+                "#TelemetryConsentPrivacyDisclaimerButton",
+                EventData.of(KEY_ACTION, ACTION_SHOW_PRIVACY_DISCLAIMER),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.Activating,
+                "#TelemetryConsentPrivacyDisclaimerClose",
+                EventData.of(KEY_ACTION, ACTION_HIDE_PRIVACY_DISCLAIMER),
+                false
+        );
         events.addEventBinding(
                 CustomUIEventBindingType.Activating,
                 "#TelemetryConsentPrimary",

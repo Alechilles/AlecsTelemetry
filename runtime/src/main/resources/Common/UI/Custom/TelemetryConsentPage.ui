@@ -591,7 +591,15 @@ $C.@PageOverlay {
 
       Group {
         Anchor: (Height: 42);
-        LayoutMode: Right;
+        LayoutMode: Left;
+
+        $C.@SmallSecondaryTextButton #TelemetryConsentPrivacyDisclaimerButton {
+          @Sounds = $C.@ButtonSounds;
+          @Text = "Privacy Disclaimer";
+          @Anchor = (MinWidth: 162);
+        }
+
+        Group { FlexWeight: 1; }
 
         $C.@SmallSecondaryTextButton #TelemetryConsentPrimary {
           @Sounds = $C.@ButtonSounds;
@@ -605,6 +613,43 @@ $C.@PageOverlay {
           @Sounds = $C.@ButtonSounds;
           @Text = "Not now";
           @Anchor = (MinWidth: 104);
+        }
+      }
+    }
+
+    Group #TelemetryConsentPrivacyDisclaimerPopup {
+      Anchor: (Left: 0, Right: 0, Top: 128, Bottom: 0);
+      Visible: false;
+      LayoutMode: Middle;
+      Background: #00000099;
+
+      Group {
+        Anchor: (Width: 640, Height: 330);
+        LayoutMode: Top;
+        Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16);
+        Padding: (Left: 20, Right: 20, Top: 18, Bottom: 16);
+
+        Label {
+          Anchor: (Height: 34);
+          Text: "Privacy Disclaimer";
+          Style: (FontSize: 18, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false);
+        }
+
+        Label #TelemetryConsentPrivacyDisclaimerBody {
+          FlexWeight: 1;
+          Text: "";
+          Style: (FontSize: 13, TextColor: #dce9f8, HorizontalAlignment: Start, VerticalAlignment: Start, Wrap: true);
+        }
+
+        Group {
+          Anchor: (Height: 42);
+          LayoutMode: Right;
+
+          $C.@SmallSecondaryTextButton #TelemetryConsentPrivacyDisclaimerClose {
+            @Sounds = $C.@ButtonSounds;
+            @Text = "Close";
+            @Anchor = (MinWidth: 96);
+          }
         }
       }
     }
