@@ -16,7 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TelemetryCoordinatorRegistry {
 
     public static final int COORDINATOR_PROTOCOL_VERSION = 2;
-    private static final String REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.v1";
+    static final String REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.protocol.v2";
+    static final String LEGACY_PROTOCOL_ONE_REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.v1";
 
     private TelemetryCoordinatorRegistry() {
     }
@@ -67,6 +68,7 @@ public final class TelemetryCoordinatorRegistry {
         }
         existing.clear();
         System.getProperties().remove(REGISTRY_KEY);
+        System.getProperties().remove(LEGACY_PROTOCOL_ONE_REGISTRY_KEY);
     }
 
     @SuppressWarnings("unchecked")

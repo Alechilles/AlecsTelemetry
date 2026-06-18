@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Path;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -90,6 +91,47 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     @Test
+    void isolatesProtocolTwoRegistryFromLegacyProtocolOneElection() {
+        ArrayList<String> lifecycle = new ArrayList<>();
+        OrderedBridge modern = orderedBridge("modern", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4", lifecycle);
+        OrderedBridge legacy = new OrderedBridge(
+                candidate("legacy", TelemetryRuntimeOrigin.STANDALONE, "9.0.0", 1),
+                lifecycle
+        );
+
+        TelemetryCoordinatorRegistry.register(modern);
+        assertEquals(List.of("modern:start"), lifecycle);
+        assertTrue(modern.isActive());
+        assertFalse(System.getProperties().containsKey(TelemetryCoordinatorRegistry.LEGACY_PROTOCOL_ONE_REGISTRY_KEY));
+
+        lifecycle.clear();
+        simulateLegacyProtocolOneRegister(legacy);
+
+        assertTrue(modern.isActive());
+        assertTrue(legacy.isActive());
+        assertEquals(List.of("legacy:start"), lifecycle);
+        assertEquals("modern", TelemetryCoordinatorRegistry.activeBridge().providerId());
+    }
+
+    @Test
+    void clearForTestsRemovesCurrentAndKnownLegacyRegistryMaps() {
+        TelemetryCoordinatorRegistry.register(bridge("modern", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4"));
+        System.getProperties().put(
+                TelemetryCoordinatorRegistry.LEGACY_PROTOCOL_ONE_REGISTRY_KEY,
+                new ConcurrentHashMap<String, Object>(Map.of("legacy", bridge(
+                        "legacy",
+                        TelemetryRuntimeOrigin.STANDALONE,
+                        "0.1.3"
+                )))
+        );
+
+        TelemetryCoordinatorRegistry.clearForTests();
+
+        assertFalse(System.getProperties().containsKey(TelemetryCoordinatorRegistry.REGISTRY_KEY));
+        assertFalse(System.getProperties().containsKey(TelemetryCoordinatorRegistry.LEGACY_PROTOCOL_ONE_REGISTRY_KEY));
+    }
+
+    @Test
     void shutsDownOldCoordinatorBeforeStartingNewWinner() {
         ArrayList<String> lifecycle = new ArrayList<>();
         OrderedBridge standalone = orderedBridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3", lifecycle);
@@ -143,6 +185,53 @@ class TelemetryCoordinatorRegistryTest {
                 Path.of(providerId + ".jar"),
                 Path.of("Telemetry")
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void simulateLegacyProtocolOneRegister(TelemetryCoordinatorBridge bridge) {
+        ConcurrentHashMap<String, Object> created = new ConcurrentHashMap<>();
+        Object existing = System.getProperties().putIfAbsent(
+                TelemetryCoordinatorRegistry.LEGACY_PROTOCOL_ONE_REGISTRY_KEY,
+                created
+        );
+        ConcurrentHashMap<String, Object> registry = existing instanceof ConcurrentHashMap<?, ?> map
+                ? (ConcurrentHashMap<String, Object>) map
+                : created;
+        registry.put(bridge.providerId(), bridge);
+        simulateLegacyProtocolOneElection(registry);
+    }
+
+    private static void simulateLegacyProtocolOneElection(ConcurrentHashMap<String, Object> registry) {
+        ArrayList<TelemetryRuntimeCandidate> candidates = new ArrayList<>();
+        for (Object value : registry.values()) {
+            if (value instanceof TelemetryCoordinatorBridge bridge) {
+                candidates.add(candidate(
+                        bridge.providerId(),
+                        TelemetryRuntimeOrigin.valueOf(bridge.origin()),
+                        bridge.runtimeVersion(),
+                        bridge.coordinatorProtocolVersion()
+                ));
+            }
+        }
+        TelemetryRuntimeCandidate winner = TelemetryRuntimeCandidate.selectWinner(candidates, 1);
+        for (Object value : List.copyOf(registry.values())) {
+            if (!(value instanceof TelemetryCoordinatorBridge bridge)) {
+                continue;
+            }
+            boolean shouldBeActive = winner != null && bridge.providerId().equals(winner.providerId());
+            if (!shouldBeActive && bridge.isActive()) {
+                bridge.shutdown();
+                bridge.deactivate();
+            }
+        }
+        if (winner == null) {
+            return;
+        }
+        Object value = registry.get(winner.providerId());
+        if (value instanceof TelemetryCoordinatorBridge bridge && !bridge.isActive()) {
+            bridge.activate();
+            bridge.start();
+        }
     }
 
     private static class RecordingBridge implements TelemetryCoordinatorBridge {
