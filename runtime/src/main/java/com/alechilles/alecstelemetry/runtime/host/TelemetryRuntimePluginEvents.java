@@ -44,25 +44,41 @@ final class TelemetryRuntimePluginEvents {
             removeWorldRegistration = plugin.getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
         } catch (RuntimeException ex) {
             unregister();
-            if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log("Alec's Telemetry could not register shared runtime events.");
-            }
+            logWarning("Alec's Telemetry could not register shared runtime events.", ex);
         }
     }
 
     void unregister() {
         registered.set(false);
-        unregister(removeWorldRegistration);
-        unregister(playerDisconnectRegistration);
-        unregister(playerReadyRegistration);
+        EventRegistration<?, ?> removeWorld = removeWorldRegistration;
+        EventRegistration<?, ?> playerDisconnect = playerDisconnectRegistration;
+        EventRegistration<?, ?> playerReady = playerReadyRegistration;
         removeWorldRegistration = null;
         playerDisconnectRegistration = null;
         playerReadyRegistration = null;
+        unregister(removeWorld, "remove world");
+        unregister(playerDisconnect, "player disconnect");
+        unregister(playerReady, "player ready");
     }
 
-    private void unregister(@Nullable EventRegistration<?, ?> registration) {
-        if (registration != null) {
+    private void unregister(@Nullable EventRegistration<?, ?> registration, @Nonnull String eventName) {
+        if (registration == null) {
+            return;
+        }
+        try {
             registration.unregister();
+        } catch (RuntimeException ex) {
+            logWarning("Alec's Telemetry could not unregister shared runtime " + eventName + " event.", ex);
+        }
+    }
+
+    private void logWarning(@Nonnull String message, @Nonnull RuntimeException ex) {
+        if (logger == null) {
+            return;
+        }
+        try {
+            logger.at(Level.WARNING).withCause(ex).log(message);
+        } catch (RuntimeException ignored) {
         }
     }
 
