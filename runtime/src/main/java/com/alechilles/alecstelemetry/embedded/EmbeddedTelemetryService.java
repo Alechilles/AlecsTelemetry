@@ -206,6 +206,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     public boolean commandProjectEnabled(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(projectId);
+            if (!activeDiagnostics.isEmpty()) {
+                return TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(activeDiagnostics).enabled();
+            }
+            return active.isProjectEnabled(projectId);
+        }
         if (active != null) {
             return active.isProjectEnabled(projectId);
         }

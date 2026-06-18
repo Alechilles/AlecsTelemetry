@@ -458,6 +458,7 @@ class EmbeddedTelemetryServiceTest {
         assertNull(service.commandProject("embedded-mod"));
         assertEquals("provider-mod", service.commandProject("provider-mod").projectId());
         assertEquals("provider-consent-only", service.commandProject("provider-consent-only").projectId());
+        assertTrue(service.commandProjectEnabled("provider-consent-only"));
         assertEquals(5, service.commandPendingReports(null));
         assertEquals(5, service.commandPendingReports("provider-mod"));
         assertEquals("active-last", service.commandLastFlushResult());
