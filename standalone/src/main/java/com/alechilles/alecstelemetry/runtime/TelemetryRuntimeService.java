@@ -807,7 +807,8 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {
-            return projectFromSummary(active.findProjectSummary(projectId));
+            TelemetryProjectRegistration project = projectFromSummary(active.findProjectSummary(projectId));
+            return project == null ? projectFromSummary(active.consentProjectDiagnostics(projectId)) : project;
         }
         if (coordinatorBridge != null && active != null) {
             return coordinatorService.findProject(projectId);

@@ -143,6 +143,12 @@ class TelemetryRuntimeHostTest {
                 "2.0.0",
                 tempDir.resolve("Winner Mod")
         );
+        TelemetryProjectRegistration winnerConsentOnlyProject = registration(
+                telemetryCategoryDescriptor("winner-consent-only", "Winner Consent Only"),
+                "Example:Winner Consent Only",
+                "2.0.0",
+                tempDir.resolve("Winner Consent Only")
+        );
         TelemetryDataPaths winnerPaths = dataPaths(tempDir.resolve("winning-provider"));
         ProviderFixture winner = providerFixture(
                 "embedded:Alechilles:Winner",
@@ -151,7 +157,7 @@ class TelemetryRuntimeHostTest {
                 TelemetryRuntimeSettings.load(winnerPaths.settingsFile(), null),
                 winnerPaths,
                 List.of(winnerProject),
-                List.of(winnerProject),
+                List.of(winnerProject, winnerConsentOnlyProject),
                 List.of(),
                 winnerProject
         );
@@ -162,10 +168,17 @@ class TelemetryRuntimeHostTest {
         assertFalse(loser.handle().ownsActiveCoordinator());
         assertTrue(winner.handle().ownsActiveCoordinator());
         TelemetryRuntimeDiagnostics loserDiagnostics = loser.handle().consentDiagnostics();
-        assertEquals(1, loserDiagnostics.projects().size());
-        assertEquals("winner-mod", loserDiagnostics.projects().getFirst().projectId());
+        assertEquals(List.of("winner-mod", "winner-consent-only"), loserDiagnostics.projects().stream()
+                .map(TelemetryRuntimeDiagnostics.ProjectDiagnostics::projectId)
+                .toList());
         assertNull(loser.handle().consentProjectDiagnostics("loser-mod"));
         assertNotNull(loser.handle().consentProjectDiagnostics("winner-mod"));
+        assertEquals(List.of("winner-mod", "winner-consent-only"), loser.handle().api().projects().stream()
+                .map(TelemetryProjectHandle::projectId)
+                .toList());
+        assertNotNull(loser.handle().api().findProject("winner-mod"));
+        assertNotNull(loser.handle().api().findProject("winner-consent-only"));
+        assertNull(loser.handle().api().findProject("loser-mod"));
 
         TelemetryConsentSnapshot disabled = new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false);
         assertFalse(loser.handle().applyConsent("loser-mod", disabled));

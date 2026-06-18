@@ -197,7 +197,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (usesLocalCoordinator(active)) {
             return coordinator.projects();
         }
-        return projectsFromSummaries(active.projectSummaries());
+        return projectsFromSummaries(activeProjects(active));
     }
 
     @Nullable
@@ -207,7 +207,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (usesLocalCoordinator(active)) {
             return coordinator.findProject(projectId);
         }
-        return projectFromSummary(active.findProjectSummary(projectId));
+        TelemetryProjectRegistration project = projectFromSummary(active.findProjectSummary(projectId));
+        return project == null ? projectFromSummary(active.consentProjectDiagnostics(projectId)) : project;
     }
 
     @Override
@@ -861,6 +862,31 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             }
         }
         return List.copyOf(projects);
+    }
+
+    @Nonnull
+    private static List<Map<String, Object>> activeProjects(@Nonnull TelemetryCoordinatorBridge active) {
+        LinkedHashMap<String, Map<String, Object>> projects = new LinkedHashMap<>();
+        for (Map<String, Object> summary : active.projectSummaries()) {
+            putProjectSummary(projects, summary);
+        }
+        Object rawProjects = active.consentDiagnostics().get("projects");
+        if (rawProjects instanceof List<?> rawList) {
+            for (Object rawProject : rawList) {
+                if (rawProject instanceof Map<?, ?> project) {
+                    putProjectSummary(projects, stringObjectMap(project));
+                }
+            }
+        }
+        return List.copyOf(projects.values());
+    }
+
+    private static void putProjectSummary(@Nonnull LinkedHashMap<String, Map<String, Object>> projects,
+                                          @Nonnull Map<String, Object> summary) {
+        String projectId = stringValue(summary.get("projectId"));
+        if (projectId != null) {
+            projects.putIfAbsent(projectId.toLowerCase(Locale.ROOT), summary);
+        }
     }
 
     @Nullable
