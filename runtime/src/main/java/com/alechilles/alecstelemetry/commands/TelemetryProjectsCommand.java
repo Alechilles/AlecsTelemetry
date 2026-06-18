@@ -1,8 +1,7 @@
 package com.alechilles.alecstelemetry.commands;
 
-import com.alechilles.alecstelemetry.AlecsTelemetry;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -18,11 +17,11 @@ import javax.annotation.Nonnull;
  */
 public final class TelemetryProjectsCommand extends AbstractPlayerCommand {
 
-    private final AlecsTelemetry plugin;
+    private final TelemetryCommandRuntime runtime;
 
-    public TelemetryProjectsCommand(@Nonnull AlecsTelemetry plugin) {
+    public TelemetryProjectsCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("projects", "List registered telemetry projects.");
-        this.plugin = plugin;
+        this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
@@ -33,13 +32,12 @@ public final class TelemetryProjectsCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        TelemetryRuntimeService runtimeService = plugin.getRuntimeService();
-        if (runtimeService == null) {
+        if (runtime == null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
 
-        TelemetryRuntimeDiagnostics diagnostics = runtimeService.diagnostics();
+        TelemetryRuntimeDiagnostics diagnostics = runtime.diagnostics();
         if (diagnostics.projects().isEmpty()) {
             TelemetryCommandSupport.send(commandContext, "No telemetry-enabled projects were discovered.");
             return;

@@ -1,7 +1,7 @@
 package com.alechilles.alecstelemetry.reports;
 
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -35,16 +35,16 @@ public final class TelemetryReportProjectSelectPage
     private static final String KEY_ACTION = "Action";
     private static final String KEY_PROJECT_ID = "ProjectId";
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryCommandRuntime runtime;
     private final PlayerRef playerRef;
     private final String reportKind;
 
     public TelemetryReportProjectSelectPage(@Nonnull PlayerRef playerRef,
-                                            @Nonnull TelemetryRuntimeService runtimeService,
+                                            @Nonnull TelemetryCommandRuntime runtime,
                                             @Nonnull String reportKind) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, SelectEventData.CODEC);
         this.playerRef = playerRef;
-        this.runtimeService = runtimeService;
+        this.runtime = runtime;
         this.reportKind = "suggestion".equalsIgnoreCase(reportKind) ? "suggestion" : "issue";
     }
 
@@ -73,7 +73,7 @@ public final class TelemetryReportProjectSelectPage
     private void openReportPage(@Nonnull Ref<EntityStore> ref,
                                 @Nonnull Store<EntityStore> store,
                                 @Nonnull String projectId) {
-        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        TelemetryProjectRegistration project = runtime.findManualReportProject(projectId);
         if (project == null || !project.descriptor().reports().enabled()) {
             refreshUi();
             return;
@@ -86,7 +86,7 @@ public final class TelemetryReportProjectSelectPage
         player.getPageManager().openCustomPage(
                 ref,
                 store,
-                new TelemetryReportPage(playerRef, runtimeService, project.projectId(), new TelemetryReportOpenRequest(reportKind, null, null))
+                new TelemetryReportPage(playerRef, runtime, project.projectId(), new TelemetryReportOpenRequest(reportKind, null, null))
         );
     }
 
@@ -99,7 +99,7 @@ public final class TelemetryReportProjectSelectPage
     }
 
     private void render(@Nonnull UICommandBuilder commands) {
-        List<TelemetryProjectRegistration> projects = runtimeService.manualReportProjects();
+        List<TelemetryProjectRegistration> projects = runtime.manualReportProjects();
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
         commands.set("#TelemetryReportProjectSelectKind.Text", "suggestion".equals(reportKind) ? "Suggestion" : "Issue");
         commands.set("#TelemetryReportProjectSelectEmpty.Visible", projects.isEmpty());
@@ -129,7 +129,7 @@ public final class TelemetryReportProjectSelectPage
     }
 
     private void bindEvents(@Nonnull UIEventBuilder events) {
-        List<TelemetryProjectRegistration> projects = runtimeService.manualReportProjects();
+        List<TelemetryProjectRegistration> projects = runtime.manualReportProjects();
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
         for (int index = 0; index < visibleRows; index++) {
             TelemetryProjectRegistration project = projects.get(index);

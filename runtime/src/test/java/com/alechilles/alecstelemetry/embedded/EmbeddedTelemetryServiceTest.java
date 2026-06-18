@@ -5,6 +5,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
@@ -33,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -44,6 +46,41 @@ class EmbeddedTelemetryServiceTest {
     @AfterEach
     void clearCoordinatorRegistry() {
         TelemetryCoordinatorRegistry.clearForTests();
+    }
+
+    @Test
+    void embeddedBootstrapUsesSharedTelemetryCommandRoot() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        TelemetryCommandRoot root = EmbeddedTelemetryBootstrap.sharedCommandRoot(service);
+
+        assertNotNull(root);
+        assertEquals(TelemetryCommandRoot.ROOT_PERMISSION, root.getPermission());
     }
 
     @Test

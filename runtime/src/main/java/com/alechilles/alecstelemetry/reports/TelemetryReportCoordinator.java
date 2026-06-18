@@ -1,7 +1,7 @@
 package com.alechilles.alecstelemetry.reports;
 
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -18,12 +18,12 @@ import java.util.logging.Level;
  */
 public final class TelemetryReportCoordinator {
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryCommandRuntime runtime;
     private final HytaleLogger logger;
 
-    public TelemetryReportCoordinator(@Nonnull TelemetryRuntimeService runtimeService,
+    public TelemetryReportCoordinator(@Nonnull TelemetryCommandRuntime runtime,
                                       @Nullable HytaleLogger logger) {
-        this.runtimeService = runtimeService;
+        this.runtime = runtime;
         this.logger = logger;
     }
 
@@ -36,7 +36,7 @@ public final class TelemetryReportCoordinator {
             warn("Unable to open manual report page because player UI context is unavailable.", null);
             return false;
         }
-        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        TelemetryProjectRegistration project = runtime.findManualReportProject(projectId);
         if (project == null || !project.descriptor().reports().enabled()) {
             warn("Unable to open manual report page for unavailable project " + projectId + ".", null);
             return false;
@@ -49,7 +49,7 @@ public final class TelemetryReportCoordinator {
         player.getPageManager().openCustomPage(
                 playerEntityRef,
                 store,
-                new TelemetryReportPage(playerRef, runtimeService, project.projectId(), request)
+                new TelemetryReportPage(playerRef, runtime, project.projectId(), request)
         );
         return true;
     }

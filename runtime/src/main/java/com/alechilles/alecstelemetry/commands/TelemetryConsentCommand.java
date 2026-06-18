@@ -1,7 +1,6 @@
-package com.alechilles.alecstelemetry.embedded.commands;
+package com.alechilles.alecstelemetry.commands;
 
-import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -13,15 +12,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import javax.annotation.Nonnull;
 
 /**
- * Embedded-mode placeholder for the standalone consent UI command.
+ * Opens the telemetry consent settings page.
  */
-final class EmbeddedTelemetryConsentCommand extends AbstractPlayerCommand {
+public final class TelemetryConsentCommand extends AbstractPlayerCommand {
 
-    private final EmbeddedTelemetryService service;
+    private final TelemetryCommandRuntime runtime;
 
-    EmbeddedTelemetryConsentCommand(@Nonnull EmbeddedTelemetryService service) {
-        super("consent", "Show telemetry consent information.");
-        this.service = service;
+    public TelemetryConsentCommand(TelemetryCommandRuntime runtime) {
+        super("consent", "Open telemetry consent settings.");
+        this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
         setAllowsExtraArguments(false);
     }
@@ -32,9 +31,12 @@ final class EmbeddedTelemetryConsentCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        TelemetryConsentCoordinator coordinator = new TelemetryConsentCoordinator(service, null);
-        if (!coordinator.openConsentPage(ref, store, playerRef, false)) {
-            EmbeddedTelemetryCommandSupport.send(commandContext, "Unable to open telemetry consent UI.");
+        if (runtime == null) {
+            TelemetryCommandSupport.send(commandContext, "Telemetry consent UI is unavailable.");
+            return;
+        }
+        if (!runtime.openConsentPage(ref, store, playerRef, false)) {
+            TelemetryCommandSupport.send(commandContext, "Unable to open telemetry consent UI.");
         }
     }
 }

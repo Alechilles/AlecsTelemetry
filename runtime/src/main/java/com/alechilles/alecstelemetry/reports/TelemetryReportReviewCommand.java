@@ -1,9 +1,8 @@
 package com.alechilles.alecstelemetry.reports;
 
-import com.alechilles.alecstelemetry.AlecsTelemetry;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandSupport;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -22,11 +21,11 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
 
     private static final int MAX_LISTED_REPORTS = 20;
 
-    private final AlecsTelemetry plugin;
+    private final TelemetryCommandRuntime runtime;
 
-    public TelemetryReportReviewCommand(@Nonnull AlecsTelemetry plugin) {
+    public TelemetryReportReviewCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("reports", "Review player-submitted telemetry reports.");
-        this.plugin = plugin;
+        this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
@@ -37,8 +36,7 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        TelemetryRuntimeService runtimeService = plugin.getRuntimeService();
-        if (runtimeService == null) {
+        if (runtime == null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
@@ -48,17 +46,17 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
             return;
         }
         switch (action.toLowerCase(java.util.Locale.ROOT)) {
-            case "pending" -> listPending(commandContext, runtimeService);
-            case "approve" -> approve(commandContext, runtimeService);
-            case "reject" -> reject(commandContext, runtimeService);
-            case "submitted" -> listSubmitted(commandContext, runtimeService);
+            case "pending" -> listPending(commandContext, runtime);
+            case "approve" -> approve(commandContext, runtime);
+            case "reject" -> reject(commandContext, runtime);
+            case "submitted" -> listSubmitted(commandContext, runtime);
             default -> sendUsage(commandContext);
         }
     }
 
     private static void listPending(@Nonnull CommandContext commandContext,
-                                    @Nonnull TelemetryRuntimeService runtimeService) {
-        List<ManualReportEnvelope> reports = runtimeService.manualReportsForReview(MAX_LISTED_REPORTS);
+                                    @Nonnull TelemetryCommandRuntime runtime) {
+        List<ManualReportEnvelope> reports = runtime.manualReportsForReview(MAX_LISTED_REPORTS);
         if (reports.isEmpty()) {
             TelemetryCommandSupport.send(commandContext, "No manual reports are waiting for review.");
             return;
@@ -77,13 +75,13 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
     }
 
     private static void approve(@Nonnull CommandContext commandContext,
-                                @Nonnull TelemetryRuntimeService runtimeService) {
+                                @Nonnull TelemetryCommandRuntime runtime) {
         String reportId = TelemetryCommandSupport.token(commandContext, 3);
         if (reportId == null) {
             TelemetryCommandSupport.send(commandContext, "Usage: /telemetry reports approve <report-id>");
             return;
         }
-        if (runtimeService.approveManualReport(reportId)) {
+        if (runtime.approveManualReport(reportId)) {
             TelemetryCommandSupport.send(commandContext, "Approved manual report " + reportId + " and queued it for upload.");
             return;
         }
@@ -91,13 +89,13 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
     }
 
     private static void reject(@Nonnull CommandContext commandContext,
-                               @Nonnull TelemetryRuntimeService runtimeService) {
+                               @Nonnull TelemetryCommandRuntime runtime) {
         String reportId = TelemetryCommandSupport.token(commandContext, 3);
         if (reportId == null) {
             TelemetryCommandSupport.send(commandContext, "Usage: /telemetry reports reject <report-id>");
             return;
         }
-        if (runtimeService.rejectManualReport(reportId)) {
+        if (runtime.rejectManualReport(reportId)) {
             TelemetryCommandSupport.send(commandContext, "Rejected manual report " + reportId + ".");
             return;
         }
@@ -105,8 +103,8 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
     }
 
     private static void listSubmitted(@Nonnull CommandContext commandContext,
-                                      @Nonnull TelemetryRuntimeService runtimeService) {
-        List<String> lines = runtimeService.submittedManualReportAuditLines(MAX_LISTED_REPORTS);
+                                      @Nonnull TelemetryCommandRuntime runtime) {
+        List<String> lines = runtime.submittedManualReportAuditLines(MAX_LISTED_REPORTS);
         if (lines.isEmpty()) {
             TelemetryCommandSupport.send(commandContext, "No submitted manual report audit entries are available.");
             return;

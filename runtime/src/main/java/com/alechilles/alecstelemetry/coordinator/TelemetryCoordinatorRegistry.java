@@ -649,6 +649,128 @@ public final class TelemetryCoordinatorRegistry {
             }
         }
 
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> manualReportProjectSummaries() {
+            try {
+                Object value = invoke(delegate, "manualReportProjectSummaries");
+                if (!(value instanceof List<?> list)) {
+                    return TelemetryCoordinatorBridge.super.manualReportProjectSummaries();
+                }
+                ArrayList<Map<String, Object>> projects = new ArrayList<>();
+                for (Object project : list) {
+                    if (project instanceof Map<?, ?> map) {
+                        projects.add(stringObjectMap(map));
+                    }
+                }
+                return List.copyOf(projects);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.manualReportProjectSummaries();
+            }
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findManualReportProjectSummary(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "findManualReportProjectSummary",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                if (value instanceof Map<?, ?> map) {
+                    return stringObjectMap(map);
+                }
+                return TelemetryCoordinatorBridge.super.findManualReportProjectSummary(projectId);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.findManualReportProjectSummary(projectId);
+            }
+        }
+
+        @Nonnull
+        @Override
+        public String manualReportReceiptStatus(@Nonnull String reportId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "manualReportReceiptStatus",
+                        new Class<?>[]{String.class},
+                        reportId
+                );
+                return value == null ? TelemetryCoordinatorBridge.super.manualReportReceiptStatus(reportId) : value.toString();
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.manualReportReceiptStatus(reportId);
+            }
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> manualReportsForReview(int maxReportsPerProject) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "manualReportsForReview",
+                        new Class<?>[]{int.class},
+                        maxReportsPerProject
+                );
+                if (!(value instanceof List<?> list)) {
+                    return TelemetryCoordinatorBridge.super.manualReportsForReview(maxReportsPerProject);
+                }
+                ArrayList<Map<String, Object>> reports = new ArrayList<>();
+                for (Object report : list) {
+                    if (report instanceof Map<?, ?> map) {
+                        reports.add(stringObjectMap(map));
+                    }
+                }
+                return List.copyOf(reports);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.manualReportsForReview(maxReportsPerProject);
+            }
+        }
+
+        @Override
+        public boolean approveManualReport(@Nonnull String reportId) {
+            return invokeBoolean(
+                    "approveManualReport",
+                    new Class<?>[]{String.class},
+                    reportId
+            );
+        }
+
+        @Override
+        public boolean rejectManualReport(@Nonnull String reportId) {
+            return invokeBoolean(
+                    "rejectManualReport",
+                    new Class<?>[]{String.class},
+                    reportId
+            );
+        }
+
+        @Nonnull
+        @Override
+        public List<String> submittedManualReportAuditLines(int maxLines) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "submittedManualReportAuditLines",
+                        new Class<?>[]{int.class},
+                        maxLines
+                );
+                if (!(value instanceof List<?> list)) {
+                    return TelemetryCoordinatorBridge.super.submittedManualReportAuditLines(maxLines);
+                }
+                ArrayList<String> lines = new ArrayList<>();
+                for (Object line : list) {
+                    if (line != null) {
+                        lines.add(line.toString());
+                    }
+                }
+                return List.copyOf(lines);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.submittedManualReportAuditLines(maxLines);
+            }
+        }
         private boolean invokeBoolean(@Nonnull String methodName,
                                       @Nonnull Class<?>[] parameterTypes,
                                       Object... args) {

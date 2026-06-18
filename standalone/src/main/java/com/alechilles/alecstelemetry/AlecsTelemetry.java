@@ -63,7 +63,7 @@ public final class AlecsTelemetry extends JavaPlugin {
             TelemetryRuntimeLocator.clear();
         }
         if (getCommandRegistry() != null) {
-            getCommandRegistry().registerCommand(new TelemetryCommandRoot(this));
+            getCommandRegistry().registerCommand(new TelemetryCommandRoot(runtimeService));
         }
     }
 

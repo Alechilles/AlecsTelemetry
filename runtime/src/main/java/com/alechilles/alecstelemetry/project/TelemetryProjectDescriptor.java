@@ -165,6 +165,141 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         );
     }
 
+    @Nonnull
+    public String toJson() {
+        LinkedHashMap<String, Object> document = new LinkedHashMap<>();
+        document.put("schemaVersion", schemaVersion);
+        document.put("projectId", projectId);
+        document.put("displayName", displayName);
+        document.put("runtimeMode", runtimeMode);
+        document.put("ownerPluginIdentifiers", ownerPluginIdentifiers);
+        document.put("packagePrefixes", packagePrefixes);
+        document.put("capture", Map.of(
+                "uncaughtExceptions", capture.uncaughtExceptions(),
+                "setupFailures", capture.setupFailures(),
+                "startFailures", capture.startFailures(),
+                "exceptionalWorldRemovals", capture.exceptionalWorldRemovals()
+        ));
+        document.put("events", Map.of(
+                "errors", eventTypeDocument(events.errors()),
+                "lifecycle", eventTypeDocument(events.lifecycle()),
+                "breadcrumbs", Map.of(
+                        "enabled", events.breadcrumbs().enabled(),
+                        "automatic", events.breadcrumbs().automatic()
+                )
+        ));
+        document.put("performance", Map.of(
+                "enabled", performance.enabled(),
+                "sampleRate", performance.sampleRate(),
+                "thresholdMs", performance.thresholdMs(),
+                "details", detailRulesDocument(performance.details())
+        ));
+        document.put("usage", Map.of(
+                "enabled", usage.enabled(),
+                "allowedEvents", usage.allowedEvents(),
+                "details", detailRulesDocument(usage.details())
+        ));
+        document.put("stats", Map.of(
+                "enabled", stats.enabled(),
+                "allowedEvents", stats.allowedEvents(),
+                "details", detailRulesDocument(stats.details())
+        ));
+        LinkedHashMap<String, Object> uiDocument = new LinkedHashMap<>();
+        putDocumentValue(uiDocument, "iconTexturePath", ui.iconTexturePath());
+        document.put("ui", uiDocument);
+        document.put("reports", reportsDocument(reports));
+        document.put("defaults", Map.of(
+                "enabled", defaults.enabled(),
+                "destinationMode", defaults.destinationMode()
+        ));
+        LinkedHashMap<String, Object> hostedDocument = new LinkedHashMap<>();
+        putDocumentValue(hostedDocument, "endpoint", hosted.endpoint());
+        putDocumentValue(hostedDocument, "eventEndpoint", hosted.eventEndpoint());
+        putDocumentValue(hostedDocument, "projectKey", hosted.projectKey());
+        hostedDocument.put("headers", hosted.headers());
+        document.put("hosted", hostedDocument);
+        LinkedHashMap<String, Object> customDocument = new LinkedHashMap<>();
+        putDocumentValue(customDocument, "url", customEndpoint.url());
+        putDocumentValue(customDocument, "eventUrl", customEndpoint.eventUrl());
+        customDocument.put("headers", customEndpoint.headers());
+        document.put("customEndpoint", customDocument);
+        return GSON.toJson(document);
+    }
+
+    @Nonnull
+    private static Map<String, Object> eventTypeDocument(@Nonnull EventTypeOptions options) {
+        return Map.of(
+                "enabled", options.enabled(),
+                "details", detailRulesDocument(options.details())
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> reportsDocument(@Nonnull ManualReportOptions options) {
+        return Map.of(
+                "enabled", options.enabled(),
+                "issue", manualReportFormDocument(options.issue()),
+                "suggestion", manualReportFormDocument(options.suggestion()),
+                "attachments", Map.of(
+                        "currentServerLog", options.attachments().currentServerLog(),
+                        "previousServerLog", options.attachments().previousServerLog(),
+                        "maxBytes", options.attachments().maxBytes()
+                ),
+                "contact", Map.of(
+                        "enabled", options.contact().enabled(),
+                        "maxLength", options.contact().maxLength()
+                ),
+                "resolutionUpdates", Map.of("enabled", options.resolutionUpdates().enabled())
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> manualReportFormDocument(@Nonnull ManualReportForm form) {
+        LinkedHashMap<String, Object> document = new LinkedHashMap<>();
+        document.put("enabled", form.enabled());
+        LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
+        for (ManualReportField field : form.fields()) {
+            LinkedHashMap<String, Object> fieldDocument = new LinkedHashMap<>();
+            fieldDocument.put("type", field.type().key());
+            fieldDocument.put("label", field.label());
+            fieldDocument.put("required", field.required());
+            if (!field.values().isEmpty()) {
+                fieldDocument.put("values", field.values());
+            }
+            fieldDocument.put("maxLength", field.maxLength());
+            putDocumentValue(fieldDocument, "min", field.min());
+            putDocumentValue(fieldDocument, "max", field.max());
+            fields.put(field.key(), fieldDocument);
+        }
+        document.put("fields", fields);
+        return Map.copyOf(document);
+    }
+
+    @Nonnull
+    private static Map<String, Object> detailRulesDocument(@Nonnull Map<String, DetailRules> rules) {
+        LinkedHashMap<String, Object> document = new LinkedHashMap<>();
+        for (Map.Entry<String, DetailRules> ruleEntry : rules.entrySet()) {
+            LinkedHashMap<String, Object> ruleDocument = new LinkedHashMap<>();
+            LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
+            for (Map.Entry<String, DetailFieldRule> fieldEntry : ruleEntry.getValue().allowedFields().entrySet()) {
+                fields.put(fieldEntry.getKey(), Map.of(
+                        "type", fieldEntry.getValue().type(),
+                        "maxLength", fieldEntry.getValue().maxLength()
+                ));
+            }
+            ruleDocument.put("allowedFields", fields);
+            document.put(ruleEntry.getKey(), ruleDocument);
+        }
+        return Map.copyOf(document);
+    }
+
+    private static void putDocumentValue(@Nonnull Map<String, Object> document,
+                                         @Nonnull String key,
+                                         @Nullable Object value) {
+        if (value != null) {
+            document.put(key, value);
+        }
+    }
     @Nullable
     public CrashReportClient.DeliveryTarget resolveDeliveryTarget(@Nonnull TelemetryRuntimeSettings settings) {
         if (!defaults.enabled()) {

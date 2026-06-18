@@ -1,8 +1,7 @@
 package com.alechilles.alecstelemetry.commands;
 
-import com.alechilles.alecstelemetry.AlecsTelemetry;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -18,11 +17,11 @@ import javax.annotation.Nonnull;
  */
 public final class TelemetryProjectCommand extends AbstractPlayerCommand {
 
-    private final AlecsTelemetry plugin;
+    private final TelemetryCommandRuntime runtime;
 
-    public TelemetryProjectCommand(@Nonnull AlecsTelemetry plugin) {
+    public TelemetryProjectCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("project", "Show diagnostics for one telemetry project.");
-        this.plugin = plugin;
+        this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
@@ -33,8 +32,7 @@ public final class TelemetryProjectCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        TelemetryRuntimeService runtimeService = plugin.getRuntimeService();
-        if (runtimeService == null) {
+        if (runtime == null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
@@ -44,7 +42,7 @@ public final class TelemetryProjectCommand extends AbstractPlayerCommand {
             return;
         }
 
-        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = runtimeService.projectDiagnostics(projectId);
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = runtime.projectDiagnostics(projectId);
         if (diagnostics == null) {
             TelemetryCommandSupport.send(commandContext, "Unknown telemetry project: " + projectId);
             return;

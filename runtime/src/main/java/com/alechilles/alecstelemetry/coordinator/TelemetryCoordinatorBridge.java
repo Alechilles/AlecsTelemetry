@@ -213,6 +213,44 @@ public interface TelemetryCoordinatorBridge {
                                                    @Nonnull Map<String, Object> playerContext) {
         return Map.of("accepted", false, "validationErrors", List.of("coordinator_manual_reports_unavailable"));
     }
+    @Nonnull
+    default List<Map<String, Object>> manualReportProjectSummaries() {
+        return List.of();
+    }
+
+    @Nonnull
+    default Map<String, Object> findManualReportProjectSummary(@Nonnull String projectId) {
+        for (Map<String, Object> project : manualReportProjectSummaries()) {
+            Object id = project.get("projectId");
+            if (id != null && id.toString().equalsIgnoreCase(projectId.trim())) {
+                return project;
+            }
+        }
+        return Map.of();
+    }
+
+    @Nonnull
+    default String manualReportReceiptStatus(@Nonnull String reportId) {
+        return "unknown";
+    }
+
+    @Nonnull
+    default List<Map<String, Object>> manualReportsForReview(int maxReportsPerProject) {
+        return List.of();
+    }
+
+    default boolean approveManualReport(@Nonnull String reportId) {
+        return false;
+    }
+
+    default boolean rejectManualReport(@Nonnull String reportId) {
+        return false;
+    }
+
+    @Nonnull
+    default List<String> submittedManualReportAuditLines(int maxLines) {
+        return List.of();
+    }
 
     @Nonnull
     private static Map<String, Object> copyStringObjectMap(@Nonnull Map<?, ?> source) {

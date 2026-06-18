@@ -1,7 +1,7 @@
 package com.alechilles.alecstelemetry.reports;
 
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -29,16 +29,16 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
     private static final String ACTION_CLOSE = "close";
     private static final String ACTION_REFRESH = "refresh";
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryCommandRuntime runtime;
     private final ManualReportEnvelope envelope;
     private final String status;
 
     public TelemetryReportReceiptPage(@Nonnull PlayerRef playerRef,
-                                      @Nonnull TelemetryRuntimeService runtimeService,
+                                      @Nonnull TelemetryCommandRuntime runtime,
                                       @Nonnull ManualReportEnvelope envelope,
                                       @Nonnull String status) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, ReceiptEventData.CODEC);
-        this.runtimeService = runtimeService;
+        this.runtime = runtime;
         this.envelope = envelope;
         this.status = status;
     }
@@ -89,7 +89,7 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
                                 @Nonnull ReceiptEventData data) {
         switch (data.action) {
             case ACTION_REFRESH -> {
-                runtimeService.triggerFlushAsync(envelope.projectId());
+                runtime.requestFlush(envelope.projectId());
                 refreshUi();
             }
             case ACTION_CLOSE -> close();
@@ -100,7 +100,7 @@ public final class TelemetryReportReceiptPage extends InteractiveCustomUIPage<Te
 
     @Nonnull
     private String displayStatus() {
-        String storedStatus = runtimeService.manualReportReceiptStatus(envelope.reportId());
+        String storedStatus = runtime.manualReportReceiptStatus(envelope.reportId());
         return switch (storedStatus) {
             case "uploaded" -> "Uploaded";
             case "review" -> "Waiting for server owner review";

@@ -380,6 +380,34 @@ public final class TelemetryCoordinatorService {
         return engine.pendingReports(projectId);
     }
 
+    @Nullable
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        return engine.findManualReportProject(projectId);
+    }
+
+    @Nonnull
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        return engine.manualReportsForReview(maxReportsPerProject);
+    }
+
+    public boolean approveManualReport(@Nonnull String reportId) {
+        return engine.approveManualReport(reportId);
+    }
+
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        return engine.rejectManualReport(reportId);
+    }
+
+    @Nonnull
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        return engine.submittedManualReportAuditLines(maxLines);
+    }
+
+    @Nonnull
+    public String manualReportReceiptStatus(@Nonnull String reportId) {
+        return engine.manualReportReceiptStatus(reportId);
+    }
+
     void emitStatsHeartbeatNow() {
         if (statsHeartbeat != null) {
             statsHeartbeat.emitHeartbeatNow();

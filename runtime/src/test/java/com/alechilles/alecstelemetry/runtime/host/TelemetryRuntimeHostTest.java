@@ -13,6 +13,10 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportKind;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
@@ -245,6 +249,83 @@ class TelemetryRuntimeHostTest {
         assertFalse(loser.handle().markConsentReviewed("stale-provider"));
     }
 
+    @Test
+    void losingProviderManualReportCommandsUseActiveProviderReviewState() throws Exception {
+        TelemetryProjectRegistration loserProject = registration(
+                manualReportDescriptor("loser-report", "Loser Report", "dependency"),
+                "Example:Loser Report",
+                "1.0.0",
+                tempDir.resolve("Loser Report.jar")
+        );
+        TelemetryDataPaths loserPaths = dataPaths(tempDir.resolve("losing-report-provider"));
+        ProviderFixture loser = providerFixture(
+                "standalone:Example:LoserReports",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                TelemetryRuntimeSettings.load(loserPaths.settingsFile(), null),
+                loserPaths,
+                List.of(loserProject),
+                List.of(loserProject),
+                List.of(),
+                loserProject
+        );
+        TelemetryProjectRegistration winnerProject = registration(
+                manualReportDescriptor("winner-report", "Winner Report", "embedded"),
+                "Example:Winner Report",
+                "2.0.0",
+                tempDir.resolve("Winner Report.jar")
+        );
+        TelemetryDataPaths winnerPaths = dataPaths(tempDir.resolve("winning-report-provider"));
+        Files.createDirectories(winnerPaths.settingsFile().getParent());
+        Files.writeString(winnerPaths.settingsFile(), "{\"manualReports\":{\"manualReviewRequired\":true}}");
+        ProviderFixture winner = providerFixture(
+                "embedded:Example:WinnerReports",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryRuntimeSettings.load(winnerPaths.settingsFile(), null),
+                winnerPaths,
+                List.of(winnerProject),
+                List.of(winnerProject),
+                List.of(),
+                winnerProject
+        );
+
+        loser.handle().start();
+        winner.handle().start();
+        ManualReportEnvelope.CreateResult approved = winner.handle().submitManualReport(
+                "winner-report",
+                issueSubmission(),
+                playerContext()
+        );
+        ManualReportEnvelope.CreateResult rejected = winner.handle().submitManualReport(
+                "winner-report",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertFalse(loser.handle().ownsActiveCoordinator());
+        assertTrue(approved.accepted());
+        assertTrue(rejected.accepted());
+        assertEquals(List.of("winner-report"), loser.handle().manualReportProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertEquals("winner-report", loser.handle().findManualReportProject("winner-report").projectId());
+        assertNull(loser.handle().findManualReportProject("loser-report"));
+        assertEquals("review", loser.handle().manualReportReceiptStatus(approved.envelope().reportId()));
+        assertEquals(List.of(approved.envelope().reportId(), rejected.envelope().reportId()),
+                loser.handle().manualReportsForReview(20).stream()
+                        .map(ManualReportEnvelope::reportId)
+                        .toList());
+
+        assertTrue(loser.handle().approveManualReport(approved.envelope().reportId()));
+        assertTrue(loser.handle().rejectManualReport(rejected.envelope().reportId()));
+        assertTrue(loser.handle().manualReportsForReview(20).isEmpty());
+        assertTrue(loser.handle().submittedManualReportAuditLines(10).stream()
+                .anyMatch(line -> line.contains(rejected.envelope().reportId())));
+
+        winner.handle().shutdown();
+        loser.handle().shutdown();
+    }
     @Test
     void loserShutdownDoesNotClearWinnerApi() {
         ProviderFixture standalone = fixture("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
@@ -689,6 +770,69 @@ class TelemetryRuntimeHostTest {
         );
     }
 
+    private static TelemetryProjectDescriptor manualReportDescriptor(String projectId,
+                                                                    String displayName,
+                                                                    String runtimeMode) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "reports": {
+                    "enabled": true,
+                    "issue": {
+                      "enabled": true,
+                      "fields": {
+                        "severity": {
+                          "type": "enum",
+                          "label": "Severity",
+                          "required": true,
+                          "values": ["minor", "major", "blocking"]
+                        }
+                      }
+                    },
+                    "suggestion": { "enabled": true },
+                    "contact": { "enabled": true }
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
+    private static ManualReportSubmission issueSubmission() {
+        return new ManualReportSubmission(
+                ManualReportKind.ISSUE,
+                "Config screen does not save",
+                "Opening the config screen and pressing Save leaves old values in place.",
+                "discord: example",
+                Map.of("severity", "major"),
+                false,
+                false,
+                true,
+                true,
+                true
+        );
+    }
+
+    private static PlayerReportRuntimeContext playerContext() {
+        return new PlayerReportRuntimeContext(
+                false,
+                7,
+                "test-world",
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Winner Report", "2.0.0"))
+        );
+    }
     private static TelemetryProjectDescriptor statsOnlyTelemetryDescriptor(String projectId, String displayName) {
         return TelemetryProjectDescriptor.fromJson(
                 """

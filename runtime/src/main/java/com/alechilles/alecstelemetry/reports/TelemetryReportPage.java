@@ -6,7 +6,7 @@ import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportInputSanitizer;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -61,7 +61,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private static final String KEY_FIELD_VALUE = "@FieldValue";
     private static final String KEY_FIELD_VALUE_PREFIX = "@FieldValue";
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryCommandRuntime runtime;
     private final PlayerRef playerRef;
     private final String projectId;
     private String selectedKind;
@@ -76,11 +76,11 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private List<String> validationErrors = List.of();
 
     public TelemetryReportPage(@Nonnull PlayerRef playerRef,
-                               @Nonnull TelemetryRuntimeService runtimeService,
+                               @Nonnull TelemetryCommandRuntime runtime,
                                @Nonnull String projectId,
                                @Nonnull TelemetryReportOpenRequest request) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, ReportEventData.CODEC);
-        this.runtimeService = runtimeService;
+        this.runtime = runtime;
         this.playerRef = playerRef;
         this.projectId = projectId;
         this.selectedKind = request.normalizedKind();
@@ -156,7 +156,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
     private void submit(@Nonnull Ref<EntityStore> ref,
                         @Nonnull Store<EntityStore> store,
                         @Nonnull ReportEventData data) {
-        ManualReportEnvelope.CreateResult result = runtimeService.submitManualReport(
+        ManualReportEnvelope.CreateResult result = runtime.submitManualReport(
                 projectId,
                 new ManualReportSubmission(
                         "suggestion".equals(selectedKind) ? ManualReportKind.SUGGESTION : ManualReportKind.ISSUE,
@@ -170,7 +170,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
                         includeDiagnostics,
                         true
                 ),
-                runtimeService.currentPlayerReportRuntimeContext()
+                runtime.currentPlayerReportRuntimeContext()
         );
         if (!result.accepted()) {
             validationErrors = result.validationErrors();
@@ -187,7 +187,7 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
         player.getPageManager().openCustomPage(
                 ref,
                 store,
-                new TelemetryReportReceiptPage(playerRef, runtimeService, envelope, status)
+                new TelemetryReportReceiptPage(playerRef, runtime, envelope, status)
         );
     }
 
@@ -414,20 +414,20 @@ public final class TelemetryReportPage extends InteractiveCustomUIPage<Telemetry
 
     @Nonnull
     private TelemetryReportViewModel viewModel() {
-        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        TelemetryProjectRegistration project = runtime.findManualReportProject(projectId);
         if (project == null) {
             throw new IllegalStateException("Unknown telemetry project: " + projectId);
         }
         return TelemetryReportViewModel.from(
                 project,
-                runtimeService.manualReportSettings(),
+                runtime.manualReportSettings(),
                 new TelemetryReportOpenRequest(selectedKind, title, description)
         );
     }
 
     @Nonnull
     private Map<String, Object> formValues(@Nonnull Map<String, String> inputValues) {
-        TelemetryProjectRegistration project = runtimeService.findManualReportProject(projectId);
+        TelemetryProjectRegistration project = runtime.findManualReportProject(projectId);
         if (project == null) {
             return Map.of();
         }

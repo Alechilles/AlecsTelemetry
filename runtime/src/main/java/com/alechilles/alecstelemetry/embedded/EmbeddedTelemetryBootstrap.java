@@ -4,11 +4,11 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
-import com.alechilles.alecstelemetry.embedded.commands.EmbeddedTelemetryCommandRoot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -30,6 +30,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
@@ -118,7 +119,7 @@ public final class EmbeddedTelemetryBootstrap {
                 candidate,
                 coordinatorService
         );
-        registerEmbeddedCommands(plugin, service, logger);
+        registerSharedCommands(plugin, service, logger);
         registerConsentNotice(plugin, new TelemetryConsentCoordinator(service, logger), logger);
         return service;
     }
@@ -150,18 +151,40 @@ public final class EmbeddedTelemetryBootstrap {
         }
     }
 
-    private static void registerEmbeddedCommands(@Nonnull JavaPlugin plugin,
-                                                 @Nonnull EmbeddedTelemetryService service,
-                                                 @Nullable HytaleLogger logger) {
-        if (plugin.getCommandRegistry() == null) {
+    @Nonnull
+    static TelemetryCommandRoot sharedCommandRoot(@Nonnull EmbeddedTelemetryService service) {
+        return new TelemetryCommandRoot(service.commandRuntime());
+    }
+
+    private static void registerSharedCommands(@Nonnull JavaPlugin plugin,
+                                               @Nonnull EmbeddedTelemetryService service,
+                                               @Nullable HytaleLogger logger) {
+        AtomicBoolean registered = new AtomicBoolean(false);
+        Runnable register = () -> {
+            if (plugin.getCommandRegistry() == null || !registered.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                plugin.getCommandRegistry().registerCommand(sharedCommandRoot(service));
+            } catch (RuntimeException ex) {
+                registered.set(false);
+                if (logger != null) {
+                    logger.at(Level.WARNING).withCause(ex).log(
+                            "Embedded telemetry commands could not register. Another runtime may already own /telemetry."
+                    );
+                }
+            }
+        };
+        register.run();
+        if (plugin.getEventRegistry() == null) {
             return;
         }
         try {
-            plugin.getCommandRegistry().registerCommand(new EmbeddedTelemetryCommandRoot(service));
+            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> register.run());
         } catch (RuntimeException ex) {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log(
-                        "Embedded telemetry commands could not register. Another telemetry runtime may already own /telemetry."
+                        "Embedded telemetry command registration retry could not register player events."
                 );
             }
         }

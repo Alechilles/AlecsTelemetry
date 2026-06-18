@@ -12,14 +12,13 @@ class RuntimeArtifactBoundaryTest {
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
 
         assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class"));
-        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/embedded/commands/EmbeddedTelemetryCommandRoot.class"));
+        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/commands/TelemetryCommandRoot.class"));
         assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/core/TelemetryCoreEngine.class"));
         assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/consent/TelemetryConsentPage.class"));
         assertNotNull(classLoader.getResource("Common/UI/Custom/TelemetryConsentPage.ui"));
         assertNotNull(classLoader.getResource("Common/UI/Custom/AlecsTelemetryLogo.png"));
         assertNotNull(classLoader.getResource("Common/UI/Custom/TelemetryConsentHeader.png"));
         assertNull(classLoader.getResource("com/alechilles/alecstelemetry/AlecsTelemetry.class"));
-        assertNull(classLoader.getResource("com/alechilles/alecstelemetry/commands/TelemetryCommandRoot.class"));
         assertNull(classLoader.getResource("manifest.json"));
     }
 }

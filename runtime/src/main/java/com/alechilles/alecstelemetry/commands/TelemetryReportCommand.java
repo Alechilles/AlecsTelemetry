@@ -1,9 +1,8 @@
 package com.alechilles.alecstelemetry.commands;
 
-import com.alechilles.alecstelemetry.AlecsTelemetry;
 import com.alechilles.alecstelemetry.reports.TelemetryReportProjectSelectPage;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -22,11 +21,11 @@ import java.util.Locale;
  */
 public final class TelemetryReportCommand extends AbstractPlayerCommand {
 
-    private final AlecsTelemetry plugin;
+    private final TelemetryCommandRuntime runtime;
 
-    public TelemetryReportCommand(@Nonnull AlecsTelemetry plugin) {
+    public TelemetryReportCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("report", "Open a telemetry issue or suggestion report.");
-        this.plugin = plugin;
+        this.runtime = runtime;
         setPermissionGroups("Player", "OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
@@ -37,8 +36,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        TelemetryRuntimeService runtimeService = plugin == null ? null : plugin.getRuntimeService();
-        if (runtimeService == null) {
+        if (runtime == null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
@@ -58,11 +56,11 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
         }
 
         if (projectId == null) {
-            openProjectSelector(commandContext, store, ref, playerRef, runtimeService, reportKind);
+            openProjectSelector(commandContext, store, ref, playerRef, runtime, reportKind);
             return;
         }
 
-        boolean opened = runtimeService.openReportPage(
+        boolean opened = runtime.openReportPage(
                 projectId,
                 ref,
                 store,
@@ -78,7 +76,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
                                             @Nonnull Store<EntityStore> store,
                                             @Nonnull Ref<EntityStore> ref,
                                             @Nonnull PlayerRef playerRef,
-                                            @Nonnull TelemetryRuntimeService runtimeService,
+                                            @Nonnull TelemetryCommandRuntime runtime,
                                             @Nonnull String reportKind) {
         Player player = store.getComponent(ref, Player.getComponentType());
         if (player == null) {
@@ -88,7 +86,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
         player.getPageManager().openCustomPage(
                 ref,
                 store,
-                new TelemetryReportProjectSelectPage(playerRef, runtimeService, reportKind)
+                new TelemetryReportProjectSelectPage(playerRef, runtime, reportKind)
         );
     }
 

@@ -199,6 +199,84 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void activeStandaloneManualReportSubmissionUsesLocalEngine() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryRuntimeService service = manualReportService(settings, dataPaths, true, client);
+
+        service.start();
+
+        assertTrue(service.ownsActiveCoordinator());
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "example-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertTrue(result.accepted());
+        assertEquals(1, fileCount(dataPaths.pendingManualReportsDirectory("example-mod")));
+        assertEquals(0, client.calls);
+
+        service.shutdown();
+    }
+
+    @Test
+    void passiveStandaloneManualReportReviewCommandsUseActiveCoordinator() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        embedded.manualReportsForReview = List.of(manualReportEnvelopeSummary("active-report"));
+        embedded.manualReportAuditLines = List.of("{\"reportId\":\"active-report\",\"reviewState\":\"rejected\"}");
+        TelemetryCoordinatorRegistry.register(embedded);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor("standalone-local", "Standalone Local", true, "dependency"),
+                "Example:Standalone Local",
+                "1.0.0",
+                tempDir.resolve("Standalone Local.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Standalone Local", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        assertFalse(service.ownsActiveCoordinator());
+        assertEquals(List.of("embedded-mod"), service.manualReportProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertEquals("embedded-mod", service.findManualReportProject("embedded-mod").projectId());
+        assertNull(service.findManualReportProject("standalone-local"));
+        assertEquals("uploaded", service.manualReportReceiptStatus("active-report"));
+        assertEquals(List.of("active-report"), service.manualReportsForReview(20).stream()
+                .map(ManualReportEnvelope::reportId)
+                .toList());
+        assertEquals(List.of("{\"reportId\":\"active-report\",\"reviewState\":\"rejected\"}"),
+                service.submittedManualReportAuditLines(10));
+        assertTrue(service.approveManualReport("active-report"));
+        assertTrue(service.rejectManualReport("active-report"));
+        assertEquals(List.of("active-report"), embedded.approvedManualReportIds);
+        assertEquals(List.of("active-report"), embedded.rejectedManualReportIds);
+
+        service.shutdown();
+    }
+    @Test
     void manualReportSubmissionReturnsValidationErrorWhenGloballyDisabled() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("""
                 {
@@ -1668,6 +1746,31 @@ class TelemetryRuntimeServiceTest {
         assertFalse(project.breadcrumbsEnabled());
     }
 
+    private static Map<String, Object> manualReportEnvelopeSummary(String reportId) {
+        return Map.of("envelopeJson", """
+                {
+                  "schemaVersion": 1,
+                  "eventType": "manual_report",
+                  "reportId": "%s",
+                  "followUpTokenHash": "hash",
+                  "reportKind": "issue",
+                  "projectId": "embedded-mod",
+                  "projectDisplayName": "Embedded Mod",
+                  "submittedAtUtc": "2026-01-01T00:00:00Z",
+                  "source": "player_ui",
+                  "sessionId": "session",
+                  "serverId": "server",
+                  "pluginIdentifier": "Example:Embedded Mod",
+                  "pluginVersion": "1.0.0",
+                  "title": "Active report",
+                  "description": "Review this report",
+                  "contact": {},
+                  "formValues": {},
+                  "attachmentManifests": [],
+                  "attachments": []
+                }
+                """.formatted(reportId));
+    }
     private static ManualReportSubmission issueSubmission() {
         return issueSubmission(false);
     }
@@ -1863,6 +1966,10 @@ class TelemetryRuntimeServiceTest {
                 "accepted", false,
                 "validationErrors", List.of("manual_report_not_configured")
         );
+        private List<Map<String, Object>> manualReportsForReview = List.of();
+        private List<String> manualReportAuditLines = List.of();
+        private final java.util.ArrayList<String> approvedManualReportIds = new java.util.ArrayList<>();
+        private final java.util.ArrayList<String> rejectedManualReportIds = new java.util.ArrayList<>();
 
         private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -2099,6 +2206,42 @@ class TelemetryRuntimeServiceTest {
             return manualReportResult;
         }
 
+        @Override
+        public List<Map<String, Object>> manualReportProjectSummaries() {
+            return List.of(projectSummary());
+        }
+
+        @Override
+        public Map<String, Object> findManualReportProjectSummary(@Nonnull String projectId) {
+            return consentProjectId.equalsIgnoreCase(projectId.trim()) ? projectSummary() : Map.of();
+        }
+
+        @Override
+        public String manualReportReceiptStatus(@Nonnull String reportId) {
+            return "uploaded";
+        }
+
+        @Override
+        public List<Map<String, Object>> manualReportsForReview(int maxReportsPerProject) {
+            return manualReportsForReview;
+        }
+
+        @Override
+        public boolean approveManualReport(@Nonnull String reportId) {
+            approvedManualReportIds.add(reportId);
+            return true;
+        }
+
+        @Override
+        public boolean rejectManualReport(@Nonnull String reportId) {
+            rejectedManualReportIds.add(reportId);
+            return true;
+        }
+
+        @Override
+        public List<String> submittedManualReportAuditLines(int maxLines) {
+            return manualReportAuditLines;
+        }
         private TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics() {
             return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
                     consentProjectId,

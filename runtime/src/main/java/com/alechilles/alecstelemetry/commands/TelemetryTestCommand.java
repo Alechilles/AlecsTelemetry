@@ -1,6 +1,6 @@
-package com.alechilles.alecstelemetry.embedded.commands;
+package com.alechilles.alecstelemetry.commands;
 
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -12,15 +12,15 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import javax.annotation.Nonnull;
 
 /**
- * Captures an embedded-mode test report.
+ * Captures a manual test report without crashing the server.
  */
-final class EmbeddedTelemetryTestCommand extends AbstractPlayerCommand {
+public final class TelemetryTestCommand extends AbstractPlayerCommand {
 
-    private final EmbeddedTelemetryService service;
+    private final TelemetryCommandRuntime runtime;
 
-    EmbeddedTelemetryTestCommand(@Nonnull EmbeddedTelemetryService service) {
+    public TelemetryTestCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("test", "Capture a manual telemetry test report. Usage: /telemetry test <project-id> [detail]");
-        this.service = service;
+        this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
@@ -31,21 +31,18 @@ final class EmbeddedTelemetryTestCommand extends AbstractPlayerCommand {
                            @Nonnull Ref<EntityStore> ref,
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
-        String projectId = EmbeddedTelemetryCommandSupport.token(commandContext, 2);
-        if (projectId == null) {
-            EmbeddedTelemetryCommandSupport.send(commandContext, "Usage: /telemetry test <project-id> [detail]");
+        if (runtime == null) {
+            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
-        if (service.commandProject(projectId) == null) {
-            EmbeddedTelemetryCommandSupport.send(commandContext, "Unknown telemetry project: " + projectId);
+        String projectId = TelemetryCommandSupport.token(commandContext, 2);
+        if (projectId == null) {
+            TelemetryCommandSupport.send(commandContext, "Usage: /telemetry test <project-id> [detail]");
             return;
         }
 
-        boolean captured = service.commandCaptureTestReport(
-                projectId,
-                EmbeddedTelemetryCommandSupport.remainder(commandContext, 3)
-        );
-        EmbeddedTelemetryCommandSupport.send(
+        boolean captured = runtime.captureTestReport(projectId, TelemetryCommandSupport.remainder(commandContext, 3));
+        TelemetryCommandSupport.send(
                 commandContext,
                 captured
                         ? "Telemetry test report queued for " + projectId + "."

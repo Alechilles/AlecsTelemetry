@@ -17,9 +17,14 @@ import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.ManualReportSubmission;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
+import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryManualReportBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
@@ -46,7 +51,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime {
+final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
     private final TelemetryRuntimeBootstrapRequest request;
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -58,6 +63,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryRuntimeApi api;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
+    private final HytaleLogger logger;
     private final List<String> registrationWarnings;
     private List<TelemetryProjectRegistration> consentProjects;
 
@@ -117,9 +123,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.api = new TelemetryRuntimeApiImpl(this);
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
+        this.logger = logger;
         this.consentProjects = List.copyOf(consentProjects);
         this.registrationWarnings = List.copyOf(registrationWarnings);
         this.pluginEvents = new TelemetryRuntimePluginEvents(this, playerCounter, logger);
+        commandRegistrar.initialize(request.plugin(), this, logger);
     }
 
     @Override
@@ -363,13 +371,154 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return active == null ? coordinator.captureTestReport(projectId, detail) : active.captureTestReport(projectId, detail);
     }
 
+    @Nonnull
+    @Override
+    public TelemetryRuntimeDiagnostics diagnostics() {
+        return consentDiagnostics();
+    }
+
+    @Nullable
+    @Override
+    public TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId) {
+        return consentProjectDiagnostics(projectId);
+    }
+
+    @Override
+    public int pendingReports(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            if (projectId == null) {
+                return diagnostics().totalPendingReports();
+            }
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = projectDiagnostics(projectId);
+            return diagnostics == null ? 0 : diagnostics.pendingReports();
+        }
+        return coordinator.pendingReports(projectId);
+    }
+
+    @Nonnull
+    @Override
+    public String lastFlushResult() {
+        return diagnostics().lastFlushResult();
+    }
+
+    @Override
+    public boolean openConsentPage(@Nonnull Ref<EntityStore> playerEntityRef,
+                                   @Nonnull Store<EntityStore> store,
+                                   @Nonnull PlayerRef playerRef,
+                                   boolean firstRun) {
+        return consentCoordinator.openConsentPage(playerEntityRef, store, playerRef, firstRun);
+    }
+
     @Override
     public boolean openReportPage(@Nonnull String projectId,
                                   @Nonnull Ref<EntityStore> playerEntityRef,
                                   @Nonnull Store<EntityStore> store,
                                   @Nonnull PlayerRef playerRef,
                                   @Nonnull TelemetryReportOpenRequest request) {
-        return false;
+        return new TelemetryReportCoordinator(this, logger)
+                .openReportPage(projectId, playerEntityRef, store, playerRef, request);
+    }
+
+    @Nonnull
+    @Override
+    public List<TelemetryProjectRegistration> manualReportProjects() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return manualReportProjectsFromSummaries(active.manualReportProjectSummaries());
+        }
+        ArrayList<TelemetryProjectRegistration> projects = new ArrayList<>();
+        for (TelemetryProjectRegistration project : coordinator.manualReportProjects()) {
+            if (project.descriptor().reports().enabled()) {
+                projects.add(project);
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nullable
+    @Override
+    public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return projectFromSummary(active.findManualReportProjectSummary(projectId));
+        }
+        return coordinator.findManualReportProject(projectId);
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryRuntimeSettings.ManualReportSettings manualReportSettings() {
+        return settings.manualReports();
+    }
+
+    @Nonnull
+    @Override
+    public PlayerReportRuntimeContext currentPlayerReportRuntimeContext() {
+        return new PlayerReportRuntimeContext(false, 0, null, coordinator.loadedMods());
+    }
+
+    @Nonnull
+    @Override
+    public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
+                                                                @Nonnull ManualReportSubmission submission,
+                                                                @Nullable PlayerReportRuntimeContext playerContext) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return manualReportResultFromMap(active.submitManualReport(
+                    projectId,
+                    submissionToMap(submission),
+                    playerContextToMap(playerContext)
+            ));
+        }
+        return manualReportResultFromMap(coordinator.submitManualReport(
+                projectId,
+                submissionToMap(submission),
+                playerContextToMap(playerContext)
+        ));
+    }
+
+    @Nonnull
+    @Override
+    public String manualReportReceiptStatus(@Nonnull String reportId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return !usesLocalCoordinator(active)
+                ? active.manualReportReceiptStatus(reportId)
+                : coordinator.manualReportReceiptStatus(reportId);
+    }
+
+    @Nonnull
+    @Override
+    public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return !usesLocalCoordinator(active)
+                ? TelemetryManualReportBridgePayload.envelopesFromSummaries(active.manualReportsForReview(maxReportsPerProject))
+                : coordinator.manualReportsForReview(maxReportsPerProject);
+    }
+
+    @Override
+    public boolean approveManualReport(@Nonnull String reportId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return !usesLocalCoordinator(active)
+                ? active.approveManualReport(reportId)
+                : coordinator.approveManualReport(reportId);
+    }
+
+    @Override
+    public boolean rejectManualReport(@Nonnull String reportId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return !usesLocalCoordinator(active)
+                ? active.rejectManualReport(reportId)
+                : coordinator.rejectManualReport(reportId);
+    }
+
+    @Nonnull
+    @Override
+    public List<String> submittedManualReportAuditLines(int maxLines) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return !usesLocalCoordinator(active)
+                ? active.submittedManualReportAuditLines(maxLines)
+                : coordinator.submittedManualReportAuditLines(maxLines);
     }
 
     @Override
@@ -469,6 +618,67 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             coordinator.recordStats(projectId, eventName, details);
         } else {
             active.recordStats(projectId, eventName, details);
+        }
+    }
+
+    @Nonnull
+    private static Map<String, Object> submissionToMap(@Nonnull ManualReportSubmission submission) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("kind", submission.kind().key());
+        values.put("title", submission.title());
+        values.put("description", submission.description());
+        putIfPresent(values, "contact", submission.contact());
+        values.put("formValues", submission.formValues());
+        values.put("includeCurrentServerLog", submission.includeCurrentServerLog());
+        values.put("includePreviousServerLog", submission.includePreviousServerLog());
+        values.put("includeLoadedModList", submission.includeLoadedModList());
+        values.put("includeDiagnostics", submission.includeDiagnostics());
+        values.put("allowResolutionUpdates", submission.allowResolutionUpdates());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> playerContextToMap(@Nullable PlayerReportRuntimeContext playerContext) {
+        PlayerReportRuntimeContext safeContext = playerContext == null ? PlayerReportRuntimeContext.UNKNOWN : playerContext;
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("singleplayer", safeContext.singleplayer());
+        values.put("onlinePlayerCount", safeContext.onlinePlayerCount());
+        putIfPresent(values, "worldName", safeContext.worldName());
+        values.put("loadedMods", safeContext.loadedMods().stream()
+                .map(TelemetryRuntimeProviderHandle::loadedModToMap)
+                .toList());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> loadedModToMap(@Nonnull com.alechilles.alecstelemetry.crash.CrashReportEnvelope.LoadedModMetadata loadedMod) {
+        return Map.of(
+                "identifier", loadedMod.identifier(),
+                "version", loadedMod.version()
+        );
+    }
+
+    @Nonnull
+    private static ManualReportEnvelope.CreateResult manualReportResultFromMap(@Nonnull Map<String, Object> values) {
+        List<String> errors = stringList(values.get("validationErrors"));
+        ManualReportEnvelope envelope = envelopeFrom(values.get("envelopeJson"));
+        String followUpToken = stringValue(values.get("followUpToken"));
+        if (Boolean.TRUE.equals(values.get("accepted")) && envelope == null && errors.isEmpty()) {
+            errors = List.of("coordinator_manual_report_missing_envelope");
+        }
+        return new ManualReportEnvelope.CreateResult(envelope, errors, followUpToken);
+    }
+
+    @Nullable
+    private static ManualReportEnvelope envelopeFrom(@Nullable Object value) {
+        String rawJson = stringValue(value);
+        if (rawJson == null) {
+            return null;
+        }
+        try {
+            return ManualReportEnvelope.fromJson(rawJson);
+        } catch (RuntimeException ignored) {
+            return null;
         }
     }
 
@@ -760,16 +970,6 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return null;
     }
 
-    @Nullable
-    private TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
-        String normalized = projectId.trim();
-        for (TelemetryProjectRegistration project : coordinator.manualReportProjects()) {
-            if (project.projectId().equalsIgnoreCase(normalized)) {
-                return project;
-            }
-        }
-        return null;
-    }
 
     private void replaceConsentProject(@Nonnull TelemetryProjectRegistration replacement) {
         ArrayList<TelemetryProjectRegistration> updated = new ArrayList<>(consentProjects.size());
@@ -915,6 +1115,17 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 : projectDiagnosticsFromSummary(diagnostics).enabled();
     }
 
+    @Nonnull
+    private static List<TelemetryProjectRegistration> manualReportProjectsFromSummaries(@Nonnull List<Map<String, Object>> summaries) {
+        ArrayList<TelemetryProjectRegistration> projects = new ArrayList<>(summaries.size());
+        for (Map<String, Object> summary : summaries) {
+            TelemetryProjectRegistration project = projectFromSummary(summary);
+            if (project != null) {
+                projects.add(project);
+            }
+        }
+        return List.copyOf(projects);
+    }
     @Nullable
     private static TelemetryProjectRegistration projectFromSummary(@Nonnull Map<String, Object> summary) {
         String projectId = stringValue(summary.get("projectId"));
@@ -928,19 +1139,37 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         );
         String pluginIdentifier = firstNonBlank(stringValue(summary.get("pluginIdentifier")), "unknown:unknown");
         String pluginVersion = firstNonBlank(stringValue(summary.get("pluginVersion")), "unknown");
+        TelemetryProjectDescriptor descriptor = descriptorFromSummary(summary, projectId, displayName, runtimeMode);
         return new TelemetryProjectRegistration(
-                TelemetryProjectDescriptor.fromJson(
-                        "{\"projectId\":\"" + escapeJson(projectId)
-                                + "\",\"displayName\":\"" + escapeJson(displayName)
-                                + "\",\"runtimeMode\":\"" + escapeJson(runtimeMode) + "\"}",
-                        null
-                ),
+                descriptor,
                 pluginIdentifier,
                 pluginVersion,
                 pathValue(summary.get("sourcePath"))
         );
     }
 
+    @Nonnull
+    private static TelemetryProjectDescriptor descriptorFromSummary(@Nonnull Map<String, Object> summary,
+                                                                    @Nonnull String projectId,
+                                                                    @Nonnull String displayName,
+                                                                    @Nonnull String runtimeMode) {
+        String descriptorJson = stringValue(summary.get("descriptorJson"));
+        if (descriptorJson != null) {
+            try {
+                return TelemetryProjectDescriptor.fromJson(descriptorJson, null);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        String reports = Boolean.TRUE.equals(summary.get("manualReportsEnabled"))
+                ? ",\"reports\":{\"enabled\":true}"
+                : "";
+        return TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"" + escapeJson(projectId)
+                        + "\",\"displayName\":\"" + escapeJson(displayName)
+                        + "\",\"runtimeMode\":\"" + escapeJson(runtimeMode) + "\"" + reports + "}",
+                null
+        );
+    }
     @Nonnull
     private static Map<String, Object> projectSummary(@Nonnull TelemetryProjectRegistration project) {
         LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
@@ -949,6 +1178,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         summary.put("runtimeMode", project.runtimeMode());
         summary.put("pluginIdentifier", project.pluginIdentifier());
         summary.put("pluginVersion", project.pluginVersion());
+        summary.put("descriptorJson", project.descriptor().toJson());
+        summary.put("manualReportsEnabled", project.descriptor().reports().enabled());
         if (project.sourcePath() != null) {
             summary.put("sourcePath", project.sourcePath().toString());
         }
@@ -1293,6 +1524,52 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                                       @Nonnull Map<String, Object> submission,
                                                       @Nonnull Map<String, Object> playerContext) {
             return service.submitManualReport(projectId, submission, playerContext);
+        }
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> manualReportProjectSummaries() {
+            ArrayList<Map<String, Object>> projects = new ArrayList<>();
+            for (TelemetryProjectRegistration project : service.manualReportProjects()) {
+                if (project.descriptor().reports().enabled()) {
+                    projects.add(projectSummary(project));
+                }
+            }
+            return List.copyOf(projects);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findManualReportProjectSummary(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = service.findManualReportProject(projectId);
+            return project == null ? Map.of() : projectSummary(project);
+        }
+
+        @Nonnull
+        @Override
+        public String manualReportReceiptStatus(@Nonnull String reportId) {
+            return service.manualReportReceiptStatus(reportId);
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> manualReportsForReview(int maxReportsPerProject) {
+            return TelemetryManualReportBridgePayload.envelopeSummaries(service.manualReportsForReview(maxReportsPerProject));
+        }
+
+        @Override
+        public boolean approveManualReport(@Nonnull String reportId) {
+            return service.approveManualReport(reportId);
+        }
+
+        @Override
+        public boolean rejectManualReport(@Nonnull String reportId) {
+            return service.rejectManualReport(reportId);
+        }
+
+        @Nonnull
+        @Override
+        public List<String> submittedManualReportAuditLines(int maxLines) {
+            return service.submittedManualReportAuditLines(maxLines);
         }
     }
 }
