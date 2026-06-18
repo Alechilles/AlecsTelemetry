@@ -294,7 +294,11 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
             if (!supported.categoryEnabled(category)) {
                 continue;
             }
-            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = projectDiagnostics(project.projectId());
+            if (diagnostics == null) {
+                appliedAll = false;
+                continue;
+            }
             TelemetryConsentSnapshot current = diagnostics.consentSnapshot();
             appliedAll &= applyLocalConsent(project.projectId(), current.withCategory(category, enabled));
         }
@@ -666,9 +670,24 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Nonnull
     public TelemetryRuntimeDiagnostics diagnostics() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentDiagnostics();
+            return activeDiagnostics.isEmpty()
+                    ? unavailableConsentDiagnostics(active)
+                    : TelemetryConsentBridgePayload.diagnosticsFromSummary(activeDiagnostics);
+        }
+        if (coordinatorBridge != null && active != null) {
+            return coordinatorDiagnostics();
+        }
+        return engineDiagnostics();
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics engineDiagnostics() {
         ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
         for (TelemetryProjectRegistration project : consentProjects) {
-            projectDiagnostics.add(buildProjectDiagnostics(project));
+            projectDiagnostics.add(buildEngineProjectDiagnostics(project));
         }
         return new TelemetryRuntimeDiagnostics(
                 engine.isEnabled(),
@@ -677,6 +696,25 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
                 engine.pendingReports(null),
                 engine.flushInProgress(),
                 engine.lastFlushResult(),
+                dataPaths.modsDirectory() == null ? null : dataPaths.modsDirectory().toString(),
+                registrationWarnings,
+                List.copyOf(projectDiagnostics)
+        );
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics coordinatorDiagnostics() {
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projectDiagnostics.add(buildCoordinatorProjectDiagnostics(project));
+        }
+        return new TelemetryRuntimeDiagnostics(
+                coordinatorService.isEnabled(),
+                consentProjects.size(),
+                coordinatorService.loadedMods().size(),
+                coordinatorService.pendingReports(null),
+                coordinatorService.flushInProgress(),
+                coordinatorService.lastFlushResult(),
                 dataPaths.modsDirectory() == null ? null : dataPaths.modsDirectory().toString(),
                 registrationWarnings,
                 List.copyOf(projectDiagnostics)
@@ -698,8 +736,20 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Nullable
     public TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(projectId);
+            return activeDiagnostics.isEmpty()
+                    ? null
+                    : TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(activeDiagnostics);
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
-        return project == null ? null : buildProjectDiagnostics(project);
+        if (project == null) {
+            return null;
+        }
+        return coordinatorBridge != null && active != null
+                ? buildCoordinatorProjectDiagnostics(project)
+                : buildEngineProjectDiagnostics(project);
     }
 
     @Nullable
@@ -716,6 +766,17 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     }
 
     public int pendingReports(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            if (projectId == null) {
+                return diagnostics().totalPendingReports();
+            }
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = projectDiagnostics(projectId);
+            return diagnostics == null ? 0 : diagnostics.pendingReports();
+        }
+        if (coordinatorBridge != null && active != null) {
+            return coordinatorService.pendingReports(projectId);
+        }
         return engine.pendingReports(projectId);
     }
 
@@ -726,6 +787,13 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return projectFromSummary(active.findProjectSummary(projectId));
+        }
+        if (coordinatorBridge != null && active != null) {
+            return coordinatorService.findProject(projectId);
+        }
         return engine.findProject(projectId);
     }
 
@@ -747,21 +815,33 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Nonnull
     FlushSummary flushPendingReportsNow(@Nonnull String reason) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            int attempted = pendingReports(null);
+            boolean scheduled = active.requestFlush(null);
+            return new FlushSummary(scheduled ? attempted : 0, 0, pendingReports(null), scheduled ? null : "active coordinator rejected flush");
+        }
         TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow(reason);
         return new FlushSummary(summary.attempted(), summary.uploaded(), summary.pendingAfter(), summary.lastFailure());
     }
 
     @Nonnull
     FlushSummary flushPendingReportsNow(@Nonnull String reason, @Nullable String projectIdFilter) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            int attempted = pendingReports(projectIdFilter);
+            boolean scheduled = active.requestFlush(projectIdFilter);
+            return new FlushSummary(scheduled ? attempted : 0, 0, pendingReports(projectIdFilter), scheduled ? null : "active coordinator rejected flush");
+        }
         TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow(reason, projectIdFilter);
         return new FlushSummary(summary.attempted(), summary.uploaded(), summary.pendingAfter(), summary.lastFailure());
     }
 
     @Nonnull
-    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildProjectDiagnostics(
+    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildEngineProjectDiagnostics(
             @Nonnull TelemetryProjectRegistration project) {
         CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
-        boolean registeredForStandaloneRuntime = findProject(project.projectId()) != null;
+        boolean registeredForStandaloneRuntime = engine.findProject(project.projectId()) != null;
         int pendingReports = registeredForStandaloneRuntime ? engine.pendingReports(project.projectId()) : 0;
         return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
                 project.projectId(),
@@ -784,6 +864,43 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
                 registeredForStandaloneRuntime ? engine.isUsageEnabled(project.projectId()) : project.usage().enabled(),
                 registeredForStandaloneRuntime ? engine.isStatsEnabled(project.projectId()) : project.stats().enabled(),
                 registeredForStandaloneRuntime ? engine.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled(),
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildCoordinatorProjectDiagnostics(
+            @Nonnull TelemetryProjectRegistration project) {
+        CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
+        boolean registeredForStandaloneRuntime = coordinatorService.findProject(project.projectId()) != null;
+        int pendingReports = registeredForStandaloneRuntime ? coordinatorService.pendingReports(project.projectId()) : 0;
+        return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                project.projectId(),
+                project.displayName(),
+                project.isEnabled(),
+                project.hasOverride(),
+                project.destinationMode(),
+                target == null ? null : target.endpoint(),
+                pendingReports,
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                project.sourcePath() == null ? null : project.sourcePath().toString(),
+                project.descriptor().ui().iconTexturePath(),
+                project.packagePrefixes(),
+                project.runtimeMode(),
+                registeredForStandaloneRuntime ? coordinatorService.isCrashEnabled(project.projectId()) : project.isCrashTelemetryEnabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isErrorEventsEnabled(project.projectId()) : project.events().errors().enabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isLifecycleEventsEnabled(project.projectId()) : project.events().lifecycle().enabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isPerformanceEnabled(project.projectId()) : project.performance().enabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isUsageEnabled(project.projectId()) : project.usage().enabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isStatsEnabled(project.projectId()) : project.stats().enabled(),
+                registeredForStandaloneRuntime ? coordinatorService.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled(),
                 supportsCrash(project),
                 project.descriptor().events().errors().enabled(),
                 project.descriptor().events().lifecycle().enabled(),
@@ -866,7 +983,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     }
 
     private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
-        return active == null || coordinatorBridge.providerId().equals(active.providerId());
+        return active == null || (coordinatorBridge != null && coordinatorBridge.providerId().equals(active.providerId()));
     }
 
     @Nonnull
@@ -915,6 +1032,69 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     @Nonnull
     private static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
         return pluginIdentifier.trim().replace(':', '_');
+    }
+
+    @Nullable
+    private static TelemetryProjectRegistration projectFromSummary(@Nonnull Map<String, Object> summary) {
+        String projectId = stringValue(summary.get("projectId"));
+        if (projectId == null) {
+            return null;
+        }
+        String displayName = firstNonBlank(stringValue(summary.get("displayName")), projectId);
+        String runtimeMode = firstNonBlank(
+                stringValue(summary.get("runtimeMode")),
+                TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY
+        );
+        String pluginIdentifier = firstNonBlank(stringValue(summary.get("pluginIdentifier")), "unknown:unknown");
+        String pluginVersion = firstNonBlank(stringValue(summary.get("pluginVersion")), "unknown");
+        return new TelemetryProjectRegistration(
+                TelemetryProjectDescriptor.fromJson(
+                        "{\"projectId\":\"" + escapeJson(projectId)
+                                + "\",\"displayName\":\"" + escapeJson(displayName)
+                                + "\",\"runtimeMode\":\"" + escapeJson(runtimeMode) + "\"}",
+                        null
+                ),
+                pluginIdentifier,
+                pluginVersion,
+                pathValue(summary.get("sourcePath"))
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> projectSummary(@Nonnull TelemetryProjectRegistration project) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("projectId", project.projectId());
+        summary.put("displayName", project.displayName());
+        summary.put("runtimeMode", project.runtimeMode());
+        summary.put("pluginIdentifier", project.pluginIdentifier());
+        summary.put("pluginVersion", project.pluginVersion());
+        if (project.sourcePath() != null) {
+            summary.put("sourcePath", project.sourcePath().toString());
+        }
+        return Map.copyOf(summary);
+    }
+
+    @Nonnull
+    private static String firstNonBlank(@Nullable String value, @Nonnull String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    @Nullable
+    private static Path pathValue(@Nullable Object value) {
+        String normalized = stringValue(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return Path.of(normalized);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    @Nonnull
+    private static String escapeJson(@Nonnull String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     /**
@@ -1172,6 +1352,28 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         }
 
         @Override
+        public boolean isEnabled() {
+            return service.isEnabled();
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            ArrayList<Map<String, Object>> projects = new ArrayList<>(service.projects().size());
+            for (TelemetryProjectRegistration project : service.projects()) {
+                projects.add(projectSummary(project));
+            }
+            return List.copyOf(projects);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = service.findProject(projectId);
+            return project == null ? Map.of() : projectSummary(project);
+        }
+
+        @Override
         public boolean isProjectEnabled(@Nonnull String projectId) {
             return service.isProjectEnabled(projectId);
         }
@@ -1219,14 +1421,16 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         @Nonnull
         @Override
         public Map<String, Object> consentDiagnostics() {
-            return TelemetryConsentBridgePayload.diagnosticsSummary(TelemetryRuntimeService.this.diagnostics());
+            return TelemetryConsentBridgePayload.diagnosticsSummary(TelemetryRuntimeService.this.coordinatorDiagnostics());
         }
 
         @Nonnull
         @Override
         public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
-            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = TelemetryRuntimeService.this
-                    .projectDiagnostics(projectId);
+            TelemetryProjectRegistration project = findConsentProject(projectId);
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = project == null
+                    ? null
+                    : buildCoordinatorProjectDiagnostics(project);
             return diagnostics == null ? Map.of() : TelemetryConsentBridgePayload.projectDiagnosticsSummary(diagnostics);
         }
 

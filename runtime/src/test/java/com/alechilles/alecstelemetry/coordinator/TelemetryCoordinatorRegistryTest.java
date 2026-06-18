@@ -10,6 +10,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCoordinatorRegistryTest {
@@ -63,7 +64,12 @@ class TelemetryCoordinatorRegistryTest {
     @Test
     void ignoresIncompatibleNewerCandidate() {
         RecordingBridge standalone = bridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
-        ForeignBridge incompatible = foreignBridge("embedded", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4", 2);
+        ForeignBridge incompatible = foreignBridge(
+                "embedded",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION + 1
+        );
 
         TelemetryCoordinatorRegistry.register(standalone);
         TelemetryCoordinatorRegistry.register(incompatible);
@@ -71,6 +77,16 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals("standalone", TelemetryCoordinatorRegistry.activeBridge().providerId());
         assertTrue(standalone.active);
         assertFalse(incompatible.active);
+    }
+
+    @Test
+    void ignoresLegacyProtocolOneCandidateAfterConsentBridgeProtocolBump() {
+        ForeignBridge legacy = foreignBridge("legacy", TelemetryRuntimeOrigin.EMBEDDED, "9.0.0", 1);
+
+        TelemetryCoordinatorRegistry.register(legacy);
+
+        assertNull(TelemetryCoordinatorRegistry.activeBridge());
+        assertFalse(legacy.active);
     }
 
     @Test

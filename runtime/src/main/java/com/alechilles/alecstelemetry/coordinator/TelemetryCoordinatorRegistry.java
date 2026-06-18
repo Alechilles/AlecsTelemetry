@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TelemetryCoordinatorRegistry {
 
-    public static final int COORDINATOR_PROTOCOL_VERSION = 1;
+    public static final int COORDINATOR_PROTOCOL_VERSION = 2;
     private static final String REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.v1";
 
     private TelemetryCoordinatorRegistry() {

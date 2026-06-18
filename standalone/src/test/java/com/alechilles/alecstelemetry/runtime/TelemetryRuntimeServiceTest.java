@@ -66,17 +66,17 @@ class TelemetryRuntimeServiceTest {
         ));
         TelemetryCoordinatorRegistry.register(embedded);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
-                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
-                "Example:Embedded Mod",
+                manualReportDescriptor("standalone-local", "Standalone Local", true, "dependency"),
+                "Example:Standalone Local",
                 "1.0.0",
-                tempDir.resolve("Embedded Mod.jar")
+                tempDir.resolve("Standalone Local.jar")
         );
         TelemetryRuntimeService service = new TelemetryRuntimeService(
                 settings,
                 dataPaths,
                 List.of(registration),
                 List.of(registration),
-                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Standalone Local", "1.0.0")),
                 new SequencedClient(CrashReportClient.UploadResult.success(204)),
                 null,
                 null
@@ -92,6 +92,16 @@ class TelemetryRuntimeServiceTest {
         assertEquals("embedded-mod", embedded.lastProjectId);
         assertEquals("settings_opened", embedded.lastEventName);
         assertEquals("from standalone api", embedded.lastDetails.get("detail"));
+        assertNull(service.findProject("standalone-local"));
+        assertEquals("embedded-mod", service.findProject("embedded-mod").projectId());
+        assertEquals("embedded-mod", service.diagnostics().projects().getFirst().projectId());
+        assertNull(service.projectDiagnostics("standalone-local"));
+        assertEquals("embedded-mod", service.projectDiagnostics("embedded-mod").projectId());
+        assertEquals(7, service.pendingReports(null));
+        assertEquals(7, service.pendingReports("embedded-mod"));
+        TelemetryRuntimeService.FlushSummary flushSummary = service.flushPendingReportsNow("test", "embedded-mod");
+        assertEquals(7, flushSummary.attempted());
+        assertEquals("embedded-mod", embedded.lastFlushProjectId);
         assertEquals("embedded-mod", service.consentDiagnostics().projects().getFirst().projectId());
         assertNull(service.consentProjectDiagnostics("standalone-only"));
         assertTrue(service.unreviewedConsentProjects().isEmpty());
@@ -1608,6 +1618,7 @@ class TelemetryRuntimeServiceTest {
         private boolean breadcrumbsEnabled = true;
         private String consentProjectId = "embedded-mod";
         private String consentDisplayName = "Embedded Mod";
+        private int pendingReports = 7;
         private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
         private Map<String, Object> lastDetails = Map.of();
         private String lastManualReportProjectId;
@@ -1684,6 +1695,21 @@ class TelemetryRuntimeServiceTest {
         }
 
         @Override
+        public boolean isEnabled() {
+            return true;
+        }
+
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            return List.of(projectSummary());
+        }
+
+        @Override
+        public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+            return consentProjectId.equalsIgnoreCase(projectId.trim()) ? projectSummary() : Map.of();
+        }
+
+        @Override
         public boolean isProjectEnabled(@Nonnull String projectId) {
             return projectEnabled;
         }
@@ -1742,7 +1768,7 @@ class TelemetryRuntimeServiceTest {
                     true,
                     1,
                     1,
-                    0,
+                    pendingReports,
                     false,
                     "never",
                     null,
@@ -1832,7 +1858,7 @@ class TelemetryRuntimeServiceTest {
                     false,
                     "custom",
                     "https://example.invalid/telemetry",
-                    0,
+                    pendingReports,
                     "Example:" + consentDisplayName,
                     "1.0.0",
                     null,
@@ -1853,6 +1879,17 @@ class TelemetryRuntimeServiceTest {
                     true,
                     true,
                     true
+            );
+        }
+
+        private Map<String, Object> projectSummary() {
+            return Map.of(
+                    "projectId", consentProjectId,
+                    "displayName", consentDisplayName,
+                    "runtimeMode", "embedded",
+                    "pluginIdentifier", "Example:" + consentDisplayName,
+                    "pluginVersion", "1.0.0",
+                    "sourcePath", candidate.sourcePath().toString()
             );
         }
     }
