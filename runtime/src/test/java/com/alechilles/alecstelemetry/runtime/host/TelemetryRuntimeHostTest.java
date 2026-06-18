@@ -178,6 +178,7 @@ class TelemetryRuntimeHostTest {
                 .toList());
         assertNotNull(loser.handle().api().findProject("winner-mod"));
         assertNotNull(loser.handle().api().findProject("winner-consent-only"));
+        assertTrue(loser.handle().api().findProject("winner-consent-only").isEnabled());
         assertNull(loser.handle().api().findProject("loser-mod"));
 
         TelemetryConsentSnapshot disabled = new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false);

@@ -95,6 +95,7 @@ class TelemetryRuntimeServiceTest {
         assertNull(service.api().findProject("standalone-local"));
         assertEquals("embedded-mod", service.api().findProject("embedded-mod").projectId());
         assertEquals("embedded-consent-only", service.api().findProject("embedded-consent-only").projectId());
+        assertTrue(service.api().findProject("embedded-consent-only").isEnabled());
         assertTrue(service.triggerFlushAsync("embedded-mod"));
         service.recordUsage("embedded-mod", "settings_opened", "from standalone api");
         assertEquals("embedded-mod", embedded.lastFlushProjectId);

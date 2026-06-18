@@ -266,7 +266,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     public boolean isProjectEnabled(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            return active.isProjectEnabled(projectId);
+            return activeProjectEnabled(active, projectId);
         }
         return engine.isProjectEnabled(projectId);
     }
@@ -1117,6 +1117,17 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         if (projectId != null) {
             projects.putIfAbsent(projectId.toLowerCase(Locale.ROOT), summary);
         }
+    }
+
+    private static boolean activeProjectEnabled(@Nonnull TelemetryCoordinatorBridge active,
+                                                @Nonnull String projectId) {
+        if (!active.findProjectSummary(projectId).isEmpty()) {
+            return active.isProjectEnabled(projectId);
+        }
+        Map<String, Object> diagnostics = active.consentProjectDiagnostics(projectId);
+        return diagnostics.isEmpty()
+                ? active.isProjectEnabled(projectId)
+                : TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(diagnostics).enabled();
     }
 
     @Nonnull

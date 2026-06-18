@@ -369,6 +369,7 @@ class EmbeddedTelemetryServiceTest {
                         .map(com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics::projectId)
                         .toList()
         );
+        assertTrue(service.consentProjectDiagnostics("consent-only-mod").enabled());
         assertTrue(service.applyConsent(
                 "consent-only-mod",
                 new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)

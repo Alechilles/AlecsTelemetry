@@ -214,7 +214,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public boolean isProjectEnabled(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        return active == null ? coordinator.isProjectEnabled(projectId) : active.isProjectEnabled(projectId);
+        return active == null ? coordinator.isProjectEnabled(projectId) : activeProjectEnabled(active, projectId);
     }
 
     @Nonnull
@@ -887,6 +887,17 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (projectId != null) {
             projects.putIfAbsent(projectId.toLowerCase(Locale.ROOT), summary);
         }
+    }
+
+    private static boolean activeProjectEnabled(@Nonnull TelemetryCoordinatorBridge active,
+                                                @Nonnull String projectId) {
+        if (!active.findProjectSummary(projectId).isEmpty()) {
+            return active.isProjectEnabled(projectId);
+        }
+        Map<String, Object> diagnostics = active.consentProjectDiagnostics(projectId);
+        return diagnostics.isEmpty()
+                ? active.isProjectEnabled(projectId)
+                : projectDiagnosticsFromSummary(diagnostics).enabled();
     }
 
     @Nullable

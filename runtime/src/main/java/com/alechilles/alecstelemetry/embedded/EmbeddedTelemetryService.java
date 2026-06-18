@@ -214,6 +214,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return active.isProjectEnabled(projectId);
         }
         if (active != null) {
+            TelemetryProjectRegistration consentProject = findConsentProject(projectId);
+            boolean runtimeProject = coordinatorBridge != null
+                    && coordinatorBridge.service.findProject(projectId) != null;
+            if (consentProject != null && !runtimeProject) {
+                return consentProject.isEnabled();
+            }
             return active.isProjectEnabled(projectId);
         }
         if (coordinatorBridge != null) {
