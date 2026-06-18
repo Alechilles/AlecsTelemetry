@@ -104,6 +104,41 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    @Nonnull
+    default Map<String, Object> consentDiagnostics() {
+        return Map.of();
+    }
+
+    @Nonnull
+    default Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+        Object projects = consentDiagnostics().get("projects");
+        if (!(projects instanceof List<?> projectList)) {
+            return Map.of();
+        }
+        for (Object rawProject : projectList) {
+            if (!(rawProject instanceof Map<?, ?> project)) {
+                continue;
+            }
+            Object id = project.get("projectId");
+            if (id != null && id.toString().equalsIgnoreCase(projectId.trim())) {
+                return copyStringObjectMap(project);
+            }
+        }
+        return Map.of();
+    }
+
+    default boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+        return false;
+    }
+
+    default boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+        return false;
+    }
+
+    default boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+        return false;
+    }
+
     default boolean recordBreadcrumb(@Nonnull String projectId,
                                      @Nonnull String category,
                                      @Nonnull String detail) {
@@ -173,5 +208,17 @@ public interface TelemetryCoordinatorBridge {
                                                    @Nonnull Map<String, Object> submission,
                                                    @Nonnull Map<String, Object> playerContext) {
         return Map.of("accepted", false, "validationErrors", List.of("coordinator_manual_reports_unavailable"));
+    }
+
+    @Nonnull
+    private static Map<String, Object> copyStringObjectMap(@Nonnull Map<?, ?> source) {
+        java.util.LinkedHashMap<String, Object> copy = new java.util.LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            copy.put(entry.getKey().toString(), entry.getValue());
+        }
+        return Map.copyOf(copy);
     }
 }

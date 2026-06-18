@@ -219,35 +219,63 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nonnull
     @Override
     public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return List.of();
+        }
         return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), consentProjects);
     }
 
     @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsentToAll(snapshotSummary(snapshot));
+        }
+        return applyLocalConsentToAll(snapshot);
+    }
+
+    private boolean applyLocalConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
-            appliedAll &= applyConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
+            appliedAll &= applyLocalConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
         }
         return appliedAll;
     }
 
     @Override
     public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsentCategoryToAll(category, enabled);
+        }
+        return applyLocalConsentCategoryToAll(category, enabled);
+    }
+
+    private boolean applyLocalConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
             TelemetryConsentSnapshot supported = supportedSnapshot(project);
             if (!supported.categoryEnabled(category)) {
                 continue;
             }
-            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildLocalProjectDiagnostics(project);
             TelemetryConsentSnapshot current = diagnostics.consentSnapshot();
-            appliedAll &= applyConsent(project.projectId(), current.withCategory(category, enabled));
+            appliedAll &= applyLocalConsent(project.projectId(), current.withCategory(category, enabled));
         }
         return appliedAll;
     }
 
     @Override
     public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsent(projectId, snapshotSummary(snapshot));
+        }
+        return applyLocalConsent(projectId, snapshot);
+    }
+
+    private boolean applyLocalConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryProjectRegistration project = findConsentProject(projectId);
         if (project == null) {
             return false;
@@ -266,12 +294,15 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        applyRuntimeConsent(project.projectId(), normalized);
-        return true;
+        return applyRuntimeConsent(project.projectId(), normalized);
     }
 
     @Override
     public boolean markConsentReviewed(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return false;
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
         return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
     }
@@ -279,9 +310,19 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nonnull
     @Override
     public TelemetryRuntimeDiagnostics consentDiagnostics() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentDiagnostics();
+            return activeDiagnostics.isEmpty() ? unavailableConsentDiagnostics(active) : diagnosticsFromSummary(activeDiagnostics);
+        }
+        return localConsentDiagnostics();
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics localConsentDiagnostics() {
         ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
         for (TelemetryProjectRegistration project : consentProjects) {
-            projectDiagnostics.add(buildProjectDiagnostics(project));
+            projectDiagnostics.add(buildLocalProjectDiagnostics(project));
         }
         return new TelemetryRuntimeDiagnostics(
                 coordinator.isEnabled(),
@@ -299,8 +340,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nullable
     @Override
     public TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(projectId);
+            return activeDiagnostics.isEmpty() ? null : projectDiagnosticsFromSummary(activeDiagnostics);
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
-        return project == null ? null : buildProjectDiagnostics(project);
+        return project == null ? null : buildLocalProjectDiagnostics(project);
     }
 
     @Override
@@ -440,35 +486,40 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
     }
 
-    private void applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+    private boolean applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            active.setProjectEnabled(projectId, snapshot.projectEnabled());
-            active.setCrashEnabled(projectId, snapshot.crashEnabled());
-            active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
-            active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
-            active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
-            active.setUsageEnabled(projectId, snapshot.usageEnabled());
-            active.setStatsEnabled(projectId, snapshot.statsEnabled());
-            active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
-            return;
+            boolean runtimeProject = !active.findProjectSummary(projectId).isEmpty();
+            boolean applied = active.setProjectEnabled(projectId, snapshot.projectEnabled());
+            if (runtimeProject) {
+                applied &= active.setCrashEnabled(projectId, snapshot.crashEnabled());
+                applied &= active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+                applied &= active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+                applied &= active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+                applied &= active.setUsageEnabled(projectId, snapshot.usageEnabled());
+                applied &= active.setStatsEnabled(projectId, snapshot.statsEnabled());
+                applied &= active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            }
+            return applied;
         }
+        boolean applied = true;
         if (coordinator.findProject(projectId) != null || findManualReportProject(projectId) != null) {
-            coordinator.setProjectEnabled(projectId, snapshot.projectEnabled());
+            applied &= coordinator.setProjectEnabled(projectId, snapshot.projectEnabled());
         }
         if (coordinator.findProject(projectId) != null) {
-            coordinator.setCrashEnabled(projectId, snapshot.crashEnabled());
-            coordinator.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
-            coordinator.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
-            coordinator.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
-            coordinator.setUsageEnabled(projectId, snapshot.usageEnabled());
-            coordinator.setStatsEnabled(projectId, snapshot.statsEnabled());
-            coordinator.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            applied &= coordinator.setCrashEnabled(projectId, snapshot.crashEnabled());
+            applied &= coordinator.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            applied &= coordinator.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            applied &= coordinator.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            applied &= coordinator.setUsageEnabled(projectId, snapshot.usageEnabled());
+            applied &= coordinator.setStatsEnabled(projectId, snapshot.statsEnabled());
+            applied &= coordinator.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
         }
+        return applied;
     }
 
     @Nonnull
-    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildProjectDiagnostics(
+    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildLocalProjectDiagnostics(
             @Nonnull TelemetryProjectRegistration project) {
         CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
         boolean registeredForRuntime = coordinator.findProject(project.projectId()) != null;
@@ -501,6 +552,158 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 project.descriptor().usage().enabled(),
                 project.descriptor().stats().enabled(),
                 project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> diagnosticsSummary(@Nonnull TelemetryRuntimeDiagnostics diagnostics) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("enabled", diagnostics.enabled());
+        summary.put("registeredProjects", diagnostics.registeredProjects());
+        summary.put("loadedMods", diagnostics.loadedMods());
+        summary.put("totalPendingReports", diagnostics.totalPendingReports());
+        summary.put("flushInProgress", diagnostics.flushInProgress());
+        summary.put("lastFlushResult", diagnostics.lastFlushResult());
+        putIfPresent(summary, "modsDirectory", diagnostics.modsDirectory());
+        summary.put("registrationWarnings", diagnostics.registrationWarnings());
+        summary.put("projects", diagnostics.projects().stream()
+                .map(TelemetryRuntimeProviderHandle::projectDiagnosticsSummary)
+                .toList());
+        return Map.copyOf(summary);
+    }
+
+    @Nonnull
+    private static Map<String, Object> projectDiagnosticsSummary(
+            @Nonnull TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("projectId", project.projectId());
+        summary.put("displayName", project.displayName());
+        summary.put("enabled", project.enabled());
+        summary.put("overridePresent", project.overridePresent());
+        summary.put("destinationMode", project.destinationMode());
+        putIfPresent(summary, "endpoint", project.endpoint());
+        summary.put("pendingReports", project.pendingReports());
+        summary.put("pluginIdentifier", project.pluginIdentifier());
+        summary.put("pluginVersion", project.pluginVersion());
+        putIfPresent(summary, "sourcePath", project.sourcePath());
+        putIfPresent(summary, "iconTexturePath", project.iconTexturePath());
+        summary.put("packagePrefixes", project.packagePrefixes());
+        summary.put("runtimeMode", project.runtimeMode());
+        summary.put("crashEnabled", project.crashEnabled());
+        summary.put("errorEnabled", project.errorEnabled());
+        summary.put("lifecycleEnabled", project.lifecycleEnabled());
+        summary.put("performanceEnabled", project.performanceEnabled());
+        summary.put("usageEnabled", project.usageEnabled());
+        summary.put("statsEnabled", project.statsEnabled());
+        summary.put("breadcrumbsEnabled", project.breadcrumbsEnabled());
+        summary.put("crashSupported", project.crashSupported());
+        summary.put("errorSupported", project.errorSupported());
+        summary.put("lifecycleSupported", project.lifecycleSupported());
+        summary.put("performanceSupported", project.performanceSupported());
+        summary.put("usageSupported", project.usageSupported());
+        summary.put("statsSupported", project.statsSupported());
+        summary.put("breadcrumbsSupported", project.breadcrumbsSupported());
+        return Map.copyOf(summary);
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeDiagnostics diagnosticsFromSummary(@Nonnull Map<String, Object> summary) {
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projects = new ArrayList<>();
+        Object rawProjects = summary.get("projects");
+        if (rawProjects instanceof List<?> projectList) {
+            for (Object rawProject : projectList) {
+                if (rawProject instanceof Map<?, ?> projectSummary) {
+                    projects.add(projectDiagnosticsFromSummary(stringObjectMap(projectSummary)));
+                }
+            }
+        }
+        return new TelemetryRuntimeDiagnostics(
+                booleanValue(summary, "enabled"),
+                intValue(summary, "registeredProjects"),
+                intValue(summary, "loadedMods"),
+                intValue(summary, "totalPendingReports"),
+                booleanValue(summary, "flushInProgress"),
+                firstNonBlank(stringValue(summary.get("lastFlushResult")), "<unavailable>"),
+                stringValue(summary.get("modsDirectory")),
+                stringList(summary.get("registrationWarnings")),
+                List.copyOf(projects)
+        );
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnosticsFromSummary(
+            @Nonnull Map<String, Object> summary) {
+        return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                firstNonBlank(stringValue(summary.get("projectId")), "unknown"),
+                firstNonBlank(stringValue(summary.get("displayName")), "Unknown Project"),
+                booleanValue(summary, "enabled"),
+                booleanValue(summary, "overridePresent"),
+                firstNonBlank(stringValue(summary.get("destinationMode")), "hosted"),
+                stringValue(summary.get("endpoint")),
+                intValue(summary, "pendingReports"),
+                firstNonBlank(stringValue(summary.get("pluginIdentifier")), "unknown:unknown"),
+                firstNonBlank(stringValue(summary.get("pluginVersion")), "unknown"),
+                stringValue(summary.get("sourcePath")),
+                stringValue(summary.get("iconTexturePath")),
+                stringList(summary.get("packagePrefixes")),
+                firstNonBlank(stringValue(summary.get("runtimeMode")), TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY),
+                booleanValue(summary, "crashEnabled"),
+                booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "lifecycleEnabled"),
+                booleanValue(summary, "performanceEnabled"),
+                booleanValue(summary, "usageEnabled"),
+                booleanValue(summary, "statsEnabled"),
+                booleanValue(summary, "breadcrumbsEnabled"),
+                booleanValue(summary, "crashSupported"),
+                booleanValue(summary, "errorSupported"),
+                booleanValue(summary, "lifecycleSupported"),
+                booleanValue(summary, "performanceSupported"),
+                booleanValue(summary, "usageSupported"),
+                booleanValue(summary, "statsSupported"),
+                booleanValue(summary, "breadcrumbsSupported")
+        );
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeDiagnostics unavailableConsentDiagnostics(@Nonnull TelemetryCoordinatorBridge active) {
+        return new TelemetryRuntimeDiagnostics(
+                false,
+                0,
+                0,
+                0,
+                false,
+                "<unavailable>",
+                null,
+                List.of("Active telemetry coordinator " + active.providerId() + " does not expose consent diagnostics."),
+                List.of()
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> snapshotSummary(@Nonnull TelemetryConsentSnapshot snapshot) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("projectEnabled", snapshot.projectEnabled());
+        summary.put("crashEnabled", snapshot.crashEnabled());
+        summary.put("errorEnabled", snapshot.errorEnabled());
+        summary.put("lifecycleEnabled", snapshot.lifecycleEnabled());
+        summary.put("performanceEnabled", snapshot.performanceEnabled());
+        summary.put("usageEnabled", snapshot.usageEnabled());
+        summary.put("statsEnabled", snapshot.statsEnabled());
+        summary.put("breadcrumbsEnabled", snapshot.breadcrumbsEnabled());
+        return Map.copyOf(summary);
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot snapshotFromSummary(@Nonnull Map<String, Object> summary) {
+        return new TelemetryConsentSnapshot(
+                booleanValue(summary, "projectEnabled"),
+                booleanValue(summary, "crashEnabled"),
+                booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "lifecycleEnabled"),
+                booleanValue(summary, "performanceEnabled"),
+                booleanValue(summary, "usageEnabled"),
+                booleanValue(summary, "statsEnabled"),
+                booleanValue(summary, "breadcrumbsEnabled")
         );
     }
 
@@ -711,6 +914,50 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private static boolean booleanValue(@Nonnull Map<String, Object> values, @Nonnull String key) {
+        Object value = values.get(key);
+        return value instanceof Boolean bool && bool;
+    }
+
+    private static int intValue(@Nonnull Map<String, Object> values, @Nonnull String key) {
+        Object value = values.get(key);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return value == null ? 0 : Integer.parseInt(value.toString());
+        } catch (NumberFormatException ignored) {
+            return 0;
+        }
+    }
+
+    @Nonnull
+    private static List<String> stringList(@Nullable Object value) {
+        if (!(value instanceof List<?> rawValues) || rawValues.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<String> values = new ArrayList<>();
+        for (Object rawValue : rawValues) {
+            String normalized = stringValue(rawValue);
+            if (normalized != null) {
+                values.add(normalized);
+            }
+        }
+        return List.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> stringObjectMap(@Nonnull Map<?, ?> source) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            values.put(entry.getKey().toString(), entry.getValue());
+        }
+        return Map.copyOf(values);
+    }
+
     @Nullable
     private static Path pathValue(@Nullable Object value) {
         String normalized = stringValue(value);
@@ -829,6 +1076,35 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
             TelemetryProjectRegistration project = service.findProject(projectId);
             return project == null ? Map.of() : projectSummary(project);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            return diagnosticsSummary(localConsentDiagnostics());
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = TelemetryRuntimeProviderHandle.this
+                    .consentProjectDiagnostics(projectId);
+            return diagnostics == null ? Map.of() : projectDiagnosticsSummary(diagnostics);
+        }
+
+        @Override
+        public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+            return applyLocalConsentToAll(snapshotFromSummary(snapshot));
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+            return applyLocalConsentCategoryToAll(category, enabled);
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+            return applyLocalConsent(projectId, snapshotFromSummary(snapshot));
         }
 
         @Override

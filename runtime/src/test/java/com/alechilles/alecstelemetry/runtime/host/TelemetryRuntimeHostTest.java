@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -110,6 +111,71 @@ class TelemetryRuntimeHostTest {
         assertEquals("Embedded Project", projects.getFirst().displayName());
         assertNotNull(standalone.handle().api().findProject("embedded-project"));
         assertNull(standalone.handle().api().findProject("standalone-project"));
+    }
+
+    @Test
+    void losingProviderConsentPathsUseActiveProviderViewAndRejectStaleLocalProjects() {
+        TelemetryProjectRegistration loserProject = registration(
+                telemetryCategoryDescriptor("loser-mod", "Loser Mod"),
+                "Example:Loser Mod",
+                "1.0.0",
+                tempDir.resolve("Loser Mod")
+        );
+        TelemetryDataPaths loserPaths = dataPaths(tempDir.resolve("losing-provider"));
+        ProviderFixture loser = providerFixture(
+                "standalone:Alechilles:Loser",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                TelemetryRuntimeSettings.load(loserPaths.settingsFile(), null),
+                loserPaths,
+                List.of(loserProject),
+                List.of(loserProject),
+                List.of(),
+                loserProject
+        );
+        TelemetryProjectRegistration winnerProject = registration(
+                telemetryCategoryDescriptor("winner-mod", "Winner Mod"),
+                "Example:Winner Mod",
+                "2.0.0",
+                tempDir.resolve("Winner Mod")
+        );
+        TelemetryDataPaths winnerPaths = dataPaths(tempDir.resolve("winning-provider"));
+        ProviderFixture winner = providerFixture(
+                "embedded:Alechilles:Winner",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryRuntimeSettings.load(winnerPaths.settingsFile(), null),
+                winnerPaths,
+                List.of(winnerProject),
+                List.of(winnerProject),
+                List.of(),
+                winnerProject
+        );
+
+        loser.handle().start();
+        winner.handle().start();
+
+        assertFalse(loser.handle().ownsActiveCoordinator());
+        assertTrue(winner.handle().ownsActiveCoordinator());
+        TelemetryRuntimeDiagnostics loserDiagnostics = loser.handle().consentDiagnostics();
+        assertEquals(1, loserDiagnostics.projects().size());
+        assertEquals("winner-mod", loserDiagnostics.projects().getFirst().projectId());
+        assertNull(loser.handle().consentProjectDiagnostics("loser-mod"));
+        assertNotNull(loser.handle().consentProjectDiagnostics("winner-mod"));
+
+        TelemetryConsentSnapshot disabled = new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false);
+        assertFalse(loser.handle().applyConsent("loser-mod", disabled));
+        assertFalse(Files.exists(loser.dataPaths().projectOverrideFile("loser-mod")));
+
+        assertTrue(loser.handle().applyConsent("winner-mod", disabled));
+        assertFalse(winner.handle().consentProjectDiagnostics("winner-mod").enabled());
+        assertFalse(loser.handle().consentProjectDiagnostics("winner-mod").enabled());
+        assertTrue(Files.exists(winner.dataPaths().projectOverrideFile("winner-mod")));
+
+        TelemetryConsentSnapshot enabled = new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true);
+        assertTrue(loser.handle().applyConsentToAll(enabled));
+        assertTrue(winner.handle().consentProjectDiagnostics("winner-mod").enabled());
+        assertTrue(loser.handle().consentProjectDiagnostics("winner-mod").enabled());
     }
 
     @Test

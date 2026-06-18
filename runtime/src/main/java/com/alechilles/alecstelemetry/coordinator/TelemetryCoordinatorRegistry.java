@@ -404,6 +404,68 @@ public final class TelemetryCoordinatorRegistry {
             );
         }
 
+        @Nonnull
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            try {
+                Object value = invoke(delegate, "consentDiagnostics");
+                if (value instanceof Map<?, ?> map) {
+                    return stringObjectMap(map);
+                }
+                return TelemetryCoordinatorBridge.super.consentDiagnostics();
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.consentDiagnostics();
+            }
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "consentProjectDiagnostics",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                if (value instanceof Map<?, ?> map) {
+                    return stringObjectMap(map);
+                }
+                return TelemetryCoordinatorBridge.super.consentProjectDiagnostics(projectId);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.consentProjectDiagnostics(projectId);
+            }
+        }
+
+        @Override
+        public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+            return invokeBoolean(
+                    "applyConsentToAll",
+                    new Class<?>[]{Map.class},
+                    snapshot
+            );
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+            return invokeBoolean(
+                    "applyConsentCategoryToAll",
+                    new Class<?>[]{String.class, boolean.class},
+                    category,
+                    enabled
+            );
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+            return invokeBoolean(
+                    "applyConsent",
+                    new Class<?>[]{String.class, Map.class},
+                    projectId,
+                    snapshot
+            );
+        }
+
         @Override
         public boolean recordBreadcrumb(@Nonnull String projectId,
                                         @Nonnull String category,
