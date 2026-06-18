@@ -267,6 +267,16 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean isEnabled() {
+            try {
+                Object value = invoke(delegate, "isEnabled");
+                return value instanceof Boolean enabled ? enabled : TelemetryCoordinatorBridge.super.isEnabled();
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.isEnabled();
+            }
+        }
+
+        @Override
         public boolean isProjectEnabled(@Nonnull String projectId) {
             return invokeBoolean(
                     "isProjectEnabled",

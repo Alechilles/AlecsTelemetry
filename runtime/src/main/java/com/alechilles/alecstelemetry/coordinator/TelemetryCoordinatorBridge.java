@@ -48,6 +48,10 @@ public interface TelemetryCoordinatorBridge {
     default void shutdown() {
     }
 
+    default boolean isEnabled() {
+        return isActive();
+    }
+
     default boolean isProjectEnabled(@Nonnull String projectId) {
         return false;
     }
