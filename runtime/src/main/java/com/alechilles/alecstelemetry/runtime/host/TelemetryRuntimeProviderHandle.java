@@ -92,18 +92,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public void start() {
         pluginEvents.register();
-        TelemetryRuntimeLocator.register(api);
         TelemetryCoordinatorRegistry.register(bridge);
-        if (ownsActiveCoordinator()) {
-            commandRegistrar.register();
-        }
     }
 
     @Override
     public void shutdown() {
-        commandRegistrar.unregister();
         TelemetryCoordinatorRegistry.unregister(bridge.providerId());
-        TelemetryRuntimeLocator.clear();
+        commandRegistrar.unregister();
+        TelemetryRuntimeLocator.clearIfCurrent(api);
         pluginEvents.unregister();
     }
 
@@ -429,7 +425,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static final class ProviderBridge implements TelemetryCoordinatorBridge {
+    private final class ProviderBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
         private final AtomicBoolean active = new AtomicBoolean(false);
@@ -498,11 +494,15 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public void start() {
             service.start();
+            TelemetryRuntimeLocator.register(api);
+            commandRegistrar.register();
         }
 
         @Override
         public void shutdown() {
+            commandRegistrar.unregister();
             service.shutdown();
+            TelemetryRuntimeLocator.clearIfCurrent(api);
         }
 
         @Override

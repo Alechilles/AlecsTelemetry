@@ -76,14 +76,14 @@ class TelemetryRuntimeHostTest {
 
     @Test
     void providerHandleReportsElectionOwnershipChanges() {
-        TelemetryRuntimeProviderHandle standalone = handle(
+        ProviderFixture standalone = fixture(
                 "standalone:Alechilles:Telemetry",
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.1.3",
                 "standalone-project",
                 "Standalone Project"
         );
-        TelemetryRuntimeProviderHandle embedded = handle(
+        ProviderFixture embedded = fixture(
                 "embedded:Alechilles:Consumer",
                 TelemetryRuntimeOrigin.EMBEDDED,
                 "0.1.4",
@@ -91,33 +91,81 @@ class TelemetryRuntimeHostTest {
                 "Embedded Project"
         );
 
-        standalone.start();
-        embedded.start();
+        standalone.handle().start();
+        embedded.handle().start();
 
-        assertFalse(standalone.ownsActiveCoordinator());
-        assertTrue(embedded.ownsActiveCoordinator());
-        assertEquals("embedded:Alechilles:Consumer", standalone.activeCoordinatorProviderId());
-        assertEquals("embedded:Alechilles:Consumer", embedded.activeCoordinatorProviderId());
+        assertFalse(standalone.handle().ownsActiveCoordinator());
+        assertTrue(embedded.handle().ownsActiveCoordinator());
+        assertEquals("embedded:Alechilles:Consumer", standalone.handle().activeCoordinatorProviderId());
+        assertEquals("embedded:Alechilles:Consumer", embedded.handle().activeCoordinatorProviderId());
 
-        List<TelemetryProjectHandle> projects = standalone.api().projects();
+        List<TelemetryProjectHandle> projects = standalone.handle().api().projects();
         assertEquals(1, projects.size());
         assertEquals("embedded-project", projects.getFirst().projectId());
         assertEquals("Embedded Project", projects.getFirst().displayName());
-        assertNotNull(standalone.api().findProject("embedded-project"));
-        assertNull(standalone.api().findProject("standalone-project"));
+        assertNotNull(standalone.handle().api().findProject("embedded-project"));
+        assertNull(standalone.handle().api().findProject("standalone-project"));
+    }
+
+    @Test
+    void loserShutdownDoesNotClearWinnerApi() {
+        ProviderFixture standalone = fixture("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
+        ProviderFixture embedded = fixture("embedded:Alechilles:Consumer", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4");
+
+        standalone.handle().start();
+        embedded.handle().start();
+
+        assertSame(embedded.handle().api(), TelemetryRuntimeLocator.tryGet());
+        assertFalse(standalone.commandRegistrar().registered());
+        assertTrue(embedded.commandRegistrar().registered());
+
+        standalone.handle().shutdown();
+
+        assertSame(embedded.handle().api(), TelemetryRuntimeLocator.tryGet());
+        assertFalse(standalone.commandRegistrar().registered());
+        assertTrue(embedded.commandRegistrar().registered());
+    }
+
+    @Test
+    void commandRegistrarFollowsCoordinatorElection() {
+        ProviderFixture standalone = fixture("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
+        ProviderFixture embedded = fixture("embedded:Alechilles:Consumer", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4");
+
+        standalone.handle().start();
+
+        assertTrue(standalone.commandRegistrar().registered());
+        assertSame(standalone.handle().api(), TelemetryRuntimeLocator.tryGet());
+
+        embedded.handle().start();
+
+        assertFalse(standalone.commandRegistrar().registered());
+        assertTrue(embedded.commandRegistrar().registered());
+        assertSame(embedded.handle().api(), TelemetryRuntimeLocator.tryGet());
+
+        embedded.handle().shutdown();
+
+        assertTrue(standalone.commandRegistrar().registered());
+        assertFalse(embedded.commandRegistrar().registered());
+        assertSame(standalone.handle().api(), TelemetryRuntimeLocator.tryGet());
     }
 
     private TelemetryRuntimeProviderHandle handle(String providerId,
                                                   TelemetryRuntimeOrigin origin,
                                                   String runtimeVersion) {
-        return handle(providerId, origin, runtimeVersion, "example-mod", "Example Mod");
+        return fixture(providerId, origin, runtimeVersion).handle();
     }
 
-    private TelemetryRuntimeProviderHandle handle(String providerId,
-                                                  TelemetryRuntimeOrigin origin,
-                                                  String runtimeVersion,
-                                                  String projectId,
-                                                  String displayName) {
+    private ProviderFixture fixture(String providerId,
+                                    TelemetryRuntimeOrigin origin,
+                                    String runtimeVersion) {
+        return fixture(providerId, origin, runtimeVersion, "example-mod", "Example Mod");
+    }
+
+    private ProviderFixture fixture(String providerId,
+                                    TelemetryRuntimeOrigin origin,
+                                    String runtimeVersion,
+                                    String projectId,
+                                    String displayName) {
         Path root = tempDir.resolve(providerId.replace(':', '_'));
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
@@ -151,13 +199,14 @@ class TelemetryRuntimeHostTest {
                 request.sourcePath(),
                 dataPaths.runtimeRoot()
         );
-        return new TelemetryRuntimeProviderHandle(
+        TelemetryRuntimeCommandRegistrar commandRegistrar = new TelemetryRuntimeCommandRegistrar();
+        return new ProviderFixture(new TelemetryRuntimeProviderHandle(
                 request,
                 candidate,
                 service,
                 new TelemetryRuntimePluginEvents(),
-                new TelemetryRuntimeCommandRegistrar()
-        );
+                commandRegistrar
+        ), commandRegistrar);
     }
 
     private static TelemetryDataPaths dataPaths(Path root) {
@@ -189,5 +238,9 @@ class TelemetryRuntimeHostTest {
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
             return UploadResult.success(200);
         }
+    }
+
+    private record ProviderFixture(TelemetryRuntimeProviderHandle handle,
+                                   TelemetryRuntimeCommandRegistrar commandRegistrar) {
     }
 }

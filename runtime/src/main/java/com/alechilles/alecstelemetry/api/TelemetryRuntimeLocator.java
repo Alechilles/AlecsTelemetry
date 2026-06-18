@@ -22,6 +22,10 @@ public final class TelemetryRuntimeLocator {
         CURRENT.set(null);
     }
 
+    public static void clearIfCurrent(@Nonnull TelemetryRuntimeApi api) {
+        CURRENT.compareAndSet(api, null);
+    }
+
     @Nullable
     public static TelemetryRuntimeApi tryGet() {
         return CURRENT.get();
