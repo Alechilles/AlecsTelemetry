@@ -4,9 +4,11 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
+import com.alechilles.alecstelemetry.embedded.commands.EmbeddedTelemetryCommandRoot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -104,7 +106,7 @@ public final class EmbeddedTelemetryBootstrap {
                 sourcePath == null ? plugin.getDataDirectory().toAbsolutePath().normalize() : sourcePath,
                 sharedDataPaths.runtimeRoot()
         );
-        return new EmbeddedTelemetryService(
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
                 settings,
                 dataPaths,
                 registration,
@@ -116,6 +118,9 @@ public final class EmbeddedTelemetryBootstrap {
                 candidate,
                 coordinatorService
         );
+        registerEmbeddedCommands(plugin, service, logger);
+        registerConsentNotice(plugin, new TelemetryConsentCoordinator(service, logger), logger);
+        return service;
     }
 
     @Nonnull
@@ -140,6 +145,40 @@ public final class EmbeddedTelemetryBootstrap {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log(
                         "Embedded telemetry stats player counter could not register player events."
+                );
+            }
+        }
+    }
+
+    private static void registerEmbeddedCommands(@Nonnull JavaPlugin plugin,
+                                                 @Nonnull EmbeddedTelemetryService service,
+                                                 @Nullable HytaleLogger logger) {
+        if (plugin.getCommandRegistry() == null) {
+            return;
+        }
+        try {
+            plugin.getCommandRegistry().registerCommand(new EmbeddedTelemetryCommandRoot(service));
+        } catch (RuntimeException ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log(
+                        "Embedded telemetry commands could not register. Another telemetry runtime may already own /telemetry."
+                );
+            }
+        }
+    }
+
+    private static void registerConsentNotice(@Nonnull JavaPlugin plugin,
+                                              @Nonnull TelemetryConsentCoordinator notice,
+                                              @Nullable HytaleLogger logger) {
+        if (plugin.getEventRegistry() == null) {
+            return;
+        }
+        try {
+            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, notice::onPlayerReady);
+        } catch (RuntimeException ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log(
+                        "Embedded telemetry consent notice could not register player events."
                 );
             }
         }

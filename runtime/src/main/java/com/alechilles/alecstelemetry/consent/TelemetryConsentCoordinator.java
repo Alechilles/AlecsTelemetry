@@ -1,8 +1,7 @@
 package com.alechilles.alecstelemetry.consent;
 
-import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -26,14 +25,15 @@ import java.util.logging.Level;
  */
 public final class TelemetryConsentCoordinator {
 
-    static final String FIRST_RUN_NOTICE = "One or more mods are using Alec's Telemetry to report anonymous statistics and/or crash, error, performance diagnostics. You may change your telemetry consent settings at any time using `/telemetry consent`.";
+    public static final String ROOT_PERMISSION = "telemetry.command.telemetry";
+    public static final String FIRST_RUN_NOTICE = "One or more mods are using Alec's Telemetry to report anonymous statistics and/or crash, error, performance diagnostics. You may change your telemetry consent settings at any time using `/telemetry consent`.";
     private static final String FIRST_RUN_NOTICE_COLOR = "#f0a33a";
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryConsentRuntime runtimeService;
     private final HytaleLogger logger;
     private final Set<String> promptedKeys = ConcurrentHashMap.newKeySet();
 
-    public TelemetryConsentCoordinator(@Nonnull TelemetryRuntimeService runtimeService,
+    public TelemetryConsentCoordinator(@Nonnull TelemetryConsentRuntime runtimeService,
                                        @Nullable HytaleLogger logger) {
         this.runtimeService = runtimeService;
         this.logger = logger;
@@ -89,7 +89,7 @@ public final class TelemetryConsentCoordinator {
     private static boolean hasConsentAccess(@Nullable PlayerRef playerRef) {
         return playerRef != null
                 && playerRef.isValid()
-                && (playerRef.hasPermission(TelemetryCommandRoot.ROOT_PERMISSION, false)
+                && (playerRef.hasPermission(ROOT_PERMISSION, false)
                 || isLocalSingleplayerOwner(playerRef));
     }
 

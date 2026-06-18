@@ -129,6 +129,34 @@ public final class TelemetryCoordinatorService {
         return engine.isProjectEnabled(projectId);
     }
 
+    public boolean isCrashEnabled(@Nonnull String projectId) {
+        return engine.isCrashEnabled(projectId);
+    }
+
+    public boolean isErrorEventsEnabled(@Nonnull String projectId) {
+        return engine.isErrorEventsEnabled(projectId);
+    }
+
+    public boolean isLifecycleEventsEnabled(@Nonnull String projectId) {
+        return engine.isLifecycleEventsEnabled(projectId);
+    }
+
+    public boolean isPerformanceEnabled(@Nonnull String projectId) {
+        return engine.isPerformanceEnabled(projectId);
+    }
+
+    public boolean isUsageEnabled(@Nonnull String projectId) {
+        return engine.isUsageEnabled(projectId);
+    }
+
+    public boolean isStatsEnabled(@Nonnull String projectId) {
+        return engine.isStatsEnabled(projectId);
+    }
+
+    public boolean isBreadcrumbsEnabled(@Nonnull String projectId) {
+        return engine.isBreadcrumbsEnabled(projectId);
+    }
+
     public int registeredProjectCount() {
         return engine.projects().size();
     }

@@ -1,7 +1,7 @@
 package com.alechilles.alecstelemetry.consent;
 
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -49,11 +49,11 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             "stats",
             "breadcrumbs"
     };
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryConsentRuntime runtimeService;
     private final boolean firstRun;
 
     public TelemetryConsentPage(@Nonnull PlayerRef playerRef,
-                                @Nonnull TelemetryRuntimeService runtimeService,
+                                @Nonnull TelemetryConsentRuntime runtimeService,
                                 boolean firstRun) {
         super(playerRef, CustomPageLifetime.CanDismissOrCloseThroughInteraction, ConsentEventData.CODEC);
         this.runtimeService = runtimeService;
@@ -103,7 +103,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void render(@Nonnull UICommandBuilder commands) {
-        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.diagnostics());
+        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.consentDiagnostics());
         List<TelemetryConsentViewModel.ProjectRow> projects = viewModel.projects();
         int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
 
@@ -169,7 +169,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void bindEvents(@Nonnull UIEventBuilder events) {
-        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.diagnostics());
+        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.consentDiagnostics());
         List<TelemetryConsentViewModel.ProjectRow> projects = viewModel.projects();
 
         events.addEventBinding(
@@ -268,7 +268,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void toggleAll(boolean enabled) {
-        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.diagnostics().projects()) {
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.consentDiagnostics().projects()) {
             TelemetryConsentSnapshot supported = project.supportedSnapshot();
             runtimeService.applyConsent(project.projectId(), new TelemetryConsentSnapshot(
                     enabled,
@@ -308,7 +308,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         if (category == null || category.isBlank()) {
             return;
         }
-        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.diagnostics());
+        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.consentDiagnostics());
         if (!categoryAnySupported(viewModel.projects(), category)) {
             return;
         }
@@ -326,7 +326,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void saveAndClose() {
-        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.diagnostics().projects()) {
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.consentDiagnostics().projects()) {
             runtimeService.markConsentReviewed(project.projectId());
         }
         close();
@@ -337,7 +337,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         if (projectId == null || projectId.isBlank()) {
             return null;
         }
-        return runtimeService.projectDiagnostics(projectId);
+        return runtimeService.consentProjectDiagnostics(projectId);
     }
 
     @Nonnull

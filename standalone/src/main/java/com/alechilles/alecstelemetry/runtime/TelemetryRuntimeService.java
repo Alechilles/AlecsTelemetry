@@ -49,7 +49,7 @@ import java.util.logging.Level;
 /**
  * Standalone telemetry runtime mod orchestration built on the shared telemetry core engine.
  */
-public final class TelemetryRuntimeService {
+public final class TelemetryRuntimeService implements TelemetryConsentRuntime {
 
     private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
 
@@ -633,10 +633,22 @@ public final class TelemetryRuntimeService {
         );
     }
 
+    @Nonnull
+    @Override
+    public TelemetryRuntimeDiagnostics consentDiagnostics() {
+        return diagnostics();
+    }
+
     @Nullable
     public TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findConsentProject(projectId);
         return project == null ? null : buildProjectDiagnostics(project);
+    }
+
+    @Nullable
+    @Override
+    public TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics(@Nonnull String projectId) {
+        return projectDiagnostics(projectId);
     }
 
     public int pendingReports(@Nullable String projectId) {

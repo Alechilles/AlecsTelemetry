@@ -1,16 +1,22 @@
 package com.alechilles.alecstelemetry.embedded;
 
-import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
+import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.world.World;
@@ -18,8 +24,11 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,7 +37,7 @@ import java.util.logging.Level;
 /**
  * Embedded telemetry runtime for one owning consumer mod.
  */
-public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
+public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, TelemetryConsentRuntime {
 
     private final TelemetryProjectRegistration project;
     private final TelemetryDataPaths dataPaths;
@@ -39,6 +48,8 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     private final EmbeddedCoordinatorBridge coordinatorBridge;
     private final HytaleLogger logger;
     private final String disabledReason;
+    private final TelemetryConsentStateStore consentStateStore;
+    private List<TelemetryProjectRegistration> consentProjects;
 
     EmbeddedTelemetryService(@Nonnull TelemetryRuntimeSettings settings,
                              @Nonnull TelemetryDataPaths dataPaths,
@@ -74,6 +85,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         this.project = project;
         this.dataPaths = dataPaths;
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
+        this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.settings = settings;
         this.engine = coordinatorService == null
                 ? new TelemetryCoreEngine(settings, dataPaths, List.of(project), loadedMods, client, logger, executor)
@@ -86,6 +98,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                 : new EmbeddedCoordinatorBridge(candidate, coordinatorService);
         this.logger = logger;
         this.disabledReason = null;
+        this.consentProjects = coordinatorService == null ? List.of(project) : coordinatorService.projects();
     }
 
     private EmbeddedTelemetryService(@Nonnull String projectId,
@@ -101,6 +114,8 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         this.coordinatorBridge = null;
         this.logger = logger;
         this.disabledReason = disabledReason;
+        this.consentStateStore = null;
+        this.consentProjects = List.of(this.project);
         if (logger != null) {
             logger.at(Level.INFO).log("Embedded telemetry is disabled: " + disabledReason);
         }
@@ -142,6 +157,205 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     @Override
     public String disabledReason() {
         return disabledReason;
+    }
+
+    boolean isDisabled() {
+        return disabledReason != null;
+    }
+
+    @Nullable
+    TelemetryProjectRegistration project() {
+        return project;
+    }
+
+    @Nullable
+    public String activeCoordinatorProviderId() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? null : active.providerId();
+    }
+
+    public boolean ownsActiveCoordinator() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active != null
+                && coordinatorBridge != null
+                && active.providerId().equals(coordinatorBridge.providerId());
+    }
+
+    @Nonnull
+    public List<TelemetryProjectRegistration> commandProjects() {
+        return List.copyOf(consentProjects);
+    }
+
+    @Nullable
+    public TelemetryProjectRegistration commandProject(@Nonnull String projectId) {
+        return findConsentProject(projectId);
+    }
+
+    public boolean commandProjectEnabled(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.isProjectEnabled(projectId);
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.isProjectEnabled(projectId);
+        }
+        return project != null
+                && project.projectId().equalsIgnoreCase(projectId.trim())
+                && isEnabled();
+    }
+
+    public int commandPendingReports(@Nullable String projectId) {
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.pendingReports(projectId);
+        }
+        if (engine != null) {
+            return engine.pendingReports(projectId);
+        }
+        return 0;
+    }
+
+    @Nonnull
+    public String commandLastFlushResult() {
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.lastFlushResult();
+        }
+        if (engine != null) {
+            return engine.lastFlushResult();
+        }
+        return disabledReason == null ? "<unavailable>" : disabledReason;
+    }
+
+    public boolean commandFlush(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestFlush(projectId);
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.requestFlush(projectId);
+        }
+        return projectId == null ? requestFlush() : project != null
+                && project.projectId().equalsIgnoreCase(projectId.trim())
+                && requestFlush();
+    }
+
+    public boolean commandCaptureTestReport(@Nonnull String projectId, @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.captureTestReport(projectId, detail);
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.captureTestReport(projectId, detail);
+        }
+        return project != null
+                && project.projectId().equalsIgnoreCase(projectId.trim())
+                && captureTestReport(detail);
+    }
+
+    @Nonnull
+    @Override
+    public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        if (consentStateStore == null || consentPaths == null) {
+            return List.of();
+        }
+        return consentStateStore.unreviewedProjects(consentPaths.consentStateFile(), consentProjects);
+    }
+
+    @Override
+    public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+        boolean appliedAll = true;
+        for (TelemetryProjectRegistration project : consentProjects) {
+            TelemetryConsentSnapshot supported = supportedSnapshot(project);
+            if (!supported.categoryEnabled(category)) {
+                continue;
+            }
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
+            TelemetryConsentSnapshot current = diagnostics.consentSnapshot();
+            appliedAll &= applyConsent(project.projectId(), current.withCategory(category, enabled));
+        }
+        return appliedAll;
+    }
+
+    @Override
+    public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryProjectRegistration project = findConsentProject(projectId);
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        if (project == null || consentPaths == null || overrideStore == null) {
+            return false;
+        }
+        TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supportedSnapshot(project));
+        Path overrideFile = consentPaths.projectOverrideFile(project.projectId());
+        boolean saved = saveConsent(overrideFile, normalized);
+        Path embeddedOverrideFile = embeddedProjectOverrideFile(consentPaths, project);
+        if (embeddedOverrideFile != null && !embeddedOverrideFile.equals(overrideFile)) {
+            saved = saved && saveConsent(embeddedOverrideFile, normalized);
+        }
+        if (!saved) {
+            return false;
+        }
+        TelemetryProjectOverride override = overrideStore.load(overrideFile);
+        if (override != null) {
+            replaceConsentProject(project.withOverride(override));
+        }
+        applyRuntimeConsent(project.projectId(), normalized);
+        return true;
+    }
+
+    private boolean saveConsent(@Nonnull Path overrideFile, @Nonnull TelemetryConsentSnapshot snapshot) {
+        return overrideStore.saveProjectEnabled(overrideFile, snapshot.projectEnabled())
+                && overrideStore.saveCrashEnabled(overrideFile, snapshot.crashEnabled())
+                && overrideStore.saveErrorEventsEnabled(overrideFile, snapshot.errorEnabled())
+                && overrideStore.saveLifecycleEventsEnabled(overrideFile, snapshot.lifecycleEnabled())
+                && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
+                && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
+                && overrideStore.saveStatsEnabled(overrideFile, snapshot.statsEnabled())
+                && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
+    }
+
+    private void applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.setProjectEnabled(projectId, snapshot.projectEnabled());
+            active.setCrashEnabled(projectId, snapshot.crashEnabled());
+            active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            active.setUsageEnabled(projectId, snapshot.usageEnabled());
+            active.setStatsEnabled(projectId, snapshot.statsEnabled());
+            active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return;
+        }
+        if (coordinatorBridge != null) {
+            coordinatorBridge.service.setProjectEnabled(projectId, snapshot.projectEnabled());
+            coordinatorBridge.service.setCrashEnabled(projectId, snapshot.crashEnabled());
+            coordinatorBridge.service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            coordinatorBridge.service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            coordinatorBridge.service.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            coordinatorBridge.service.setUsageEnabled(projectId, snapshot.usageEnabled());
+            coordinatorBridge.service.setStatsEnabled(projectId, snapshot.statsEnabled());
+            coordinatorBridge.service.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return;
+        }
+        if (engine != null && this.project != null && this.project.projectId().equalsIgnoreCase(projectId)) {
+            engine.setProjectEnabled(projectId, snapshot.projectEnabled());
+            engine.setCrashEnabled(projectId, snapshot.crashEnabled());
+            engine.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            engine.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            engine.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            engine.setUsageEnabled(projectId, snapshot.usageEnabled());
+            engine.setStatsEnabled(projectId, snapshot.statsEnabled());
+            engine.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+        }
+    }
+
+    @Override
+    public boolean markConsentReviewed(@Nonnull String projectId) {
+        TelemetryProjectRegistration project = findConsentProject(projectId);
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        return project != null
+                && consentStateStore != null
+                && consentPaths != null
+                && consentStateStore.markReviewed(consentPaths.consentStateFile(), project);
     }
 
     @Override
@@ -406,6 +620,93 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         );
     }
 
+    @Nonnull
+    @Override
+    public TelemetryRuntimeDiagnostics consentDiagnostics() {
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projectDiagnostics.add(buildProjectDiagnostics(project));
+        }
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        return new TelemetryRuntimeDiagnostics(
+                !isDisabled() && (coordinatorBridge == null ? engine != null && engine.isEnabled() : coordinatorBridge.service.isEnabled()),
+                consentProjects.size(),
+                loadedModCount(),
+                commandPendingReports(null),
+                coordinatorBridge != null ? coordinatorBridge.service.flushInProgress() : engine != null && engine.flushInProgress(),
+                commandLastFlushResult(),
+                consentPaths == null || consentPaths.modsDirectory() == null ? null : consentPaths.modsDirectory().toString(),
+                List.of(),
+                List.copyOf(projectDiagnostics)
+        );
+    }
+
+    @Nullable
+    @Override
+    public TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics(@Nonnull String projectId) {
+        TelemetryProjectRegistration project = findConsentProject(projectId);
+        return project == null ? null : buildProjectDiagnostics(project);
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics.ProjectDiagnostics buildProjectDiagnostics(
+            @Nonnull TelemetryProjectRegistration project) {
+        TelemetryRuntimeSettings effectiveSettings = consentSettings();
+        CrashReportClient.DeliveryTarget target = effectiveSettings == null ? null : project.resolveDeliveryTarget(effectiveSettings);
+        return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                project.projectId(),
+                project.displayName(),
+                commandProjectEnabled(project.projectId()),
+                project.hasOverride(),
+                project.destinationMode(),
+                target == null ? null : target.endpoint(),
+                commandPendingReports(project.projectId()),
+                project.pluginIdentifier(),
+                project.pluginVersion(),
+                project.sourcePath() == null ? null : project.sourcePath().toString(),
+                project.descriptor().ui().iconTexturePath(),
+                project.packagePrefixes(),
+                project.runtimeMode(),
+                commandCrashEnabled(project),
+                commandErrorEnabled(project),
+                commandLifecycleEnabled(project),
+                commandPerformanceEnabled(project),
+                commandUsageEnabled(project),
+                commandStatsEnabled(project),
+                commandBreadcrumbsEnabled(project),
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    private int loadedModCount() {
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.loadedMods().size();
+        }
+        return project == null ? 0 : 1;
+    }
+
+    @Nullable
+    private TelemetryRuntimeSettings consentSettings() {
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.settings();
+        }
+        return settings;
+    }
+
+    @Nullable
+    private TelemetryDataPaths consentDataPaths() {
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.dataPaths();
+        }
+        return dataPaths;
+    }
+
     int pendingReports() {
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.pendingReports(project.projectId());
@@ -435,6 +736,139 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         return target == null || target.endpoint() == null || target.endpoint().isBlank()
                 ? "<disabled>"
                 : target.endpoint();
+    }
+
+    private boolean commandCrashEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isCrashEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isCrashEnabled(project.projectId())
+                : project.isCrashTelemetryEnabled();
+    }
+
+    private boolean commandErrorEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isErrorEventsEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isErrorEventsEnabled(project.projectId())
+                : project.events().errors().enabled();
+    }
+
+    private boolean commandLifecycleEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isLifecycleEventsEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isLifecycleEventsEnabled(project.projectId())
+                : project.events().lifecycle().enabled();
+    }
+
+    private boolean commandPerformanceEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isPerformanceEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isPerformanceEnabled(project.projectId())
+                : project.performance().enabled();
+    }
+
+    private boolean commandUsageEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isUsageEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isUsageEnabled(project.projectId())
+                : project.usage().enabled();
+    }
+
+    private boolean commandStatsEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isStatsEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isStatsEnabled(project.projectId())
+                : project.stats().enabled();
+    }
+
+    private boolean commandBreadcrumbsEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isBreadcrumbsEnabled(project.projectId());
+        }
+        return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
+                ? engine.isBreadcrumbsEnabled(project.projectId())
+                : project.events().breadcrumbs().enabled();
+    }
+
+    @Nullable
+    private TelemetryProjectRegistration findConsentProject(@Nonnull String projectId) {
+        String normalized = projectId.trim();
+        for (TelemetryProjectRegistration project : consentProjects) {
+            if (project.projectId().equalsIgnoreCase(normalized)) {
+                return project;
+            }
+        }
+        return null;
+    }
+
+    private void replaceConsentProject(@Nonnull TelemetryProjectRegistration replacement) {
+        ArrayList<TelemetryProjectRegistration> updated = new ArrayList<>(consentProjects.size());
+        for (TelemetryProjectRegistration project : consentProjects) {
+            updated.add(project.projectId().equalsIgnoreCase(replacement.projectId()) ? replacement : project);
+        }
+        consentProjects = List.copyOf(updated);
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
+        return new TelemetryConsentSnapshot(
+                true,
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
+        TelemetryProjectDescriptor.CaptureOptions capture = project.descriptor().capture();
+        return capture.uncaughtExceptions()
+                || capture.setupFailures()
+                || capture.startFailures()
+                || capture.exceptionalWorldRemovals();
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot clampToSupported(@Nonnull TelemetryConsentSnapshot snapshot,
+                                                             @Nonnull TelemetryConsentSnapshot supported) {
+        return new TelemetryConsentSnapshot(
+                snapshot.projectEnabled(),
+                supported.crashEnabled() && snapshot.crashEnabled(),
+                supported.errorEnabled() && snapshot.errorEnabled(),
+                supported.lifecycleEnabled() && snapshot.lifecycleEnabled(),
+                supported.performanceEnabled() && snapshot.performanceEnabled(),
+                supported.usageEnabled() && snapshot.usageEnabled(),
+                supported.statsEnabled() && snapshot.statsEnabled(),
+                supported.breadcrumbsEnabled() && snapshot.breadcrumbsEnabled()
+        );
+    }
+
+    @Nullable
+    private static Path embeddedProjectOverrideFile(@Nonnull TelemetryDataPaths dataPaths,
+                                                    @Nonnull TelemetryProjectRegistration project) {
+        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+            return null;
+        }
+        return dataPaths.modsDirectory()
+                .resolve(project.pluginIdentifier().trim().replace(':', '_'))
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve(project.projectId() + ".json");
     }
 
     @Nonnull

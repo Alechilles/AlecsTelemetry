@@ -176,7 +176,7 @@ class TelemetryConsentAssetPackTest {
 
     @Test
     void consentPageBindsHeaderToggleButtonsToDeterministicServerActions() throws IOException {
-        String source = sourceText("src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java");
+        String source = sourceText("../runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentPage.java");
 
         assertTrue(
                 source.contains("CustomUIEventBindingType.Activating,\n                \"#TelemetryConsentAllToggleButton\""),
