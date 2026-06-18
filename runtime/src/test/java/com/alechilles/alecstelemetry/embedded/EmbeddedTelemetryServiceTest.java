@@ -9,6 +9,7 @@ import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
@@ -46,6 +48,34 @@ class EmbeddedTelemetryServiceTest {
     @AfterEach
     void clearCoordinatorRegistry() {
         TelemetryCoordinatorRegistry.clearForTests();
+    }
+
+    @Test
+    void embeddedBootstrapProjectOverridePrefersSharedSettings() throws Exception {
+        TelemetryDataPaths sharedPaths = dataPaths(tempDir.resolve("shared-telemetry"));
+        TelemetryDataPaths ownerPaths = dataPaths(tempDir.resolve("owner-telemetry"));
+        Files.createDirectories(sharedPaths.projectSettingsDirectory());
+        Files.createDirectories(ownerPaths.projectSettingsDirectory());
+        Files.writeString(sharedPaths.projectOverrideFile("embedded-project"), """
+                {
+                  "enabled": false
+                }
+                """);
+        Files.writeString(ownerPaths.projectOverrideFile("embedded-project"), """
+                {
+                  "enabled": true
+                }
+                """);
+
+        TelemetryProjectOverride override = EmbeddedTelemetryBootstrap.loadProjectOverride(
+                sharedPaths,
+                ownerPaths,
+                null,
+                "embedded-project"
+        );
+
+        assertNotNull(override);
+        assertEquals(Boolean.FALSE, override.enabled());
     }
 
     @Test
@@ -645,6 +675,22 @@ class EmbeddedTelemetryServiceTest {
         String overrideRaw = java.nio.file.Files.readString(dataPaths.projectOverrideFile("embedded-mod"));
         JsonObject override = JsonParser.parseString(overrideRaw).getAsJsonObject();
         assertFalse(override.getAsJsonObject("events").getAsJsonObject("breadcrumbs").get("enabled").getAsBoolean());
+    }
+
+    private static TelemetryDataPaths dataPaths(Path telemetryRoot) {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                telemetryRoot.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        return new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
     }
 
     private static TelemetryProjectDescriptor descriptor() {

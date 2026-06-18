@@ -1114,7 +1114,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     private static java.nio.file.Path embeddedProjectOverrideFile(
             @Nonnull TelemetryDataPaths dataPaths,
             @Nonnull TelemetryProjectRegistration project) {
-        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+        if (dataPaths.modsDirectory() == null) {
             return null;
         }
         return dataPaths.modsDirectory()

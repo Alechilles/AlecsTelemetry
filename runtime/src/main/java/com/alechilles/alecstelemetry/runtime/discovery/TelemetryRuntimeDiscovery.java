@@ -197,7 +197,7 @@ public final class TelemetryRuntimeDiscovery {
     private static java.nio.file.Path embeddedProjectOverrideFile(
             @Nonnull TelemetryDataPaths dataPaths,
             @Nonnull TelemetryProjectRegistration project) {
-        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+        if (dataPaths.modsDirectory() == null) {
             return null;
         }
         return dataPaths.modsDirectory()

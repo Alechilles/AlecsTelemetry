@@ -13,6 +13,7 @@ import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
+import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
@@ -74,10 +75,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 ? TelemetryDataPaths.forSharedCoordinator(request.plugin())
                 : TelemetryDataPaths.from(request.plugin());
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
+        TelemetryProjectRegistration providerRegistration = embeddedProviderRegistration(request, dataPaths, logger);
+        List<CrashReportEnvelope.LoadedModMetadata> fallbackLoadedMods = providerRegistration == null
+                ? List.of()
+                : List.of(new CrashReportEnvelope.LoadedModMetadata(
+                        providerRegistration.pluginIdentifier(),
+                        providerRegistration.pluginVersion()
+                ));
         TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
                 dataPaths,
-                TelemetryLoadedModSnapshotProvider.hytalePluginManager(List.of(), logger)
+                TelemetryLoadedModSnapshotProvider.hytalePluginManager(fallbackLoadedMods, logger)
         );
+        if (providerRegistration != null) {
+            discovery = discovery.withProviderRegistration(providerRegistration);
+        }
         TelemetryPlayerCounter playerCounter = new TelemetryPlayerCounter();
         CrashReportClient client = new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger);
         TelemetryCoordinatorService coordinator = TelemetryCoordinatorService.fromDiscovery(
@@ -101,6 +112,37 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 logger,
                 new TelemetryRuntimeCommandRegistrar()
         );
+    }
+
+    @Nullable
+    private static TelemetryProjectRegistration embeddedProviderRegistration(@Nonnull TelemetryRuntimeBootstrapRequest request,
+                                                                             @Nonnull TelemetryDataPaths dataPaths,
+                                                                             @Nullable HytaleLogger logger) {
+        TelemetryProjectDescriptor descriptor = request.embeddedDescriptor();
+        if (!request.embedded() || descriptor == null) {
+            return null;
+        }
+        TelemetryProjectOverride override = embeddedProviderOverride(request, dataPaths, logger, descriptor.projectId());
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                request.providerPluginIdentifier(),
+                request.providerPluginVersion(),
+                request.sourcePath()
+        );
+        return override == null ? registration : registration.withOverride(override);
+    }
+
+    @Nullable
+    private static TelemetryProjectOverride embeddedProviderOverride(@Nonnull TelemetryRuntimeBootstrapRequest request,
+                                                                     @Nonnull TelemetryDataPaths dataPaths,
+                                                                     @Nullable HytaleLogger logger,
+                                                                     @Nonnull String projectId) {
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
+        TelemetryProjectOverride sharedOverride = store.load(dataPaths.projectOverrideFile(projectId));
+        if (sharedOverride != null) {
+            return sharedOverride;
+        }
+        return store.load(TelemetryDataPaths.forEmbeddedOwner(request.plugin()).projectOverrideFile(projectId));
     }
 
     TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,
@@ -981,7 +1023,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Nullable
     private Path embeddedProjectOverrideFile(@Nonnull TelemetryProjectRegistration project) {
-        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+        if (dataPaths.modsDirectory() == null) {
             return null;
         }
         return dataPaths.modsDirectory()

@@ -15,6 +15,9 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.common.semver.Semver;
@@ -64,21 +67,11 @@ public final class EmbeddedTelemetryBootstrap {
                     "No telemetry/project.json descriptor was found in the owning mod."
             );
         }
-        if (!descriptor.isEmbeddedMode()) {
-            return EmbeddedTelemetryService.disabled(
-                    descriptor.projectId(),
-                    descriptor.displayName(),
-                    logger,
-                    "Descriptor runtimeMode is '" + descriptor.runtimeMode() + "'; embedded bootstrap requires runtimeMode=embedded."
-            );
-        }
-
         TelemetryDataPaths dataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
         TelemetryDataPaths sharedDataPaths = TelemetryDataPaths.forSharedCoordinator(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
         TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
-        TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
-                .load(dataPaths.projectOverrideFile(descriptor.projectId()));
+        TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, dataPaths, logger, descriptor.projectId());
         String pluginVersion = resolvePluginVersion(plugin);
         Path sourcePath = resolvePluginSourcePath(plugin);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
@@ -89,10 +82,20 @@ public final class EmbeddedTelemetryBootstrap {
         ).withOverride(override);
         EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
         registerPlayerCounter(plugin, playerCounter, logger);
-        CrashReportClient client = new HttpCrashReportClient(sharedSettings.connectTimeoutMs(), sharedSettings.readTimeoutMs(), logger);
-        TelemetryCoordinatorService coordinatorService = TelemetryCoordinatorService.discover(
+        CrashReportEnvelope.LoadedModMetadata providerLoadedMod = new CrashReportEnvelope.LoadedModMetadata(
+                pluginIdentifier,
+                pluginVersion
+        );
+        CrashReportClient sharedClient = new HttpCrashReportClient(sharedSettings.connectTimeoutMs(), sharedSettings.readTimeoutMs(), logger);
+        TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
                 sharedDataPaths,
-                client,
+                TelemetryLoadedModSnapshotProvider.hytalePluginManager(List.of(providerLoadedMod), logger)
+        ).withProviderRegistration(registration);
+        TelemetryCoordinatorService coordinatorService = TelemetryCoordinatorService.fromDiscovery(
+                sharedSettings,
+                sharedDataPaths,
+                discovery,
+                sharedClient,
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
                 playerCounter::onlinePlayers
@@ -111,7 +114,7 @@ public final class EmbeddedTelemetryBootstrap {
                 settings,
                 dataPaths,
                 registration,
-                List.of(new CrashReportEnvelope.LoadedModMetadata(pluginIdentifier, pluginVersion)),
+                List.of(providerLoadedMod),
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
@@ -122,6 +125,19 @@ public final class EmbeddedTelemetryBootstrap {
         registerSharedCommands(plugin, service, logger);
         registerConsentNotice(plugin, new TelemetryConsentCoordinator(service, logger), logger);
         return service;
+    }
+
+    @Nullable
+    static TelemetryProjectOverride loadProjectOverride(@Nonnull TelemetryDataPaths sharedDataPaths,
+                                                        @Nonnull TelemetryDataPaths ownerDataPaths,
+                                                        @Nullable HytaleLogger logger,
+                                                        @Nonnull String projectId) {
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
+        TelemetryProjectOverride sharedOverride = store.load(sharedDataPaths.projectOverrideFile(projectId));
+        if (sharedOverride != null) {
+            return sharedOverride;
+        }
+        return store.load(ownerDataPaths.projectOverrideFile(projectId));
     }
 
     @Nonnull

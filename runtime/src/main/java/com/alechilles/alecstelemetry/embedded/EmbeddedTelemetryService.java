@@ -1201,7 +1201,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nullable
     private static Path embeddedProjectOverrideFile(@Nonnull TelemetryDataPaths dataPaths,
                                                     @Nonnull TelemetryProjectRegistration project) {
-        if (!project.isEmbeddedMode() || dataPaths.modsDirectory() == null) {
+        if (dataPaths.modsDirectory() == null) {
             return null;
         }
         return dataPaths.modsDirectory()

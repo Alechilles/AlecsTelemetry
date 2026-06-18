@@ -22,6 +22,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import org.junit.jupiter.api.AfterEach;
@@ -68,6 +69,67 @@ class TelemetryRuntimeHostTest {
         assertNotNull(embedded);
         assertEquals(TelemetryRuntimeHostHandle.class, standalone.getReturnType());
         assertEquals(TelemetryRuntimeHostHandle.class, embedded.getReturnType());
+    }
+
+    @Test
+    void embeddedProviderDescriptorIsRegisteredWithoutRuntimeMode() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson("""
+                {
+                  "projectId": "embedded-provider",
+                  "displayName": "Embedded Provider",
+                  "ownerPluginIdentifiers": ["Example:Embedded Provider"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "stats": { "enabled": true, "allowedEvents": ["heartbeat"] }
+                }
+                """, null);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Embedded Provider",
+                "1.2.3",
+                tempDir.resolve("Embedded Provider.jar")
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscoveryResult(
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of()
+        ).withProviderRegistration(registration);
+
+        assertEquals(List.of("embedded-provider"), result.projects().stream().map(TelemetryProjectRegistration::projectId).toList());
+        assertEquals(List.of("embedded-provider"), result.consentProjects().stream().map(TelemetryProjectRegistration::projectId).toList());
+        assertEquals(List.of("Example:Embedded Provider"), result.loadedMods().stream().map(CrashReportEnvelope.LoadedModMetadata::identifier).toList());
+        assertEquals("dependency", result.projects().getFirst().runtimeMode());
+    }
+
+    @Test
+    void embeddedProviderInjectionRecomputesCollisionWarnings() {
+        TelemetryProjectRegistration existing = registration(
+                telemetryCategoryDescriptor("existing-project", "Existing Project"),
+                "Example:Existing",
+                "1.0.0",
+                tempDir.resolve("Existing.jar")
+        );
+        TelemetryProjectRegistration provider = registration(
+                telemetryCategoryDescriptor("provider-project", "Provider Project"),
+                "Example:Provider",
+                "1.2.3",
+                tempDir.resolve("Provider.jar")
+        );
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscoveryResult(
+                List.of(existing),
+                List.of(existing),
+                List.of(),
+                List.of(),
+                List.of("non-collision warning")
+        ).withProviderRegistration(provider);
+
+        assertEquals(1, result.collisions().size());
+        assertEquals(
+                List.of("non-collision warning", result.collisions().getFirst().format()),
+                result.registrationWarnings()
+        );
     }
 
     @Test
