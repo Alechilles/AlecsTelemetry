@@ -12,6 +12,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -204,7 +205,8 @@ class TelemetryRuntimeHostTest {
                 request,
                 candidate,
                 service,
-                new TelemetryRuntimePluginEvents(),
+                new TelemetryPlayerCounter(),
+                null,
                 commandRegistrar
         ), commandRegistrar);
     }

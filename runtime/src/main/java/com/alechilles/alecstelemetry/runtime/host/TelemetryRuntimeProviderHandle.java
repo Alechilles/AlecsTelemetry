@@ -24,7 +24,9 @@ import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
+import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
@@ -71,7 +73,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 request,
                 candidate(request, dataPaths),
                 coordinator,
-                new TelemetryRuntimePluginEvents(),
+                playerCounter,
+                logger,
                 new TelemetryRuntimeCommandRegistrar()
         );
     }
@@ -79,19 +82,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,
                                    @Nonnull TelemetryRuntimeCandidate candidate,
                                    @Nonnull TelemetryCoordinatorService coordinator,
-                                   @Nonnull TelemetryRuntimePluginEvents pluginEvents,
+                                   @Nonnull TelemetryPlayerCounter playerCounter,
+                                   @Nullable HytaleLogger logger,
                                    @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar) {
         this.request = request;
         this.coordinator = coordinator;
         this.bridge = new ProviderBridge(candidate, coordinator);
-        this.pluginEvents = pluginEvents;
         this.commandRegistrar = commandRegistrar;
         this.api = new TelemetryRuntimeApiImpl(this);
+        this.pluginEvents = new TelemetryRuntimePluginEvents(this, playerCounter, logger);
     }
 
     @Override
     public void start() {
-        pluginEvents.register();
+        pluginEvents.register(request.plugin());
         TelemetryCoordinatorRegistry.register(bridge);
     }
 
@@ -107,6 +111,29 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public boolean ownsActiveCoordinator() {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active != null && bridge.providerId().equals(active.providerId());
+    }
+
+    void onPlayerReady(@Nonnull PlayerReadyEvent event) {
+        if (ownsActiveCoordinator()) {
+            commandRegistrar.onPlayerReady(event);
+        }
+    }
+
+    void onWorldRemoved(@Nonnull RemoveWorldEvent event) {
+        if (!ownsActiveCoordinator()
+                || event.getRemovalReason() != RemoveWorldEvent.RemovalReason.EXCEPTIONAL
+                || event.getWorld() == null
+                || event.getWorld().getFailureException() == null) {
+            return;
+        }
+        coordinator.captureExceptionalWorldRemoval(
+                event.getWorld().getFailureException(),
+                event.getWorld().getName(),
+                event.getRemovalReason().name(),
+                event.getWorld().getPossibleFailureCause() == null
+                        ? null
+                        : event.getWorld().getPossibleFailureCause().toString()
+        );
     }
 
     @Nullable
