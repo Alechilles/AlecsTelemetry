@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
@@ -32,6 +33,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EmbeddedTelemetryServiceTest {
@@ -296,6 +298,88 @@ class EmbeddedTelemetryServiceTest {
 
         service.shutdown();
         assertTrue(TelemetryCoordinatorRegistry.activeBridge() == null);
+    }
+
+    @Test
+    void passiveEmbeddedConsentRuntimeUsesActiveProviderBridgeView() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                tempDir.resolve("Mods")
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService coordinatorService = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+        ProviderStyleConsentBridge active = new ProviderStyleConsentBridge(new TelemetryRuntimeCandidate(
+                "standalone:Example:Provider",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.5",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Provider",
+                "2.0.0",
+                tempDir.resolve("Provider.jar"),
+                tempDir.resolve("ProviderTelemetry")
+        ));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null,
+                new EmbeddedTelemetryPlayerCounter(),
+                new TelemetryRuntimeCandidate(
+                        "embedded:Example:Embedded Mod",
+                        TelemetryRuntimeOrigin.EMBEDDED,
+                        "0.1.4",
+                        TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                        "Example:Embedded Mod",
+                        "1.0.0",
+                        tempDir.resolve("Embedded Mod.jar"),
+                        telemetryRoot
+                ),
+                coordinatorService
+        );
+
+        TelemetryCoordinatorRegistry.register(active);
+        service.start();
+
+        assertFalse(service.ownsActiveCoordinator());
+        assertEquals("standalone:Example:Provider", service.activeCoordinatorProviderId());
+        assertEquals("provider-mod", service.consentDiagnostics().projects().getFirst().projectId());
+        assertNull(service.consentProjectDiagnostics("embedded-mod"));
+        assertTrue(service.unreviewedConsentProjects().isEmpty());
+        assertFalse(service.applyConsent("embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+
+        assertTrue(service.applyConsent("provider-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+        assertFalse(service.consentProjectDiagnostics("provider-mod").enabled());
+        assertTrue(service.markConsentReviewed("provider-mod"));
+        assertEquals(List.of("provider-mod"), active.reviewedProjectIds);
+
+        service.shutdown();
     }
 
     @Test
@@ -568,5 +652,152 @@ class EmbeddedTelemetryServiceTest {
             throw new UnsupportedOperationException("scheduleWithFixedDelay");
         }
 
+    }
+
+    private static final class ProviderStyleConsentBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
+        private boolean active;
+        private TelemetryConsentSnapshot snapshot = new TelemetryConsentSnapshot(
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true
+        );
+
+        private ProviderStyleConsentBridge(TelemetryRuntimeCandidate candidate) {
+            this.candidate = candidate;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active = true;
+        }
+
+        @Override
+        public void deactivate() {
+            active = false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            return TelemetryConsentBridgePayload.diagnosticsSummary(new com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics(
+                    true,
+                    1,
+                    1,
+                    0,
+                    false,
+                    "never",
+                    null,
+                    List.of(),
+                    List.of(projectDiagnostics())
+            ));
+        }
+
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(String projectId) {
+            return "provider-mod".equalsIgnoreCase(projectId.trim())
+                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(projectDiagnostics())
+                    : Map.of();
+        }
+
+        @Override
+        public boolean applyConsent(String projectId, Map<String, Object> snapshot) {
+            if (!"provider-mod".equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            this.snapshot = TelemetryConsentBridgePayload.snapshotFromSummary(snapshot);
+            return true;
+        }
+
+        @Override
+        public boolean markConsentReviewed(String projectId) {
+            if (!"provider-mod".equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            reviewedProjectIds.add("provider-mod");
+            return true;
+        }
+
+        private com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics() {
+            return new com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                    "provider-mod",
+                    "Provider Mod",
+                    snapshot.projectEnabled(),
+                    false,
+                    "custom",
+                    "https://example.invalid/telemetry",
+                    0,
+                    "Example:Provider",
+                    "2.0.0",
+                    null,
+                    null,
+                    List.of("com.example.provider"),
+                    "dependency",
+                    snapshot.crashEnabled(),
+                    snapshot.errorEnabled(),
+                    snapshot.lifecycleEnabled(),
+                    snapshot.performanceEnabled(),
+                    snapshot.usageEnabled(),
+                    snapshot.statsEnabled(),
+                    snapshot.breadcrumbsEnabled(),
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+            );
+        }
     }
 }

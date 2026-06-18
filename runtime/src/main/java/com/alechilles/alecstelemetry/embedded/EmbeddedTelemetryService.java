@@ -255,6 +255,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nonnull
     @Override
     public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return List.of();
+        }
         TelemetryDataPaths consentPaths = consentDataPaths();
         if (consentStateStore == null || consentPaths == null) {
             return List.of();
@@ -264,15 +268,31 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsentToAll(TelemetryConsentBridgePayload.snapshotSummary(snapshot));
+        }
+        return applyLocalConsentToAll(snapshot);
+    }
+
+    private boolean applyLocalConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
-            appliedAll &= applyConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
+            appliedAll &= applyLocalConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
         }
         return appliedAll;
     }
 
     @Override
     public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsentCategoryToAll(category, enabled);
+        }
+        return applyLocalConsentCategoryToAll(category, enabled);
+    }
+
+    private boolean applyLocalConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
             TelemetryConsentSnapshot supported = supportedSnapshot(project);
@@ -281,13 +301,21 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             }
             TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
             TelemetryConsentSnapshot current = diagnostics.consentSnapshot();
-            appliedAll &= applyConsent(project.projectId(), current.withCategory(category, enabled));
+            appliedAll &= applyLocalConsent(project.projectId(), current.withCategory(category, enabled));
         }
         return appliedAll;
     }
 
     @Override
     public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsent(projectId, TelemetryConsentBridgePayload.snapshotSummary(snapshot));
+        }
+        return applyLocalConsent(projectId, snapshot);
+    }
+
+    private boolean applyLocalConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryProjectRegistration project = findConsentProject(projectId);
         TelemetryDataPaths consentPaths = consentDataPaths();
         if (project == null || consentPaths == null || overrideStore == null) {
@@ -307,8 +335,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        applyRuntimeConsent(project.projectId(), normalized);
-        return true;
+        return applyRuntimeConsent(project.projectId(), normalized);
     }
 
     private boolean saveConsent(@Nonnull Path overrideFile, @Nonnull TelemetryConsentSnapshot snapshot) {
@@ -322,29 +349,21 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
     }
 
-    private void applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+    private boolean applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        if (active != null) {
-            active.setProjectEnabled(projectId, snapshot.projectEnabled());
-            active.setCrashEnabled(projectId, snapshot.crashEnabled());
-            active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
-            active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
-            active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
-            active.setUsageEnabled(projectId, snapshot.usageEnabled());
-            active.setStatsEnabled(projectId, snapshot.statsEnabled());
-            active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
-            return;
+        if (!usesLocalCoordinator(active)) {
+            return active.applyConsent(projectId, TelemetryConsentBridgePayload.snapshotSummary(snapshot));
         }
         if (coordinatorBridge != null) {
-            coordinatorBridge.service.setProjectEnabled(projectId, snapshot.projectEnabled());
-            coordinatorBridge.service.setCrashEnabled(projectId, snapshot.crashEnabled());
-            coordinatorBridge.service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
-            coordinatorBridge.service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
-            coordinatorBridge.service.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
-            coordinatorBridge.service.setUsageEnabled(projectId, snapshot.usageEnabled());
-            coordinatorBridge.service.setStatsEnabled(projectId, snapshot.statsEnabled());
-            coordinatorBridge.service.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
-            return;
+            boolean applied = coordinatorBridge.service.setProjectEnabled(projectId, snapshot.projectEnabled());
+            applied &= coordinatorBridge.service.setCrashEnabled(projectId, snapshot.crashEnabled());
+            applied &= coordinatorBridge.service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            applied &= coordinatorBridge.service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            applied &= coordinatorBridge.service.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            applied &= coordinatorBridge.service.setUsageEnabled(projectId, snapshot.usageEnabled());
+            applied &= coordinatorBridge.service.setStatsEnabled(projectId, snapshot.statsEnabled());
+            applied &= coordinatorBridge.service.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return applied;
         }
         if (engine != null && this.project != null && this.project.projectId().equalsIgnoreCase(projectId)) {
             engine.setProjectEnabled(projectId, snapshot.projectEnabled());
@@ -355,11 +374,17 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             engine.setUsageEnabled(projectId, snapshot.usageEnabled());
             engine.setStatsEnabled(projectId, snapshot.statsEnabled());
             engine.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return true;
         }
+        return false;
     }
 
     @Override
     public boolean markConsentReviewed(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.markConsentReviewed(projectId);
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
         TelemetryDataPaths consentPaths = consentDataPaths();
         return project != null
@@ -633,6 +658,18 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nonnull
     @Override
     public TelemetryRuntimeDiagnostics consentDiagnostics() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentDiagnostics();
+            return activeDiagnostics.isEmpty()
+                    ? unavailableConsentDiagnostics(active)
+                    : TelemetryConsentBridgePayload.diagnosticsFromSummary(activeDiagnostics);
+        }
+        return localConsentDiagnostics();
+    }
+
+    @Nonnull
+    private TelemetryRuntimeDiagnostics localConsentDiagnostics() {
         ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
         for (TelemetryProjectRegistration project : consentProjects) {
             projectDiagnostics.add(buildProjectDiagnostics(project));
@@ -654,6 +691,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nullable
     @Override
     public TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(projectId);
+            return activeDiagnostics.isEmpty()
+                    ? null
+                    : TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(activeDiagnostics);
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
         return project == null ? null : buildProjectDiagnostics(project);
     }
@@ -820,6 +864,25 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             }
         }
         return null;
+    }
+
+    private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
+        return active == null || (coordinatorBridge != null && coordinatorBridge.providerId().equals(active.providerId()));
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeDiagnostics unavailableConsentDiagnostics(@Nonnull TelemetryCoordinatorBridge active) {
+        return new TelemetryRuntimeDiagnostics(
+                false,
+                0,
+                0,
+                0,
+                false,
+                "<unavailable>",
+                null,
+                List.of("Active telemetry coordinator " + active.providerId() + " does not expose consent diagnostics."),
+                List.of()
+        );
     }
 
     private void replaceConsentProject(@Nonnull TelemetryProjectRegistration replacement) {
@@ -1066,33 +1129,45 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Nonnull
         @Override
         public Map<String, Object> consentDiagnostics() {
-            return TelemetryConsentBridgePayload.diagnosticsSummary(EmbeddedTelemetryService.this.consentDiagnostics());
+            return TelemetryConsentBridgePayload.diagnosticsSummary(EmbeddedTelemetryService.this.localConsentDiagnostics());
         }
 
         @Nonnull
         @Override
         public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
-            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = EmbeddedTelemetryService.this
-                    .consentProjectDiagnostics(projectId);
+            TelemetryProjectRegistration project = findConsentProject(projectId);
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = project == null
+                    ? null
+                    : buildProjectDiagnostics(project);
             return diagnostics == null ? Map.of() : TelemetryConsentBridgePayload.projectDiagnosticsSummary(diagnostics);
         }
 
         @Override
         public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
-            return EmbeddedTelemetryService.this.applyConsentToAll(TelemetryConsentBridgePayload.snapshotFromSummary(snapshot));
+            return EmbeddedTelemetryService.this.applyLocalConsentToAll(TelemetryConsentBridgePayload.snapshotFromSummary(snapshot));
         }
 
         @Override
         public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
-            return EmbeddedTelemetryService.this.applyConsentCategoryToAll(category, enabled);
+            return EmbeddedTelemetryService.this.applyLocalConsentCategoryToAll(category, enabled);
         }
 
         @Override
         public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
-            return EmbeddedTelemetryService.this.applyConsent(
+            return EmbeddedTelemetryService.this.applyLocalConsent(
                     projectId,
                     TelemetryConsentBridgePayload.snapshotFromSummary(snapshot)
             );
+        }
+
+        @Override
+        public boolean markConsentReviewed(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = findConsentProject(projectId);
+            TelemetryDataPaths consentPaths = consentDataPaths();
+            return project != null
+                    && consentStateStore != null
+                    && consentPaths != null
+                    && consentStateStore.markReviewed(consentPaths.consentStateFile(), project);
         }
 
         @Override

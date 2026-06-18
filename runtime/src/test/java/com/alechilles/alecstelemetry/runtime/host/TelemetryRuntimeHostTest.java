@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
@@ -12,6 +13,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
@@ -25,7 +27,9 @@ import org.junit.jupiter.api.io.TempDir;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -176,6 +180,50 @@ class TelemetryRuntimeHostTest {
         assertTrue(loser.handle().applyConsentToAll(enabled));
         assertTrue(winner.handle().consentProjectDiagnostics("winner-mod").enabled());
         assertTrue(loser.handle().consentProjectDiagnostics("winner-mod").enabled());
+    }
+
+    @Test
+    void losingProviderConsentPathsUseActiveStandaloneBridgeViewAndReviewState() {
+        TelemetryProjectRegistration activeProject = registration(
+                telemetryCategoryDescriptor("standalone-active", "Standalone Active"),
+                "Example:Standalone Active",
+                "2.0.0",
+                tempDir.resolve("Standalone Active.jar")
+        );
+        StandaloneStyleConsentBridge active = new StandaloneStyleConsentBridge(new TelemetryRuntimeCandidate(
+                "standalone:Example:Active",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Active",
+                "2.0.0",
+                tempDir.resolve("Active.jar"),
+                tempDir.resolve("active-runtime")
+        ), activeProject);
+        ProviderFixture loser = fixture(
+                "standalone:Example:Loser",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                "stale-provider",
+                "Stale Provider"
+        );
+
+        TelemetryCoordinatorRegistry.register(active);
+        loser.handle().start();
+
+        assertFalse(loser.handle().ownsActiveCoordinator());
+        assertEquals("standalone:Example:Active", loser.handle().activeCoordinatorProviderId());
+        assertEquals("standalone-active", loser.handle().consentDiagnostics().projects().getFirst().projectId());
+        assertNull(loser.handle().consentProjectDiagnostics("stale-provider"));
+        assertFalse(loser.handle().applyConsent("stale-provider",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+
+        assertTrue(loser.handle().applyConsent("standalone-active",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+        assertFalse(loser.handle().consentProjectDiagnostics("standalone-active").enabled());
+        assertTrue(loser.handle().markConsentReviewed("standalone-active"));
+        assertEquals(List.of("standalone-active"), active.reviewedProjectIds);
+        assertFalse(loser.handle().markConsentReviewed("stale-provider"));
     }
 
     @Test
@@ -691,5 +739,166 @@ class TelemetryRuntimeHostTest {
     private record ProviderFixture(TelemetryRuntimeProviderHandle handle,
                                    TelemetryRuntimeCommandRegistrar commandRegistrar,
                                    TelemetryDataPaths dataPaths) {
+    }
+
+    private static final class StandaloneStyleConsentBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private final TelemetryProjectRegistration project;
+        private final ArrayList<String> reviewedProjectIds = new ArrayList<>();
+        private boolean active;
+        private TelemetryConsentSnapshot snapshot = new TelemetryConsentSnapshot(
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true,
+                true
+        );
+
+        private StandaloneStyleConsentBridge(TelemetryRuntimeCandidate candidate, TelemetryProjectRegistration project) {
+            this.candidate = candidate;
+            this.project = project;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active = true;
+        }
+
+        @Override
+        public void deactivate() {
+            active = false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            return TelemetryConsentBridgePayload.diagnosticsSummary(new TelemetryRuntimeDiagnostics(
+                    true,
+                    1,
+                    1,
+                    0,
+                    false,
+                    "never",
+                    null,
+                    List.of(),
+                    List.of(projectDiagnostics())
+            ));
+        }
+
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(String projectId) {
+            return project.projectId().equalsIgnoreCase(projectId.trim())
+                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(projectDiagnostics())
+                    : Map.of();
+        }
+
+        @Override
+        public boolean applyConsent(String projectId, Map<String, Object> snapshot) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            this.snapshot = TelemetryConsentBridgePayload.snapshotFromSummary(snapshot);
+            return true;
+        }
+
+        @Override
+        public boolean applyConsentToAll(Map<String, Object> snapshot) {
+            this.snapshot = TelemetryConsentBridgePayload.snapshotFromSummary(snapshot);
+            return true;
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(String category, boolean enabled) {
+            snapshot = snapshot.withCategory(category, enabled);
+            return true;
+        }
+
+        @Override
+        public boolean markConsentReviewed(String projectId) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            reviewedProjectIds.add(project.projectId());
+            return true;
+        }
+
+        private TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics() {
+            return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                    project.projectId(),
+                    project.displayName(),
+                    snapshot.projectEnabled(),
+                    false,
+                    project.destinationMode(),
+                    "https://example.invalid/telemetry",
+                    0,
+                    project.pluginIdentifier(),
+                    project.pluginVersion(),
+                    project.sourcePath().toString(),
+                    project.descriptor().ui().iconTexturePath(),
+                    project.packagePrefixes(),
+                    project.runtimeMode(),
+                    snapshot.crashEnabled(),
+                    snapshot.errorEnabled(),
+                    snapshot.lifecycleEnabled(),
+                    snapshot.performanceEnabled(),
+                    snapshot.usageEnabled(),
+                    snapshot.statsEnabled(),
+                    snapshot.breadcrumbsEnabled(),
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+            );
+        }
     }
 }

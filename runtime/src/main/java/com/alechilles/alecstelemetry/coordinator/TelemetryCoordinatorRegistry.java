@@ -467,6 +467,15 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean markConsentReviewed(@Nonnull String projectId) {
+            return invokeBoolean(
+                    "markConsentReviewed",
+                    new Class<?>[]{String.class},
+                    projectId
+            );
+        }
+
+        @Override
         public boolean recordBreadcrumb(@Nonnull String projectId,
                                         @Nonnull String category,
                                         @Nonnull String detail) {

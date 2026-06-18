@@ -139,6 +139,10 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    default boolean markConsentReviewed(@Nonnull String projectId) {
+        return false;
+    }
+
     default boolean recordBreadcrumb(@Nonnull String projectId,
                                      @Nonnull String category,
                                      @Nonnull String detail) {

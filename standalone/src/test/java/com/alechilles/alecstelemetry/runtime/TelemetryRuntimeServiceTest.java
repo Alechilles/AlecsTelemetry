@@ -92,6 +92,9 @@ class TelemetryRuntimeServiceTest {
         assertEquals("embedded-mod", embedded.lastProjectId);
         assertEquals("settings_opened", embedded.lastEventName);
         assertEquals("from standalone api", embedded.lastDetails.get("detail"));
+        assertEquals("embedded-mod", service.consentDiagnostics().projects().getFirst().projectId());
+        assertNull(service.consentProjectDiagnostics("standalone-only"));
+        assertTrue(service.unreviewedConsentProjects().isEmpty());
         assertTrue(service.applyConsent(
                 "embedded-mod",
                 new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
@@ -104,6 +107,9 @@ class TelemetryRuntimeServiceTest {
         assertFalse(embedded.usageEnabled);
         assertFalse(embedded.statsEnabled);
         assertFalse(embedded.breadcrumbsEnabled);
+        assertTrue(service.markConsentReviewed("embedded-mod"));
+        assertEquals(List.of("embedded-mod"), embedded.reviewedProjectIds);
+        assertFalse(service.markConsentReviewed("standalone-only"));
 
         service.shutdown();
     }
@@ -1596,6 +1602,9 @@ class TelemetryRuntimeServiceTest {
         private boolean usageEnabled = true;
         private boolean statsEnabled = true;
         private boolean breadcrumbsEnabled = true;
+        private String consentProjectId = "embedded-mod";
+        private String consentDisplayName = "Embedded Mod";
+        private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
         private Map<String, Object> lastDetails = Map.of();
         private String lastManualReportProjectId;
         private Map<String, Object> lastManualReportSubmission = Map.of();
@@ -1724,6 +1733,74 @@ class TelemetryRuntimeServiceTest {
         }
 
         @Override
+        public Map<String, Object> consentDiagnostics() {
+            return TelemetryConsentBridgePayload.diagnosticsSummary(new TelemetryRuntimeDiagnostics(
+                    true,
+                    1,
+                    1,
+                    0,
+                    false,
+                    "never",
+                    null,
+                    List.of(),
+                    List.of(consentProjectDiagnostics())
+            ));
+        }
+
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+            return consentProjectId.equalsIgnoreCase(projectId.trim())
+                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(consentProjectDiagnostics())
+                    : Map.of();
+        }
+
+        @Override
+        public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+            return applyConsent(consentProjectId, snapshot);
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+            TelemetryConsentSnapshot snapshot = new TelemetryConsentSnapshot(
+                    projectEnabled,
+                    crashEnabled,
+                    errorEventsEnabled,
+                    lifecycleEventsEnabled,
+                    performanceEnabled,
+                    usageEnabled,
+                    statsEnabled,
+                    breadcrumbsEnabled
+            );
+            return applyConsent(consentProjectId, TelemetryConsentBridgePayload.snapshotSummary(snapshot.withCategory(category, enabled)));
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+            if (!consentProjectId.equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            TelemetryConsentSnapshot normalized = TelemetryConsentBridgePayload.snapshotFromSummary(snapshot);
+            projectEnabled = normalized.projectEnabled();
+            crashEnabled = normalized.crashEnabled();
+            errorEventsEnabled = normalized.errorEnabled();
+            lifecycleEventsEnabled = normalized.lifecycleEnabled();
+            performanceEnabled = normalized.performanceEnabled();
+            usageEnabled = normalized.usageEnabled();
+            statsEnabled = normalized.statsEnabled();
+            breadcrumbsEnabled = normalized.breadcrumbsEnabled();
+            return true;
+        }
+
+        @Override
+        public boolean markConsentReviewed(@Nonnull String projectId) {
+            if (!consentProjectId.equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            reviewedProjectIds.add(consentProjectId);
+            return true;
+        }
+
+        @Override
         public boolean recordUsage(@Nonnull String projectId,
                                    @Nonnull String eventName,
                                    @Nonnull Map<String, Object> details) {
@@ -1741,6 +1818,38 @@ class TelemetryRuntimeServiceTest {
             lastManualReportSubmission = submission;
             lastManualReportPlayerContext = playerContext;
             return manualReportResult;
+        }
+
+        private TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics() {
+            return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                    consentProjectId,
+                    consentDisplayName,
+                    projectEnabled,
+                    false,
+                    "custom",
+                    "https://example.invalid/telemetry",
+                    0,
+                    "Example:" + consentDisplayName,
+                    "1.0.0",
+                    null,
+                    null,
+                    List.of("com.example"),
+                    "embedded",
+                    crashEnabled,
+                    errorEventsEnabled,
+                    lifecycleEventsEnabled,
+                    performanceEnabled,
+                    usageEnabled,
+                    statsEnabled,
+                    breadcrumbsEnabled,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+            );
         }
     }
 }

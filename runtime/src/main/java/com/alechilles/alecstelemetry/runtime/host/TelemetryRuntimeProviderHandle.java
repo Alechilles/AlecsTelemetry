@@ -301,7 +301,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public boolean markConsentReviewed(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {
-            return false;
+            return active.markConsentReviewed(projectId);
         }
         TelemetryProjectRegistration project = findConsentProject(projectId);
         return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
@@ -1105,6 +1105,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
             return applyLocalConsent(projectId, snapshotFromSummary(snapshot));
+        }
+
+        @Override
+        public boolean markConsentReviewed(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = findConsentProject(projectId);
+            return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
         }
 
         @Override

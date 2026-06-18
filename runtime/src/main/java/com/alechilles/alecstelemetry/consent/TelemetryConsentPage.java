@@ -27,14 +27,14 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
 
     public static final String UI_PATH = "TelemetryConsentPage.ui";
 
-    static final String ACTION_TOGGLE_ALL = "toggle_all";
-    static final String ACTION_TOGGLE_GLOBAL_CATEGORY = "toggle_global_category";
-    static final String ACTION_TOGGLE_PROJECT = "toggle_project";
-    static final String ACTION_TOGGLE_CATEGORY = "toggle_category";
-    static final String ACTION_SHOW_PRIVACY_DISCLAIMER = "show_privacy_disclaimer";
-    static final String ACTION_HIDE_PRIVACY_DISCLAIMER = "hide_privacy_disclaimer";
-    static final String ACTION_SAVE = "save";
-    static final String ACTION_CLOSE = "close";
+    static final String ACTION_TOGGLE_ALL = TelemetryConsentUiContract.ACTION_TOGGLE_ALL;
+    static final String ACTION_TOGGLE_GLOBAL_CATEGORY = TelemetryConsentUiContract.ACTION_TOGGLE_GLOBAL_CATEGORY;
+    static final String ACTION_TOGGLE_PROJECT = TelemetryConsentUiContract.ACTION_TOGGLE_PROJECT;
+    static final String ACTION_TOGGLE_CATEGORY = TelemetryConsentUiContract.ACTION_TOGGLE_CATEGORY;
+    static final String ACTION_SHOW_PRIVACY_DISCLAIMER = TelemetryConsentUiContract.ACTION_SHOW_PRIVACY_DISCLAIMER;
+    static final String ACTION_HIDE_PRIVACY_DISCLAIMER = TelemetryConsentUiContract.ACTION_HIDE_PRIVACY_DISCLAIMER;
+    static final String ACTION_SAVE = TelemetryConsentUiContract.ACTION_SAVE;
+    static final String ACTION_CLOSE = TelemetryConsentUiContract.ACTION_CLOSE;
 
     private static final int MAX_PROJECT_ROWS = 8;
     private static final String PRIVACY_DISCLAIMER_TEXT = String.join("\n\n",
@@ -424,18 +424,18 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     @Nonnull
-    private static String projectToggleSelector(int index) {
-        return rowSelector(index) + " #TelemetryConsentProjectToggleButton";
+    static String projectToggleSelector(int index) {
+        return TelemetryConsentUiContract.projectToggleSelector(index);
     }
 
     @Nonnull
-    private static String categoryCheckSelector(int index, @Nonnull String category) {
-        return rowSelector(index) + " #TelemetryConsent" + selectorToken(category) + "Enabled";
+    static String categoryCheckSelector(int index, @Nonnull String category) {
+        return TelemetryConsentUiContract.categoryCheckSelector(index, category);
     }
 
     @Nonnull
-    private static String categoryToggleSelector(int index, @Nonnull String category) {
-        return rowSelector(index) + " #TelemetryConsent" + selectorToken(category) + "ToggleButton";
+    static String categoryToggleSelector(int index, @Nonnull String category) {
+        return TelemetryConsentUiContract.categoryToggleSelector(index, category);
     }
 
     @Nonnull
@@ -444,13 +444,13 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     @Nonnull
-    private static String globalCategoryCheckSelector(@Nonnull String category) {
-        return "#TelemetryConsent" + selectorToken(category) + "AllEnabled";
+    static String globalCategoryCheckSelector(@Nonnull String category) {
+        return TelemetryConsentUiContract.globalCategoryCheckSelector(category);
     }
 
     @Nonnull
-    private static String globalCategoryToggleSelector(@Nonnull String category) {
-        return "#TelemetryConsent" + selectorToken(category) + "AllToggleButton";
+    static String globalCategoryToggleSelector(@Nonnull String category) {
+        return TelemetryConsentUiContract.globalCategoryToggleSelector(category);
     }
 
     @Nonnull
@@ -459,16 +459,8 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     @Nonnull
-    private static String selectorToken(@Nonnull String category) {
-        if ("crash".equals(category)) {
-            return "Capture";
-        }
-        return capitalize(category);
-    }
-
-    @Nonnull
-    private static String capitalize(@Nonnull String value) {
-        return value.substring(0, 1).toUpperCase() + value.substring(1);
+    static String selectorToken(@Nonnull String category) {
+        return TelemetryConsentUiContract.selectorToken(category);
     }
 
     public static final class ConsentEventData {
