@@ -338,6 +338,52 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void activeStandaloneApiListsAndFindsConsentOnlyProjects() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration runtimeProject = new TelemetryProjectRegistration(
+                manualReportDescriptor("runtime-mod", "Runtime Mod", true, "dependency"),
+                "Example:Runtime Mod",
+                "1.0.0",
+                tempDir.resolve("Runtime Mod.jar")
+        );
+        TelemetryProjectRegistration consentOnlyProject = new TelemetryProjectRegistration(
+                manualReportDescriptor("standalone-consent-only", "Standalone Consent Only", true, "dependency"),
+                "Example:Standalone Consent Only",
+                "1.0.0",
+                tempDir.resolve("Standalone Consent Only.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(runtimeProject),
+                List.of(runtimeProject, consentOnlyProject),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Runtime Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Standalone Consent Only", "1.0.0")
+                ),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        assertTrue(service.ownsActiveCoordinator());
+        assertEquals(List.of("runtime-mod", "standalone-consent-only"), service.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertEquals(List.of("runtime-mod", "standalone-consent-only"), service.api().projects().stream()
+                .map(TelemetryProjectHandle::projectId)
+                .toList());
+        assertEquals("standalone-consent-only", service.findProject("standalone-consent-only").projectId());
+        assertEquals("standalone-consent-only", service.api().findProject("standalone-consent-only").projectId());
+        assertTrue(service.api().findProject("standalone-consent-only").isEnabled());
+
+        service.shutdown();
+    }
+
+    @Test
     void embeddedConsentProjectCanAcceptManualReportsWithoutStandaloneRegistration() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("{}");
         TelemetryDataPaths dataPaths = manualReportPaths(settings);

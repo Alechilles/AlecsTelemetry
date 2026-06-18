@@ -195,7 +195,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public List<TelemetryProjectRegistration> projects() {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (usesLocalCoordinator(active)) {
-            return coordinator.projects();
+            return mergedProjects(coordinator.projects(), consentProjects);
         }
         return projectsFromSummaries(activeProjects(active));
     }
@@ -205,7 +205,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (usesLocalCoordinator(active)) {
-            return coordinator.findProject(projectId);
+            TelemetryProjectRegistration project = coordinator.findProject(projectId);
+            return project == null ? findConsentProject(projectId) : project;
         }
         TelemetryProjectRegistration project = projectFromSummary(active.findProjectSummary(projectId));
         return project == null ? projectFromSummary(active.consentProjectDiagnostics(projectId)) : project;
@@ -847,6 +848,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
         return active == null || bridge.providerId().equals(active.providerId());
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> mergedProjects(
+            @Nonnull List<TelemetryProjectRegistration> runtimeProjects,
+            @Nonnull List<TelemetryProjectRegistration> consentProjects) {
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : runtimeProjects) {
+            projects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(projects.values());
     }
 
     @Nonnull

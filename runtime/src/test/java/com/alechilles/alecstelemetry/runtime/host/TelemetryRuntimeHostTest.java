@@ -167,6 +167,11 @@ class TelemetryRuntimeHostTest {
 
         assertFalse(loser.handle().ownsActiveCoordinator());
         assertTrue(winner.handle().ownsActiveCoordinator());
+        assertEquals(List.of("winner-mod", "winner-consent-only"), winner.handle().api().projects().stream()
+                .map(TelemetryProjectHandle::projectId)
+                .toList());
+        assertNotNull(winner.handle().api().findProject("winner-consent-only"));
+        assertTrue(winner.handle().api().findProject("winner-consent-only").isEnabled());
         TelemetryRuntimeDiagnostics loserDiagnostics = loser.handle().consentDiagnostics();
         assertEquals(List.of("winner-mod", "winner-consent-only"), loserDiagnostics.projects().stream()
                 .map(TelemetryRuntimeDiagnostics.ProjectDiagnostics::projectId)

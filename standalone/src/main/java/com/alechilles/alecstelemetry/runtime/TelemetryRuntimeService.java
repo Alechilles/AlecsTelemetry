@@ -253,7 +253,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
             return projectsFromSummaries(activeProjects(active));
         }
         if (coordinatorBridge != null && active != null) {
-            return coordinatorService.projects();
+            return mergedProjects(coordinatorService.projects(), consentProjects);
         }
         return engine.projects();
     }
@@ -811,7 +811,8 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
             return project == null ? projectFromSummary(active.consentProjectDiagnostics(projectId)) : project;
         }
         if (coordinatorBridge != null && active != null) {
-            return coordinatorService.findProject(projectId);
+            TelemetryProjectRegistration project = coordinatorService.findProject(projectId);
+            return project == null ? findConsentProject(projectId) : project;
         }
         return engine.findProject(projectId);
     }
@@ -1003,6 +1004,20 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
         return active == null || (coordinatorBridge != null && coordinatorBridge.providerId().equals(active.providerId()));
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> mergedProjects(
+            @Nonnull List<TelemetryProjectRegistration> runtimeProjects,
+            @Nonnull List<TelemetryProjectRegistration> consentProjects) {
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : runtimeProjects) {
+            projects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(projects.values());
     }
 
     @Nonnull
