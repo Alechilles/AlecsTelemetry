@@ -6,6 +6,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,47 @@ class TelemetryCoordinatorServiceTest {
         assertEquals(1, service.registeredProjectCount());
         assertEquals("embedded-mod", service.projects().getFirst().projectId());
         assertEquals("embedded", service.projects().getFirst().runtimeMode());
+    }
+
+    @Test
+    void fromDiscoveryRegistersSuppliedProjectsAndLoadedMods() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration statsProject = new TelemetryProjectRegistration(
+                statsDescriptor("stats-mod", "Stats Mod", "standalone"),
+                "Example:Stats Mod",
+                "7.8.9",
+                tempDir.resolve("Stats.jar")
+        );
+        CrashReportEnvelope.LoadedModMetadata loadedMod =
+                new CrashReportEnvelope.LoadedModMetadata("Example:Stats Mod", "7.8.9");
+        TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscoveryResult(
+                List.of(statsProject),
+                List.of(statsProject),
+                List.of(loadedMod),
+                List.of(),
+                List.of()
+        );
+
+        TelemetryCoordinatorService service = TelemetryCoordinatorService.fromDiscovery(
+                settings,
+                dataPaths,
+                discovery,
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null,
+                null
+        );
+
+        assertEquals(1, service.registeredProjectCount());
+        assertEquals("stats-mod", service.projects().getFirst().projectId());
+        assertTrue(service.isStatsEnabled("stats-mod"));
+        assertEquals(1, service.loadedMods().size());
+        assertEquals("Example:Stats Mod", service.loadedMods().getFirst().identifier());
+        assertEquals("7.8.9", service.loadedMods().getFirst().version());
     }
 
     @Test

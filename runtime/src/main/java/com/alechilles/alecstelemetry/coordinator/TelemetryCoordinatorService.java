@@ -4,16 +4,15 @@ import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
-import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
-import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
-import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -74,6 +73,27 @@ public final class TelemetryCoordinatorService {
     }
 
     @Nonnull
+    public static TelemetryCoordinatorService fromDiscovery(@Nonnull TelemetryRuntimeSettings settings,
+                                                            @Nonnull TelemetryDataPaths dataPaths,
+                                                            @Nonnull TelemetryRuntimeDiscoveryResult discovery,
+                                                            @Nonnull CrashReportClient client,
+                                                            @Nullable HytaleLogger logger,
+                                                            @Nullable ScheduledExecutorService executor,
+                                                            @Nullable IntSupplier onlinePlayers) {
+        return new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                discovery.projects(),
+                manualReportRuntimeProjects(discovery.projects(), discovery.consentProjects()),
+                discovery.loadedMods(),
+                client,
+                logger,
+                executor,
+                onlinePlayers
+        );
+    }
+
+    @Nonnull
     public static TelemetryCoordinatorService discover(@Nonnull TelemetryDataPaths dataPaths,
                                                        @Nonnull CrashReportClient client,
                                                        @Nullable HytaleLogger logger,
@@ -88,18 +108,11 @@ public final class TelemetryCoordinatorService {
                                                        @Nullable ScheduledExecutorService executor,
                                                        @Nullable IntSupplier onlinePlayers) {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
-        TelemetryProjectDiscovery.DiscoveryResult discovery = new TelemetryProjectDiscovery(logger)
-                .discover(dataPaths.descriptorDirectories());
-        Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
-                .loadAll(dataPaths.projectSettingsDirectory());
-        List<TelemetryProjectRegistration> projects = applyOverrides(discovery.projects(), overrides);
-        List<TelemetryProjectRegistration> consentProjects = applyOverrides(discovery.consentProjects(), overrides);
-        return new TelemetryCoordinatorService(
+        TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(dataPaths);
+        return fromDiscovery(
                 settings,
                 dataPaths,
-                projects,
-                manualReportRuntimeProjects(projects, consentProjects),
-                discovery.loadedMods(),
+                discovery,
                 client,
                 logger,
                 executor,
@@ -542,17 +555,6 @@ public final class TelemetryCoordinatorService {
             ));
         }
         return List.copyOf(loadedMods);
-    }
-
-    @Nonnull
-    private static List<TelemetryProjectRegistration> applyOverrides(
-            @Nonnull List<TelemetryProjectRegistration> projects,
-            @Nonnull Map<String, TelemetryProjectOverride> overrides) {
-        ArrayList<TelemetryProjectRegistration> resolved = new ArrayList<>(projects.size());
-        for (TelemetryProjectRegistration project : projects) {
-            resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
-        }
-        return List.copyOf(resolved);
     }
 
     @Nonnull
