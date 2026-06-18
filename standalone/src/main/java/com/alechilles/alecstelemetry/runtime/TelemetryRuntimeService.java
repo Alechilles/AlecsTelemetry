@@ -76,16 +76,29 @@ public final class TelemetryRuntimeService {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
         TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(logger)
                 .discover(dataPaths.descriptorDirectories());
+        TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider = TelemetryLoadedModSnapshotProvider.hytalePluginManager(
+                discoveryResult.loadedMods(),
+                logger
+        );
+        List<CrashReportEnvelope.LoadedModMetadata> activeLoadedMods = loadedModSnapshotProvider.snapshotLoadedMods();
+        List<TelemetryProjectRegistration> activeProjects = filterRegistrationsToLoadedMods(
+                discoveryResult.projects(),
+                activeLoadedMods
+        );
+        List<TelemetryProjectRegistration> activeConsentProjects = filterRegistrationsToLoadedMods(
+                discoveryResult.consentProjects(),
+                activeLoadedMods
+        );
         Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
                 .loadAll(dataPaths.projectSettingsDirectory());
         Map<String, TelemetryProjectOverride> consentOverrides = loadConsentOverrides(
-                discoveryResult.consentProjects(),
+                activeConsentProjects,
                 overrides,
                 dataPaths,
                 logger
         );
-        List<TelemetryProjectRegistration> resolvedProjects = applyOverrides(discoveryResult.projects(), overrides);
-        List<TelemetryProjectRegistration> resolvedConsentProjects = applyOverrides(discoveryResult.consentProjects(), consentOverrides);
+        List<TelemetryProjectRegistration> resolvedProjects = applyOverrides(activeProjects, overrides);
+        List<TelemetryProjectRegistration> resolvedConsentProjects = applyOverrides(activeConsentProjects, consentOverrides);
         List<TelemetryProjectCollisionDetector.Collision> collisions = TelemetryProjectCollisionDetector.detect(resolvedProjects);
         List<String> registrationWarnings = buildRegistrationWarnings(collisions, discoveryResult.skippedRegistrationWarnings());
         return new TelemetryRuntimeService(
@@ -93,8 +106,8 @@ public final class TelemetryRuntimeService {
                 dataPaths,
                 resolvedProjects,
                 resolvedConsentProjects,
-                discoveryResult.loadedMods(),
-                TelemetryLoadedModSnapshotProvider.hytalePluginManager(discoveryResult.loadedMods(), logger),
+                activeLoadedMods,
+                loadedModSnapshotProvider,
                 collisions,
                 registrationWarnings,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
@@ -751,6 +764,77 @@ public final class TelemetryRuntimeService {
             resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
         }
         return List.copyOf(resolved);
+    }
+
+    @Nonnull
+    static List<TelemetryProjectRegistration> filterRegistrationsToLoadedMods(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods) {
+        if (projects.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashMap<String, Boolean> loadedIdentifiers = new LinkedHashMap<>();
+        for (CrashReportEnvelope.LoadedModMetadata loadedMod : loadedMods) {
+            if (loadedMod == null) {
+                continue;
+            }
+            addIdentifierVariants(loadedIdentifiers, loadedMod.identifier());
+        }
+        if (loadedIdentifiers.isEmpty()) {
+            return List.of();
+        }
+
+        ArrayList<TelemetryProjectRegistration> filtered = new ArrayList<>(projects.size());
+        for (TelemetryProjectRegistration project : projects) {
+            if (matchesLoadedMod(project, loadedIdentifiers)) {
+                filtered.add(project);
+            }
+        }
+        return List.copyOf(filtered);
+    }
+
+    private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,
+                                            @Nonnull Map<String, Boolean> loadedIdentifiers) {
+        if (containsIdentifierVariant(loadedIdentifiers, project.pluginIdentifier())) {
+            return true;
+        }
+        if (containsIdentifierVariant(loadedIdentifiers, project.displayName())) {
+            return true;
+        }
+        for (String ownerPluginIdentifier : project.ownerPluginIdentifiers()) {
+            if (containsIdentifierVariant(loadedIdentifiers, ownerPluginIdentifier)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsIdentifierVariant(@Nonnull Map<String, Boolean> loadedIdentifiers,
+                                                     @Nullable String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            return false;
+        }
+        LinkedHashMap<String, Boolean> variants = new LinkedHashMap<>();
+        addIdentifierVariants(variants, identifier);
+        for (String variant : variants.keySet()) {
+            if (loadedIdentifiers.containsKey(variant)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void addIdentifierVariants(@Nonnull Map<String, Boolean> identifiers,
+                                              @Nullable String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            return;
+        }
+        String normalized = identifier.trim();
+        identifiers.put(normalized.toLowerCase(Locale.ROOT), true);
+        int separator = normalized.indexOf(':');
+        if (separator >= 0 && separator + 1 < normalized.length()) {
+            identifiers.put(normalized.substring(separator + 1).trim().toLowerCase(Locale.ROOT), true);
+        }
     }
 
     @Nonnull

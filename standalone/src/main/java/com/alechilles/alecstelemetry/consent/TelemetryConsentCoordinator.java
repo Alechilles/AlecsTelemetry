@@ -6,6 +6,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.modules.singleplayer.SingleplayerModule;
@@ -24,6 +25,9 @@ import java.util.logging.Level;
  * Opens the telemetry consent page for operators when newly discovered telemetry projects need review.
  */
 public final class TelemetryConsentCoordinator {
+
+    static final String FIRST_RUN_NOTICE = "One or more mods are using Alec's Telemetry to report anonymous statistics and/or crash, error, performance diagnostics. You may change your telemetry consent settings at any time using `/telemetry consent`.";
+    private static final String FIRST_RUN_NOTICE_COLOR = "#f0a33a";
 
     private final TelemetryRuntimeService runtimeService;
     private final HytaleLogger logger;
@@ -50,7 +54,7 @@ public final class TelemetryConsentCoordinator {
         if (!promptedKeys.add(promptKey)) {
             return;
         }
-        if (!openConsentPage(playerEntityRef, store, playerRef, true)) {
+        if (!sendFirstRunNotice(playerRef)) {
             promptedKeys.remove(promptKey);
         }
     }
@@ -70,6 +74,16 @@ public final class TelemetryConsentCoordinator {
                 new TelemetryConsentPage(playerRef, runtimeService, firstRun)
         );
         return true;
+    }
+
+    private boolean sendFirstRunNotice(@Nonnull PlayerRef playerRef) {
+        try {
+            playerRef.sendMessage(Message.raw(FIRST_RUN_NOTICE).color(FIRST_RUN_NOTICE_COLOR));
+            return true;
+        } catch (Exception ex) {
+            warn("Unable to send telemetry consent notice.", ex);
+            return false;
+        }
     }
 
     private static boolean hasConsentAccess(@Nullable PlayerRef playerRef) {

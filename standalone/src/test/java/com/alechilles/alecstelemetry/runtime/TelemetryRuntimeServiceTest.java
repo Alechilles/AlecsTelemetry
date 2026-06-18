@@ -261,6 +261,56 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void filtersDiscoveredProjectsToActuallyLoadedMods() {
+        TelemetryProjectRegistration active = new TelemetryProjectRegistration(
+                manualReportDescriptor("active-mod", "Active Mod", true),
+                "Example:Active Mod",
+                "1.0.0",
+                tempDir.resolve("Active Mod.jar")
+        );
+        TelemetryProjectRegistration assetOnly = new TelemetryProjectRegistration(
+                manualReportDescriptor("asset-only-mod", "Asset Only Mod", true),
+                "Example:Asset Only Mod",
+                "1.0.0",
+                tempDir.resolve("Asset Only Mod.jar")
+        );
+        TelemetryProjectRegistration installedButDisabled = new TelemetryProjectRegistration(
+                manualReportDescriptor("disabled-mod", "Disabled Mod", true),
+                "Example:Disabled Mod",
+                "1.0.0",
+                tempDir.resolve("Disabled Mod.jar")
+        );
+
+        List<TelemetryProjectRegistration> filtered = TelemetryRuntimeService.filterRegistrationsToLoadedMods(
+                List.of(active, assetOnly, installedButDisabled),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Active Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Asset Only Mod", "1.0.0")
+                )
+        );
+
+        assertEquals(
+                List.of("active-mod", "asset-only-mod"),
+                filtered.stream().map(TelemetryProjectRegistration::projectId).toList()
+        );
+    }
+
+    @Test
+    void noLoadedModsMeansNoRuntimeOrConsentProjects() {
+        TelemetryProjectRegistration installedButDisabled = new TelemetryProjectRegistration(
+                manualReportDescriptor("disabled-mod", "Disabled Mod", true),
+                "Example:Disabled Mod",
+                "1.0.0",
+                tempDir.resolve("Disabled Mod.jar")
+        );
+
+        assertTrue(TelemetryRuntimeService.filterRegistrationsToLoadedMods(
+                List.of(installedButDisabled),
+                List.of()
+        ).isEmpty());
+    }
+
+    @Test
     void embeddedConsentProjectCanAcceptManualReportsWithoutStandaloneRegistration() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("{}");
         TelemetryDataPaths dataPaths = manualReportPaths(settings);
