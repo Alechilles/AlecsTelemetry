@@ -27,7 +27,14 @@ public final class TelemetryCoordinatorRegistry {
         if (candidate == null) {
             return;
         }
-        registry().put(candidate.providerId(), bridge);
+        Object previous = registry().put(candidate.providerId(), bridge);
+        if (previous != null && previous != bridge) {
+            ReflectiveBridge previousBridge = new ReflectiveBridge(previous, candidateFrom(previous));
+            if (previousBridge.isActive()) {
+                previousBridge.shutdown();
+                previousBridge.deactivate();
+            }
+        }
         elect();
     }
 

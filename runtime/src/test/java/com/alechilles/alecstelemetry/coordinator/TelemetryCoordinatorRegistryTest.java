@@ -146,6 +146,24 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals(List.of("standalone:shutdown", "embedded:start"), lifecycle);
     }
 
+    @Test
+    void shutsDownActiveBridgeWhenSameProviderRegistersReplacement() {
+        ArrayList<String> lifecycle = new ArrayList<>();
+        OrderedBridge original = orderedBridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3", lifecycle);
+        OrderedBridge replacement = orderedBridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3", lifecycle);
+
+        TelemetryCoordinatorRegistry.register(original);
+        assertEquals(List.of("standalone:start"), lifecycle);
+        assertTrue(original.isActive());
+
+        lifecycle.clear();
+        TelemetryCoordinatorRegistry.register(replacement);
+
+        assertFalse(original.isActive());
+        assertTrue(replacement.isActive());
+        assertEquals(List.of("standalone:shutdown", "standalone:start"), lifecycle);
+    }
+
     private static RecordingBridge bridge(String providerId, TelemetryRuntimeOrigin origin, String runtimeVersion) {
         return new RecordingBridge(candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION));
     }
