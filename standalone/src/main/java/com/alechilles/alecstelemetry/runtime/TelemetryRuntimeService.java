@@ -243,6 +243,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         return active == null ? null : active.providerId();
     }
 
+    @Override
     public boolean isEnabled() {
         return engine.isEnabled();
     }
@@ -593,6 +594,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         return settings.manualReports();
     }
 
+    @Override
     public boolean openReportPage(@Nonnull String projectId,
                                   @Nonnull Ref<EntityStore> playerEntityRef,
                                   @Nonnull Store<EntityStore> store,

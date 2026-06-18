@@ -22,12 +22,7 @@ public final class TelemetryRuntimeApiImpl implements TelemetryRuntimeApi {
 
     @Override
     public boolean isEnabled() {
-        for (TelemetryProjectRegistration project : runtime.projects()) {
-            if (runtime.isProjectEnabled(project.projectId())) {
-                return true;
-            }
-        }
-        return false;
+        return runtime.isEnabled();
     }
 
     @Nonnull

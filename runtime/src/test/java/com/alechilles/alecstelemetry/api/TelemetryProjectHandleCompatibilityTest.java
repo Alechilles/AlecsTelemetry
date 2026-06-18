@@ -1,13 +1,25 @@
 package com.alechilles.alecstelemetry.api;
 
+import com.alechilles.alecstelemetry.api.internal.TelemetryProjectHandleImpl;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeOperations;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProjectHandleCompatibilityTest {
 
@@ -52,6 +64,27 @@ class TelemetryProjectHandleCompatibilityTest {
                 null,
                 new TelemetryReportOpenRequest("issue", null, null)
         ));
+    }
+
+    @Test
+    void runtimeBackedReportPageOpenDelegatesToRuntimeOperations() {
+        FakeRuntimeOperations runtime = new FakeRuntimeOperations(true, true);
+        runtime.openReportPageResult = true;
+        TelemetryProjectHandle handle = new TelemetryProjectHandleImpl(runtime, "example-mod");
+        TelemetryReportOpenRequest request = new TelemetryReportOpenRequest("issue", null, null);
+
+        assertTrue(handle.openReportPage(null, null, null, request));
+        assertEquals("example-mod", runtime.openedProjectId);
+        assertSame(request, runtime.openedRequest);
+    }
+
+    @Test
+    void runtimeApiEnabledFollowsGlobalRuntimeOperation() {
+        TelemetryRuntimeApi disabledApi = new TelemetryRuntimeApiImpl(new FakeRuntimeOperations(false, true));
+        TelemetryRuntimeApi enabledApi = new TelemetryRuntimeApiImpl(new FakeRuntimeOperations(true, false));
+
+        assertFalse(disabledApi.isEnabled());
+        assertTrue(enabledApi.isEnabled());
     }
 
     private static final class NoopTelemetryProjectHandle implements TelemetryProjectHandle {
@@ -107,6 +140,120 @@ class TelemetryProjectHandleCompatibilityTest {
         @Override
         public boolean requestFlush() {
             return false;
+        }
+    }
+
+    private static final class FakeRuntimeOperations implements TelemetryRuntimeOperations {
+        private final boolean enabled;
+        private final boolean projectEnabled;
+        private final TelemetryProjectRegistration project;
+        private boolean openReportPageResult;
+        private String openedProjectId;
+        private TelemetryReportOpenRequest openedRequest;
+
+        private FakeRuntimeOperations(boolean enabled, boolean projectEnabled) {
+            this.enabled = enabled;
+            this.projectEnabled = projectEnabled;
+            this.project = project("example-mod", "Example Mod");
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        @Nonnull
+        @Override
+        public List<TelemetryProjectRegistration> projects() {
+            return List.of(project);
+        }
+
+        @Nullable
+        @Override
+        public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
+            return project.projectId().equals(projectId) ? project : null;
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return projectEnabled;
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            return false;
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+            return false;
+        }
+
+        @Override
+        public boolean openReportPage(@Nonnull String projectId,
+                                      @Nonnull Ref<EntityStore> playerEntityRef,
+                                      @Nonnull Store<EntityStore> store,
+                                      @Nonnull PlayerRef playerRef,
+                                      @Nonnull TelemetryReportOpenRequest request) {
+            openedProjectId = projectId;
+            openedRequest = request;
+            return openReportPageResult;
+        }
+
+        @Override
+        public void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail) {
+        }
+
+        @Override
+        public void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        }
+
+        @Override
+        public void captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        }
+
+        @Override
+        public void recordErrorWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable Throwable throwable,
+                                           @Nullable TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordLifecycleWithContext(@Nonnull String projectId,
+                                               @Nonnull String eventName,
+                                               int durationMs,
+                                               boolean success,
+                                               @Nullable TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordPerformanceWithContext(@Nonnull String projectId,
+                                                 @Nonnull String eventName,
+                                                 int durationMs,
+                                                 @Nullable Double metricValue,
+                                                 @Nullable TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordUsageWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordStatsWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable TelemetryEventContext context) {
+        }
+
+        @Nonnull
+        private static TelemetryProjectRegistration project(@Nonnull String projectId, @Nonnull String displayName) {
+            TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                    "{\"projectId\":\"" + projectId + "\",\"displayName\":\"" + displayName + "\"}",
+                    null
+            );
+            return new TelemetryProjectRegistration(descriptor, "Example:" + displayName, "1.0.0", null);
         }
     }
 }

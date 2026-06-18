@@ -2,12 +2,19 @@ package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 
 public interface TelemetryRuntimeOperations {
+    boolean isEnabled();
+
     @Nonnull
     List<TelemetryProjectRegistration> projects();
 
@@ -19,6 +26,12 @@ public interface TelemetryRuntimeOperations {
     boolean requestFlush(@Nullable String projectId);
 
     boolean captureTestReport(@Nonnull String projectId, @Nullable String detail);
+
+    boolean openReportPage(@Nonnull String projectId,
+                           @Nonnull Ref<EntityStore> playerEntityRef,
+                           @Nonnull Store<EntityStore> store,
+                           @Nonnull PlayerRef playerRef,
+                           @Nonnull TelemetryReportOpenRequest request);
 
     void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail);
 
