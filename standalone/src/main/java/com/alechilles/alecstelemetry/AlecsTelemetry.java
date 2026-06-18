@@ -47,6 +47,7 @@ public final class AlecsTelemetry extends JavaPlugin {
                     HytaleServer.SCHEDULED_EXECUTOR,
                     getLogger()
             );
+            runtimeService.attachStatsHeartbeat(statsHeartbeatService);
             TelemetryRuntimeLocator.register(runtimeService.api());
             getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
             getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
@@ -70,9 +71,6 @@ public final class AlecsTelemetry extends JavaPlugin {
     protected void start() {
         if (runtimeService != null) {
             runtimeService.start();
-            if (statsHeartbeatService != null && runtimeService.ownsActiveCoordinator()) {
-                statsHeartbeatService.start();
-            }
             String activeProvider = runtimeService.activeCoordinatorProviderId();
             getLogger().at(Level.INFO).log(
                     "Alec's Telemetry enabled. Active coordinator="

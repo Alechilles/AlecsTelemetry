@@ -18,6 +18,9 @@ import com.alechilles.alecstelemetry.report.ManualReportReceiptStore;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryStatsHeartbeatService;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryStatsRuntime;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +36,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -379,6 +388,59 @@ class TelemetryRuntimeServiceTest {
         assertEquals("standalone-consent-only", service.findProject("standalone-consent-only").projectId());
         assertEquals("standalone-consent-only", service.api().findProject("standalone-consent-only").projectId());
         assertTrue(service.api().findProject("standalone-consent-only").isEnabled());
+
+        service.shutdown();
+    }
+
+    @Test
+    void standaloneStatsHeartbeatStopsWhenElectionMovesToNewerCoordinator() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                statsOnlyTelemetryDescriptor("standalone-stats", "Standalone Stats"),
+                "Example:Standalone Stats",
+                "1.0.0",
+                tempDir.resolve("Standalone Stats.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Standalone Stats", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+        RecordingScheduledExecutor heartbeatExecutor = new RecordingScheduledExecutor();
+        service.attachStatsHeartbeat(new TelemetryStatsHeartbeatService(
+                TelemetryStatsRuntime.from(service),
+                new TelemetryPlayerCounter(),
+                heartbeatExecutor,
+                null
+        ));
+
+        service.start();
+
+        assertTrue(service.ownsActiveCoordinator());
+        assertEquals(1, heartbeatExecutor.futures.size());
+        RecordingScheduledFuture<?> standaloneHeartbeat = heartbeatExecutor.futures.getFirst();
+        assertFalse(standaloneHeartbeat.isCancelled());
+
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(embedded);
+
+        assertFalse(service.ownsActiveCoordinator());
+        assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
+        assertTrue(standaloneHeartbeat.isCancelled());
 
         service.shutdown();
     }
@@ -1636,6 +1698,113 @@ class TelemetryRuntimeServiceTest {
         }
         try (var files = Files.list(directory)) {
             return files.filter(Files::isRegularFile).count();
+        }
+    }
+
+    private static final class RecordingScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
+        private final java.util.ArrayList<RecordingScheduledFuture<?>> futures = new java.util.ArrayList<>();
+        private boolean shutdown;
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, @Nonnull TimeUnit unit) {
+            return scheduleWithFixedDelay(command, delay, delay, unit);
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(@Nonnull Callable<V> callable, long delay, @Nonnull TimeUnit unit) {
+            RecordingScheduledFuture<V> future = new RecordingScheduledFuture<>();
+            futures.add(future);
+            return future;
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(@Nonnull Runnable command,
+                                                      long initialDelay,
+                                                      long period,
+                                                      @Nonnull TimeUnit unit) {
+            return scheduleWithFixedDelay(command, initialDelay, period, unit);
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(@Nonnull Runnable command,
+                                                         long initialDelay,
+                                                         long delay,
+                                                         @Nonnull TimeUnit unit) {
+            RecordingScheduledFuture<Void> future = new RecordingScheduledFuture<>();
+            futures.add(future);
+            return future;
+        }
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Nonnull
+        @Override
+        public List<Runnable> shutdownNow() {
+            shutdown = true;
+            return List.of();
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return shutdown;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, @Nonnull TimeUnit unit) {
+            return shutdown;
+        }
+
+        @Override
+        public void execute(@Nonnull Runnable command) {
+            command.run();
+        }
+    }
+
+    private static final class RecordingScheduledFuture<V> implements ScheduledFuture<V> {
+        private boolean cancelled;
+
+        @Override
+        public long getDelay(@Nonnull TimeUnit unit) {
+            return 0;
+        }
+
+        @Override
+        public int compareTo(@Nonnull Delayed other) {
+            return 0;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            cancelled = true;
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return cancelled;
+        }
+
+        @Override
+        public boolean isDone() {
+            return cancelled;
+        }
+
+        @Override
+        public V get() {
+            return null;
+        }
+
+        @Override
+        public V get(long timeout, @Nonnull TimeUnit unit) {
+            return null;
         }
     }
 

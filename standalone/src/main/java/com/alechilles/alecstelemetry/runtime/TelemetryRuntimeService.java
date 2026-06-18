@@ -28,6 +28,7 @@ import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryStatsHeartbeatService;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -70,6 +71,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     private final TelemetryConsentStateStore consentStateStore;
     private final List<TelemetryProjectRegistration> projects;
     private final TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider;
+    private volatile TelemetryStatsHeartbeatService statsHeartbeatService;
     private List<TelemetryProjectRegistration> consentProjects;
 
     @Nonnull
@@ -212,11 +214,30 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     public void shutdown() {
         TelemetryCoordinatorRegistry.unregister(candidate.providerId());
+        stopStatsHeartbeat();
     }
 
     public boolean ownsActiveCoordinator() {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active != null && active.providerId().equals(candidate.providerId());
+    }
+
+    public void attachStatsHeartbeat(@Nullable TelemetryStatsHeartbeatService statsHeartbeatService) {
+        this.statsHeartbeatService = statsHeartbeatService;
+    }
+
+    private void startStatsHeartbeat() {
+        TelemetryStatsHeartbeatService heartbeat = statsHeartbeatService;
+        if (heartbeat != null) {
+            heartbeat.start();
+        }
+    }
+
+    private void stopStatsHeartbeat() {
+        TelemetryStatsHeartbeatService heartbeat = statsHeartbeatService;
+        if (heartbeat != null) {
+            heartbeat.shutdown();
+        }
     }
 
     @Nullable
@@ -1431,6 +1452,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         @Override
         public void deactivate() {
             active.set(false);
+            stopStatsHeartbeat();
         }
 
         @Override
@@ -1441,10 +1463,12 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         @Override
         public void start() {
             service.start();
+            startStatsHeartbeat();
         }
 
         @Override
         public void shutdown() {
+            stopStatsHeartbeat();
             service.shutdown();
         }
 
