@@ -2,12 +2,7 @@ package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
-import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
-import com.hypixel.hytale.server.core.universe.PlayerRef;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -17,16 +12,13 @@ import javax.annotation.Nullable;
  */
 public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle {
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryRuntimeOperations runtime;
     private final String projectId;
-    private final String displayName;
 
-    public TelemetryProjectHandleImpl(@Nonnull TelemetryRuntimeService runtimeService,
-                                      @Nonnull String projectId,
-                                      @Nonnull String displayName) {
-        this.runtimeService = runtimeService;
+    public TelemetryProjectHandleImpl(@Nonnull TelemetryRuntimeOperations runtime,
+                                      @Nonnull String projectId) {
+        this.runtime = runtime;
         this.projectId = projectId;
-        this.displayName = displayName;
     }
 
     @Nonnull
@@ -38,89 +30,82 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     @Nonnull
     @Override
     public String displayName() {
-        return displayName;
+        TelemetryProjectRegistration project = runtime.findProject(projectId);
+        return project == null ? projectId : project.displayName();
     }
 
     @Override
     public boolean isEnabled() {
-        return runtimeService.isProjectEnabled(projectId);
+        return runtime.isProjectEnabled(projectId);
     }
 
     @Override
     public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
-        runtimeService.recordBreadcrumb(projectId, category, detail);
+        runtime.recordBreadcrumb(projectId, category, detail);
     }
 
     @Override
     public void captureSetupFailure(@Nullable Throwable throwable) {
-        runtimeService.captureSetupFailure(projectId, throwable);
+        runtime.captureSetupFailure(projectId, throwable);
     }
 
     @Override
     public void captureStartFailure(@Nullable Throwable throwable) {
-        runtimeService.captureStartFailure(projectId, throwable);
+        runtime.captureStartFailure(projectId, throwable);
     }
 
     @Override
     public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable String detail) {
-        runtimeService.recordError(projectId, eventName, throwable, detail);
+        runtime.recordErrorWithContext(projectId, eventName, throwable, TelemetryEventContext.error().detail(detail).build());
     }
 
     @Override
     public void recordErrorWithContext(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
-        runtimeService.recordErrorWithContext(projectId, eventName, throwable, context);
+        runtime.recordErrorWithContext(projectId, eventName, throwable, context);
     }
 
     @Override
     public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail) {
-        runtimeService.recordLifecycle(projectId, eventName, durationMs, success, detail);
+        runtime.recordLifecycleWithContext(projectId, eventName, durationMs, success, TelemetryEventContext.lifecycle().detail(detail).build());
     }
 
     @Override
     public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
-        runtimeService.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
+        runtime.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
     @Override
     public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable String detail) {
-        runtimeService.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
+        runtime.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, TelemetryEventContext.performance().detail(detail).build());
     }
 
     @Override
     public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
-        runtimeService.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
+        runtime.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
     }
 
     @Override
     public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
-        runtimeService.recordUsage(projectId, eventName, detail);
+        runtime.recordUsageWithContext(projectId, eventName, TelemetryEventContext.usage().detail(detail).build());
     }
 
     @Override
     public void recordUsageWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
-        runtimeService.recordUsageWithContext(projectId, eventName, context);
+        runtime.recordUsageWithContext(projectId, eventName, context);
     }
 
     @Override
     public void recordStats(@Nonnull String eventName, @Nullable String detail) {
-        runtimeService.recordStats(projectId, eventName, detail);
+        runtime.recordStatsWithContext(projectId, eventName, TelemetryEventContext.stats().detail(detail).build());
     }
 
     @Override
     public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
-        runtimeService.recordStatsWithContext(projectId, eventName, context);
-    }
-
-    @Override
-    public boolean openReportPage(@Nonnull Ref<EntityStore> playerEntityRef,
-                                  @Nonnull Store<EntityStore> store,
-                                  @Nonnull PlayerRef playerRef,
-                                  @Nonnull TelemetryReportOpenRequest request) {
-        return runtimeService.openReportPage(projectId, playerEntityRef, store, playerRef, request);
+        runtime.recordStatsWithContext(projectId, eventName, context);
     }
 
     @Override
     public boolean requestFlush() {
-        return runtimeService.triggerFlushAsync(projectId);
+        return runtime.requestFlush(projectId);
     }
 }

@@ -3,6 +3,7 @@ package com.alechilles.alecstelemetry.runtime;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeOperations;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
@@ -49,7 +50,7 @@ import java.util.logging.Level;
 /**
  * Standalone telemetry runtime mod orchestration built on the shared telemetry core engine.
  */
-public final class TelemetryRuntimeService implements TelemetryConsentRuntime {
+public final class TelemetryRuntimeService implements TelemetryConsentRuntime, TelemetryRuntimeOperations {
 
     private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
 
@@ -380,6 +381,11 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime {
             return active.requestFlush(projectId);
         }
         return engine.triggerFlushAsync(projectId);
+    }
+
+    @Override
+    public boolean requestFlush(@Nullable String projectId) {
+        return triggerFlushAsync(projectId);
     }
 
     public void recordBreadcrumb(@Nonnull String projectId,

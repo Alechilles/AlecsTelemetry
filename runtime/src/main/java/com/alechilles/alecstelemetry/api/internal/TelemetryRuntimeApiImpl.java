@@ -3,7 +3,6 @@ package com.alechilles.alecstelemetry.api.internal;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -15,23 +14,28 @@ import java.util.List;
  */
 public final class TelemetryRuntimeApiImpl implements TelemetryRuntimeApi {
 
-    private final TelemetryRuntimeService runtimeService;
+    private final TelemetryRuntimeOperations runtime;
 
-    public TelemetryRuntimeApiImpl(@Nonnull TelemetryRuntimeService runtimeService) {
-        this.runtimeService = runtimeService;
+    public TelemetryRuntimeApiImpl(@Nonnull TelemetryRuntimeOperations runtime) {
+        this.runtime = runtime;
     }
 
     @Override
     public boolean isEnabled() {
-        return runtimeService.isEnabled();
+        for (TelemetryProjectRegistration project : runtime.projects()) {
+            if (runtime.isProjectEnabled(project.projectId())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Nonnull
     @Override
     public List<TelemetryProjectHandle> projects() {
-        ArrayList<TelemetryProjectHandle> handles = new ArrayList<>(runtimeService.projects().size());
-        for (TelemetryProjectRegistration project : runtimeService.projects()) {
-            handles.add(new TelemetryProjectHandleImpl(runtimeService, project.projectId(), project.displayName()));
+        ArrayList<TelemetryProjectHandle> handles = new ArrayList<>(runtime.projects().size());
+        for (TelemetryProjectRegistration project : runtime.projects()) {
+            handles.add(new TelemetryProjectHandleImpl(runtime, project.projectId()));
         }
         return List.copyOf(handles);
     }
@@ -39,15 +43,15 @@ public final class TelemetryRuntimeApiImpl implements TelemetryRuntimeApi {
     @Nullable
     @Override
     public TelemetryProjectHandle findProject(@Nonnull String projectId) {
-        TelemetryProjectRegistration project = runtimeService.findProject(projectId);
+        TelemetryProjectRegistration project = runtime.findProject(projectId);
         if (project == null) {
             return null;
         }
-        return new TelemetryProjectHandleImpl(runtimeService, project.projectId(), project.displayName());
+        return new TelemetryProjectHandleImpl(runtime, project.projectId());
     }
 
     @Override
     public boolean requestFlush() {
-        return runtimeService.triggerFlushAsync();
+        return runtime.requestFlush(null);
     }
 }
