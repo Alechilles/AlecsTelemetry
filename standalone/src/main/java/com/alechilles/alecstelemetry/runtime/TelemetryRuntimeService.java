@@ -25,6 +25,9 @@ import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
+import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -75,42 +78,23 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         HytaleLogger logger = plugin.getLogger();
         TelemetryDataPaths dataPaths = TelemetryDataPaths.from(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
-        TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(logger)
+        TelemetryProjectDiscovery.DiscoveryResult descriptorSnapshot = new TelemetryProjectDiscovery(logger)
                 .discover(dataPaths.descriptorDirectories());
         TelemetryLoadedModSnapshotProvider loadedModSnapshotProvider = TelemetryLoadedModSnapshotProvider.hytalePluginManager(
-                discoveryResult.loadedMods(),
+                descriptorSnapshot.loadedMods(),
                 logger
         );
-        List<CrashReportEnvelope.LoadedModMetadata> activeLoadedMods = loadedModSnapshotProvider.snapshotLoadedMods();
-        List<TelemetryProjectRegistration> activeProjects = filterRegistrationsToLoadedMods(
-                discoveryResult.projects(),
-                activeLoadedMods
-        );
-        List<TelemetryProjectRegistration> activeConsentProjects = filterRegistrationsToLoadedMods(
-                discoveryResult.consentProjects(),
-                activeLoadedMods
-        );
-        Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
-                .loadAll(dataPaths.projectSettingsDirectory());
-        Map<String, TelemetryProjectOverride> consentOverrides = loadConsentOverrides(
-                activeConsentProjects,
-                overrides,
-                dataPaths,
-                logger
-        );
-        List<TelemetryProjectRegistration> resolvedProjects = applyOverrides(activeProjects, overrides);
-        List<TelemetryProjectRegistration> resolvedConsentProjects = applyOverrides(activeConsentProjects, consentOverrides);
-        List<TelemetryProjectCollisionDetector.Collision> collisions = TelemetryProjectCollisionDetector.detect(resolvedProjects);
-        List<String> registrationWarnings = buildRegistrationWarnings(collisions, discoveryResult.skippedRegistrationWarnings());
+        TelemetryRuntimeDiscoveryResult discoveryResult = new TelemetryRuntimeDiscovery(logger)
+                .discoverActive(dataPaths, loadedModSnapshotProvider);
         return new TelemetryRuntimeService(
                 settings,
                 dataPaths,
-                resolvedProjects,
-                resolvedConsentProjects,
-                activeLoadedMods,
+                discoveryResult.projects(),
+                discoveryResult.consentProjects(),
+                discoveryResult.loadedMods(),
                 loadedModSnapshotProvider,
-                collisions,
-                registrationWarnings,
+                discoveryResult.collisions(),
+                discoveryResult.registrationWarnings(),
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
@@ -221,7 +205,6 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         this.coordinatorBridge = new StandaloneCoordinatorBridge(candidate, coordinatorService);
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
-        logRegistrationWarnings();
     }
 
     public void start() {
@@ -779,38 +762,14 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     private static List<TelemetryProjectRegistration> applyOverrides(
             @Nonnull List<TelemetryProjectRegistration> projects,
             @Nonnull Map<String, TelemetryProjectOverride> overrides) {
-        ArrayList<TelemetryProjectRegistration> resolved = new ArrayList<>(projects.size());
-        for (TelemetryProjectRegistration project : projects) {
-            resolved.add(project.withOverride(overrides.get(project.projectId().toLowerCase(Locale.ROOT))));
-        }
-        return List.copyOf(resolved);
+        return TelemetryRuntimeDiscovery.applyOverrides(projects, overrides);
     }
 
     @Nonnull
     static List<TelemetryProjectRegistration> filterRegistrationsToLoadedMods(
             @Nonnull List<TelemetryProjectRegistration> projects,
             @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods) {
-        if (projects.isEmpty()) {
-            return List.of();
-        }
-        LinkedHashMap<String, Boolean> loadedIdentifiers = new LinkedHashMap<>();
-        for (CrashReportEnvelope.LoadedModMetadata loadedMod : loadedMods) {
-            if (loadedMod == null) {
-                continue;
-            }
-            addIdentifierVariants(loadedIdentifiers, loadedMod.identifier());
-        }
-        if (loadedIdentifiers.isEmpty()) {
-            return List.of();
-        }
-
-        ArrayList<TelemetryProjectRegistration> filtered = new ArrayList<>(projects.size());
-        for (TelemetryProjectRegistration project : projects) {
-            if (matchesLoadedMod(project, loadedIdentifiers)) {
-                filtered.add(project);
-            }
-        }
-        return List.copyOf(filtered);
+        return TelemetryRuntimeDiscovery.filterRegistrationsToLoadedMods(projects, loadedMods);
     }
 
     private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,

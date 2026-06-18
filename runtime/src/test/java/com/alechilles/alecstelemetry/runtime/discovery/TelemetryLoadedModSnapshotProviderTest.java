@@ -1,4 +1,4 @@
-package com.alechilles.alecstelemetry.runtime;
+package com.alechilles.alecstelemetry.runtime.discovery;
 
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import org.junit.jupiter.api.Test;

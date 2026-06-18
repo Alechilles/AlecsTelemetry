@@ -1,4 +1,4 @@
-package com.alechilles.alecstelemetry.runtime;
+package com.alechilles.alecstelemetry.runtime.discovery;
 
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.hypixel.hytale.assetstore.AssetPack;
