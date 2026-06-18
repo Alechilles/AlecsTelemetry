@@ -1,4 +1,4 @@
-package com.alechilles.alecstelemetry.stats;
+package com.alechilles.alecstelemetry.runtime.stats;
 
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;

@@ -1,18 +1,28 @@
-package com.alechilles.alecstelemetry.runtime;
+package com.alechilles.alecstelemetry.runtime.stats;
 
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeOperations;
+import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
-import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.stats.TelemetryPlayerCounter;
-import com.alechilles.alecstelemetry.stats.TelemetryStatsHeartbeatService;
-import com.alechilles.alecstelemetry.stats.TelemetryStatsRuntime;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -21,7 +31,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class TelemetryStatsHeartbeatServiceTest {
+class TelemetryRuntimeStatsHeartbeatServiceTest {
 
     @TempDir
     Path tempDir;
@@ -80,7 +90,7 @@ class TelemetryStatsHeartbeatServiceTest {
                 tempDir.resolve("Example Mod")
         );
         CapturingClient client = new CapturingClient(CrashReportClient.UploadResult.success(204));
-        TelemetryRuntimeService runtimeService = new TelemetryRuntimeService(
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
                 settings,
                 dataPaths,
                 List.of(registration),
@@ -93,9 +103,9 @@ class TelemetryStatsHeartbeatServiceTest {
         counter.markReady(UUID.randomUUID());
         counter.markReady(UUID.randomUUID());
 
-        new TelemetryStatsHeartbeatService(TelemetryStatsRuntime.from(runtimeService), counter, null, null).emitHeartbeatNow();
+        new TelemetryStatsHeartbeatService(TelemetryStatsRuntime.from(new CoreRuntimeOperations(engine)), counter, null, null).emitHeartbeatNow();
 
-        assertEquals(1, runtimeService.flushPendingReportsNow("test-stats-heartbeat").attempted());
+        assertEquals(1, engine.flushPendingReportsNow("test-stats-heartbeat").attempted());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
@@ -145,7 +155,7 @@ class TelemetryStatsHeartbeatServiceTest {
                 tempDir.resolve("Example Mod")
         );
         CapturingClient client = new CapturingClient(CrashReportClient.UploadResult.success(204));
-        TelemetryRuntimeService runtimeService = new TelemetryRuntimeService(
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
                 settings,
                 dataPaths,
                 List.of(registration),
@@ -155,7 +165,7 @@ class TelemetryStatsHeartbeatServiceTest {
                 null
         );
 
-        TelemetryProjectHandle handle = runtimeService.api().findProject("example-mod");
+        TelemetryProjectHandle handle = new TelemetryRuntimeApiImpl(new CoreRuntimeOperations(engine)).findProject("example-mod");
         handle.recordStatsWithContext(
                 "chart_sample",
                 com.alechilles.alecstelemetry.api.TelemetryEventContext.stats()
@@ -167,8 +177,112 @@ class TelemetryStatsHeartbeatServiceTest {
                         .build()
         );
 
-        assertEquals(0, runtimeService.flushPendingReportsNow("test-chart-sample").attempted());
+        assertEquals(0, engine.flushPendingReportsNow("test-chart-sample").attempted());
         assertEquals(0, client.payloads.size());
+    }
+
+    private static final class CoreRuntimeOperations implements TelemetryRuntimeOperations {
+        private final TelemetryCoreEngine engine;
+
+        private CoreRuntimeOperations(TelemetryCoreEngine engine) {
+            this.engine = engine;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return engine.isEnabled();
+        }
+
+        @Nonnull
+        @Override
+        public List<TelemetryProjectRegistration> projects() {
+            return engine.projects();
+        }
+
+        @Nullable
+        @Override
+        public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
+            return engine.findProject(projectId);
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return engine.isProjectEnabled(projectId);
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            return engine.triggerFlushAsync(projectId);
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+            return false;
+        }
+
+        @Override
+        public boolean openReportPage(@Nonnull String projectId,
+                                      @Nonnull Ref<EntityStore> playerEntityRef,
+                                      @Nonnull Store<EntityStore> store,
+                                      @Nonnull PlayerRef playerRef,
+                                      @Nonnull TelemetryReportOpenRequest request) {
+            return false;
+        }
+
+        @Override
+        public void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail) {
+            engine.recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
+        public void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            engine.captureSetupFailure(projectId, throwable);
+        }
+
+        @Override
+        public void captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            engine.captureStartFailure(projectId, throwable);
+        }
+
+        @Override
+        public void recordErrorWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable Throwable throwable,
+                                           @Nullable TelemetryEventContext context) {
+            engine.recordErrorWithContext(projectId, eventName, throwable, context);
+        }
+
+        @Override
+        public void recordLifecycleWithContext(@Nonnull String projectId,
+                                               @Nonnull String eventName,
+                                               int durationMs,
+                                               boolean success,
+                                               @Nullable TelemetryEventContext context) {
+            engine.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
+        }
+
+        @Override
+        public void recordPerformanceWithContext(@Nonnull String projectId,
+                                                 @Nonnull String eventName,
+                                                 int durationMs,
+                                                 @Nullable Double metricValue,
+                                                 @Nullable TelemetryEventContext context) {
+            engine.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
+        }
+
+        @Override
+        public void recordUsageWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable TelemetryEventContext context) {
+            engine.recordUsageWithContext(projectId, eventName, context);
+        }
+
+        @Override
+        public void recordStatsWithContext(@Nonnull String projectId,
+                                           @Nonnull String eventName,
+                                           @Nullable TelemetryEventContext context) {
+            engine.recordStatsWithContext(projectId, eventName, context);
+        }
     }
 
     private static final class CapturingClient implements CrashReportClient {

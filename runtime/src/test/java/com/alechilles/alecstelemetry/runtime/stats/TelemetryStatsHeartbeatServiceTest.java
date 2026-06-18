@@ -1,4 +1,4 @@
-package com.alechilles.alecstelemetry.stats;
+package com.alechilles.alecstelemetry.runtime.stats;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;

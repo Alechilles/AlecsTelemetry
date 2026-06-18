@@ -1,8 +1,8 @@
-package com.alechilles.alecstelemetry.stats;
+package com.alechilles.alecstelemetry.runtime.stats;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeOperations;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeService;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -20,7 +20,7 @@ public interface TelemetryStatsRuntime {
                                 @Nonnull TelemetryEventContext context);
 
     @Nonnull
-    static TelemetryStatsRuntime from(@Nonnull TelemetryRuntimeService runtimeService) {
+    static TelemetryStatsRuntime from(@Nonnull TelemetryRuntimeOperations runtimeService) {
         return new TelemetryStatsRuntime() {
             @Nonnull
             @Override
