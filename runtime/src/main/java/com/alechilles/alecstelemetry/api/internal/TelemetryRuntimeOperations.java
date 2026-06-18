@@ -23,6 +23,10 @@ public interface TelemetryRuntimeOperations {
 
     boolean isProjectEnabled(@Nonnull String projectId);
 
+    default boolean canEmitStatsHeartbeat() {
+        return true;
+    }
+
     boolean requestFlush(@Nullable String projectId);
 
     boolean captureTestReport(@Nonnull String projectId, @Nullable String detail);

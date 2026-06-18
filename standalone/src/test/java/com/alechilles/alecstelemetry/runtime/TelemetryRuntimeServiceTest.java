@@ -412,12 +412,13 @@ class TelemetryRuntimeServiceTest {
                 null
         );
         RecordingScheduledExecutor heartbeatExecutor = new RecordingScheduledExecutor();
-        service.attachStatsHeartbeat(new TelemetryStatsHeartbeatService(
+        TelemetryStatsHeartbeatService heartbeat = new TelemetryStatsHeartbeatService(
                 TelemetryStatsRuntime.from(service),
                 new TelemetryPlayerCounter(),
                 heartbeatExecutor,
                 null
-        ));
+        );
+        service.attachStatsHeartbeat(heartbeat);
 
         service.start();
 
@@ -441,6 +442,9 @@ class TelemetryRuntimeServiceTest {
         assertFalse(service.ownsActiveCoordinator());
         assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
         assertTrue(standaloneHeartbeat.isCancelled());
+        heartbeat.emitHeartbeatNow();
+        assertNull(embedded.lastStatsProjectId);
+        assertNull(embedded.lastStatsEventName);
 
         service.shutdown();
     }
@@ -1835,6 +1839,8 @@ class TelemetryRuntimeServiceTest {
         private String lastFlushProjectId;
         private String lastProjectId;
         private String lastEventName;
+        private String lastStatsProjectId;
+        private String lastStatsEventName;
         private boolean projectEnabled = true;
         private boolean crashEnabled = true;
         private boolean errorEventsEnabled = true;
@@ -2069,6 +2075,16 @@ class TelemetryRuntimeServiceTest {
                                    @Nonnull Map<String, Object> details) {
             lastProjectId = projectId;
             lastEventName = eventName;
+            lastDetails = details;
+            return true;
+        }
+
+        @Override
+        public boolean recordStats(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            lastStatsProjectId = projectId;
+            lastStatsEventName = eventName;
             lastDetails = details;
             return true;
         }

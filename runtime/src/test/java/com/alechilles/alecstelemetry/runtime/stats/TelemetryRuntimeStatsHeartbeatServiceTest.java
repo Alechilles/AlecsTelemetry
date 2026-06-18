@@ -116,6 +116,35 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
     }
 
     @Test
+    void heartbeatSkipsStatsEmissionWhenRuntimeDisallowsHeartbeat() {
+        TelemetryProjectRegistration registration = statsRegistration("passive-mod", "Passive Mod");
+        java.util.ArrayList<String> emittedProjectIds = new java.util.ArrayList<>();
+        TelemetryStatsRuntime runtime = new TelemetryStatsRuntime() {
+            @Nonnull
+            @Override
+            public List<TelemetryProjectRegistration> projects() {
+                return List.of(registration);
+            }
+
+            @Override
+            public boolean canEmitHeartbeat() {
+                return false;
+            }
+
+            @Override
+            public void recordStatsWithContext(@Nonnull String projectId,
+                                               @Nonnull String eventName,
+                                               @Nonnull TelemetryEventContext context) {
+                emittedProjectIds.add(projectId);
+            }
+        };
+
+        new TelemetryStatsHeartbeatService(runtime, new TelemetryPlayerCounter(), null, null).emitHeartbeatNow();
+
+        assertEquals(List.of(), emittedProjectIds);
+    }
+
+    @Test
     void projectHandleDoesNotQueueCustomChartSamples() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
@@ -283,6 +312,24 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
                                            @Nullable TelemetryEventContext context) {
             engine.recordStatsWithContext(projectId, eventName, context);
         }
+    }
+
+    private static TelemetryProjectRegistration statsRegistration(String projectId, String displayName) {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "stats": {
+                    "enabled": true
+                  }
+                }
+                """.formatted(projectId, displayName, displayName),
+                null
+        );
+        return new TelemetryProjectRegistration(descriptor, "Example:" + displayName, "1.0.0", null);
     }
 
     private static final class CapturingClient implements CrashReportClient {

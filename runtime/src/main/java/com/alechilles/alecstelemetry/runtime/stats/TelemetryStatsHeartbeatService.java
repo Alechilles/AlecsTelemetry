@@ -60,8 +60,14 @@ public final class TelemetryStatsHeartbeatService {
     }
 
     public void emitHeartbeatNow() {
+        if (!runtime.canEmitHeartbeat()) {
+            return;
+        }
         int playersOnline = playerCounter.onlinePlayers();
         for (TelemetryProjectRegistration project : runtime.projects()) {
+            if (!runtime.canEmitHeartbeat()) {
+                return;
+            }
             runtime.recordStatsWithContext(
                     project.projectId(),
                     EVENT_HEARTBEAT,

@@ -15,6 +15,10 @@ public interface TelemetryStatsRuntime {
     @Nonnull
     List<TelemetryProjectRegistration> projects();
 
+    default boolean canEmitHeartbeat() {
+        return true;
+    }
+
     void recordStatsWithContext(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 @Nonnull TelemetryEventContext context);
@@ -26,6 +30,11 @@ public interface TelemetryStatsRuntime {
             @Override
             public List<TelemetryProjectRegistration> projects() {
                 return runtimeService.projects();
+            }
+
+            @Override
+            public boolean canEmitHeartbeat() {
+                return runtimeService.canEmitStatsHeartbeat();
             }
 
             @Override

@@ -222,6 +222,11 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         return active != null && active.providerId().equals(candidate.providerId());
     }
 
+    @Override
+    public boolean canEmitStatsHeartbeat() {
+        return ownsActiveCoordinator();
+    }
+
     public void attachStatsHeartbeat(@Nullable TelemetryStatsHeartbeatService statsHeartbeatService) {
         this.statsHeartbeatService = statsHeartbeatService;
     }
