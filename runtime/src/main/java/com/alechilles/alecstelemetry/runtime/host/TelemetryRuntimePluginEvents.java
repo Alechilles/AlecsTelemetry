@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
+import com.hypixel.hytale.event.EventRegistration;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
@@ -17,6 +18,9 @@ final class TelemetryRuntimePluginEvents {
     private final TelemetryPlayerCounter playerCounter;
     private final HytaleLogger logger;
     private final AtomicBoolean registered = new AtomicBoolean(false);
+    private EventRegistration<?, ?> playerReadyRegistration;
+    private EventRegistration<?, ?> playerDisconnectRegistration;
+    private EventRegistration<?, ?> removeWorldRegistration;
 
     TelemetryRuntimePluginEvents(@Nonnull TelemetryRuntimeProviderHandle handle,
                                  @Nonnull TelemetryPlayerCounter playerCounter,
@@ -35,11 +39,11 @@ final class TelemetryRuntimePluginEvents {
             return;
         }
         try {
-            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
-            plugin.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnected);
-            plugin.getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
+            playerReadyRegistration = plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
+            playerDisconnectRegistration = plugin.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnected);
+            removeWorldRegistration = plugin.getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
         } catch (RuntimeException ex) {
-            registered.set(false);
+            unregister();
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log("Alec's Telemetry could not register shared runtime events.");
             }
@@ -48,6 +52,18 @@ final class TelemetryRuntimePluginEvents {
 
     void unregister() {
         registered.set(false);
+        unregister(removeWorldRegistration);
+        unregister(playerDisconnectRegistration);
+        unregister(playerReadyRegistration);
+        removeWorldRegistration = null;
+        playerDisconnectRegistration = null;
+        playerReadyRegistration = null;
+    }
+
+    private void unregister(@Nullable EventRegistration<?, ?> registration) {
+        if (registration != null) {
+            registration.unregister();
+        }
     }
 
     private void onPlayerReady(@Nonnull PlayerReadyEvent event) {
