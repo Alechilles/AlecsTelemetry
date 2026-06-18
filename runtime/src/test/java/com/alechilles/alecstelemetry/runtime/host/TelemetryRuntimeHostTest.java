@@ -425,6 +425,8 @@ class TelemetryRuntimeHostTest {
         );
         TelemetryRuntimeProviderHandle handle = fixture.handle();
 
+        handle.start();
+
         assertEquals(1, handle.consentDiagnostics().registeredProjects());
         assertEquals("embedded", handle.consentDiagnostics().projects().getFirst().runtimeMode());
         assertTrue(handle.applyConsent(
@@ -452,6 +454,8 @@ class TelemetryRuntimeHostTest {
         assertEquals(false, centralOverride.events().errors().enabled());
         assertEquals(false, embeddedOverride.enabled());
         assertEquals(false, embeddedOverride.events().errors().enabled());
+
+        handle.shutdown();
     }
 
     private TelemetryRuntimeProviderHandle handle(String providerId,

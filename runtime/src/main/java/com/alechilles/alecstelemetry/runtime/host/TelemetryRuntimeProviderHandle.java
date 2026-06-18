@@ -491,6 +491,9 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (active != null) {
             boolean runtimeProject = !active.findProjectSummary(projectId).isEmpty();
             boolean applied = active.setProjectEnabled(projectId, snapshot.projectEnabled());
+            if (!runtimeProject && !applied) {
+                return findConsentProject(projectId) != null;
+            }
             if (runtimeProject) {
                 applied &= active.setCrashEnabled(projectId, snapshot.crashEnabled());
                 applied &= active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
