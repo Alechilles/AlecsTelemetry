@@ -50,24 +50,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
                              @Nullable HytaleLogger logger,
                              @Nullable ScheduledExecutorService executor,
                              @Nonnull EmbeddedTelemetryPlayerCounter playerCounter) {
-        this(settings, dataPaths, project, List.of(project), loadedMods, client, logger, executor, playerCounter);
-    }
-
-    EmbeddedTelemetryService(@Nonnull TelemetryRuntimeSettings settings,
-                             @Nonnull TelemetryDataPaths dataPaths,
-                             @Nonnull TelemetryProjectRegistration project,
-                             @Nonnull List<TelemetryProjectRegistration> projects,
-                             @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
-                             @Nonnull CrashReportClient client,
-                             @Nullable HytaleLogger logger,
-                             @Nullable ScheduledExecutorService executor,
-                             @Nonnull EmbeddedTelemetryPlayerCounter playerCounter) {
         this.project = project;
         this.dataPaths = dataPaths;
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.settings = settings;
-        this.engine = new TelemetryCoreEngine(settings, dataPaths, projects, loadedMods, client, logger, executor);
-        this.statsHeartbeat = new EmbeddedTelemetryStatsHeartbeat(engine, playerCounter, executor, logger);
+        this.engine = new TelemetryCoreEngine(settings, dataPaths, List.of(project), loadedMods, client, logger, executor);
+        this.statsHeartbeat = new EmbeddedTelemetryStatsHeartbeat(project.projectId(), engine, playerCounter, executor, logger);
         this.logger = logger;
         this.disabledReason = null;
     }

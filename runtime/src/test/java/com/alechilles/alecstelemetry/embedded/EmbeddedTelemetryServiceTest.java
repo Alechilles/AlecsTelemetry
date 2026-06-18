@@ -204,63 +204,6 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
-    void embeddedStatsHeartbeatQueuesForEveryRegisteredStatsProject() {
-        Path telemetryRoot = tempDir.resolve("Telemetry");
-        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
-        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
-                telemetryRoot,
-                settings.filePath(),
-                telemetryRoot.resolve("Settings").resolve("projects"),
-                telemetryRoot,
-                telemetryRoot.resolve("crash-reports"),
-                telemetryRoot.resolve("events"),
-                null
-        );
-        TelemetryProjectRegistration owner = new TelemetryProjectRegistration(
-                descriptorWithStats("embedded-owner", "Embedded Owner"),
-                "Example:Embedded Owner",
-                "1.0.0",
-                tempDir.resolve("Embedded Owner.jar")
-        );
-        TelemetryProjectRegistration downstream = new TelemetryProjectRegistration(
-                descriptorWithStats("downstream-mod", "Downstream Mod"),
-                "Example:Downstream Mod",
-                "1.0.0",
-                tempDir.resolve("Downstream Mod.jar")
-        );
-        SequencedClient client = new SequencedClient(
-                CrashReportClient.UploadResult.success(204),
-                CrashReportClient.UploadResult.success(204)
-        );
-        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
-                settings,
-                dataPaths,
-                owner,
-                List.of(owner, downstream),
-                List.of(
-                        new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Owner", "1.0.0"),
-                        new CrashReportEnvelope.LoadedModMetadata("Example:Downstream Mod", "1.0.0")
-                ),
-                client,
-                null,
-                null,
-                new EmbeddedTelemetryPlayerCounter()
-        );
-
-        service.emitStatsHeartbeatNow();
-
-        service.shutdown();
-
-        assertEquals(2, client.payloads.size());
-        List<String> projectIds = client.payloads.stream()
-                .map(JsonParser::parseString)
-                .map(element -> element.getAsJsonObject().get("projectId").getAsString())
-                .toList();
-        assertTrue(projectIds.contains("embedded-owner"));
-        assertTrue(projectIds.contains("downstream-mod"));
-    }
-
-    @Test
     void shutdownFlushesQueuedStatsHeartbeatWhenAsyncFlushHasNotRun() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -411,16 +354,11 @@ class EmbeddedTelemetryServiceTest {
     }
 
     private static TelemetryProjectDescriptor descriptorWithStats() {
-        return descriptorWithStats("embedded-mod", "Embedded Mod");
-    }
-
-    private static TelemetryProjectDescriptor descriptorWithStats(String projectId, String displayName) {
         return TelemetryProjectDescriptor.fromJson(
-                String.format(
                 """
                 {
-                  "projectId": "%s",
-                  "displayName": "%s",
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
                   "runtimeMode": "embedded",
                   "ownerPluginIdentifiers": ["Example:Embedded Mod"],
                   "packagePrefixes": ["com.example.embedded"],
@@ -436,8 +374,6 @@ class EmbeddedTelemetryServiceTest {
                   }
                 }
                 """,
-                projectId,
-                displayName),
                 null
         );
     }

@@ -2,7 +2,6 @@ package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
-import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -21,6 +20,7 @@ final class EmbeddedTelemetryStatsHeartbeat {
     static final String EVENT_HEARTBEAT = "heartbeat";
     static final int HEARTBEAT_INTERVAL_SECONDS = 300;
 
+    private final String projectId;
     private final TelemetryCoreEngine engine;
     private final EmbeddedTelemetryPlayerCounter playerCounter;
     private final ScheduledExecutorService executor;
@@ -29,10 +29,12 @@ final class EmbeddedTelemetryStatsHeartbeat {
 
     private volatile ScheduledFuture<?> future;
 
-    EmbeddedTelemetryStatsHeartbeat(@Nonnull TelemetryCoreEngine engine,
+    EmbeddedTelemetryStatsHeartbeat(@Nonnull String projectId,
+                                    @Nonnull TelemetryCoreEngine engine,
                                     @Nonnull EmbeddedTelemetryPlayerCounter playerCounter,
                                     @Nullable ScheduledExecutorService executor,
                                     @Nullable HytaleLogger logger) {
+        this.projectId = projectId;
         this.engine = engine;
         this.playerCounter = playerCounter;
         this.executor = executor;
@@ -61,19 +63,16 @@ final class EmbeddedTelemetryStatsHeartbeat {
     }
 
     void emitHeartbeatNow() {
-        int playersOnline = playerCounter.onlinePlayers();
-        for (TelemetryProjectRegistration project : engine.projects()) {
-            engine.recordStatsWithContext(
-                    project.projectId(),
-                    EVENT_HEARTBEAT,
-                    TelemetryEventContext.stats()
-                            .featureKey("stats")
-                            .entryPoint(EVENT_HEARTBEAT)
-                            .runtimeSide("server")
-                            .detail("playersOnline", playersOnline)
-                            .build()
-            );
-        }
+        engine.recordStatsWithContext(
+                projectId,
+                EVENT_HEARTBEAT,
+                TelemetryEventContext.stats()
+                        .featureKey("stats")
+                        .entryPoint(EVENT_HEARTBEAT)
+                        .runtimeSide("server")
+                        .detail("playersOnline", playerCounter.onlinePlayers())
+                        .build()
+        );
     }
 
     private void emitHeartbeatSafely() {
