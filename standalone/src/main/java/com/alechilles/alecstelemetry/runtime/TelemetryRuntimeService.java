@@ -1003,7 +1003,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         return List.copyOf(values);
     }
 
-    private static final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
+    private final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
         private final AtomicBoolean active = new AtomicBoolean(false);
@@ -1122,6 +1122,38 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         @Override
         public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
             return service.setBreadcrumbsEnabled(projectId, enabled);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            return TelemetryConsentBridgePayload.diagnosticsSummary(TelemetryRuntimeService.this.consentDiagnostics());
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = TelemetryRuntimeService.this
+                    .consentProjectDiagnostics(projectId);
+            return diagnostics == null ? Map.of() : TelemetryConsentBridgePayload.projectDiagnosticsSummary(diagnostics);
+        }
+
+        @Override
+        public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+            return TelemetryRuntimeService.this.applyConsentToAll(TelemetryConsentBridgePayload.snapshotFromSummary(snapshot));
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+            return TelemetryRuntimeService.this.applyConsentCategoryToAll(category, enabled);
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+            return TelemetryRuntimeService.this.applyConsent(
+                    projectId,
+                    TelemetryConsentBridgePayload.snapshotFromSummary(snapshot)
+            );
         }
 
         @Override

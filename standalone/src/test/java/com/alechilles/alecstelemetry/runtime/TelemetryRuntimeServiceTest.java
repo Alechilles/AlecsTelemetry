@@ -1113,6 +1113,55 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void standaloneCoordinatorBridgeExposesConsentBridgeSurfaceThroughRegistry() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectRegistration project = new TelemetryProjectRegistration(
+                telemetryCategoryDescriptor("standalone-mod", "Standalone Mod"),
+                "Example:Standalone Mod",
+                "1.0.0",
+                tempDir.resolve("Standalone Mod")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(project),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Standalone Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertTrue(active != null);
+        Map<String, Object> diagnostics = active.consentDiagnostics();
+        assertEquals(1, ((List<?>) diagnostics.get("projects")).size());
+        assertEquals("standalone-mod", active.consentProjectDiagnostics("standalone-mod").get("projectId"));
+        assertTrue(active.applyConsent(
+                "standalone-mod",
+                TelemetryConsentBridgePayload.snapshotSummary(
+                        new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+                )
+        ));
+        assertFalse(service.projectDiagnostics("standalone-mod").enabled());
+        assertFalse(active.applyConsent(
+                "missing-mod",
+                TelemetryConsentBridgePayload.snapshotSummary(
+                        new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)
+                )
+        ));
+    }
+
+    @Test
     void consentBulkChangesOnlyEnableCategoriesSupportedByDescriptor() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(

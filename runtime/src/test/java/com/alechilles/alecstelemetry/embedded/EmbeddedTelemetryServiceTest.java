@@ -8,6 +8,8 @@ import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.google.gson.JsonObject;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
+import java.util.Map;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
@@ -276,8 +279,20 @@ class EmbeddedTelemetryServiceTest {
         service.recordError("embedded_event", null, "Forwarded through coordinator bridge.");
 
         assertEquals("embedded:Example:Embedded Mod", TelemetryCoordinatorRegistry.activeBridge().providerId());
+        Map<String, Object> diagnostics = TelemetryCoordinatorRegistry.activeBridge().consentDiagnostics();
+        assertEquals(1, ((List<?>) diagnostics.get("projects")).size());
+        assertEquals("embedded-mod", TelemetryCoordinatorRegistry.activeBridge()
+                .consentProjectDiagnostics("embedded-mod")
+                .get("projectId"));
         assertEquals(1, service.flushPendingReportsNow("embedded-bridge").attempted());
         assertEquals(1, client.calls);
+        assertTrue(TelemetryCoordinatorRegistry.activeBridge().applyConsent(
+                "embedded-mod",
+                TelemetryConsentBridgePayload.snapshotSummary(
+                        new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+                )
+        ));
+        assertFalse(service.consentProjectDiagnostics("embedded-mod").enabled());
 
         service.shutdown();
         assertTrue(TelemetryCoordinatorRegistry.activeBridge() == null);

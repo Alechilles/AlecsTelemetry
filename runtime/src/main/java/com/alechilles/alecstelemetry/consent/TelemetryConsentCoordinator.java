@@ -27,7 +27,7 @@ public final class TelemetryConsentCoordinator {
 
     public static final String ROOT_PERMISSION = "telemetry.command.telemetry";
     public static final String FIRST_RUN_NOTICE = "One or more mods are using Alec's Telemetry to report anonymous statistics and/or crash, error, performance diagnostics. You may change your telemetry consent settings at any time using `/telemetry consent`.";
-    private static final String FIRST_RUN_NOTICE_COLOR = "#f0a33a";
+    static final String FIRST_RUN_NOTICE_COLOR = "#f0a33a";
 
     private final TelemetryConsentRuntime runtimeService;
     private final HytaleLogger logger;

@@ -14,6 +14,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
@@ -919,7 +920,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         }
     }
 
-    private static final class EmbeddedCoordinatorBridge implements TelemetryCoordinatorBridge {
+    private final class EmbeddedCoordinatorBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
         private final AtomicBoolean active = new AtomicBoolean(false);
@@ -1060,6 +1061,38 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Override
         public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
             return service.setBreadcrumbsEnabled(projectId, enabled);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentDiagnostics() {
+            return TelemetryConsentBridgePayload.diagnosticsSummary(EmbeddedTelemetryService.this.consentDiagnostics());
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
+            TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = EmbeddedTelemetryService.this
+                    .consentProjectDiagnostics(projectId);
+            return diagnostics == null ? Map.of() : TelemetryConsentBridgePayload.projectDiagnosticsSummary(diagnostics);
+        }
+
+        @Override
+        public boolean applyConsentToAll(@Nonnull Map<String, Object> snapshot) {
+            return EmbeddedTelemetryService.this.applyConsentToAll(TelemetryConsentBridgePayload.snapshotFromSummary(snapshot));
+        }
+
+        @Override
+        public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
+            return EmbeddedTelemetryService.this.applyConsentCategoryToAll(category, enabled);
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull Map<String, Object> snapshot) {
+            return EmbeddedTelemetryService.this.applyConsent(
+                    projectId,
+                    TelemetryConsentBridgePayload.snapshotFromSummary(snapshot)
+            );
         }
 
         @Override
