@@ -99,7 +99,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 : new EmbeddedCoordinatorBridge(candidate, coordinatorService);
         this.logger = logger;
         this.disabledReason = null;
-        this.consentProjects = coordinatorService == null ? List.of(project) : coordinatorService.projects();
+        this.consentProjects = coordinatorService == null ? List.of(project) : consentProjects(coordinatorService);
     }
 
     private EmbeddedTelemetryService(@Nonnull String projectId,
@@ -355,7 +355,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return active.applyConsent(projectId, TelemetryConsentBridgePayload.snapshotSummary(snapshot));
         }
         if (coordinatorBridge != null) {
+            boolean runtimeProject = coordinatorBridge.service.findProject(projectId) != null;
             boolean applied = coordinatorBridge.service.setProjectEnabled(projectId, snapshot.projectEnabled());
+            if (!runtimeProject && !applied) {
+                return findConsentProject(projectId) != null;
+            }
+            if (!runtimeProject) {
+                return true;
+            }
             applied &= coordinatorBridge.service.setCrashEnabled(projectId, snapshot.crashEnabled());
             applied &= coordinatorBridge.service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
             applied &= coordinatorBridge.service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
@@ -377,6 +384,18 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return true;
         }
         return false;
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> consentProjects(@Nonnull TelemetryCoordinatorService coordinatorService) {
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : coordinatorService.projects()) {
+            projects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : coordinatorService.manualReportProjects()) {
+            projects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(projects.values());
     }
 
     @Override

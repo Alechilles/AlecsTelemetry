@@ -301,6 +301,91 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void coordinatorBackedEmbeddedConsentIncludesConsentOnlyProjects() throws Exception {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                tempDir.resolve("Mods")
+        );
+        TelemetryProjectRegistration runtimeRegistration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        TelemetryProjectRegistration consentOnlyRegistration = new TelemetryProjectRegistration(
+                consentOnlyDescriptor(),
+                "Example:Consent Only Mod",
+                "2.0.0",
+                tempDir.resolve("Consent Only Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService coordinatorService = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(runtimeRegistration),
+                List.of(runtimeRegistration, consentOnlyRegistration),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Consent Only Mod", "2.0.0")
+                ),
+                client,
+                null,
+                null
+        );
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                runtimeRegistration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null,
+                new EmbeddedTelemetryPlayerCounter(),
+                new TelemetryRuntimeCandidate(
+                        "embedded:Example:Embedded Mod",
+                        TelemetryRuntimeOrigin.EMBEDDED,
+                        "0.1.4",
+                        TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                        "Example:Embedded Mod",
+                        "1.0.0",
+                        tempDir.resolve("Embedded Mod.jar"),
+                        telemetryRoot
+                ),
+                coordinatorService
+        );
+
+        service.start();
+
+        assertEquals(
+                List.of("embedded-mod", "consent-only-mod"),
+                service.consentDiagnostics().projects().stream()
+                        .map(com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics::projectId)
+                        .toList()
+        );
+        assertTrue(service.applyConsent(
+                "consent-only-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+        ));
+        assertFalse(service.consentProjectDiagnostics("consent-only-mod").enabled());
+        String overrideRaw = java.nio.file.Files.readString(dataPaths.projectOverrideFile("consent-only-mod"));
+        JsonObject override = JsonParser.parseString(overrideRaw).getAsJsonObject();
+        assertFalse(override.get("enabled").getAsBoolean());
+        assertFalse(override.getAsJsonObject("events").getAsJsonObject("errors").get("enabled").getAsBoolean());
+        assertTrue(service.markConsentReviewed("consent-only-mod"));
+        assertTrue(service.unreviewedConsentProjects().stream()
+                .noneMatch(project -> project.projectId().equals("consent-only-mod")));
+
+        service.shutdown();
+    }
+
+    @Test
     void passiveEmbeddedConsentRuntimeUsesActiveProviderBridgeView() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -550,6 +635,45 @@ class EmbeddedTelemetryServiceTest {
                   },
                   "stats": {
                     "enabled": true
+                  }
+                }
+                """,
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor consentOnlyDescriptor() {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "consent-only-mod",
+                  "displayName": "Consent Only Mod",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Example:Consent Only Mod"],
+                  "packagePrefixes": ["com.example.consentonly"],
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true
+                  },
+                  "usage": {
+                    "enabled": true
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "reports": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
                   }
                 }
                 """,
