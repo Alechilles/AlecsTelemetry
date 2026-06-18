@@ -4,6 +4,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
@@ -22,7 +23,10 @@ import javax.annotation.Nullable;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Level;
 
 /**
@@ -66,8 +70,9 @@ public final class EmbeddedTelemetryBootstrap {
 
         TelemetryDataPaths dataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
-        TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
-                .load(dataPaths.projectOverrideFile(descriptor.projectId()));
+        TelemetryProjectOverrideStore overrideStore = new TelemetryProjectOverrideStore(logger);
+        Map<String, TelemetryProjectOverride> overrides = overrideStore.loadAll(dataPaths.projectSettingsDirectory());
+        TelemetryProjectOverride override = overrides.get(descriptor.projectId().toLowerCase(Locale.ROOT));
         String pluginVersion = resolvePluginVersion(plugin);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
                 descriptor,
@@ -75,13 +80,26 @@ public final class EmbeddedTelemetryBootstrap {
                 pluginVersion,
                 resolvePluginSourcePath(plugin)
         ).withOverride(override);
+        TelemetryProjectDiscovery.DiscoveryResult discovery = new TelemetryProjectDiscovery(logger)
+                .discover(dataPaths.descriptorDirectories());
+        List<TelemetryProjectRegistration> runtimeProjects = embeddedRuntimeProjects(
+                registration,
+                discovery.consentProjects(),
+                overrides
+        );
+        List<CrashReportEnvelope.LoadedModMetadata> loadedMods = loadedMods(
+                pluginIdentifier,
+                pluginVersion,
+                discovery.loadedMods()
+        );
         EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
         registerPlayerCounter(plugin, playerCounter, logger);
         return new EmbeddedTelemetryService(
                 settings,
                 dataPaths,
                 registration,
-                List.of(new CrashReportEnvelope.LoadedModMetadata(pluginIdentifier, pluginVersion)),
+                runtimeProjects,
+                loadedMods,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
@@ -105,6 +123,36 @@ public final class EmbeddedTelemetryBootstrap {
                 );
             }
         }
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> embeddedRuntimeProjects(
+            @Nonnull TelemetryProjectRegistration owner,
+            @Nonnull List<TelemetryProjectRegistration> discoveredProjects,
+            @Nonnull Map<String, TelemetryProjectOverride> overrides) {
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        projects.put(owner.projectId().toLowerCase(Locale.ROOT), owner);
+        for (TelemetryProjectRegistration discovered : discoveredProjects) {
+            String key = discovered.projectId().toLowerCase(Locale.ROOT);
+            projects.putIfAbsent(key, discovered.withOverride(overrides.get(key)));
+        }
+        return List.copyOf(projects.values());
+    }
+
+    @Nonnull
+    private static List<CrashReportEnvelope.LoadedModMetadata> loadedMods(
+            @Nonnull String ownerPluginIdentifier,
+            @Nonnull String ownerPluginVersion,
+            @Nonnull List<CrashReportEnvelope.LoadedModMetadata> discoveredLoadedMods) {
+        LinkedHashMap<String, CrashReportEnvelope.LoadedModMetadata> loadedMods = new LinkedHashMap<>();
+        loadedMods.put(
+                ownerPluginIdentifier.toLowerCase(Locale.ROOT),
+                new CrashReportEnvelope.LoadedModMetadata(ownerPluginIdentifier, ownerPluginVersion)
+        );
+        for (CrashReportEnvelope.LoadedModMetadata loadedMod : discoveredLoadedMods) {
+            loadedMods.putIfAbsent(loadedMod.identifier().toLowerCase(Locale.ROOT), loadedMod);
+        }
+        return List.copyOf(loadedMods.values());
     }
 
     @Nullable
