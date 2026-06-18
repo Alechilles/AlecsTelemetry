@@ -79,6 +79,12 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must expose a global breadcrumbs consent checkbox"
         );
         assertTrue(
+                consentPage.contains("@TelemetryConsentUnsupportedCellLabel")
+                        && consentPage.contains("#TelemetryConsentCaptureUnsupported")
+                        && consentPage.contains("#TelemetryConsentCaptureAllUnsupported"),
+                "TelemetryConsentPage.ui must include passive disabled placeholders for unsupported telemetry cells"
+        );
+        assertTrue(
                 consentPage.contains("TooltipText: \"Crash reports, uncaught exceptions"),
                 "TelemetryConsentPage.ui must explain crash telemetry through a tooltip"
         );

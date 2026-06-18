@@ -112,8 +112,9 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         for (String category : CATEGORIES) {
             boolean supported = categoryAnySupported(projects, category);
             commands.set(globalCategoryCheckSelector(category) + ".Value", categoryAllEnabled(projects, category));
-            commands.set(globalCategoryCheckSelector(category) + ".Enabled", supported);
-            commands.set(globalCategoryToggleSelector(category) + ".Enabled", supported);
+            commands.set(globalCategoryCheckSelector(category) + ".Visible", supported);
+            commands.set(globalCategoryToggleSelector(category) + ".Visible", supported);
+            commands.set(globalCategoryUnsupportedSelector(category) + ".Visible", !supported);
         }
         commands.set("#TelemetryConsentPrimary.Text", firstRun ? "Save choices" : "Save");
         commands.set("#TelemetryConsentSecondary.Text", firstRun ? "Not now" : "Close");
@@ -160,9 +161,11 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                                     boolean enabled) {
         String checkSelector = categoryCheckSelector(index, category);
         String toggleSelector = categoryToggleSelector(index, category);
+        String unsupportedSelector = categoryUnsupportedSelector(index, category);
         commands.set(checkSelector + ".Value", supported && enabled);
-        commands.set(checkSelector + ".Enabled", supported);
-        commands.set(toggleSelector + ".Enabled", supported);
+        commands.set(checkSelector + ".Visible", supported);
+        commands.set(toggleSelector + ".Visible", supported);
+        commands.set(unsupportedSelector + ".Visible", !supported);
     }
 
     private void bindEvents(@Nonnull UIEventBuilder events) {
@@ -412,6 +415,11 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     @Nonnull
+    private static String categoryUnsupportedSelector(int index, @Nonnull String category) {
+        return rowSelector(index) + " #TelemetryConsent" + selectorToken(category) + "Unsupported";
+    }
+
+    @Nonnull
     private static String globalCategoryCheckSelector(@Nonnull String category) {
         return "#TelemetryConsent" + selectorToken(category) + "AllEnabled";
     }
@@ -419,6 +427,11 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     @Nonnull
     private static String globalCategoryToggleSelector(@Nonnull String category) {
         return "#TelemetryConsent" + selectorToken(category) + "AllToggleButton";
+    }
+
+    @Nonnull
+    private static String globalCategoryUnsupportedSelector(@Nonnull String category) {
+        return "#TelemetryConsent" + selectorToken(category) + "AllUnsupported";
     }
 
     @Nonnull
