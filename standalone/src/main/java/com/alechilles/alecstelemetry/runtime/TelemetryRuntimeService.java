@@ -351,6 +351,38 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         if (!usesLocalCoordinator(active)) {
             return active.applyConsent(projectId, TelemetryConsentBridgePayload.snapshotSummary(snapshot));
         }
+        if (coordinatorBridge != null) {
+            boolean applied = applyCoordinatorRuntimeConsent(coordinatorService, projectId, snapshot);
+            if (applied) {
+                applyEngineRuntimeConsent(projectId, snapshot);
+            }
+            return applied;
+        }
+        return applyEngineRuntimeConsent(projectId, snapshot);
+    }
+
+    private boolean applyCoordinatorRuntimeConsent(@Nonnull TelemetryCoordinatorService service,
+                                                   @Nonnull String projectId,
+                                                   @Nonnull TelemetryConsentSnapshot snapshot) {
+        boolean registeredProject = service.findProject(projectId) != null;
+        boolean manualReportProject = findManualReportProject(projectId) != null;
+        if (!registeredProject && !manualReportProject) {
+            return findConsentProject(projectId) != null;
+        }
+        boolean applied = service.setProjectEnabled(projectId, snapshot.projectEnabled());
+        if (registeredProject) {
+            applied &= service.setCrashEnabled(projectId, snapshot.crashEnabled());
+            applied &= service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            applied &= service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            applied &= service.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            applied &= service.setUsageEnabled(projectId, snapshot.usageEnabled());
+            applied &= service.setStatsEnabled(projectId, snapshot.statsEnabled());
+            applied &= service.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+        }
+        return applied;
+    }
+
+    private boolean applyEngineRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         boolean registeredProject = findProject(projectId) != null;
         boolean manualReportProject = findManualReportProject(projectId) != null;
         if (!registeredProject && !manualReportProject) {

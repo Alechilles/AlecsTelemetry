@@ -1159,6 +1159,10 @@ class TelemetryRuntimeServiceTest {
                 )
         ));
         assertFalse(service.projectDiagnostics("standalone-mod").enabled());
+        assertFalse(active.isProjectEnabled("standalone-mod"));
+        assertEquals(0, service.pendingReports("standalone-mod"));
+        active.recordUsage("standalone-mod", "settings_opened", Map.of("detail", "after disable"));
+        assertEquals(0, service.pendingReports("standalone-mod"));
         assertFalse(active.applyConsent(
                 "missing-mod",
                 TelemetryConsentBridgePayload.snapshotSummary(
