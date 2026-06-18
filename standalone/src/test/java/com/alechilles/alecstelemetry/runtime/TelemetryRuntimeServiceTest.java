@@ -64,6 +64,7 @@ class TelemetryRuntimeServiceTest {
                 tempDir.resolve("Embedded Mod.jar"),
                 tempDir.resolve("Telemetry")
         ));
+        embedded.runtimeEnabled = false;
         TelemetryCoordinatorRegistry.register(embedded);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
                 manualReportDescriptor("standalone-local", "Standalone Local", true, "dependency"),
@@ -86,6 +87,13 @@ class TelemetryRuntimeServiceTest {
 
         assertFalse(service.ownsActiveCoordinator());
         assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
+        assertFalse(service.isEnabled());
+        assertFalse(service.api().isEnabled());
+        assertEquals(List.of("embedded-mod"), service.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertNull(service.api().findProject("standalone-local"));
+        assertEquals("embedded-mod", service.api().findProject("embedded-mod").projectId());
         assertTrue(service.triggerFlushAsync("embedded-mod"));
         service.recordUsage("embedded-mod", "settings_opened", "from standalone api");
         assertEquals("embedded-mod", embedded.lastFlushProjectId);
@@ -1605,6 +1613,7 @@ class TelemetryRuntimeServiceTest {
     private static final class RecordingCoordinatorBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private boolean active;
+        private boolean runtimeEnabled = true;
         private String lastFlushProjectId;
         private String lastProjectId;
         private String lastEventName;
@@ -1696,7 +1705,7 @@ class TelemetryRuntimeServiceTest {
 
         @Override
         public boolean isEnabled() {
-            return true;
+            return runtimeEnabled;
         }
 
         @Override

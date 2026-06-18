@@ -184,11 +184,23 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     public List<TelemetryProjectRegistration> commandProjects() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return projectsFromSummaries(activeProjects(active));
+        }
         return List.copyOf(consentProjects);
     }
 
     @Nullable
     public TelemetryProjectRegistration commandProject(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            TelemetryProjectRegistration project = projectFromSummary(active.findProjectSummary(projectId));
+            if (project != null) {
+                return project;
+            }
+            return projectFromSummary(active.consentProjectDiagnostics(projectId));
+        }
         return findConsentProject(projectId);
     }
 
@@ -206,6 +218,19 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public int commandPendingReports(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            if (projectId == null) {
+                Map<String, Object> activeDiagnostics = active.consentDiagnostics();
+                return activeDiagnostics.isEmpty()
+                        ? 0
+                        : TelemetryConsentBridgePayload.diagnosticsFromSummary(activeDiagnostics).totalPendingReports();
+            }
+            Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(projectId);
+            return activeDiagnostics.isEmpty()
+                    ? 0
+                    : TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(activeDiagnostics).pendingReports();
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.pendingReports(projectId);
         }
@@ -217,6 +242,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     public String commandLastFlushResult() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            Map<String, Object> activeDiagnostics = active.consentDiagnostics();
+            if (activeDiagnostics.isEmpty()) {
+                return "<unavailable>";
+            }
+            return TelemetryConsentBridgePayload.diagnosticsFromSummary(activeDiagnostics).lastFlushResult();
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.lastFlushResult();
         }
@@ -1284,6 +1317,110 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             summary.put("sourcePath", project.sourcePath().toString());
         }
         return Map.copyOf(summary);
+    }
+
+    @Nullable
+    private static TelemetryProjectRegistration projectFromSummary(@Nonnull Map<String, Object> summary) {
+        String projectId = stringValue(summary.get("projectId"));
+        if (projectId == null) {
+            return null;
+        }
+        String displayName = firstNonBlank(stringValue(summary.get("displayName")), projectId);
+        String runtimeMode = firstNonBlank(
+                stringValue(summary.get("runtimeMode")),
+                TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY
+        );
+        String pluginIdentifier = firstNonBlank(stringValue(summary.get("pluginIdentifier")), "unknown:unknown");
+        String pluginVersion = firstNonBlank(stringValue(summary.get("pluginVersion")), "unknown");
+        return new TelemetryProjectRegistration(
+                TelemetryProjectDescriptor.fromJson(
+                        "{\"projectId\":\"" + escapeJson(projectId)
+                                + "\",\"displayName\":\"" + escapeJson(displayName)
+                                + "\",\"runtimeMode\":\"" + escapeJson(runtimeMode) + "\"}",
+                        null
+                ),
+                pluginIdentifier,
+                pluginVersion,
+                pathValue(summary.get("sourcePath"))
+        );
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> projectsFromSummaries(@Nonnull List<Map<String, Object>> summaries) {
+        if (summaries.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<TelemetryProjectRegistration> projects = new ArrayList<>(summaries.size());
+        for (Map<String, Object> summary : summaries) {
+            TelemetryProjectRegistration project = projectFromSummary(summary);
+            if (project != null) {
+                projects.add(project);
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nonnull
+    private static List<Map<String, Object>> activeProjects(@Nonnull TelemetryCoordinatorBridge active) {
+        List<Map<String, Object>> summaries = active.projectSummaries();
+        if (!summaries.isEmpty()) {
+            return summaries;
+        }
+        Object rawProjects = active.consentDiagnostics().get("projects");
+        if (!(rawProjects instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<Map<String, Object>> projects = new ArrayList<>(rawList.size());
+        for (Object rawProject : rawList) {
+            if (rawProject instanceof Map<?, ?> project) {
+                projects.add(stringObjectMap(project));
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nullable
+    private static String stringValue(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.toString().trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    @Nonnull
+    private static String firstNonBlank(@Nullable String value, @Nonnull String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    @Nonnull
+    private static Map<String, Object> stringObjectMap(@Nonnull Map<?, ?> source) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            values.put(entry.getKey().toString(), entry.getValue());
+        }
+        return Map.copyOf(values);
+    }
+
+    @Nullable
+    private static Path pathValue(@Nullable Object value) {
+        String normalized = stringValue(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return Path.of(normalized);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    @Nonnull
+    private static String escapeJson(@Nonnull String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     @Nonnull

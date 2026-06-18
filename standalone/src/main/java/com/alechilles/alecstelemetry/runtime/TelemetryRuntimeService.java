@@ -227,6 +227,13 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Override
     public boolean isEnabled() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return active.isEnabled();
+        }
+        if (coordinatorBridge != null && active != null) {
+            return coordinatorService.isEnabled();
+        }
         return engine.isEnabled();
     }
 
@@ -241,6 +248,13 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
 
     @Nonnull
     public List<TelemetryProjectRegistration> projects() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return projectsFromSummaries(activeProjects(active));
+        }
+        if (coordinatorBridge != null && active != null) {
+            return coordinatorService.projects();
+        }
         return engine.projects();
     }
 
@@ -250,6 +264,10 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     }
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.isProjectEnabled(projectId);
+        }
         return engine.isProjectEnabled(projectId);
     }
 
@@ -1061,6 +1079,40 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     }
 
     @Nonnull
+    private static List<TelemetryProjectRegistration> projectsFromSummaries(@Nonnull List<Map<String, Object>> summaries) {
+        if (summaries.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<TelemetryProjectRegistration> projects = new ArrayList<>(summaries.size());
+        for (Map<String, Object> summary : summaries) {
+            TelemetryProjectRegistration project = projectFromSummary(summary);
+            if (project != null) {
+                projects.add(project);
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nonnull
+    private static List<Map<String, Object>> activeProjects(@Nonnull TelemetryCoordinatorBridge active) {
+        List<Map<String, Object>> summaries = active.projectSummaries();
+        if (!summaries.isEmpty()) {
+            return summaries;
+        }
+        Object rawProjects = active.consentDiagnostics().get("projects");
+        if (!(rawProjects instanceof List<?> rawList) || rawList.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<Map<String, Object>> projects = new ArrayList<>(rawList.size());
+        for (Object rawProject : rawList) {
+            if (rawProject instanceof Map<?, ?> project) {
+                projects.add(stringObjectMap(project));
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nonnull
     private static Map<String, Object> projectSummary(@Nonnull TelemetryProjectRegistration project) {
         LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
         summary.put("projectId", project.projectId());
@@ -1077,6 +1129,18 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     @Nonnull
     private static String firstNonBlank(@Nullable String value, @Nonnull String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    @Nonnull
+    private static Map<String, Object> stringObjectMap(@Nonnull Map<?, ?> source) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            values.put(entry.getKey().toString(), entry.getValue());
+        }
+        return Map.copyOf(values);
     }
 
     @Nullable

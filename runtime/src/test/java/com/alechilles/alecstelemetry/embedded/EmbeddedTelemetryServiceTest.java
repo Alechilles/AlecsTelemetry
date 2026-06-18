@@ -452,6 +452,16 @@ class EmbeddedTelemetryServiceTest {
 
         assertFalse(service.ownsActiveCoordinator());
         assertEquals("standalone:Example:Provider", service.activeCoordinatorProviderId());
+        assertEquals(List.of("provider-mod"), service.commandProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertNull(service.commandProject("embedded-mod"));
+        assertEquals("provider-mod", service.commandProject("provider-mod").projectId());
+        assertEquals(5, service.commandPendingReports(null));
+        assertEquals(5, service.commandPendingReports("provider-mod"));
+        assertEquals("active-last", service.commandLastFlushResult());
+        assertTrue(service.commandFlush("provider-mod"));
+        assertEquals("provider-mod", active.lastFlushProjectId);
         assertEquals("provider-mod", service.consentDiagnostics().projects().getFirst().projectId());
         assertNull(service.consentProjectDiagnostics("embedded-mod"));
         assertTrue(service.unreviewedConsentProjects().isEmpty());
@@ -782,6 +792,9 @@ class EmbeddedTelemetryServiceTest {
         private final TelemetryRuntimeCandidate candidate;
         private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
         private boolean active;
+        private String lastFlushProjectId;
+        private int pendingReports = 5;
+        private String lastFlushResult = "active-last";
         private TelemetryConsentSnapshot snapshot = new TelemetryConsentSnapshot(
                 true,
                 true,
@@ -853,14 +866,40 @@ class EmbeddedTelemetryServiceTest {
         }
 
         @Override
+        public boolean isEnabled() {
+            return true;
+        }
+
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            return List.of(projectSummary());
+        }
+
+        @Override
+        public Map<String, Object> findProjectSummary(String projectId) {
+            return "provider-mod".equalsIgnoreCase(projectId.trim()) ? projectSummary() : Map.of();
+        }
+
+        @Override
+        public boolean isProjectEnabled(String projectId) {
+            return "provider-mod".equalsIgnoreCase(projectId.trim()) && snapshot.projectEnabled();
+        }
+
+        @Override
+        public boolean requestFlush(String projectId) {
+            lastFlushProjectId = projectId;
+            return projectId == null || "provider-mod".equalsIgnoreCase(projectId.trim());
+        }
+
+        @Override
         public Map<String, Object> consentDiagnostics() {
             return TelemetryConsentBridgePayload.diagnosticsSummary(new com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics(
                     true,
                     1,
                     1,
-                    0,
+                    pendingReports,
                     false,
-                    "never",
+                    lastFlushResult,
                     null,
                     List.of(),
                     List.of(projectDiagnostics())
@@ -900,7 +939,7 @@ class EmbeddedTelemetryServiceTest {
                     false,
                     "custom",
                     "https://example.invalid/telemetry",
-                    0,
+                    pendingReports,
                     "Example:Provider",
                     "2.0.0",
                     null,
@@ -921,6 +960,17 @@ class EmbeddedTelemetryServiceTest {
                     true,
                     true,
                     true
+            );
+        }
+
+        private Map<String, Object> projectSummary() {
+            return Map.of(
+                    "projectId", "provider-mod",
+                    "displayName", "Provider Mod",
+                    "runtimeMode", "dependency",
+                    "pluginIdentifier", "Example:Provider",
+                    "pluginVersion", "2.0.0",
+                    "sourcePath", candidate.sourcePath().toString()
             );
         }
     }
