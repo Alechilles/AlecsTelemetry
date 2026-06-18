@@ -6,11 +6,15 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
+import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -150,6 +154,192 @@ class TelemetryRuntimeHostTest {
         assertSame(standalone.handle().api(), TelemetryRuntimeLocator.tryGet());
     }
 
+    @Test
+    void providerApplyConsentToAllUpdatesEveryProjectAndTelemetryCategory() {
+        TelemetryProjectRegistration first = registration(
+                telemetryCategoryDescriptor("first-mod", "First Mod"),
+                "Example:First Mod",
+                "1.0.0",
+                tempDir.resolve("First Mod")
+        );
+        TelemetryProjectRegistration second = registration(
+                telemetryCategoryDescriptor("second-mod", "Second Mod"),
+                "Example:Second Mod",
+                "2.0.0",
+                tempDir.resolve("Second Mod")
+        );
+        ProviderFixture fixture = consentFixture("bulk-consent", List.of(first, second), List.of(first, second));
+        TelemetryRuntimeProviderHandle handle = fixture.handle();
+
+        assertTrue(handle.applyConsentToAll(new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : handle.consentDiagnostics().projects()) {
+            assertAllTelemetryDisabled(project);
+            assertTrue(project.overridePresent());
+        }
+
+        assertTrue(handle.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : handle.consentDiagnostics().projects()) {
+            assertAllTelemetryEnabled(project);
+            assertTrue(project.overridePresent());
+        }
+
+        assertTrue(handle.applyConsentCategoryToAll("usage", false));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : handle.consentDiagnostics().projects()) {
+            assertTrue(project.enabled());
+            assertTrue(project.crashEnabled());
+            assertTrue(project.errorEnabled());
+            assertTrue(project.lifecycleEnabled());
+            assertTrue(project.performanceEnabled());
+            assertFalse(project.usageEnabled());
+            assertTrue(project.statsEnabled());
+            assertTrue(project.breadcrumbsEnabled());
+            assertTrue(project.overridePresent());
+        }
+
+        TelemetryProjectOverride override = new TelemetryProjectOverrideStore(null)
+                .load(fixture.dataPaths().projectOverrideFile("first-mod"));
+        assertNotNull(override);
+        assertEquals(false, override.usage().enabled());
+        assertEquals(true, override.stats().enabled());
+    }
+
+    @Test
+    void providerConsentBulkChangesOnlyEnableCategoriesSupportedByDescriptor() {
+        TelemetryProjectRegistration project = registration(
+                statsOnlyTelemetryDescriptor("animal-husbandry", "Animal Husbandry"),
+                "Example:Animal Husbandry",
+                "1.0.0",
+                tempDir.resolve("Animal Husbandry")
+        );
+        TelemetryRuntimeProviderHandle handle = consentFixture("stats-only-consent", List.of(project), List.of(project)).handle();
+
+        assertTrue(handle.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)));
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = handle.consentProjectDiagnostics("animal-husbandry");
+        assertNotNull(diagnostics);
+        assertTrue(diagnostics.enabled());
+        assertFalse(diagnostics.crashEnabled());
+        assertFalse(diagnostics.errorEnabled());
+        assertFalse(diagnostics.lifecycleEnabled());
+        assertFalse(diagnostics.performanceEnabled());
+        assertFalse(diagnostics.usageEnabled());
+        assertTrue(diagnostics.statsEnabled());
+        assertFalse(diagnostics.breadcrumbsEnabled());
+        assertFalse(diagnostics.crashSupported());
+        assertFalse(diagnostics.usageSupported());
+        assertTrue(diagnostics.statsSupported());
+
+        assertTrue(handle.applyConsentCategoryToAll("usage", true));
+        diagnostics = handle.consentProjectDiagnostics("animal-husbandry");
+        assertNotNull(diagnostics);
+        assertFalse(diagnostics.usageEnabled());
+
+        assertTrue(handle.applyConsent(
+                "animal-husbandry",
+                new TelemetryConsentSnapshot(true, true, true, true, true, true, false, true)
+        ));
+        diagnostics = handle.consentProjectDiagnostics("animal-husbandry");
+        assertNotNull(diagnostics);
+        assertFalse(diagnostics.crashEnabled());
+        assertFalse(diagnostics.usageEnabled());
+        assertFalse(diagnostics.statsEnabled());
+        assertTrue(diagnostics.overridePresent());
+    }
+
+    @Test
+    void providerReviewedStateAndDiagnosticsUseConsentProjectView() {
+        TelemetryProjectRegistration first = registration(
+                telemetryCategoryDescriptor("first-mod", "First Mod"),
+                "Example:First Mod",
+                "1.0.0",
+                tempDir.resolve("First Mod")
+        );
+        TelemetryProjectRegistration second = registration(
+                telemetryCategoryDescriptor("second-mod", "Second Mod"),
+                "Example:Second Mod",
+                "2.0.0",
+                tempDir.resolve("Second Mod")
+        );
+        ProviderFixture fixture = consentFixture(
+                "diagnostic-consent",
+                List.of(first, second),
+                List.of(first, second),
+                List.of("duplicate telemetry project ignored")
+        );
+        TelemetryRuntimeProviderHandle handle = fixture.handle();
+
+        assertEquals(List.of(first, second), handle.unreviewedConsentProjects());
+        assertTrue(handle.markConsentReviewed("first-mod"));
+        assertEquals(List.of(second), handle.unreviewedConsentProjects());
+        assertTrue(handle.markConsentReviewed("second-mod"));
+        assertTrue(handle.unreviewedConsentProjects().isEmpty());
+
+        TelemetryRuntimeDiagnostics diagnostics = handle.consentDiagnostics();
+        assertTrue(diagnostics.enabled());
+        assertEquals(2, diagnostics.registeredProjects());
+        assertEquals(2, diagnostics.loadedMods());
+        assertEquals(0, diagnostics.totalPendingReports());
+        assertEquals(List.of("duplicate telemetry project ignored"), diagnostics.registrationWarnings());
+        assertEquals(2, diagnostics.projects().size());
+
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics firstDiagnostics = handle.consentProjectDiagnostics("first-mod");
+        assertNotNull(firstDiagnostics);
+        assertEquals("First Mod", firstDiagnostics.displayName());
+        assertEquals("Example:First Mod", firstDiagnostics.pluginIdentifier());
+        assertEquals("1.0.0", firstDiagnostics.pluginVersion());
+        assertEquals(tempDir.resolve("First Mod").toString(), firstDiagnostics.sourcePath());
+        assertEquals("dependency", firstDiagnostics.runtimeMode());
+        assertTrue(firstDiagnostics.endpoint().contains("example.invalid"));
+    }
+
+    @Test
+    void providerMirrorsEmbeddedConsentOverrideToOwnerSettings() {
+        Path root = tempDir.resolve("embedded-consent");
+        Path modsDir = tempDir.resolve("mods");
+        TelemetryProjectRegistration embedded = registration(
+                telemetryCategoryDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        ProviderFixture fixture = consentFixture(
+                "embedded-consent",
+                List.of(),
+                List.of(embedded),
+                List.of(),
+                root,
+                modsDir
+        );
+        TelemetryRuntimeProviderHandle handle = fixture.handle();
+
+        assertEquals(1, handle.consentDiagnostics().registeredProjects());
+        assertEquals("embedded", handle.consentDiagnostics().projects().getFirst().runtimeMode());
+        assertTrue(handle.applyConsent(
+                "embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+        ));
+
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = handle.consentProjectDiagnostics("embedded-mod");
+        assertNotNull(diagnostics);
+        assertFalse(diagnostics.enabled());
+        assertTrue(diagnostics.overridePresent());
+
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);
+        TelemetryProjectOverride centralOverride = store.load(fixture.dataPaths().projectOverrideFile("embedded-mod"));
+        Path embeddedOverrideFile = modsDir
+                .resolve("Example_Embedded Mod")
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve("embedded-mod.json");
+        TelemetryProjectOverride embeddedOverride = store.load(embeddedOverrideFile);
+        assertNotNull(centralOverride);
+        assertNotNull(embeddedOverride);
+        assertEquals(false, centralOverride.enabled());
+        assertEquals(false, centralOverride.events().errors().enabled());
+        assertEquals(false, embeddedOverride.enabled());
+        assertEquals(false, embeddedOverride.events().errors().enabled());
+    }
+
     private TelemetryRuntimeProviderHandle handle(String providerId,
                                                   TelemetryRuntimeOrigin origin,
                                                   String runtimeVersion) {
@@ -171,12 +361,70 @@ class TelemetryRuntimeHostTest {
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryProjectRegistration project = project(providerId, projectId, displayName);
-        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+        return providerFixture(
+                providerId,
+                origin,
+                runtimeVersion,
                 settings,
                 dataPaths,
                 List.of(project),
                 List.of(project),
-                List.of(new CrashReportEnvelope.LoadedModMetadata(project.pluginIdentifier(), project.pluginVersion())),
+                List.of(),
+                project
+        );
+    }
+
+    private ProviderFixture consentFixture(String fixtureName,
+                                           List<TelemetryProjectRegistration> projects,
+                                           List<TelemetryProjectRegistration> consentProjects) {
+        return consentFixture(fixtureName, projects, consentProjects, List.of());
+    }
+
+    private ProviderFixture consentFixture(String fixtureName,
+                                           List<TelemetryProjectRegistration> projects,
+                                           List<TelemetryProjectRegistration> consentProjects,
+                                           List<String> registrationWarnings) {
+        Path root = tempDir.resolve(fixtureName);
+        return consentFixture(fixtureName, projects, consentProjects, registrationWarnings, root, null);
+    }
+
+    private ProviderFixture consentFixture(String fixtureName,
+                                           List<TelemetryProjectRegistration> projects,
+                                           List<TelemetryProjectRegistration> consentProjects,
+                                           List<String> registrationWarnings,
+                                           Path root,
+                                           Path modsDir) {
+        TelemetryDataPaths dataPaths = dataPaths(root, modsDir);
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
+        TelemetryProjectRegistration providerProject = consentProjects.isEmpty() ? projects.getFirst() : consentProjects.getFirst();
+        return providerFixture(
+                "standalone:Alechilles:" + fixtureName,
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                settings,
+                dataPaths,
+                projects,
+                consentProjects,
+                registrationWarnings,
+                providerProject
+        );
+    }
+
+    private ProviderFixture providerFixture(String providerId,
+                                            TelemetryRuntimeOrigin origin,
+                                            String runtimeVersion,
+                                            TelemetryRuntimeSettings settings,
+                                            TelemetryDataPaths dataPaths,
+                                            List<TelemetryProjectRegistration> projects,
+                                            List<TelemetryProjectRegistration> consentProjects,
+                                            List<String> registrationWarnings,
+                                            TelemetryProjectRegistration providerProject) {
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                projects,
+                consentProjects,
+                loadedMods(consentProjects.isEmpty() ? projects : consentProjects),
                 new NoopCrashReportClient(),
                 null,
                 null
@@ -184,10 +432,10 @@ class TelemetryRuntimeHostTest {
         TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
                 null,
                 origin,
-                project.pluginIdentifier(),
-                project.pluginVersion(),
+                providerProject.pluginIdentifier(),
+                providerProject.pluginVersion(),
                 runtimeVersion,
-                root.resolve("provider.jar"),
+                dataPaths.runtimeRoot().resolve("provider.jar"),
                 null
         );
         TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
@@ -195,8 +443,8 @@ class TelemetryRuntimeHostTest {
                 origin,
                 runtimeVersion,
                 TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
-                project.pluginIdentifier(),
-                project.pluginVersion(),
+                providerProject.pluginIdentifier(),
+                providerProject.pluginVersion(),
                 request.sourcePath(),
                 dataPaths.runtimeRoot()
         );
@@ -207,15 +455,19 @@ class TelemetryRuntimeHostTest {
                 settings,
                 dataPaths,
                 service,
-                List.of(project),
-                List.of(),
+                consentProjects,
+                registrationWarnings,
                 new TelemetryPlayerCounter(),
                 null,
                 commandRegistrar
-        ), commandRegistrar);
+        ), commandRegistrar, dataPaths);
     }
 
     private static TelemetryDataPaths dataPaths(Path root) {
+        return dataPaths(root, null);
+    }
+
+    private static TelemetryDataPaths dataPaths(Path root, Path modsDir) {
         Path settingsRoot = root.resolve("Settings");
         Path telemetryRoot = root.resolve("Telemetry");
         return new TelemetryDataPaths(
@@ -225,7 +477,7 @@ class TelemetryRuntimeHostTest {
                 telemetryRoot,
                 telemetryRoot.resolve("crash-reports"),
                 telemetryRoot.resolve("events"),
-                null
+                modsDir
         );
     }
 
@@ -239,6 +491,130 @@ class TelemetryRuntimeHostTest {
         return new TelemetryProjectRegistration(descriptor, providerId, "1.0.0", null);
     }
 
+    private static TelemetryProjectRegistration registration(TelemetryProjectDescriptor descriptor,
+                                                             String pluginIdentifier,
+                                                             String pluginVersion,
+                                                             Path sourcePath) {
+        return new TelemetryProjectRegistration(descriptor, pluginIdentifier, pluginVersion, sourcePath);
+    }
+
+    private static List<CrashReportEnvelope.LoadedModMetadata> loadedMods(List<TelemetryProjectRegistration> projects) {
+        return projects.stream()
+                .map(project -> new CrashReportEnvelope.LoadedModMetadata(project.pluginIdentifier(), project.pluginVersion()))
+                .toList();
+    }
+
+    private static TelemetryProjectDescriptor telemetryCategoryDescriptor(String projectId, String displayName) {
+        return telemetryCategoryDescriptor(projectId, displayName, "dependency");
+    }
+
+    private static TelemetryProjectDescriptor telemetryCategoryDescriptor(String projectId,
+                                                                          String displayName,
+                                                                          String runtimeMode) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true
+                  },
+                  "usage": {
+                    "enabled": true
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor statsOnlyTelemetryDescriptor(String projectId, String displayName) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "performance": {
+                    "enabled": false
+                  },
+                  "usage": {
+                    "enabled": false
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, displayName),
+                null
+        );
+    }
+
+    private static void assertAllTelemetryEnabled(TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
+        assertTrue(project.enabled());
+        assertTrue(project.crashEnabled());
+        assertTrue(project.errorEnabled());
+        assertTrue(project.lifecycleEnabled());
+        assertTrue(project.performanceEnabled());
+        assertTrue(project.usageEnabled());
+        assertTrue(project.statsEnabled());
+        assertTrue(project.breadcrumbsEnabled());
+    }
+
+    private static void assertAllTelemetryDisabled(TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
+        assertFalse(project.enabled());
+        assertFalse(project.crashEnabled());
+        assertFalse(project.errorEnabled());
+        assertFalse(project.lifecycleEnabled());
+        assertFalse(project.performanceEnabled());
+        assertFalse(project.usageEnabled());
+        assertFalse(project.statsEnabled());
+        assertFalse(project.breadcrumbsEnabled());
+    }
+
     private static final class NoopCrashReportClient implements CrashReportClient {
         @Override
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
@@ -247,6 +623,7 @@ class TelemetryRuntimeHostTest {
     }
 
     private record ProviderFixture(TelemetryRuntimeProviderHandle handle,
-                                   TelemetryRuntimeCommandRegistrar commandRegistrar) {
+                                   TelemetryRuntimeCommandRegistrar commandRegistrar,
+                                   TelemetryDataPaths dataPaths) {
     }
 }

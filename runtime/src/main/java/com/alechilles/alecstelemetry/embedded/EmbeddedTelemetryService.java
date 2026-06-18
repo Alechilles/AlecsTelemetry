@@ -262,6 +262,15 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     @Override
+    public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
+        boolean appliedAll = true;
+        for (TelemetryProjectRegistration project : consentProjects) {
+            appliedAll &= applyConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
+        }
+        return appliedAll;
+    }
+
+    @Override
     public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {

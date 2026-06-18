@@ -21,6 +21,8 @@ public interface TelemetryConsentRuntime {
     @Nullable
     TelemetryRuntimeDiagnostics.ProjectDiagnostics consentProjectDiagnostics(@Nonnull String projectId);
 
+    boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot);
+
     boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot);
 
     boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled);

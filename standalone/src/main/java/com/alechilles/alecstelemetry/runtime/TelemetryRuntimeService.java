@@ -258,6 +258,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
         return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), consentProjects);
     }
 
+    @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
