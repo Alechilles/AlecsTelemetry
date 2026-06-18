@@ -12,7 +12,6 @@ import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
@@ -69,11 +68,17 @@ class TelemetryCoordinatorServiceTest {
                 "7.8.9",
                 tempDir.resolve("Stats.jar")
         );
+        TelemetryProjectRegistration reportProject = new TelemetryProjectRegistration(
+                reportDescriptor("report-mod", "Report Mod", "standalone"),
+                "Example:Report Mod",
+                "1.0.0",
+                tempDir.resolve("Report.jar")
+        );
         CrashReportEnvelope.LoadedModMetadata loadedMod =
                 new CrashReportEnvelope.LoadedModMetadata("Example:Stats Mod", "7.8.9");
         TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscoveryResult(
                 List.of(statsProject),
-                List.of(statsProject),
+                List.of(reportProject),
                 List.of(loadedMod),
                 List.of(),
                 List.of()
@@ -95,6 +100,9 @@ class TelemetryCoordinatorServiceTest {
         assertEquals(1, service.loadedMods().size());
         assertEquals("Example:Stats Mod", service.loadedMods().getFirst().identifier());
         assertEquals("7.8.9", service.loadedMods().getFirst().version());
+        assertEquals(2, service.manualReportProjects().size());
+        assertEquals("stats-mod", service.manualReportProjects().get(0).projectId());
+        assertEquals("report-mod", service.manualReportProjects().get(1).projectId());
     }
 
     @Test
@@ -300,6 +308,32 @@ class TelemetryCoordinatorServiceTest {
                   "customEndpoint": {
                     "url": "https://example.invalid/telemetry",
                     "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor reportDescriptor(String projectId, String displayName, String runtimeMode) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "reports": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event",
+                    "manualReportUrl": "https://example.invalid/telemetry/report"
                   }
                 }
                 """.formatted(projectId, displayName, runtimeMode, displayName),
