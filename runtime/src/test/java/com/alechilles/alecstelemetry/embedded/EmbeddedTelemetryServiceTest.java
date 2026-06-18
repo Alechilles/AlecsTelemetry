@@ -342,7 +342,7 @@ class EmbeddedTelemetryServiceTest {
         EmbeddedTelemetryService service = new EmbeddedTelemetryService(
                 settings,
                 dataPaths,
-                runtimeRegistration,
+                consentOnlyRegistration,
                 List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
                 client,
                 null,
@@ -363,6 +363,7 @@ class EmbeddedTelemetryServiceTest {
 
         service.start();
 
+        assertTrue(service.isEnabled());
         assertEquals(
                 List.of("embedded-mod", "consent-only-mod"),
                 service.consentDiagnostics().projects().stream()
@@ -375,6 +376,7 @@ class EmbeddedTelemetryServiceTest {
                 new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
         ));
         assertFalse(service.consentProjectDiagnostics("consent-only-mod").enabled());
+        assertFalse(service.isEnabled());
         String overrideRaw = java.nio.file.Files.readString(dataPaths.projectOverrideFile("consent-only-mod"));
         JsonObject override = JsonParser.parseString(overrideRaw).getAsJsonObject();
         assertFalse(override.get("enabled").getAsBoolean());
