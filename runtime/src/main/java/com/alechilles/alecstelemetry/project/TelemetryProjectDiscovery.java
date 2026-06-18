@@ -74,16 +74,6 @@ public final class TelemetryProjectDiscovery {
                         String projectIdKey = data.registration().projectId().toLowerCase(Locale.ROOT);
                         boolean newConsentProject = !consentRegistrations.containsKey(projectIdKey);
                         consentRegistrations.putIfAbsent(projectIdKey, data.registration());
-                        if (data.registration().isEmbeddedMode()) {
-                            if (newConsentProject) {
-                                skippedRegistrationWarnings.add(
-                                        "Discovered embedded telemetry project "
-                                                + data.registration().projectId()
-                                                + "; standalone runtime will expose consent controls but will not capture or upload for it."
-                                );
-                            }
-                            continue;
-                        }
                         if (registrations.containsKey(projectIdKey)) {
                             warn(
                                     "Duplicate telemetry project id discovered; keeping first registration for "

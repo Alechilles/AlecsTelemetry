@@ -1,5 +1,9 @@
 package com.alechilles.alecstelemetry.embedded;
 
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
@@ -8,6 +12,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -30,6 +35,11 @@ class EmbeddedTelemetryServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @AfterEach
+    void clearCoordinatorRegistry() {
+        TelemetryCoordinatorRegistry.clearForTests();
+    }
 
     @Test
     void embeddedServiceCapturesAndFlushesForOneOwningProject() {
@@ -201,6 +211,76 @@ class EmbeddedTelemetryServiceTest {
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
         assertEquals(2, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+    }
+
+    @Test
+    void embeddedServiceRegistersCoordinatorCandidateAndForwardsThroughActiveBridge() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                tempDir.resolve("Mods")
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService coordinatorService = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+        TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                telemetryRoot
+        );
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null,
+                new EmbeddedTelemetryPlayerCounter(),
+                candidate,
+                coordinatorService
+        );
+
+        service.start();
+        assertTrue(service.setProjectEnabled(false));
+        assertFalse(service.isEnabled());
+        service.recordError("disabled_event", null, "Should not queue while disabled.");
+        assertEquals(0, service.flushPendingReportsNow("embedded-disabled").attempted());
+        assertTrue(service.setProjectEnabled(true));
+        assertTrue(service.isEnabled());
+        service.recordError("embedded_event", null, "Forwarded through coordinator bridge.");
+
+        assertEquals("embedded:Example:Embedded Mod", TelemetryCoordinatorRegistry.activeBridge().providerId());
+        assertEquals(1, service.flushPendingReportsNow("embedded-bridge").attempted());
+        assertEquals(1, client.calls);
+
+        service.shutdown();
+        assertTrue(TelemetryCoordinatorRegistry.activeBridge() == null);
     }
 
     @Test

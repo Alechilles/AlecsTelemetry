@@ -56,7 +56,7 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void keepsEmbeddedDescriptorsConsentVisibleWithoutRegisteringForStandaloneRuntime() throws Exception {
+    void registersEmbeddedDescriptorsForCoordinatorRuntime() throws Exception {
         Path modFolder = tempDir.resolve("Embedded Mod");
         Files.createDirectories(modFolder.resolve("telemetry"));
         Files.writeString(
@@ -82,12 +82,13 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertTrue(result.projects().isEmpty());
+        assertEquals(1, result.projects().size());
+        assertEquals("embedded-mod", result.projects().getFirst().projectId());
+        assertEquals("embedded", result.projects().getFirst().runtimeMode());
         assertEquals(1, result.consentProjects().size());
         assertEquals("embedded-mod", result.consentProjects().getFirst().projectId());
         assertEquals(1, result.loadedMods().size());
-        assertEquals(1, result.skippedRegistrationWarnings().size());
-        assertFalse(result.skippedRegistrationWarnings().getFirst().isBlank());
+        assertTrue(result.skippedRegistrationWarnings().isEmpty());
     }
 
     @Test
@@ -119,7 +120,8 @@ class TelemetryProjectDiscoveryTest {
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null)
                 .discover(List.of(saveModsDirectory, installedModsDirectory));
 
-        assertTrue(result.projects().isEmpty());
+        assertEquals(1, result.projects().size());
+        assertEquals("alecs-tamework", result.projects().getFirst().projectId());
         assertEquals(1, result.consentProjects().size());
         assertEquals("alecs-tamework", result.consentProjects().getFirst().projectId());
         assertEquals("Alechilles:Alec's Tamework!", result.consentProjects().getFirst().pluginIdentifier());

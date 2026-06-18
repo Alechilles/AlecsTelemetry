@@ -1,5 +1,9 @@
 package com.alechilles.alecstelemetry.runtime;
 
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
@@ -16,9 +20,12 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -37,6 +44,123 @@ class TelemetryRuntimeServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @AfterEach
+    void clearCoordinatorRegistry() {
+        TelemetryCoordinatorRegistry.clearForTests();
+    }
+
+    @Test
+    void standaloneRuntimeServiceReportsPassiveWhenNewerEmbeddedCoordinatorWins() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(embedded);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        assertFalse(service.ownsActiveCoordinator());
+        assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
+        assertTrue(service.triggerFlushAsync("embedded-mod"));
+        service.recordUsage("embedded-mod", "settings_opened", "from standalone api");
+        assertEquals("embedded-mod", embedded.lastFlushProjectId);
+        assertEquals("embedded-mod", embedded.lastProjectId);
+        assertEquals("settings_opened", embedded.lastEventName);
+        assertEquals("from standalone api", embedded.lastDetails.get("detail"));
+        assertTrue(service.applyConsent(
+                "embedded-mod",
+                new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+        ));
+        assertFalse(embedded.projectEnabled);
+        assertFalse(embedded.crashEnabled);
+        assertFalse(embedded.errorEventsEnabled);
+        assertFalse(embedded.lifecycleEventsEnabled);
+        assertFalse(embedded.performanceEnabled);
+        assertFalse(embedded.usageEnabled);
+        assertFalse(embedded.statsEnabled);
+        assertFalse(embedded.breadcrumbsEnabled);
+
+        service.shutdown();
+    }
+
+    @Test
+    void passiveStandaloneManualReportSubmissionRoutesToActiveCoordinator() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        embedded.manualReportResult = Map.of(
+                "accepted", false,
+                "validationErrors", List.of("proxied_manual_report")
+        );
+        TelemetryCoordinatorRegistry.register(embedded);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "embedded-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertFalse(result.accepted());
+        assertTrue(result.validationErrors().contains("proxied_manual_report"));
+        assertEquals("embedded-mod", embedded.lastManualReportProjectId);
+        assertEquals("issue", embedded.lastManualReportSubmission.get("kind"));
+        assertEquals("test-world", embedded.lastManualReportPlayerContext.get("worldName"));
+        assertEquals(0, fileCount(dataPaths.pendingManualReportsDirectory("embedded-mod")));
+
+        service.shutdown();
+    }
 
     @Test
     void manualReportSubmissionReturnsValidationErrorWhenGloballyDisabled() throws Exception {
@@ -1356,6 +1480,168 @@ class TelemetryRuntimeServiceTest {
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
+        }
+    }
+
+    private static final class RecordingCoordinatorBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private boolean active;
+        private String lastFlushProjectId;
+        private String lastProjectId;
+        private String lastEventName;
+        private boolean projectEnabled = true;
+        private boolean crashEnabled = true;
+        private boolean errorEventsEnabled = true;
+        private boolean lifecycleEventsEnabled = true;
+        private boolean performanceEnabled = true;
+        private boolean usageEnabled = true;
+        private boolean statsEnabled = true;
+        private boolean breadcrumbsEnabled = true;
+        private Map<String, Object> lastDetails = Map.of();
+        private String lastManualReportProjectId;
+        private Map<String, Object> lastManualReportSubmission = Map.of();
+        private Map<String, Object> lastManualReportPlayerContext = Map.of();
+        private Map<String, Object> manualReportResult = Map.of(
+                "accepted", false,
+                "validationErrors", List.of("manual_report_not_configured")
+        );
+
+        private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
+            this.candidate = candidate;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active = true;
+        }
+
+        @Override
+        public void deactivate() {
+            active = false;
+        }
+
+        @Override
+        public boolean isActive() {
+            return active;
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            lastFlushProjectId = projectId;
+            return true;
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return projectEnabled;
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            projectEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            crashEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            errorEventsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            lifecycleEventsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            performanceEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            usageEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            statsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            breadcrumbsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean recordUsage(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            lastProjectId = projectId;
+            lastEventName = eventName;
+            lastDetails = details;
+            return true;
+        }
+
+        @Override
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> submission,
+                                                      @Nonnull Map<String, Object> playerContext) {
+            lastManualReportProjectId = projectId;
+            lastManualReportSubmission = submission;
+            lastManualReportPlayerContext = playerContext;
+            return manualReportResult;
         }
     }
 }

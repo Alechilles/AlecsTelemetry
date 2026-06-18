@@ -70,11 +70,15 @@ public final class AlecsTelemetry extends JavaPlugin {
     protected void start() {
         if (runtimeService != null) {
             runtimeService.start();
-            if (statsHeartbeatService != null) {
+            if (statsHeartbeatService != null && runtimeService.ownsActiveCoordinator()) {
                 statsHeartbeatService.start();
             }
+            String activeProvider = runtimeService.activeCoordinatorProviderId();
             getLogger().at(Level.INFO).log(
-                    "Alec's Telemetry enabled. Registered projects=" + runtimeService.registeredProjectCount()
+                    "Alec's Telemetry enabled. Active coordinator="
+                            + (activeProvider == null ? "<none>" : activeProvider)
+                            + ", standaloneOwnsRuntime=" + runtimeService.ownsActiveCoordinator()
+                            + ", registered projects=" + runtimeService.registeredProjectCount()
             );
             return;
         }
@@ -102,7 +106,9 @@ public final class AlecsTelemetry extends JavaPlugin {
         if (runtimeService == null) {
             return;
         }
-        runtimeService.captureExceptionalWorldRemoval(event.getWorld(), event.getRemovalReason());
+        if (runtimeService.ownsActiveCoordinator()) {
+            runtimeService.captureExceptionalWorldRemoval(event.getWorld(), event.getRemovalReason());
+        }
     }
 
     private void onPlayerReady(@Nonnull PlayerReadyEvent event) {

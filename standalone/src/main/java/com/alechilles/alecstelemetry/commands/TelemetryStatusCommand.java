@@ -47,6 +47,10 @@ public final class TelemetryStatusCommand extends AbstractPlayerCommand {
                         + ", loadedMods=" + diagnostics.loadedMods()
                         + ", pending=" + diagnostics.totalPendingReports()
                         + ", flushInProgress=" + diagnostics.flushInProgress()
+                        + ", activeCoordinator=" + (runtimeService.activeCoordinatorProviderId() == null
+                        ? "<none>"
+                        : runtimeService.activeCoordinatorProviderId())
+                        + ", standaloneOwnsRuntime=" + runtimeService.ownsActiveCoordinator()
         );
         TelemetryCommandSupport.send(commandContext, "Telemetry last flush: " + diagnostics.lastFlushResult());
         if (diagnostics.modsDirectory() != null) {

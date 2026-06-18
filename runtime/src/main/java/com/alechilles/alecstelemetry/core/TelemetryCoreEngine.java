@@ -581,14 +581,44 @@ public final class TelemetryCoreEngine {
                 || world.getFailureException() == null) {
             return;
         }
-        captureAcrossProjects(
-                SOURCE_EXCEPTIONAL_WORLD_REMOVAL,
+        captureExceptionalWorldRemoval(
                 world.getFailureException(),
-                Thread.currentThread(),
                 world.getName(),
                 removalReason.name(),
-                world.getPossibleFailureCause()
+                world.getPossibleFailureCause() == null ? null : world.getPossibleFailureCause().toString()
         );
+    }
+
+    public boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                  @Nullable String worldName,
+                                                  @Nullable String removalReason,
+                                                  @Nullable String possibleFailureCause) {
+        if (!enabled.get()
+                || throwable == null
+                || !RemoveWorldEvent.RemovalReason.EXCEPTIONAL.name().equals(removalReason)) {
+            return false;
+        }
+        captureAcrossProjects(
+                SOURCE_EXCEPTIONAL_WORLD_REMOVAL,
+                throwable,
+                Thread.currentThread(),
+                worldName,
+                removalReason,
+                pluginIdentifierFrom(possibleFailureCause)
+        );
+        return true;
+    }
+
+    @Nullable
+    private static PluginIdentifier pluginIdentifierFrom(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return PluginIdentifier.fromString(value);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     @Nonnull

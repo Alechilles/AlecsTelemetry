@@ -3,6 +3,11 @@ package com.alechilles.alecstelemetry.runtime;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
@@ -31,12 +36,14 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
@@ -44,12 +51,17 @@ import java.util.logging.Level;
  */
 public final class TelemetryRuntimeService {
 
+    private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
+
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
     private final List<TelemetryProjectCollisionDetector.Collision> collisions;
     private final List<String> registrationWarnings;
     private final TelemetryRuntimeApi api;
     private final TelemetryCoreEngine engine;
+    private final TelemetryRuntimeCandidate candidate;
+    private final TelemetryCoordinatorService coordinatorService;
+    private final StandaloneCoordinatorBridge coordinatorBridge;
     private final HytaleLogger logger;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
@@ -87,7 +99,8 @@ public final class TelemetryRuntimeService {
                 registrationWarnings,
                 new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
                 logger,
-                HytaleServer.SCHEDULED_EXECUTOR
+                HytaleServer.SCHEDULED_EXECUTOR,
+                standaloneCandidate(plugin, dataPaths)
         );
     }
 
@@ -110,7 +123,8 @@ public final class TelemetryRuntimeService {
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
-                executor
+                executor,
+                standaloneCandidate(dataPaths)
         );
     }
 
@@ -143,7 +157,8 @@ public final class TelemetryRuntimeService {
                 buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
-                executor
+                executor,
+                standaloneCandidate(dataPaths)
         );
     }
 
@@ -157,7 +172,8 @@ public final class TelemetryRuntimeService {
                                     @Nonnull List<String> registrationWarnings,
                                     @Nonnull CrashReportClient client,
                                     @Nullable HytaleLogger logger,
-                                    @Nullable ScheduledExecutorService executor) {
+                                    @Nullable ScheduledExecutorService executor,
+                                    @Nonnull TelemetryRuntimeCandidate candidate) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.collisions = List.copyOf(collisions);
@@ -167,6 +183,7 @@ public final class TelemetryRuntimeService {
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.projects = List.copyOf(projects);
         this.loadedModSnapshotProvider = loadedModSnapshotProvider;
+        this.candidate = candidate;
         this.engine = new TelemetryCoreEngine(
                 settings,
                 dataPaths,
@@ -177,17 +194,39 @@ public final class TelemetryRuntimeService {
                 logger,
                 executor
         );
+        this.coordinatorService = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                projects,
+                manualReportRuntimeProjects(projects, consentProjects),
+                loadedMods,
+                client,
+                logger,
+                executor
+        );
+        this.coordinatorBridge = new StandaloneCoordinatorBridge(candidate, coordinatorService);
         this.api = new TelemetryRuntimeApiImpl(this);
         this.consentProjects = List.copyOf(consentProjects);
         logRegistrationWarnings();
     }
 
     public void start() {
-        engine.start();
+        TelemetryCoordinatorRegistry.register(coordinatorBridge);
     }
 
     public void shutdown() {
-        engine.shutdown();
+        TelemetryCoordinatorRegistry.unregister(candidate.providerId());
+    }
+
+    public boolean ownsActiveCoordinator() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active != null && active.providerId().equals(candidate.providerId());
+    }
+
+    @Nullable
+    public String activeCoordinatorProviderId() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? null : active.providerId();
     }
 
     public boolean isEnabled() {
@@ -278,19 +317,35 @@ public final class TelemetryRuntimeService {
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        if (findProject(project.projectId()) != null || findManualReportProject(project.projectId()) != null) {
-            engine.setProjectEnabled(project.projectId(), normalized.projectEnabled());
-        }
-        if (findProject(project.projectId()) != null) {
-            engine.setCrashEnabled(project.projectId(), normalized.crashEnabled());
-            engine.setErrorEventsEnabled(project.projectId(), normalized.errorEnabled());
-            engine.setLifecycleEventsEnabled(project.projectId(), normalized.lifecycleEnabled());
-            engine.setPerformanceEnabled(project.projectId(), normalized.performanceEnabled());
-            engine.setUsageEnabled(project.projectId(), normalized.usageEnabled());
-            engine.setStatsEnabled(project.projectId(), normalized.statsEnabled());
-            engine.setBreadcrumbsEnabled(project.projectId(), normalized.breadcrumbsEnabled());
-        }
+        applyRuntimeConsent(project.projectId(), normalized);
         return true;
+    }
+
+    private void applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.setProjectEnabled(projectId, snapshot.projectEnabled());
+            active.setCrashEnabled(projectId, snapshot.crashEnabled());
+            active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            active.setUsageEnabled(projectId, snapshot.usageEnabled());
+            active.setStatsEnabled(projectId, snapshot.statsEnabled());
+            active.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+            return;
+        }
+        if (findProject(projectId) != null || findManualReportProject(projectId) != null) {
+            engine.setProjectEnabled(projectId, snapshot.projectEnabled());
+        }
+        if (findProject(projectId) != null) {
+            engine.setCrashEnabled(projectId, snapshot.crashEnabled());
+            engine.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            engine.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
+            engine.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
+            engine.setUsageEnabled(projectId, snapshot.usageEnabled());
+            engine.setStatsEnabled(projectId, snapshot.statsEnabled());
+            engine.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
+        }
     }
 
     public boolean markConsentReviewed(@Nonnull String projectId) {
@@ -299,24 +354,47 @@ public final class TelemetryRuntimeService {
     }
 
     public boolean triggerFlushAsync() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestFlush(null);
+        }
         return engine.triggerFlushAsync();
     }
 
     public boolean triggerFlushAsync(@Nullable String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestFlush(projectId);
+        }
         return engine.triggerFlushAsync(projectId);
     }
 
     public void recordBreadcrumb(@Nonnull String projectId,
                                  @Nonnull String category,
                                  @Nonnull String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordBreadcrumb(projectId, category, detail);
+            return;
+        }
         engine.recordBreadcrumb(projectId, category, detail);
     }
 
     public void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureSetupFailure(projectId, throwable);
+            return;
+        }
         engine.captureSetupFailure(projectId, throwable);
     }
 
     public void captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureStartFailure(projectId, throwable);
+            return;
+        }
         engine.captureStartFailure(projectId, throwable);
     }
 
@@ -324,6 +402,11 @@ public final class TelemetryRuntimeService {
                             @Nonnull String eventName,
                             @Nullable Throwable throwable,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordError(projectId, eventName, throwable, detailsFrom(detail));
+            return;
+        }
         engine.recordError(projectId, eventName, throwable, detail);
     }
 
@@ -331,6 +414,11 @@ public final class TelemetryRuntimeService {
                                        @Nonnull String eventName,
                                        @Nullable Throwable throwable,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordError(projectId, eventName, throwable, detailsFrom(context));
+            return;
+        }
         engine.recordErrorWithContext(projectId, eventName, throwable, context);
     }
 
@@ -339,6 +427,11 @@ public final class TelemetryRuntimeService {
                                 int durationMs,
                                 boolean success,
                                 @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordLifecycle(projectId, eventName, durationMs, success, detailsFrom(detail));
+            return;
+        }
         engine.recordLifecycle(projectId, eventName, durationMs, success, detail);
     }
 
@@ -347,6 +440,11 @@ public final class TelemetryRuntimeService {
                                            int durationMs,
                                            boolean success,
                                            @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordLifecycle(projectId, eventName, durationMs, success, detailsFrom(context));
+            return;
+        }
         engine.recordLifecycleWithContext(projectId, eventName, durationMs, success, context);
     }
 
@@ -355,6 +453,11 @@ public final class TelemetryRuntimeService {
                                   int durationMs,
                                   @Nullable Double metricValue,
                                   @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordPerformance(projectId, eventName, durationMs, metricValue, detailsFrom(detail));
+            return;
+        }
         engine.recordPerformance(projectId, eventName, durationMs, metricValue, detail);
     }
 
@@ -363,39 +466,81 @@ public final class TelemetryRuntimeService {
                                              int durationMs,
                                              @Nullable Double metricValue,
                                              @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordPerformance(projectId, eventName, durationMs, metricValue, detailsFrom(context));
+            return;
+        }
         engine.recordPerformanceWithContext(projectId, eventName, durationMs, metricValue, context);
     }
 
     public void recordUsage(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordUsage(projectId, eventName, detailsFrom(detail));
+            return;
+        }
         engine.recordUsage(projectId, eventName, detail);
     }
 
     public void recordUsageWithContext(@Nonnull String projectId,
                                        @Nonnull String eventName,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordUsage(projectId, eventName, detailsFrom(context));
+            return;
+        }
         engine.recordUsageWithContext(projectId, eventName, context);
     }
 
     public void recordStats(@Nonnull String projectId,
                             @Nonnull String eventName,
                             @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordStats(projectId, eventName, detailsFrom(detail));
+            return;
+        }
         engine.recordStats(projectId, eventName, detail);
     }
 
     public void recordStatsWithContext(@Nonnull String projectId,
                                        @Nonnull String eventName,
                                        @Nullable TelemetryEventContext context) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.recordStats(projectId, eventName, detailsFrom(context));
+            return;
+        }
         engine.recordStatsWithContext(projectId, eventName, context);
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.captureTestReport(projectId, detail);
+        }
         return engine.captureTestReport(projectId, detail);
     }
 
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
+        if (world == null || removalReason != RemoveWorldEvent.RemovalReason.EXCEPTIONAL || world.getFailureException() == null) {
+            return;
+        }
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureExceptionalWorldRemoval(
+                    world.getFailureException(),
+                    world.getName(),
+                    removalReason.name(),
+                    world.getPossibleFailureCause() == null ? null : world.getPossibleFailureCause().toString()
+            );
+            return;
+        }
         engine.captureExceptionalWorldRemoval(world, removalReason);
     }
 
@@ -403,6 +548,14 @@ public final class TelemetryRuntimeService {
     public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return manualReportResultFromMap(active.submitManualReport(
+                    projectId,
+                    submissionToMap(submission),
+                    playerContextToMap(playerContext)
+            ));
+        }
         return engine.submitManualReport(projectId, submission, playerContext);
     }
 
@@ -711,5 +864,381 @@ public final class TelemetryRuntimeService {
      * One flush pass summary.
      */
     record FlushSummary(int attempted, int uploaded, int pendingAfter, @Nullable String lastFailure) {
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeCandidate standaloneCandidate(@Nonnull TelemetryDataPaths dataPaths) {
+        return new TelemetryRuntimeCandidate(
+                "standalone:Alechilles:Alec's Telemetry",
+                TelemetryRuntimeOrigin.STANDALONE,
+                resolveRuntimeVersion(),
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Alechilles:Alec's Telemetry",
+                resolveRuntimeVersion(),
+                dataPaths.runtimeRoot(),
+                dataPaths.runtimeRoot()
+        );
+    }
+
+    @Nonnull
+    private static TelemetryRuntimeCandidate standaloneCandidate(@Nonnull JavaPlugin plugin,
+                                                                @Nonnull TelemetryDataPaths dataPaths) {
+        String pluginIdentifier = plugin.getIdentifier() == null ? "Alechilles:Alec's Telemetry" : plugin.getIdentifier().toString();
+        String pluginVersion = plugin.getManifest() == null || plugin.getManifest().getVersion() == null
+                ? resolveRuntimeVersion()
+                : plugin.getManifest().getVersion().toString();
+        Path sourcePath;
+        try {
+            sourcePath = plugin.getFile() == null ? dataPaths.runtimeRoot() : plugin.getFile().toAbsolutePath().normalize();
+        } catch (Exception ignored) {
+            sourcePath = dataPaths.runtimeRoot();
+        }
+        return new TelemetryRuntimeCandidate(
+                "standalone:" + pluginIdentifier,
+                TelemetryRuntimeOrigin.STANDALONE,
+                resolveRuntimeVersion(),
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                dataPaths.runtimeRoot()
+        );
+    }
+
+    @Nonnull
+    private static String resolveRuntimeVersion() {
+        Package runtimePackage = TelemetryRuntimeService.class.getPackage();
+        String implementationVersion = runtimePackage == null ? null : runtimePackage.getImplementationVersion();
+        return implementationVersion == null || implementationVersion.isBlank()
+                ? FALLBACK_RUNTIME_VERSION
+                : implementationVersion.trim();
+    }
+
+    @Nonnull
+    private static Map<String, Object> detailsFrom(@Nullable String detail) {
+        return detail == null || detail.isBlank() ? Map.of() : Map.of("detail", detail);
+    }
+
+    @Nonnull
+    private static Map<String, Object> detailsFrom(@Nullable TelemetryEventContext context) {
+        if (context == null) {
+            return Map.of();
+        }
+        TelemetryEventContext normalized = context.normalize();
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>(normalized.details());
+        putIfPresent(details, "detail", normalized.detail());
+        putIfPresent(details, "severity", normalized.severity());
+        putIfPresent(details, "fingerprint", normalized.fingerprint());
+        putIfPresent(details, "subsystem", normalized.subsystem());
+        putIfPresent(details, "phase", normalized.phase());
+        putIfPresent(details, "operation", normalized.operation());
+        putIfPresent(details, "target", normalized.target());
+        putIfPresent(details, "featureKey", normalized.featureKey());
+        putIfPresent(details, "entryPoint", normalized.entryPoint());
+        putIfPresent(details, "runtimeSide", normalized.runtimeSide());
+        putIfPresent(details, "entityType", normalized.entityType());
+        putIfPresent(details, "itemId", normalized.itemId());
+        putIfPresent(details, "blockId", normalized.blockId());
+        putIfPresent(details, "biomeId", normalized.biomeId());
+        putIfPresent(details, "commandName", normalized.commandName());
+        putIfPresent(details, "worldName", normalized.worldName());
+        return Map.copyOf(details);
+    }
+
+    private static void putIfPresent(@Nonnull Map<String, Object> details,
+                                     @Nonnull String key,
+                                     @Nullable String value) {
+        if (value != null && !value.isBlank()) {
+            details.put(key, value);
+        }
+    }
+
+    @Nonnull
+    private static Map<String, Object> submissionToMap(@Nonnull ManualReportSubmission submission) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("kind", submission.kind().key());
+        values.put("title", submission.title());
+        values.put("description", submission.description());
+        putIfPresent(values, "contact", submission.contact());
+        values.put("formValues", submission.formValues());
+        values.put("includeCurrentServerLog", submission.includeCurrentServerLog());
+        values.put("includePreviousServerLog", submission.includePreviousServerLog());
+        values.put("includeLoadedModList", submission.includeLoadedModList());
+        values.put("includeDiagnostics", submission.includeDiagnostics());
+        values.put("allowResolutionUpdates", submission.allowResolutionUpdates());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> playerContextToMap(@Nullable PlayerReportRuntimeContext playerContext) {
+        PlayerReportRuntimeContext safeContext = playerContext == null ? PlayerReportRuntimeContext.UNKNOWN : playerContext;
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("singleplayer", safeContext.singleplayer());
+        values.put("onlinePlayerCount", safeContext.onlinePlayerCount());
+        putIfPresent(values, "worldName", safeContext.worldName());
+        values.put("loadedMods", safeContext.loadedMods().stream()
+                .map(TelemetryRuntimeService::loadedModToMap)
+                .toList());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> loadedModToMap(@Nonnull CrashReportEnvelope.LoadedModMetadata loadedMod) {
+        return Map.of(
+                "identifier", loadedMod.identifier(),
+                "version", loadedMod.version()
+        );
+    }
+
+    @Nonnull
+    private static ManualReportEnvelope.CreateResult manualReportResultFromMap(@Nonnull Map<String, Object> values) {
+        List<String> errors = stringList(values.get("validationErrors"));
+        ManualReportEnvelope envelope = envelopeFrom(values.get("envelopeJson"));
+        String followUpToken = stringValue(values.get("followUpToken"));
+        if (Boolean.TRUE.equals(values.get("accepted")) && envelope == null && errors.isEmpty()) {
+            errors = List.of("coordinator_manual_report_missing_envelope");
+        }
+        return new ManualReportEnvelope.CreateResult(envelope, errors, followUpToken);
+    }
+
+    @Nullable
+    private static ManualReportEnvelope envelopeFrom(@Nullable Object value) {
+        String rawJson = stringValue(value);
+        if (rawJson == null) {
+            return null;
+        }
+        try {
+            return ManualReportEnvelope.fromJson(rawJson);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static String stringValue(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.toString().trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    @Nonnull
+    private static List<String> stringList(@Nullable Object value) {
+        if (!(value instanceof List<?> rawValues) || rawValues.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<String> values = new ArrayList<>();
+        for (Object rawValue : rawValues) {
+            String normalized = stringValue(rawValue);
+            if (normalized != null) {
+                values.add(normalized);
+            }
+        }
+        return List.copyOf(values);
+    }
+
+    private static final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private final TelemetryCoordinatorService service;
+        private final AtomicBoolean active = new AtomicBoolean(false);
+
+        private StandaloneCoordinatorBridge(@Nonnull TelemetryRuntimeCandidate candidate,
+                                            @Nonnull TelemetryCoordinatorService service) {
+            this.candidate = candidate;
+            this.service = service;
+        }
+
+        @Override
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        @Override
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        @Override
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        @Override
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        @Override
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        @Override
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        @Override
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        @Override
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        @Override
+        public void activate() {
+            active.set(true);
+        }
+
+        @Override
+        public void deactivate() {
+            active.set(false);
+        }
+
+        @Override
+        public boolean isActive() {
+            return active.get();
+        }
+
+        @Override
+        public void start() {
+            service.start();
+        }
+
+        @Override
+        public void shutdown() {
+            service.shutdown();
+        }
+
+        @Override
+        public boolean isProjectEnabled(@Nonnull String projectId) {
+            return service.isProjectEnabled(projectId);
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setProjectEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setCrashEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setCrashEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setErrorEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setLifecycleEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setPerformanceEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setUsageEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setUsageEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setStatsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setStatsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setBreadcrumbsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean recordBreadcrumb(@Nonnull String projectId,
+                                        @Nonnull String category,
+                                        @Nonnull String detail) {
+            return service.recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
+        public boolean captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return service.captureSetupFailure(projectId, throwable);
+        }
+
+        @Override
+        public boolean captureStartFailure(@Nonnull String projectId, @Nullable Throwable throwable) {
+            return service.captureStartFailure(projectId, throwable);
+        }
+
+        @Override
+        public boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                      @Nullable String worldName,
+                                                      @Nullable String removalReason,
+                                                      @Nullable String possibleFailureCause) {
+            return service.captureExceptionalWorldRemoval(throwable, worldName, removalReason, possibleFailureCause);
+        }
+
+        @Override
+        public boolean recordError(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nullable Throwable throwable,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordError(projectId, eventName, throwable, details);
+        }
+
+        @Override
+        public boolean recordLifecycle(@Nonnull String projectId,
+                                       @Nonnull String eventName,
+                                       int durationMs,
+                                       boolean success,
+                                       @Nonnull Map<String, Object> details) {
+            return service.recordLifecycle(projectId, eventName, durationMs, success, details);
+        }
+
+        @Override
+        public boolean recordPerformance(@Nonnull String projectId,
+                                         @Nonnull String eventName,
+                                         int durationMs,
+                                         @Nullable Double metricValue,
+                                         @Nonnull Map<String, Object> details) {
+            return service.recordPerformance(projectId, eventName, durationMs, metricValue, details);
+        }
+
+        @Override
+        public boolean recordUsage(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordUsage(projectId, eventName, details);
+        }
+
+        @Override
+        public boolean recordStats(@Nonnull String projectId,
+                                   @Nonnull String eventName,
+                                   @Nonnull Map<String, Object> details) {
+            return service.recordStats(projectId, eventName, details);
+        }
+
+        @Override
+        public boolean requestFlush(@Nullable String projectId) {
+            return service.requestFlush(projectId);
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
+            return service.captureTestReport(projectId, detail);
+        }
+
+        @Override
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> submission,
+                                                      @Nonnull Map<String, Object> playerContext) {
+            return service.submitManualReport(projectId, submission, playerContext);
+        }
     }
 }

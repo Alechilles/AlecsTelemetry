@@ -1,5 +1,11 @@
 # Embedded Mode Refactor Plan
 
+> Superseded implementation note: embedded and standalone runtimes now
+> participate in coordinator election. The active latest-compatible coordinator
+> discovers enabled descriptors for all installed mods, including
+> `runtimeMode=embedded`; non-winning copies forward operations to the active
+> bridge.
+
 ## Goal
 
 Support two distribution modes that produce the same telemetry payloads and use the
@@ -32,7 +38,7 @@ of the standalone runtime mod.
 
 Preferred rule:
 
-- if a mod declares embedded mode, the standalone runtime ignores that mod
+- if a mod declares embedded mode, any active telemetry coordinator can still discover and handle that mod
 
 This is the right default because it avoids duplicate reports while still allowing:
 
@@ -58,7 +64,7 @@ Allowed values:
   - means the standalone `Alec's Telemetry` mod may discover and manage this mod
 - `embedded`
   - means the mod manages telemetry internally through the embedded bootstrap
-  - the standalone runtime must skip this mod if it sees the descriptor
+  - the descriptor participates in coordinator discovery; the active elected runtime handles it
 
 ### Why this is the right shape
 
@@ -134,14 +140,14 @@ Should contain:
 - `EmbeddedTelemetryBootstrap`
 - `EmbeddedTelemetryService`
 - `EmbeddedTelemetryHandle`
-- optional breadcrumb/lifecycle helpers for the owning mod only
+- optional breadcrumb/lifecycle helpers that forward to the elected active coordinator
 
 Should not contain:
 
 - installed-mod scanning across the whole server
 - `/telemetry` commands
 - standalone override directory support
-- global project registry for unrelated mods
+- a separate consumer-facing cross-mod project locator beyond the coordinator bridge
 
 ## Runtime Behavior By Mode
 
@@ -156,13 +162,13 @@ Behavior remains close to current standalone runtime:
 
 ### Embedded mode
 
-Behavior changes to local ownership:
+Behavior changes to coordinator ownership:
 
 - the consumer mod explicitly bootstraps telemetry for itself
 - it reads only its own `telemetry/project.json`
 - it uses its own plugin data directory for local queueing/settings
 - it can still use the same hosted `projectKey` or a custom endpoint
-- the standalone runtime ignores it if both are installed
+- the active coordinator handles it if both are installed
 
 ## Coexistence Detection Rules
 
@@ -172,12 +178,12 @@ When the standalone runtime scans `telemetry/project.json` files:
 
 1. if `runtimeMode` is omitted, treat it as `dependency`
 2. if `runtimeMode` is `dependency`, register normally
-3. if `runtimeMode` is `embedded`, skip registration and log an info-level message
+3. if `runtimeMode` is `embedded`, register it for the active coordinator runtime
 
 Recommended log example:
 
 ```text
-Skipping telemetry project cool-mod because it declares runtimeMode=embedded.
+Registering telemetry project cool-mod because it declares runtimeMode=embedded and the active coordinator owns capture/upload.
 ```
 
 ### Embedded bootstrap behavior
@@ -229,7 +235,7 @@ Keep:
 
 ### Embedded mode
 
-Default: no shared commands.
+Default: shared command surfaces proxy to the active coordinator when standalone is installed.
 
 Reason:
 
@@ -256,13 +262,13 @@ Support directly.
 
 ### Uncaught exception capture
 
-Support, but keep it scoped to the embedded project only.
+Support through the active coordinator, which may own multiple installed projects.
 
 Implementation expectation:
 
-- embedded bootstrap may install a chained default uncaught exception handler
-- it still classifies against only that embedded project's descriptor
-- if several embedded mods install handlers, they chain and each checks attribution
+- only the active coordinator installs the chained default uncaught exception handler
+- it classifies against all enabled telemetry project descriptors
+- passive embedded mods forward API calls and do not install handlers
 
 This is acceptable, but it should be clearly documented as process-wide behavior.
 
@@ -297,7 +303,7 @@ Suggested embedded API:
 - `requestFlush()`
 - `captureTestReport(detail)`
 
-The embedded API should be local to the owning mod, not a global cross-mod locator.
+The embedded API should remain local to the owning mod and forward through the coordinator bridge rather than exposing a separate global cross-mod locator.
 
 ## Concrete Refactor Steps
 
@@ -313,11 +319,11 @@ The embedded API should be local to the owning mod, not a global cross-mod locat
 2. Keep package names stable where possible to minimize churn.
 3. Make `TelemetryRuntimeService` depend on core abstractions instead of owning all logic directly.
 
-### Phase 3: standalone skip behavior
+### Phase 3: coordinator discovery behavior
 
-1. Update `TelemetryProjectDiscovery` / registration flow to skip `runtimeMode=embedded`.
-2. Add diagnostics/logging so skipped embedded projects are visible.
-3. Add tests proving standalone ignores embedded descriptors.
+1. Update `TelemetryProjectDiscovery` / registration flow to include `runtimeMode=embedded`.
+2. Add diagnostics/logging so coordinator ownership is visible.
+3. Add tests proving standalone proxies to a newer embedded coordinator.
 
 ### Phase 4: embedded bootstrap implementation
 
@@ -373,7 +379,7 @@ The rest of the descriptor stays the same.
 ### Unit tests
 
 - descriptor parsing with `runtimeMode`
-- standalone skip logic
+- coordinator discovery and proxy behavior
 - embedded bootstrap descriptor loading
 - embedded local storage path selection
 
@@ -381,7 +387,7 @@ The rest of the descriptor stays the same.
 
 - dependency-mode consumer still works unchanged
 - embedded consumer can emit and flush a hosted test report
-- standalone runtime ignores an embedded consumer descriptor
+- active coordinator handles an embedded consumer descriptor
 - mixed server with one dependency-mode mod and one embedded-mode mod works without duplicate alerts
 
 ### Manual validation
@@ -394,7 +400,7 @@ The rest of the descriptor stays the same.
 ## Recommended Execution Order
 
 1. add `runtimeMode`
-2. add standalone skip behavior
+2. add coordinator discovery behavior
 3. extract `core` boundary
 4. add embedded bootstrap
 5. add embedded sample mod

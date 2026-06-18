@@ -19,6 +19,9 @@ broke.
 - Designed around `dependency` mode as the default integration path.
 - Also supports `embedded` mode for advanced integrations that want to bundle the
   telemetry bootstrap directly.
+- If multiple standalone or embedded telemetry copies are installed, the latest
+  compatible runtime version becomes the active coordinator for all enabled
+  telemetry projects. Standalone wins only when runtime versions tie.
 - Captures attributed crashes and startup/setup failures, queues reports locally,
   and flushes them to the configured destination.
 - Emits anonymous Hytale usage statistics for active servers, active players,
@@ -119,7 +122,9 @@ Portal URL: `https://telemetry.alecsmods.com/portal`
 Need something more custom than the default hosted dependency-mode flow?
 
 - Use `runtimeMode: "embedded"` if you want to bundle telemetry bootstrap logic
-  directly into your mod.
+  directly into your mod. Embedded copies still participate in coordinator
+  election and can handle telemetry for all installed enabled projects when they
+  are the latest compatible runtime.
 - Use a custom endpoint if you want reports to go somewhere other than Alec's
   hosted service.
 - Server owners can override packaged destination settings at runtime through
