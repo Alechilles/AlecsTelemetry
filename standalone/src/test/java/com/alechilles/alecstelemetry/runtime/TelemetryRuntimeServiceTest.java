@@ -89,7 +89,7 @@ class TelemetryRuntimeServiceTest {
         assertEquals("embedded:Example:Embedded Mod", service.activeCoordinatorProviderId());
         assertFalse(service.isEnabled());
         assertFalse(service.api().isEnabled());
-        assertEquals(List.of("embedded-mod"), service.projects().stream()
+        assertEquals(List.of("embedded-mod", "embedded-consent-only"), service.projects().stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         assertNull(service.api().findProject("standalone-local"));
@@ -1627,6 +1627,8 @@ class TelemetryRuntimeServiceTest {
         private boolean breadcrumbsEnabled = true;
         private String consentProjectId = "embedded-mod";
         private String consentDisplayName = "Embedded Mod";
+        private String consentOnlyProjectId = "embedded-consent-only";
+        private String consentOnlyDisplayName = "Embedded Consent Only";
         private int pendingReports = 7;
         private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
         private Map<String, Object> lastDetails = Map.of();
@@ -1775,21 +1777,25 @@ class TelemetryRuntimeServiceTest {
         public Map<String, Object> consentDiagnostics() {
             return TelemetryConsentBridgePayload.diagnosticsSummary(new TelemetryRuntimeDiagnostics(
                     true,
-                    1,
+                    2,
                     1,
                     pendingReports,
                     false,
                     "never",
                     null,
                     List.of(),
-                    List.of(consentProjectDiagnostics())
+                    List.of(consentProjectDiagnostics(), consentOnlyProjectDiagnostics())
             ));
         }
 
         @Override
         public Map<String, Object> consentProjectDiagnostics(@Nonnull String projectId) {
-            return consentProjectId.equalsIgnoreCase(projectId.trim())
-                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(consentProjectDiagnostics())
+            String normalized = projectId.trim();
+            if (consentProjectId.equalsIgnoreCase(normalized)) {
+                return TelemetryConsentBridgePayload.projectDiagnosticsSummary(consentProjectDiagnostics());
+            }
+            return consentOnlyProjectId.equalsIgnoreCase(normalized)
+                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(consentOnlyProjectDiagnostics())
                     : Map.of();
         }
 
@@ -1881,6 +1887,38 @@ class TelemetryRuntimeServiceTest {
                     usageEnabled,
                     statsEnabled,
                     breadcrumbsEnabled,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+            );
+        }
+
+        private TelemetryRuntimeDiagnostics.ProjectDiagnostics consentOnlyProjectDiagnostics() {
+            return new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                    consentOnlyProjectId,
+                    consentOnlyDisplayName,
+                    true,
+                    false,
+                    "custom",
+                    "https://example.invalid/telemetry",
+                    0,
+                    "Example:" + consentOnlyDisplayName,
+                    "1.0.0",
+                    null,
+                    null,
+                    List.of("com.example.consentonly"),
+                    "embedded",
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
                     true,
                     true,
                     true,

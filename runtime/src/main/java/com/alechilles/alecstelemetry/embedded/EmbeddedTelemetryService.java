@@ -1362,21 +1362,27 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     private static List<Map<String, Object>> activeProjects(@Nonnull TelemetryCoordinatorBridge active) {
-        List<Map<String, Object>> summaries = active.projectSummaries();
-        if (!summaries.isEmpty()) {
-            return summaries;
+        LinkedHashMap<String, Map<String, Object>> projects = new LinkedHashMap<>();
+        for (Map<String, Object> summary : active.projectSummaries()) {
+            putProjectSummary(projects, summary);
         }
         Object rawProjects = active.consentDiagnostics().get("projects");
-        if (!(rawProjects instanceof List<?> rawList) || rawList.isEmpty()) {
-            return List.of();
-        }
-        ArrayList<Map<String, Object>> projects = new ArrayList<>(rawList.size());
-        for (Object rawProject : rawList) {
-            if (rawProject instanceof Map<?, ?> project) {
-                projects.add(stringObjectMap(project));
+        if (rawProjects instanceof List<?> rawList) {
+            for (Object rawProject : rawList) {
+                if (rawProject instanceof Map<?, ?> project) {
+                    putProjectSummary(projects, stringObjectMap(project));
+                }
             }
         }
-        return List.copyOf(projects);
+        return List.copyOf(projects.values());
+    }
+
+    private static void putProjectSummary(@Nonnull LinkedHashMap<String, Map<String, Object>> projects,
+                                          @Nonnull Map<String, Object> summary) {
+        String projectId = stringValue(summary.get("projectId"));
+        if (projectId != null) {
+            projects.putIfAbsent(projectId.toLowerCase(Locale.ROOT), summary);
+        }
     }
 
     @Nullable

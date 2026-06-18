@@ -452,11 +452,12 @@ class EmbeddedTelemetryServiceTest {
 
         assertFalse(service.ownsActiveCoordinator());
         assertEquals("standalone:Example:Provider", service.activeCoordinatorProviderId());
-        assertEquals(List.of("provider-mod"), service.commandProjects().stream()
+        assertEquals(List.of("provider-mod", "provider-consent-only"), service.commandProjects().stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         assertNull(service.commandProject("embedded-mod"));
         assertEquals("provider-mod", service.commandProject("provider-mod").projectId());
+        assertEquals("provider-consent-only", service.commandProject("provider-consent-only").projectId());
         assertEquals(5, service.commandPendingReports(null));
         assertEquals(5, service.commandPendingReports("provider-mod"));
         assertEquals("active-last", service.commandLastFlushResult());
@@ -895,21 +896,25 @@ class EmbeddedTelemetryServiceTest {
         public Map<String, Object> consentDiagnostics() {
             return TelemetryConsentBridgePayload.diagnosticsSummary(new com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics(
                     true,
-                    1,
+                    2,
                     1,
                     pendingReports,
                     false,
                     lastFlushResult,
                     null,
                     List.of(),
-                    List.of(projectDiagnostics())
+                    List.of(projectDiagnostics(), consentOnlyProjectDiagnostics())
             ));
         }
 
         @Override
         public Map<String, Object> consentProjectDiagnostics(String projectId) {
-            return "provider-mod".equalsIgnoreCase(projectId.trim())
-                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(projectDiagnostics())
+            String normalized = projectId.trim();
+            if ("provider-mod".equalsIgnoreCase(normalized)) {
+                return TelemetryConsentBridgePayload.projectDiagnosticsSummary(projectDiagnostics());
+            }
+            return "provider-consent-only".equalsIgnoreCase(normalized)
+                    ? TelemetryConsentBridgePayload.projectDiagnosticsSummary(consentOnlyProjectDiagnostics())
                     : Map.of();
         }
 
@@ -953,6 +958,38 @@ class EmbeddedTelemetryServiceTest {
                     snapshot.usageEnabled(),
                     snapshot.statsEnabled(),
                     snapshot.breadcrumbsEnabled(),
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true
+            );
+        }
+
+        private com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics consentOnlyProjectDiagnostics() {
+            return new com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                    "provider-consent-only",
+                    "Provider Consent Only",
+                    true,
+                    false,
+                    "custom",
+                    "https://example.invalid/telemetry",
+                    0,
+                    "Example:Provider Consent Only",
+                    "2.0.0",
+                    null,
+                    null,
+                    List.of("com.example.provider.consentonly"),
+                    "dependency",
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
                     true,
                     true,
                     true,
