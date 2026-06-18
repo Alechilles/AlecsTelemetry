@@ -13,7 +13,7 @@ class TelemetryConsentCoordinatorTest {
     @Test
     void firstRunConsentSendsChatNoticeInsteadOfOpeningUi() throws Exception {
         String source = Files.readString(Path.of(
-                "../runtime/src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentCoordinator.java"
+                "src/main/java/com/alechilles/alecstelemetry/consent/TelemetryConsentCoordinator.java"
         )).replace("\r\n", "\n");
         String onPlayerReady = source.substring(
                 source.indexOf("public void onPlayerReady"),

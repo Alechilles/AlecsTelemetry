@@ -204,7 +204,11 @@ class TelemetryRuntimeHostTest {
         return new ProviderFixture(new TelemetryRuntimeProviderHandle(
                 request,
                 candidate,
+                settings,
+                dataPaths,
                 service,
+                List.of(project),
+                List.of(),
                 new TelemetryPlayerCounter(),
                 null,
                 commandRegistrar
