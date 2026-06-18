@@ -48,7 +48,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Level;
 
 /**
  * Standalone telemetry runtime mod orchestration built on the shared telemetry core engine.
@@ -85,7 +84,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
                 logger
         );
         TelemetryRuntimeDiscoveryResult discoveryResult = new TelemetryRuntimeDiscovery(logger)
-                .discoverActive(dataPaths, loadedModSnapshotProvider);
+                .discoverActive(dataPaths, descriptorSnapshot, loadedModSnapshotProvider);
         return new TelemetryRuntimeService(
                 settings,
                 dataPaths,
@@ -118,7 +117,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
                 loadedMods,
                 TelemetryLoadedModSnapshotProvider.fixed(loadedMods),
                 TelemetryProjectCollisionDetector.detect(projects),
-                buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
+                TelemetryRuntimeDiscovery.buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
                 executor,
@@ -152,7 +151,7 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
                 loadedMods,
                 loadedModSnapshotProvider,
                 TelemetryProjectCollisionDetector.detect(projects),
-                buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
+                TelemetryRuntimeDiscovery.buildRegistrationWarnings(TelemetryProjectCollisionDetector.detect(projects), List.of()),
                 client,
                 logger,
                 executor,
@@ -759,61 +758,10 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     }
 
     @Nonnull
-    private static List<TelemetryProjectRegistration> applyOverrides(
-            @Nonnull List<TelemetryProjectRegistration> projects,
-            @Nonnull Map<String, TelemetryProjectOverride> overrides) {
-        return TelemetryRuntimeDiscovery.applyOverrides(projects, overrides);
-    }
-
-    @Nonnull
     static List<TelemetryProjectRegistration> filterRegistrationsToLoadedMods(
             @Nonnull List<TelemetryProjectRegistration> projects,
             @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods) {
         return TelemetryRuntimeDiscovery.filterRegistrationsToLoadedMods(projects, loadedMods);
-    }
-
-    private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,
-                                            @Nonnull Map<String, Boolean> loadedIdentifiers) {
-        if (containsIdentifierVariant(loadedIdentifiers, project.pluginIdentifier())) {
-            return true;
-        }
-        if (containsIdentifierVariant(loadedIdentifiers, project.displayName())) {
-            return true;
-        }
-        for (String ownerPluginIdentifier : project.ownerPluginIdentifiers()) {
-            if (containsIdentifierVariant(loadedIdentifiers, ownerPluginIdentifier)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean containsIdentifierVariant(@Nonnull Map<String, Boolean> loadedIdentifiers,
-                                                     @Nullable String identifier) {
-        if (identifier == null || identifier.isBlank()) {
-            return false;
-        }
-        LinkedHashMap<String, Boolean> variants = new LinkedHashMap<>();
-        addIdentifierVariants(variants, identifier);
-        for (String variant : variants.keySet()) {
-            if (loadedIdentifiers.containsKey(variant)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static void addIdentifierVariants(@Nonnull Map<String, Boolean> identifiers,
-                                              @Nullable String identifier) {
-        if (identifier == null || identifier.isBlank()) {
-            return;
-        }
-        String normalized = identifier.trim();
-        identifiers.put(normalized.toLowerCase(Locale.ROOT), true);
-        int separator = normalized.indexOf(':');
-        if (separator >= 0 && separator + 1 < normalized.length()) {
-            identifiers.put(normalized.substring(separator + 1).trim().toLowerCase(Locale.ROOT), true);
-        }
     }
 
     @Nonnull
@@ -830,31 +778,6 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
             }
         }
         return List.copyOf(reportProjects.values());
-    }
-
-    @Nonnull
-    private static Map<String, TelemetryProjectOverride> loadConsentOverrides(
-            @Nonnull List<TelemetryProjectRegistration> projects,
-            @Nonnull Map<String, TelemetryProjectOverride> centralOverrides,
-            @Nonnull TelemetryDataPaths dataPaths,
-            @Nullable HytaleLogger logger) {
-        LinkedHashMap<String, TelemetryProjectOverride> resolved = new LinkedHashMap<>(centralOverrides);
-        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
-        for (TelemetryProjectRegistration project : projects) {
-            String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
-            if (resolved.containsKey(projectIdKey)) {
-                continue;
-            }
-            java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(dataPaths, project);
-            if (embeddedOverrideFile == null) {
-                continue;
-            }
-            TelemetryProjectOverride override = store.load(embeddedOverrideFile);
-            if (override != null) {
-                resolved.put(projectIdKey, override);
-            }
-        }
-        return Map.copyOf(resolved);
     }
 
     @Nullable
@@ -899,28 +822,6 @@ public final class TelemetryRuntimeService implements TelemetryConsentRuntime, T
     @Nonnull
     private static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
         return pluginIdentifier.trim().replace(':', '_');
-    }
-
-    @Nonnull
-    private static List<String> buildRegistrationWarnings(
-            @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
-            @Nonnull List<String> skippedWarnings) {
-        ArrayList<String> warnings = new ArrayList<>(skippedWarnings.size() + collisions.size());
-        warnings.addAll(skippedWarnings);
-        for (TelemetryProjectCollisionDetector.Collision collision : collisions) {
-            warnings.add(collision.format());
-        }
-        return List.copyOf(warnings);
-    }
-
-    private void logRegistrationWarnings() {
-        if (logger == null || registrationWarnings.isEmpty()) {
-            return;
-        }
-        for (String warning : registrationWarnings) {
-            Level level = warning.contains("embedded telemetry project") ? Level.INFO : Level.WARNING;
-            logger.at(level).log("Telemetry registration note: " + warning);
-        }
     }
 
     /**

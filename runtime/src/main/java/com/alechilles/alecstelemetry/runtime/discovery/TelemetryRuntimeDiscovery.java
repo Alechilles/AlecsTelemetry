@@ -27,11 +27,37 @@ public final class TelemetryRuntimeDiscovery {
     }
 
     @Nonnull
+    public TelemetryRuntimeDiscoveryResult discoverActive(@Nonnull TelemetryDataPaths dataPaths) {
+        TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(logger)
+                .discover(dataPaths.descriptorDirectories());
+        return discoverActive(
+                dataPaths,
+                discoveryResult,
+                TelemetryLoadedModSnapshotProvider.hytalePluginManager(discoveryResult.loadedMods(), logger)
+        );
+    }
+
+    @Nonnull
     public TelemetryRuntimeDiscoveryResult discoverActive(
             @Nonnull TelemetryDataPaths dataPaths,
             @Nonnull TelemetryLoadedModSnapshotProvider snapshotProvider) {
         TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(logger)
                 .discover(dataPaths.descriptorDirectories());
+        return discoverActive(dataPaths, discoveryResult, snapshotProvider);
+    }
+
+    @Nonnull
+    public TelemetryRuntimeDiscoveryResult discoverActive(
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nonnull TelemetryProjectDiscovery.DiscoveryResult discoveryResult) {
+        return discoverActive(dataPaths, discoveryResult, TelemetryLoadedModSnapshotProvider.fixed(discoveryResult.loadedMods()));
+    }
+
+    @Nonnull
+    public TelemetryRuntimeDiscoveryResult discoverActive(
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nonnull TelemetryProjectDiscovery.DiscoveryResult discoveryResult,
+            @Nonnull TelemetryLoadedModSnapshotProvider snapshotProvider) {
         List<CrashReportEnvelope.LoadedModMetadata> activeLoadedMods = snapshotProvider.snapshotLoadedMods();
         List<TelemetryProjectRegistration> activeProjects = filterRegistrationsToLoadedMods(
                 discoveryResult.projects(),
@@ -188,7 +214,7 @@ public final class TelemetryRuntimeDiscovery {
     }
 
     @Nonnull
-    private static List<String> buildRegistrationWarnings(
+    public static List<String> buildRegistrationWarnings(
             @Nonnull List<TelemetryProjectCollisionDetector.Collision> collisions,
             @Nonnull List<String> skippedWarnings) {
         ArrayList<String> warnings = new ArrayList<>(skippedWarnings.size() + collisions.size());
