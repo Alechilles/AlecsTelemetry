@@ -109,6 +109,60 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void passiveStandaloneManualReportSubmissionRoutesToActiveCoordinator() throws Exception {
+        TelemetryRuntimeSettings settings = manualReportSettings("{}");
+        TelemetryDataPaths dataPaths = manualReportPaths(settings);
+        RecordingCoordinatorBridge embedded = new RecordingCoordinatorBridge(new TelemetryRuntimeCandidate(
+                "embedded:Example:Embedded Mod",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar"),
+                tempDir.resolve("Telemetry")
+        ));
+        embedded.manualReportResult = Map.of(
+                "accepted", false,
+                "validationErrors", List.of("proxied_manual_report")
+        );
+        TelemetryCoordinatorRegistry.register(embedded);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                manualReportDescriptor("embedded-mod", "Embedded Mod", true, "embedded"),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(registration),
+                List.of(registration),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        service.start();
+
+        ManualReportEnvelope.CreateResult result = service.submitManualReport(
+                "embedded-mod",
+                issueSubmission(),
+                playerContext()
+        );
+
+        assertFalse(result.accepted());
+        assertTrue(result.validationErrors().contains("proxied_manual_report"));
+        assertEquals("embedded-mod", embedded.lastManualReportProjectId);
+        assertEquals("issue", embedded.lastManualReportSubmission.get("kind"));
+        assertEquals("test-world", embedded.lastManualReportPlayerContext.get("worldName"));
+        assertEquals(0, fileCount(dataPaths.pendingManualReportsDirectory("embedded-mod")));
+
+        service.shutdown();
+    }
+
+    @Test
     void manualReportSubmissionReturnsValidationErrorWhenGloballyDisabled() throws Exception {
         TelemetryRuntimeSettings settings = manualReportSettings("""
                 {
@@ -1348,6 +1402,13 @@ class TelemetryRuntimeServiceTest {
         private boolean statsEnabled = true;
         private boolean breadcrumbsEnabled = true;
         private Map<String, Object> lastDetails = Map.of();
+        private String lastManualReportProjectId;
+        private Map<String, Object> lastManualReportSubmission = Map.of();
+        private Map<String, Object> lastManualReportPlayerContext = Map.of();
+        private Map<String, Object> manualReportResult = Map.of(
+                "accepted", false,
+                "validationErrors", List.of("manual_report_not_configured")
+        );
 
         private RecordingCoordinatorBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -1475,6 +1536,16 @@ class TelemetryRuntimeServiceTest {
             lastEventName = eventName;
             lastDetails = details;
             return true;
+        }
+
+        @Override
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> submission,
+                                                      @Nonnull Map<String, Object> playerContext) {
+            lastManualReportProjectId = projectId;
+            lastManualReportSubmission = submission;
+            lastManualReportPlayerContext = playerContext;
+            return manualReportResult;
         }
     }
 }

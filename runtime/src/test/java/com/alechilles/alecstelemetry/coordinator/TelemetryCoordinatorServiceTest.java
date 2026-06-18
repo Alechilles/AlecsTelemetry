@@ -93,6 +93,51 @@ class TelemetryCoordinatorServiceTest {
         assertEquals("test", payload.getAsJsonObject("details").get("source").getAsString());
     }
 
+    @Test
+    void bridgeFriendlyExceptionalWorldRemovalCapturesForAttributedProject() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                descriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+        RuntimeException throwable = new RuntimeException("world crashed");
+        throwable.setStackTrace(new StackTraceElement[]{
+                new StackTraceElement("com.example.telemetry.WorldSystem", "tick", "WorldSystem.java", 42)
+        });
+
+        assertTrue(service.captureExceptionalWorldRemoval(
+                throwable,
+                "Default",
+                "EXCEPTIONAL",
+                "Example:Embedded Mod"
+        ));
+        assertEquals(1, service.flushPendingReportsNow("test", "embedded-mod").attempted());
+
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("embedded-mod", payload.get("projectId").getAsString());
+        assertEquals("exceptional_world_removal", payload.get("source").getAsString());
+        assertEquals("Default", payload.get("worldName").getAsString());
+        assertEquals("EXCEPTIONAL", payload.get("worldRemovalReason").getAsString());
+        assertEquals("Example:Embedded Mod", payload.get("worldFailurePluginIdentifier").getAsString());
+    }
+
     private TelemetryDataPaths dataPaths(TelemetryRuntimeSettings settings) {
         return new TelemetryDataPaths(
                 tempDir,

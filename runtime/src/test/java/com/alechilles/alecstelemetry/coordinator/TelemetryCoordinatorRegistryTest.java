@@ -3,6 +3,8 @@ package com.alechilles.alecstelemetry.coordinator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -39,10 +41,21 @@ class TelemetryCoordinatorRegistryTest {
         assertTrue(active.recordUsage("alecs-tamework", "settings_page_opened", Map.of("source", "api")));
         assertTrue(active.setProjectEnabled("alecs-tamework", false));
         assertTrue(active.setBreadcrumbsEnabled("alecs-tamework", false));
+        RuntimeException throwable = new RuntimeException("world crashed");
+        assertTrue(active.captureExceptionalWorldRemoval(
+                throwable,
+                "Default",
+                "EXCEPTIONAL",
+                "Alechilles:Alec's Tamework!"
+        ));
 
         assertEquals("alecs-tamework", embedded.lastProjectId);
         assertEquals("settings_page_opened", embedded.lastEventName);
         assertEquals("api", embedded.lastDetails.get("source"));
+        assertEquals(throwable, embedded.lastWorldRemovalThrowable);
+        assertEquals("Default", embedded.lastWorldName);
+        assertEquals("EXCEPTIONAL", embedded.lastWorldRemovalReason);
+        assertEquals("Alechilles:Alec's Tamework!", embedded.lastWorldFailurePluginIdentifier);
         assertFalse(embedded.projectEnabled);
         assertFalse(embedded.breadcrumbsEnabled);
     }
@@ -60,8 +73,33 @@ class TelemetryCoordinatorRegistryTest {
         assertFalse(incompatible.active);
     }
 
+    @Test
+    void shutsDownOldCoordinatorBeforeStartingNewWinner() {
+        ArrayList<String> lifecycle = new ArrayList<>();
+        OrderedBridge standalone = orderedBridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3", lifecycle);
+        OrderedBridge embedded = orderedBridge("embedded", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4", lifecycle);
+
+        TelemetryCoordinatorRegistry.register(standalone);
+        assertEquals(List.of("standalone:start"), lifecycle);
+
+        lifecycle.clear();
+        TelemetryCoordinatorRegistry.register(embedded);
+
+        assertEquals(List.of("standalone:shutdown", "embedded:start"), lifecycle);
+    }
+
     private static RecordingBridge bridge(String providerId, TelemetryRuntimeOrigin origin, String runtimeVersion) {
         return new RecordingBridge(candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION));
+    }
+
+    private static OrderedBridge orderedBridge(String providerId,
+                                               TelemetryRuntimeOrigin origin,
+                                               String runtimeVersion,
+                                               ArrayList<String> lifecycle) {
+        return new OrderedBridge(
+                candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION),
+                lifecycle
+        );
     }
 
     private static ForeignBridge foreignBridge(String providerId, TelemetryRuntimeOrigin origin, String runtimeVersion) {
@@ -155,6 +193,25 @@ class TelemetryCoordinatorRegistryTest {
         }
     }
 
+    private static final class OrderedBridge extends RecordingBridge {
+        private final ArrayList<String> lifecycle;
+
+        private OrderedBridge(TelemetryRuntimeCandidate candidate, ArrayList<String> lifecycle) {
+            super(candidate);
+            this.lifecycle = lifecycle;
+        }
+
+        @Override
+        public void start() {
+            lifecycle.add(providerId() + ":start");
+        }
+
+        @Override
+        public void shutdown() {
+            lifecycle.add(providerId() + ":shutdown");
+        }
+    }
+
     @SuppressWarnings("unused")
     private static final class ForeignBridge {
         private final TelemetryRuntimeCandidate candidate;
@@ -164,6 +221,10 @@ class TelemetryCoordinatorRegistryTest {
         private boolean projectEnabled = true;
         private boolean breadcrumbsEnabled = true;
         private Map<String, Object> lastDetails = Map.of();
+        private Throwable lastWorldRemovalThrowable;
+        private String lastWorldName;
+        private String lastWorldRemovalReason;
+        private String lastWorldFailurePluginIdentifier;
 
         private ForeignBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -231,6 +292,17 @@ class TelemetryCoordinatorRegistryTest {
             lastProjectId = projectId;
             lastEventName = eventName;
             lastDetails = details;
+            return true;
+        }
+
+        public boolean captureExceptionalWorldRemoval(Throwable throwable,
+                                                      String worldName,
+                                                      String removalReason,
+                                                      String possibleFailureCause) {
+            lastWorldRemovalThrowable = throwable;
+            lastWorldName = worldName;
+            lastWorldRemovalReason = removalReason;
+            lastWorldFailurePluginIdentifier = possibleFailureCause;
             return true;
         }
     }

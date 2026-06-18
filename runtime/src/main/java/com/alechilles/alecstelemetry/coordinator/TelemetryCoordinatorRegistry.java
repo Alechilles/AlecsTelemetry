@@ -88,20 +88,30 @@ public final class TelemetryCoordinatorRegistry {
                 candidates(),
                 COORDINATOR_PROTOCOL_VERSION
         );
-        for (Object value : registry().values()) {
+        List<Object> bridges = List.copyOf(registry().values());
+        for (Object value : bridges) {
             TelemetryRuntimeCandidate candidate = candidateFrom(value);
             if (candidate == null) {
                 continue;
             }
             ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
             boolean shouldBeActive = winner != null && candidate.providerId().equals(winner.providerId());
-            if (shouldBeActive && !bridge.isActive()) {
-                bridge.activate();
-                bridge.start();
-            } else if (!shouldBeActive && bridge.isActive()) {
+            if (!shouldBeActive && bridge.isActive()) {
                 bridge.shutdown();
                 bridge.deactivate();
             }
+        }
+        if (winner == null) {
+            return;
+        }
+        Object winningBridge = registry().get(winner.providerId());
+        if (winningBridge == null) {
+            return;
+        }
+        ReflectiveBridge bridge = new ReflectiveBridge(winningBridge, winner);
+        if (!bridge.isActive()) {
+            bridge.activate();
+            bridge.start();
         }
     }
 
@@ -454,6 +464,21 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                      @Nullable String worldName,
+                                                      @Nullable String removalReason,
+                                                      @Nullable String possibleFailureCause) {
+            return invokeBoolean(
+                    "captureExceptionalWorldRemoval",
+                    new Class<?>[]{Throwable.class, String.class, String.class, String.class},
+                    throwable,
+                    worldName,
+                    removalReason,
+                    possibleFailureCause
+            );
+        }
+
+        @Override
         public boolean requestFlush(@Nullable String projectId) {
             return invokeBoolean(
                     "requestFlush",
@@ -470,6 +495,29 @@ public final class TelemetryCoordinatorRegistry {
                     projectId,
                     detail
             );
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                       @Nonnull Map<String, Object> submission,
+                                                       @Nonnull Map<String, Object> playerContext) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "submitManualReport",
+                        new Class<?>[]{String.class, Map.class, Map.class},
+                        projectId,
+                        submission,
+                        playerContext
+                );
+                if (value instanceof Map<?, ?> result) {
+                    return (Map<String, Object>) result;
+                }
+                return TelemetryCoordinatorBridge.super.submitManualReport(projectId, submission, playerContext);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.submitManualReport(projectId, submission, playerContext);
+            }
         }
 
         private boolean invokeBoolean(@Nonnull String methodName,

@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.coordinator;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -132,11 +133,25 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    default boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                   @Nullable String worldName,
+                                                   @Nullable String removalReason,
+                                                   @Nullable String possibleFailureCause) {
+        return false;
+    }
+
     default boolean requestFlush(@Nullable String projectId) {
         return false;
     }
 
     default boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return false;
+    }
+
+    @Nonnull
+    default Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                   @Nonnull Map<String, Object> submission,
+                                                   @Nonnull Map<String, Object> playerContext) {
+        return Map.of("accepted", false, "validationErrors", List.of("coordinator_manual_reports_unavailable"));
     }
 }

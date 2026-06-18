@@ -531,6 +531,19 @@ public final class TelemetryRuntimeService {
 
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
+        if (world == null || removalReason != RemoveWorldEvent.RemovalReason.EXCEPTIONAL || world.getFailureException() == null) {
+            return;
+        }
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureExceptionalWorldRemoval(
+                    world.getFailureException(),
+                    world.getName(),
+                    removalReason.name(),
+                    world.getPossibleFailureCause() == null ? null : world.getPossibleFailureCause().toString()
+            );
+            return;
+        }
         engine.captureExceptionalWorldRemoval(world, removalReason);
     }
 
@@ -538,6 +551,14 @@ public final class TelemetryRuntimeService {
     public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return manualReportResultFromMap(active.submitManualReport(
+                    projectId,
+                    submissionToMap(submission),
+                    playerContextToMap(playerContext)
+            ));
+        }
         return engine.submitManualReport(projectId, submission, playerContext);
     }
 
@@ -891,6 +912,91 @@ public final class TelemetryRuntimeService {
         }
     }
 
+    @Nonnull
+    private static Map<String, Object> submissionToMap(@Nonnull ManualReportSubmission submission) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("kind", submission.kind().key());
+        values.put("title", submission.title());
+        values.put("description", submission.description());
+        putIfPresent(values, "contact", submission.contact());
+        values.put("formValues", submission.formValues());
+        values.put("includeCurrentServerLog", submission.includeCurrentServerLog());
+        values.put("includePreviousServerLog", submission.includePreviousServerLog());
+        values.put("includeLoadedModList", submission.includeLoadedModList());
+        values.put("includeDiagnostics", submission.includeDiagnostics());
+        values.put("allowResolutionUpdates", submission.allowResolutionUpdates());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> playerContextToMap(@Nullable PlayerReportRuntimeContext playerContext) {
+        PlayerReportRuntimeContext safeContext = playerContext == null ? PlayerReportRuntimeContext.UNKNOWN : playerContext;
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("singleplayer", safeContext.singleplayer());
+        values.put("onlinePlayerCount", safeContext.onlinePlayerCount());
+        putIfPresent(values, "worldName", safeContext.worldName());
+        values.put("loadedMods", safeContext.loadedMods().stream()
+                .map(TelemetryRuntimeService::loadedModToMap)
+                .toList());
+        return Map.copyOf(values);
+    }
+
+    @Nonnull
+    private static Map<String, Object> loadedModToMap(@Nonnull CrashReportEnvelope.LoadedModMetadata loadedMod) {
+        return Map.of(
+                "identifier", loadedMod.identifier(),
+                "version", loadedMod.version()
+        );
+    }
+
+    @Nonnull
+    private static ManualReportEnvelope.CreateResult manualReportResultFromMap(@Nonnull Map<String, Object> values) {
+        List<String> errors = stringList(values.get("validationErrors"));
+        ManualReportEnvelope envelope = envelopeFrom(values.get("envelopeJson"));
+        String followUpToken = stringValue(values.get("followUpToken"));
+        if (Boolean.TRUE.equals(values.get("accepted")) && envelope == null && errors.isEmpty()) {
+            errors = List.of("coordinator_manual_report_missing_envelope");
+        }
+        return new ManualReportEnvelope.CreateResult(envelope, errors, followUpToken);
+    }
+
+    @Nullable
+    private static ManualReportEnvelope envelopeFrom(@Nullable Object value) {
+        String rawJson = stringValue(value);
+        if (rawJson == null) {
+            return null;
+        }
+        try {
+            return ManualReportEnvelope.fromJson(rawJson);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static String stringValue(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.toString().trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    @Nonnull
+    private static List<String> stringList(@Nullable Object value) {
+        if (!(value instanceof List<?> rawValues) || rawValues.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<String> values = new ArrayList<>();
+        for (Object rawValue : rawValues) {
+            String normalized = stringValue(rawValue);
+            if (normalized != null) {
+                values.add(normalized);
+            }
+        }
+        return List.copyOf(values);
+    }
+
     private static final class StandaloneCoordinatorBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
@@ -1030,6 +1136,14 @@ public final class TelemetryRuntimeService {
         }
 
         @Override
+        public boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                      @Nullable String worldName,
+                                                      @Nullable String removalReason,
+                                                      @Nullable String possibleFailureCause) {
+            return service.captureExceptionalWorldRemoval(throwable, worldName, removalReason, possibleFailureCause);
+        }
+
+        @Override
         public boolean recordError(@Nonnull String projectId,
                                    @Nonnull String eventName,
                                    @Nullable Throwable throwable,
@@ -1077,6 +1191,13 @@ public final class TelemetryRuntimeService {
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return service.captureTestReport(projectId, detail);
+        }
+
+        @Override
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> submission,
+                                                      @Nonnull Map<String, Object> playerContext) {
+            return service.submitManualReport(projectId, submission, playerContext);
         }
     }
 }

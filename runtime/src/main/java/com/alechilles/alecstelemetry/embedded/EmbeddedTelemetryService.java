@@ -361,7 +361,18 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
     @Override
     public void captureExceptionalWorldRemoval(@Nullable World world,
                                                @Nullable RemoveWorldEvent.RemovalReason removalReason) {
-        if (engine != null) {
+        if (world == null || removalReason != RemoveWorldEvent.RemovalReason.EXCEPTIONAL || world.getFailureException() == null) {
+            return;
+        }
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            active.captureExceptionalWorldRemoval(
+                    world.getFailureException(),
+                    world.getName(),
+                    removalReason.name(),
+                    world.getPossibleFailureCause() == null ? null : world.getPossibleFailureCause().toString()
+            );
+        } else if (engine != null) {
             engine.captureExceptionalWorldRemoval(world, removalReason);
         }
     }
@@ -604,6 +615,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         }
 
         @Override
+        public boolean captureExceptionalWorldRemoval(@Nullable Throwable throwable,
+                                                      @Nullable String worldName,
+                                                      @Nullable String removalReason,
+                                                      @Nullable String possibleFailureCause) {
+            return service.captureExceptionalWorldRemoval(throwable, worldName, removalReason, possibleFailureCause);
+        }
+
+        @Override
         public boolean recordError(@Nonnull String projectId,
                                    @Nonnull String eventName,
                                    @Nullable Throwable throwable,
@@ -651,6 +670,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle {
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return service.captureTestReport(projectId, detail);
+        }
+
+        @Override
+        public Map<String, Object> submitManualReport(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> submission,
+                                                      @Nonnull Map<String, Object> playerContext) {
+            return service.submitManualReport(projectId, submission, playerContext);
         }
     }
 
