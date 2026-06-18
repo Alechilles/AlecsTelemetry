@@ -987,6 +987,28 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         }
 
         @Override
+        public boolean isEnabled() {
+            return service.isEnabled();
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            ArrayList<Map<String, Object>> projects = new ArrayList<>(service.projects().size());
+            for (TelemetryProjectRegistration project : service.projects()) {
+                projects.add(projectSummary(project));
+            }
+            return List.copyOf(projects);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = service.findProject(projectId);
+            return project == null ? Map.of() : projectSummary(project);
+        }
+
+        @Override
         public boolean isProjectEnabled(@Nonnull String projectId) {
             return service.isProjectEnabled(projectId);
         }
@@ -1112,6 +1134,20 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                                                       @Nonnull Map<String, Object> playerContext) {
             return service.submitManualReport(projectId, submission, playerContext);
         }
+    }
+
+    @Nonnull
+    private static Map<String, Object> projectSummary(@Nonnull TelemetryProjectRegistration project) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("projectId", project.projectId());
+        summary.put("displayName", project.displayName());
+        summary.put("runtimeMode", project.runtimeMode());
+        summary.put("pluginIdentifier", project.pluginIdentifier());
+        summary.put("pluginVersion", project.pluginVersion());
+        if (project.sourcePath() != null) {
+            summary.put("sourcePath", project.sourcePath().toString());
+        }
+        return Map.copyOf(summary);
     }
 
     @Nonnull

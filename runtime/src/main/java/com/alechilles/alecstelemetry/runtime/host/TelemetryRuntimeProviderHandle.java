@@ -11,6 +11,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
@@ -28,6 +29,8 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -119,7 +122,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Override
     public int registeredProjectCount() {
-        return coordinator.registeredProjectCount();
+        return projects().size();
     }
 
     @Nonnull
@@ -137,13 +140,21 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nonnull
     @Override
     public List<TelemetryProjectRegistration> projects() {
-        return coordinator.projects();
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (usesLocalCoordinator(active)) {
+            return coordinator.projects();
+        }
+        return projectsFromSummaries(active.projectSummaries());
     }
 
     @Nullable
     @Override
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
-        return coordinator.findProject(projectId);
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (usesLocalCoordinator(active)) {
+            return coordinator.findProject(projectId);
+        }
+        return projectFromSummary(active.findProjectSummary(projectId));
     }
 
     @Override
@@ -327,6 +338,97 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
     }
 
+    private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
+        return active == null || bridge.providerId().equals(active.providerId());
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectRegistration> projectsFromSummaries(@Nonnull List<Map<String, Object>> summaries) {
+        if (summaries.isEmpty()) {
+            return List.of();
+        }
+        ArrayList<TelemetryProjectRegistration> projects = new ArrayList<>(summaries.size());
+        for (Map<String, Object> summary : summaries) {
+            TelemetryProjectRegistration project = projectFromSummary(summary);
+            if (project != null) {
+                projects.add(project);
+            }
+        }
+        return List.copyOf(projects);
+    }
+
+    @Nullable
+    private static TelemetryProjectRegistration projectFromSummary(@Nonnull Map<String, Object> summary) {
+        String projectId = stringValue(summary.get("projectId"));
+        if (projectId == null) {
+            return null;
+        }
+        String displayName = firstNonBlank(stringValue(summary.get("displayName")), projectId);
+        String runtimeMode = firstNonBlank(
+                stringValue(summary.get("runtimeMode")),
+                TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY
+        );
+        String pluginIdentifier = firstNonBlank(stringValue(summary.get("pluginIdentifier")), "unknown:unknown");
+        String pluginVersion = firstNonBlank(stringValue(summary.get("pluginVersion")), "unknown");
+        return new TelemetryProjectRegistration(
+                TelemetryProjectDescriptor.fromJson(
+                        "{\"projectId\":\"" + escapeJson(projectId)
+                                + "\",\"displayName\":\"" + escapeJson(displayName)
+                                + "\",\"runtimeMode\":\"" + escapeJson(runtimeMode) + "\"}",
+                        null
+                ),
+                pluginIdentifier,
+                pluginVersion,
+                pathValue(summary.get("sourcePath"))
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> projectSummary(@Nonnull TelemetryProjectRegistration project) {
+        LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+        summary.put("projectId", project.projectId());
+        summary.put("displayName", project.displayName());
+        summary.put("runtimeMode", project.runtimeMode());
+        summary.put("pluginIdentifier", project.pluginIdentifier());
+        summary.put("pluginVersion", project.pluginVersion());
+        if (project.sourcePath() != null) {
+            summary.put("sourcePath", project.sourcePath().toString());
+        }
+        return Map.copyOf(summary);
+    }
+
+    @Nullable
+    private static String stringValue(@Nullable Object value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.toString().trim();
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    @Nonnull
+    private static String firstNonBlank(@Nullable String value, @Nonnull String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    @Nullable
+    private static Path pathValue(@Nullable Object value) {
+        String normalized = stringValue(value);
+        if (normalized == null) {
+            return null;
+        }
+        try {
+            return Path.of(normalized);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    @Nonnull
+    private static String escapeJson(@Nonnull String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
     private static final class ProviderBridge implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
@@ -406,6 +508,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public boolean isEnabled() {
             return service.isEnabled();
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            ArrayList<Map<String, Object>> projects = new ArrayList<>(service.projects().size());
+            for (TelemetryProjectRegistration project : service.projects()) {
+                projects.add(projectSummary(project));
+            }
+            return List.copyOf(projects);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+            TelemetryProjectRegistration project = service.findProject(projectId);
+            return project == null ? Map.of() : projectSummary(project);
         }
 
         @Override

@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
+import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
@@ -23,6 +24,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,8 +76,20 @@ class TelemetryRuntimeHostTest {
 
     @Test
     void providerHandleReportsElectionOwnershipChanges() {
-        TelemetryRuntimeProviderHandle standalone = handle("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
-        TelemetryRuntimeProviderHandle embedded = handle("embedded:Alechilles:Consumer", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4");
+        TelemetryRuntimeProviderHandle standalone = handle(
+                "standalone:Alechilles:Telemetry",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                "standalone-project",
+                "Standalone Project"
+        );
+        TelemetryRuntimeProviderHandle embedded = handle(
+                "embedded:Alechilles:Consumer",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                "embedded-project",
+                "Embedded Project"
+        );
 
         standalone.start();
         embedded.start();
@@ -84,15 +98,30 @@ class TelemetryRuntimeHostTest {
         assertTrue(embedded.ownsActiveCoordinator());
         assertEquals("embedded:Alechilles:Consumer", standalone.activeCoordinatorProviderId());
         assertEquals("embedded:Alechilles:Consumer", embedded.activeCoordinatorProviderId());
+
+        List<TelemetryProjectHandle> projects = standalone.api().projects();
+        assertEquals(1, projects.size());
+        assertEquals("embedded-project", projects.getFirst().projectId());
+        assertEquals("Embedded Project", projects.getFirst().displayName());
+        assertNotNull(standalone.api().findProject("embedded-project"));
+        assertNull(standalone.api().findProject("standalone-project"));
     }
 
     private TelemetryRuntimeProviderHandle handle(String providerId,
                                                   TelemetryRuntimeOrigin origin,
                                                   String runtimeVersion) {
+        return handle(providerId, origin, runtimeVersion, "example-mod", "Example Mod");
+    }
+
+    private TelemetryRuntimeProviderHandle handle(String providerId,
+                                                  TelemetryRuntimeOrigin origin,
+                                                  String runtimeVersion,
+                                                  String projectId,
+                                                  String displayName) {
         Path root = tempDir.resolve(providerId.replace(':', '_'));
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
-        TelemetryProjectRegistration project = project(providerId);
+        TelemetryProjectRegistration project = project(providerId, projectId, displayName);
         TelemetryCoordinatorService service = new TelemetryCoordinatorService(
                 settings,
                 dataPaths,
@@ -145,9 +174,11 @@ class TelemetryRuntimeHostTest {
         );
     }
 
-    private static TelemetryProjectRegistration project(String providerId) {
+    private static TelemetryProjectRegistration project(String providerId,
+                                                        String projectId,
+                                                        String displayName) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
-                "{\"projectId\":\"example-mod\",\"displayName\":\"Example Mod\"}",
+                "{\"projectId\":\"" + projectId + "\",\"displayName\":\"" + displayName + "\"}",
                 null
         );
         return new TelemetryProjectRegistration(descriptor, providerId, "1.0.0", null);

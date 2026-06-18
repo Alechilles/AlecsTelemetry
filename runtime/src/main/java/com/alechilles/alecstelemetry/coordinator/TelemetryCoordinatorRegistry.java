@@ -276,6 +276,45 @@ public final class TelemetryCoordinatorRegistry {
             }
         }
 
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> projectSummaries() {
+            try {
+                Object value = invoke(delegate, "projectSummaries");
+                if (!(value instanceof List<?> list)) {
+                    return TelemetryCoordinatorBridge.super.projectSummaries();
+                }
+                ArrayList<Map<String, Object>> projects = new ArrayList<>();
+                for (Object project : list) {
+                    if (project instanceof Map<?, ?> map) {
+                        projects.add(stringObjectMap(map));
+                    }
+                }
+                return List.copyOf(projects);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.projectSummaries();
+            }
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "findProjectSummary",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                if (value instanceof Map<?, ?> map) {
+                    return stringObjectMap(map);
+                }
+                return TelemetryCoordinatorBridge.super.findProjectSummary(projectId);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super.findProjectSummary(projectId);
+            }
+        }
+
         @Override
         public boolean isProjectEnabled(@Nonnull String projectId) {
             return invokeBoolean(
@@ -546,6 +585,17 @@ public final class TelemetryCoordinatorRegistry {
                 invoke(delegate, methodName, parameterTypes, args);
             } catch (ReflectiveOperationException ignored) {
             }
+        }
+
+        @Nonnull
+        private static Map<String, Object> stringObjectMap(@Nonnull Map<?, ?> raw) {
+            java.util.LinkedHashMap<String, Object> values = new java.util.LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                if (entry != null && entry.getKey() != null && entry.getValue() != null) {
+                    values.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+            return Map.copyOf(values);
         }
     }
 }

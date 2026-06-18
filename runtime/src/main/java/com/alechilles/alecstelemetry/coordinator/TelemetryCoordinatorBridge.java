@@ -52,6 +52,22 @@ public interface TelemetryCoordinatorBridge {
         return isActive();
     }
 
+    @Nonnull
+    default List<Map<String, Object>> projectSummaries() {
+        return List.of();
+    }
+
+    @Nonnull
+    default Map<String, Object> findProjectSummary(@Nonnull String projectId) {
+        for (Map<String, Object> project : projectSummaries()) {
+            Object id = project.get("projectId");
+            if (id != null && id.toString().equalsIgnoreCase(projectId.trim())) {
+                return project;
+            }
+        }
+        return Map.of();
+    }
+
     default boolean isProjectEnabled(@Nonnull String projectId) {
         return false;
     }
