@@ -1,0 +1,7 @@
+standalone.*always.*(wins|own|owns|handles|active)
+always.*standalone.*(wins|own|owns|handles|active)
+standalone.*is (an|the) unconditional.*(winner|runtime|coordinator)
+must install.*standalone.*telemetry
+embedded.*cannot.*(coordinate|handle|report|upload)
+embedded.*never.*(coordinate|handle|report|upload)
+no standalone.*(telemetry|reports|upload).*disabled

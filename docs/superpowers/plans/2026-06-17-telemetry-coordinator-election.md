@@ -1940,7 +1940,7 @@ The active coordinator handles descriptors from all installed enabled mods, incl
 Run:
 
 ```powershell
-rg -n -f docs/verification/telemetry-coordinator-stale-patterns.txt README.md docs wiki
+rg -n -f docs/verification/telemetry-coordinator-stale-patterns.txt --glob '!docs/verification/telemetry-coordinator-stale-patterns.txt' README.md docs wiki
 ```
 
 Expected: no stale statements remain unless they are explicitly marked as historical notes.
