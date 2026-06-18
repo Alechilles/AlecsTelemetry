@@ -42,12 +42,55 @@ class TelemetryConsentViewModelTest {
         assertFalse(viewModel.projects().get(0).consent().projectEnabled());
         assertFalse(viewModel.projects().get(0).consent().crashEnabled());
         assertFalse(viewModel.projects().get(0).consent().statsEnabled());
+        assertFalse(viewModel.projects().get(0).supported().crashEnabled());
+        assertFalse(viewModel.projects().get(0).supported().statsEnabled());
         assertEquals("zeta-mod", viewModel.projects().get(1).projectId());
         assertTrue(viewModel.projects().get(1).consent().projectEnabled());
         assertTrue(viewModel.projects().get(1).consent().statsEnabled());
+        assertTrue(viewModel.projects().get(1).supported().statsEnabled());
         assertTrue(viewModel.explanationLines().contains(
                 "Each mod controls its suggested defaults, and you can override them here."
         ));
+    }
+
+    @Test
+    void exposesSupportedTelemetryCategoriesSeparatelyFromCurrentConsent() {
+        TelemetryRuntimeDiagnostics diagnostics = diagnosticsFor(new TelemetryRuntimeDiagnostics.ProjectDiagnostics(
+                "stats-mod",
+                "Stats Mod",
+                true,
+                false,
+                "hosted",
+                "https://example.invalid/ingest",
+                0,
+                "Example:Stats Mod",
+                "1.0.0",
+                "C:/mods/stats",
+                null,
+                List.of("com.example.stats"),
+                "dependency",
+                false,
+                false,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                true,
+                false
+        ));
+
+        TelemetryConsentViewModel.ProjectRow row = TelemetryConsentViewModel.from(diagnostics).projects().getFirst();
+
+        assertTrue(row.consent().statsEnabled());
+        assertFalse(row.consent().usageEnabled());
+        assertTrue(row.supported().statsEnabled());
+        assertFalse(row.supported().usageEnabled());
     }
 
     @Test
@@ -125,6 +168,13 @@ class TelemetryConsentViewModelTest {
                 categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
                 categoriesEnabled
         );
     }
@@ -161,6 +211,13 @@ class TelemetryConsentViewModelTest {
                 iconTexturePath,
                 List.of("com.example." + projectId.replace("-", "")),
                 "dependency",
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
+                categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,
                 categoriesEnabled,

@@ -10,6 +10,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -224,7 +225,7 @@ public final class TelemetryRuntimeService {
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
-            appliedAll &= applyConsent(project.projectId(), snapshot);
+            appliedAll &= applyConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
         }
         return appliedAll;
     }
@@ -232,17 +233,12 @@ public final class TelemetryRuntimeService {
     public boolean applyConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
         for (TelemetryProjectRegistration project : consentProjects) {
+            TelemetryConsentSnapshot supported = supportedSnapshot(project);
+            if (!supported.categoryEnabled(category)) {
+                continue;
+            }
             TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = buildProjectDiagnostics(project);
-            TelemetryConsentSnapshot current = new TelemetryConsentSnapshot(
-                    diagnostics.enabled(),
-                    diagnostics.crashEnabled(),
-                    diagnostics.errorEnabled(),
-                    diagnostics.lifecycleEnabled(),
-                    diagnostics.performanceEnabled(),
-                    diagnostics.usageEnabled(),
-                    diagnostics.statsEnabled(),
-                    diagnostics.breadcrumbsEnabled()
-            );
+            TelemetryConsentSnapshot current = diagnostics.consentSnapshot();
             appliedAll &= applyConsent(project.projectId(), current.withCategory(category, enabled));
         }
         return appliedAll;
@@ -253,26 +249,27 @@ public final class TelemetryRuntimeService {
         if (project == null) {
             return false;
         }
+        TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supportedSnapshot(project));
         java.nio.file.Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
-        boolean saved = overrideStore.saveProjectEnabled(overrideFile, snapshot.projectEnabled())
-                && overrideStore.saveCrashEnabled(overrideFile, snapshot.crashEnabled())
-                && overrideStore.saveErrorEventsEnabled(overrideFile, snapshot.errorEnabled())
-                && overrideStore.saveLifecycleEventsEnabled(overrideFile, snapshot.lifecycleEnabled())
-                && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
-                && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
-                && overrideStore.saveStatsEnabled(overrideFile, snapshot.statsEnabled())
-                && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
+        boolean saved = overrideStore.saveProjectEnabled(overrideFile, normalized.projectEnabled())
+                && overrideStore.saveCrashEnabled(overrideFile, normalized.crashEnabled())
+                && overrideStore.saveErrorEventsEnabled(overrideFile, normalized.errorEnabled())
+                && overrideStore.saveLifecycleEventsEnabled(overrideFile, normalized.lifecycleEnabled())
+                && overrideStore.savePerformanceEnabled(overrideFile, normalized.performanceEnabled())
+                && overrideStore.saveUsageEnabled(overrideFile, normalized.usageEnabled())
+                && overrideStore.saveStatsEnabled(overrideFile, normalized.statsEnabled())
+                && overrideStore.saveBreadcrumbsEnabled(overrideFile, normalized.breadcrumbsEnabled());
         java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(project);
         if (embeddedOverrideFile != null) {
             saved = saved
-                    && overrideStore.saveProjectEnabled(embeddedOverrideFile, snapshot.projectEnabled())
-                    && overrideStore.saveCrashEnabled(embeddedOverrideFile, snapshot.crashEnabled())
-                    && overrideStore.saveErrorEventsEnabled(embeddedOverrideFile, snapshot.errorEnabled())
-                    && overrideStore.saveLifecycleEventsEnabled(embeddedOverrideFile, snapshot.lifecycleEnabled())
-                    && overrideStore.savePerformanceEnabled(embeddedOverrideFile, snapshot.performanceEnabled())
-                    && overrideStore.saveUsageEnabled(embeddedOverrideFile, snapshot.usageEnabled())
-                    && overrideStore.saveStatsEnabled(embeddedOverrideFile, snapshot.statsEnabled())
-                    && overrideStore.saveBreadcrumbsEnabled(embeddedOverrideFile, snapshot.breadcrumbsEnabled());
+                    && overrideStore.saveProjectEnabled(embeddedOverrideFile, normalized.projectEnabled())
+                    && overrideStore.saveCrashEnabled(embeddedOverrideFile, normalized.crashEnabled())
+                    && overrideStore.saveErrorEventsEnabled(embeddedOverrideFile, normalized.errorEnabled())
+                    && overrideStore.saveLifecycleEventsEnabled(embeddedOverrideFile, normalized.lifecycleEnabled())
+                    && overrideStore.savePerformanceEnabled(embeddedOverrideFile, normalized.performanceEnabled())
+                    && overrideStore.saveUsageEnabled(embeddedOverrideFile, normalized.usageEnabled())
+                    && overrideStore.saveStatsEnabled(embeddedOverrideFile, normalized.statsEnabled())
+                    && overrideStore.saveBreadcrumbsEnabled(embeddedOverrideFile, normalized.breadcrumbsEnabled());
         }
         if (!saved) {
             return false;
@@ -282,16 +279,16 @@ public final class TelemetryRuntimeService {
             replaceConsentProject(project.withOverride(override));
         }
         if (findProject(project.projectId()) != null || findManualReportProject(project.projectId()) != null) {
-            engine.setProjectEnabled(project.projectId(), snapshot.projectEnabled());
+            engine.setProjectEnabled(project.projectId(), normalized.projectEnabled());
         }
         if (findProject(project.projectId()) != null) {
-            engine.setCrashEnabled(project.projectId(), snapshot.crashEnabled());
-            engine.setErrorEventsEnabled(project.projectId(), snapshot.errorEnabled());
-            engine.setLifecycleEventsEnabled(project.projectId(), snapshot.lifecycleEnabled());
-            engine.setPerformanceEnabled(project.projectId(), snapshot.performanceEnabled());
-            engine.setUsageEnabled(project.projectId(), snapshot.usageEnabled());
-            engine.setStatsEnabled(project.projectId(), snapshot.statsEnabled());
-            engine.setBreadcrumbsEnabled(project.projectId(), snapshot.breadcrumbsEnabled());
+            engine.setCrashEnabled(project.projectId(), normalized.crashEnabled());
+            engine.setErrorEventsEnabled(project.projectId(), normalized.errorEnabled());
+            engine.setLifecycleEventsEnabled(project.projectId(), normalized.lifecycleEnabled());
+            engine.setPerformanceEnabled(project.projectId(), normalized.performanceEnabled());
+            engine.setUsageEnabled(project.projectId(), normalized.usageEnabled());
+            engine.setStatsEnabled(project.projectId(), normalized.statsEnabled());
+            engine.setBreadcrumbsEnabled(project.projectId(), normalized.breadcrumbsEnabled());
         }
         return true;
     }
@@ -544,7 +541,51 @@ public final class TelemetryRuntimeService {
                 registeredForStandaloneRuntime ? engine.isPerformanceEnabled(project.projectId()) : project.performance().enabled(),
                 registeredForStandaloneRuntime ? engine.isUsageEnabled(project.projectId()) : project.usage().enabled(),
                 registeredForStandaloneRuntime ? engine.isStatsEnabled(project.projectId()) : project.stats().enabled(),
-                registeredForStandaloneRuntime ? engine.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled()
+                registeredForStandaloneRuntime ? engine.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled(),
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
+        return new TelemetryConsentSnapshot(
+                true,
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
+        TelemetryProjectDescriptor.CaptureOptions capture = project.descriptor().capture();
+        return capture.uncaughtExceptions()
+                || capture.setupFailures()
+                || capture.startFailures()
+                || capture.exceptionalWorldRemovals();
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot clampToSupported(@Nonnull TelemetryConsentSnapshot snapshot,
+                                                             @Nonnull TelemetryConsentSnapshot supported) {
+        return new TelemetryConsentSnapshot(
+                snapshot.projectEnabled(),
+                supported.crashEnabled() && snapshot.crashEnabled(),
+                supported.errorEnabled() && snapshot.errorEnabled(),
+                supported.lifecycleEnabled() && snapshot.lifecycleEnabled(),
+                supported.performanceEnabled() && snapshot.performanceEnabled(),
+                supported.usageEnabled() && snapshot.usageEnabled(),
+                supported.statsEnabled() && snapshot.statsEnabled(),
+                supported.breadcrumbsEnabled() && snapshot.breadcrumbsEnabled()
         );
     }
 

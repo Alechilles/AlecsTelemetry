@@ -44,7 +44,8 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                              @Nullable String sourcePath,
                              @Nullable String iconTexturePath,
                              @Nonnull String runtimeMode,
-                             @Nonnull TelemetryConsentSnapshot consent) {
+                             @Nonnull TelemetryConsentSnapshot consent,
+                             @Nonnull TelemetryConsentSnapshot supported) {
 
         @Nonnull
         private static ProjectRow from(@Nonnull TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
@@ -59,16 +60,8 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                     project.sourcePath(),
                     project.iconTexturePath(),
                     project.runtimeMode(),
-                    new TelemetryConsentSnapshot(
-                            project.enabled(),
-                            project.crashEnabled(),
-                            project.errorEnabled(),
-                            project.lifecycleEnabled(),
-                            project.performanceEnabled(),
-                            project.usageEnabled(),
-                            project.statsEnabled(),
-                            project.breadcrumbsEnabled()
-                    )
+                    project.consentSnapshot(),
+                    project.supportedSnapshot()
             );
         }
 

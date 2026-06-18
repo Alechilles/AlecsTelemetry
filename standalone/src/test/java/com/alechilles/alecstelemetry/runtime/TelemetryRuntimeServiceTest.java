@@ -939,6 +939,61 @@ class TelemetryRuntimeServiceTest {
     }
 
     @Test
+    void consentBulkChangesOnlyEnableCategoriesSupportedByDescriptor() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectRegistration project = new TelemetryProjectRegistration(
+                statsOnlyTelemetryDescriptor("animal-husbandry", "Animal Husbandry"),
+                "Example:Animal Husbandry",
+                "1.0.0",
+                tempDir.resolve("Animal Husbandry")
+        );
+        TelemetryRuntimeService service = new TelemetryRuntimeService(
+                settings,
+                dataPaths,
+                List.of(project),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Animal Husbandry", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+
+        assertTrue(service.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)));
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = service.projectDiagnostics("animal-husbandry");
+        assertTrue(diagnostics.enabled());
+        assertFalse(diagnostics.crashEnabled());
+        assertFalse(diagnostics.errorEnabled());
+        assertFalse(diagnostics.lifecycleEnabled());
+        assertFalse(diagnostics.performanceEnabled());
+        assertFalse(diagnostics.usageEnabled());
+        assertTrue(diagnostics.statsEnabled());
+        assertFalse(diagnostics.breadcrumbsEnabled());
+        assertFalse(diagnostics.crashSupported());
+        assertFalse(diagnostics.usageSupported());
+        assertTrue(diagnostics.statsSupported());
+
+        assertTrue(service.applyConsentCategoryToAll("usage", true));
+        assertFalse(service.projectDiagnostics("animal-husbandry").usageEnabled());
+
+        assertTrue(service.applyConsent(
+                "animal-husbandry",
+                new TelemetryConsentSnapshot(true, true, true, true, true, true, false, true)
+        ));
+        diagnostics = service.projectDiagnostics("animal-husbandry");
+        assertFalse(diagnostics.crashEnabled());
+        assertFalse(diagnostics.usageEnabled());
+        assertFalse(diagnostics.statsEnabled());
+    }
+
+    @Test
     void embeddedConsentProjectIsVisibleAndMirrorsOverridesToOwnerSettings() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         Path modsDir = tempDir.resolve("mods");
@@ -1167,6 +1222,47 @@ class TelemetryRuntimeServiceTest {
                   },
                   "usage": {
                     "enabled": true
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.invalid/telemetry",
+                    "eventUrl": "https://example.invalid/telemetry/event"
+                  }
+                }
+                """.formatted(projectId, displayName, displayName),
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor statsOnlyTelemetryDescriptor(String projectId, String displayName) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "performance": {
+                    "enabled": false
+                  },
+                  "usage": {
+                    "enabled": false
                   },
                   "stats": {
                     "enabled": true

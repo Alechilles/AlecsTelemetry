@@ -110,7 +110,10 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         commands.set("#TelemetryConsentSummary.Text", String.join("\n", viewModel.explanationLines()));
         commands.set("#TelemetryConsentAllEnabled.Value", allTelemetryEnabled(projects));
         for (String category : CATEGORIES) {
+            boolean supported = categoryAnySupported(projects, category);
             commands.set(globalCategoryCheckSelector(category) + ".Value", categoryAllEnabled(projects, category));
+            commands.set(globalCategoryCheckSelector(category) + ".Enabled", supported);
+            commands.set(globalCategoryToggleSelector(category) + ".Enabled", supported);
         }
         commands.set("#TelemetryConsentPrimary.Text", firstRun ? "Save choices" : "Save");
         commands.set("#TelemetryConsentSecondary.Text", firstRun ? "Not now" : "Close");
@@ -145,13 +148,21 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             commands.set(rowSelector(index) + " #TelemetryConsentProjectIconPlaceholder.Visible", true);
         }
         commands.set(projectCheckSelector(index) + ".Value", consent.projectEnabled());
-        commands.set(categoryCheckSelector(index, "crash") + ".Value", consent.crashEnabled());
-        commands.set(categoryCheckSelector(index, "error") + ".Value", consent.errorEnabled());
-        commands.set(categoryCheckSelector(index, "lifecycle") + ".Value", consent.lifecycleEnabled());
-        commands.set(categoryCheckSelector(index, "performance") + ".Value", consent.performanceEnabled());
-        commands.set(categoryCheckSelector(index, "usage") + ".Value", consent.usageEnabled());
-        commands.set(categoryCheckSelector(index, "stats") + ".Value", consent.statsEnabled());
-        commands.set(categoryCheckSelector(index, "breadcrumbs") + ".Value", consent.breadcrumbsEnabled());
+        for (String category : CATEGORIES) {
+            setCategory(commands, index, category, project.supported().categoryEnabled(category), consent.categoryEnabled(category));
+        }
+    }
+
+    private static void setCategory(@Nonnull UICommandBuilder commands,
+                                    int index,
+                                    @Nonnull String category,
+                                    boolean supported,
+                                    boolean enabled) {
+        String checkSelector = categoryCheckSelector(index, category);
+        String toggleSelector = categoryToggleSelector(index, category);
+        commands.set(checkSelector + ".Value", supported && enabled);
+        commands.set(checkSelector + ".Enabled", supported);
+        commands.set(toggleSelector + ".Enabled", supported);
     }
 
     private void bindEvents(@Nonnull UIEventBuilder events) {
@@ -172,6 +183,9 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 false
         );
         for (String category : CATEGORIES) {
+            if (!categoryAnySupported(projects, category)) {
+                continue;
+            }
             String categoryCheck = globalCategoryCheckSelector(category);
             events.addEventBinding(
                     CustomUIEventBindingType.ValueChanged,
@@ -224,6 +238,9 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                     false
             );
             for (String category : CATEGORIES) {
+                if (!project.supported().categoryEnabled(category)) {
+                    continue;
+                }
                 String categoryCheck = categoryCheckSelector(index, category);
                 events.addEventBinding(
                         CustomUIEventBindingType.ValueChanged,
@@ -248,16 +265,19 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     }
 
     private void toggleAll(boolean enabled) {
-        runtimeService.applyConsentToAll(new TelemetryConsentSnapshot(
-                enabled,
-                enabled,
-                enabled,
-                enabled,
-                enabled,
-                enabled,
-                enabled,
-                enabled
-        ));
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.diagnostics().projects()) {
+            TelemetryConsentSnapshot supported = project.supportedSnapshot();
+            runtimeService.applyConsent(project.projectId(), new TelemetryConsentSnapshot(
+                    enabled,
+                    enabled && supported.crashEnabled(),
+                    enabled && supported.errorEnabled(),
+                    enabled && supported.lifecycleEnabled(),
+                    enabled && supported.performanceEnabled(),
+                    enabled && supported.usageEnabled(),
+                    enabled && supported.statsEnabled(),
+                    enabled && supported.breadcrumbsEnabled()
+            ));
+        }
     }
 
     private void toggleProject(@Nullable String projectId, boolean enabled) {
@@ -285,12 +305,16 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         if (category == null || category.isBlank()) {
             return;
         }
+        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.diagnostics());
+        if (!categoryAnySupported(viewModel.projects(), category)) {
+            return;
+        }
         runtimeService.applyConsentCategoryToAll(category, enabled);
     }
 
     private void toggleCategory(@Nullable String projectId, @Nullable String category, boolean enabled) {
         TelemetryRuntimeDiagnostics.ProjectDiagnostics project = diagnostics(projectId);
-        if (project == null || category == null) {
+        if (project == null || category == null || !project.supportedSnapshot().categoryEnabled(category)) {
             return;
         }
         TelemetryConsentSnapshot current = snapshot(project);
@@ -330,20 +354,36 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     private static boolean allTelemetryEnabled(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects) {
         return !projects.isEmpty() && projects.stream().allMatch(project -> {
             TelemetryConsentSnapshot consent = project.consent();
+            TelemetryConsentSnapshot supported = project.supported();
             return consent.projectEnabled()
-                    && consent.crashEnabled()
-                    && consent.errorEnabled()
-                    && consent.lifecycleEnabled()
-                    && consent.performanceEnabled()
-                    && consent.usageEnabled()
-                    && consent.statsEnabled()
-                    && consent.breadcrumbsEnabled();
+                    && (!supported.crashEnabled() || consent.crashEnabled())
+                    && (!supported.errorEnabled() || consent.errorEnabled())
+                    && (!supported.lifecycleEnabled() || consent.lifecycleEnabled())
+                    && (!supported.performanceEnabled() || consent.performanceEnabled())
+                    && (!supported.usageEnabled() || consent.usageEnabled())
+                    && (!supported.statsEnabled() || consent.statsEnabled())
+                    && (!supported.breadcrumbsEnabled() || consent.breadcrumbsEnabled());
         });
     }
 
     private static boolean categoryAllEnabled(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects,
                                               @Nonnull String category) {
-        return !projects.isEmpty() && projects.stream().allMatch(project -> project.consent().categoryEnabled(category));
+        boolean anySupported = false;
+        for (TelemetryConsentViewModel.ProjectRow project : projects) {
+            if (!project.supported().categoryEnabled(category)) {
+                continue;
+            }
+            anySupported = true;
+            if (!project.consent().categoryEnabled(category)) {
+                return false;
+            }
+        }
+        return anySupported;
+    }
+
+    private static boolean categoryAnySupported(@Nonnull List<TelemetryConsentViewModel.ProjectRow> projects,
+                                                @Nonnull String category) {
+        return projects.stream().anyMatch(project -> project.supported().categoryEnabled(category));
     }
 
     @Nonnull

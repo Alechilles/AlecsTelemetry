@@ -1,5 +1,7 @@
 package com.alechilles.alecstelemetry.runtime;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
@@ -39,6 +41,40 @@ public record TelemetryRuntimeDiagnostics(boolean enabled,
                                      boolean performanceEnabled,
                                      boolean usageEnabled,
                                      boolean statsEnabled,
-                                     boolean breadcrumbsEnabled) {
+                                     boolean breadcrumbsEnabled,
+                                     boolean crashSupported,
+                                     boolean errorSupported,
+                                     boolean lifecycleSupported,
+                                     boolean performanceSupported,
+                                     boolean usageSupported,
+                                     boolean statsSupported,
+                                     boolean breadcrumbsSupported) {
+        @Nonnull
+        public TelemetryConsentSnapshot consentSnapshot() {
+            return new TelemetryConsentSnapshot(
+                    enabled,
+                    crashEnabled,
+                    errorEnabled,
+                    lifecycleEnabled,
+                    performanceEnabled,
+                    usageEnabled,
+                    statsEnabled,
+                    breadcrumbsEnabled
+            );
+        }
+
+        @Nonnull
+        public TelemetryConsentSnapshot supportedSnapshot() {
+            return new TelemetryConsentSnapshot(
+                    true,
+                    crashSupported,
+                    errorSupported,
+                    lifecycleSupported,
+                    performanceSupported,
+                    usageSupported,
+                    statsSupported,
+                    breadcrumbsSupported
+            );
+        }
     }
 }
