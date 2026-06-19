@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1 - Consent Metrics Hotfix - 2026-06-19
+
+### Fixed
+- Fixed hosted consent metrics so first-review choices and later opt-in or opt-out changes are uploaded for portal consent-rate reporting.
+
 ## 0.2.0 - Unified Runtime, Consent, Reports, and Stats - 2026-06-18
 
 ### Added
