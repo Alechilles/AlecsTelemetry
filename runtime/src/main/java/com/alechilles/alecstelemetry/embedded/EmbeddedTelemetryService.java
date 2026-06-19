@@ -582,6 +582,32 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     @Override
+    public boolean isConsentNoticeShown(@Nonnull String viewerKey,
+                                        @Nonnull List<TelemetryProjectRegistration> projects) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return false;
+        }
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        return consentStateStore != null
+                && consentPaths != null
+                && consentStateStore.isNoticeShown(consentPaths.consentStateFile(), viewerKey, projects);
+    }
+
+    @Override
+    public boolean markConsentNoticeShown(@Nonnull String viewerKey,
+                                          @Nonnull List<TelemetryProjectRegistration> projects) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return false;
+        }
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        return consentStateStore != null
+                && consentPaths != null
+                && consentStateStore.markNoticeShown(consentPaths.consentStateFile(), viewerKey, projects);
+    }
+
+    @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {

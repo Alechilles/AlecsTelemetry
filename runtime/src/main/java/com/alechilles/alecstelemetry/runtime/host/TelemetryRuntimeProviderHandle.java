@@ -290,6 +290,22 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     }
 
     @Override
+    public boolean isConsentNoticeShown(@Nonnull String viewerKey,
+                                        @Nonnull List<TelemetryProjectRegistration> projects) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return usesLocalCoordinator(active)
+                && consentStateStore.isNoticeShown(dataPaths.consentStateFile(), viewerKey, projects);
+    }
+
+    @Override
+    public boolean markConsentNoticeShown(@Nonnull String viewerKey,
+                                          @Nonnull List<TelemetryProjectRegistration> projects) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return usesLocalCoordinator(active)
+                && consentStateStore.markNoticeShown(dataPaths.consentStateFile(), viewerKey, projects);
+    }
+
+    @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {

@@ -15,6 +15,12 @@ public interface TelemetryConsentRuntime {
     @Nonnull
     List<TelemetryProjectRegistration> unreviewedConsentProjects();
 
+    boolean isConsentNoticeShown(@Nonnull String viewerKey,
+                                 @Nonnull List<TelemetryProjectRegistration> projects);
+
+    boolean markConsentNoticeShown(@Nonnull String viewerKey,
+                                   @Nonnull List<TelemetryProjectRegistration> projects);
+
     @Nonnull
     TelemetryRuntimeDiagnostics consentDiagnostics();
 

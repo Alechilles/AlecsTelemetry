@@ -17,6 +17,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
@@ -50,12 +51,20 @@ public final class TelemetryConsentCoordinator {
         if (!hasConsentAccess(playerRef)) {
             return;
         }
-        String promptKey = promptKey(unreviewed);
+        String viewerKey = viewerKey(playerRef);
+        if (runtimeService.isConsentNoticeShown(viewerKey, unreviewed)) {
+            return;
+        }
+        String promptKey = viewerKey + "|" + promptKey(unreviewed);
         if (!promptedKeys.add(promptKey)) {
             return;
         }
         if (!sendFirstRunNotice(playerRef)) {
             promptedKeys.remove(promptKey);
+            return;
+        }
+        if (!runtimeService.markConsentNoticeShown(viewerKey, unreviewed)) {
+            warn("Unable to save telemetry consent notice state.", null);
         }
     }
 
@@ -95,6 +104,12 @@ public final class TelemetryConsentCoordinator {
 
     private static boolean isLocalSingleplayerOwner(@Nonnull PlayerRef playerRef) {
         return SingleplayerModule.get() != null && SingleplayerModule.isOwner(playerRef);
+    }
+
+    @Nonnull
+    private static String viewerKey(@Nonnull PlayerRef playerRef) {
+        UUID uuid = playerRef.getUuid();
+        return uuid == null ? "unknown-player" : uuid.toString();
     }
 
     @Nonnull

@@ -38,9 +38,11 @@ public final class TelemetryConsentStateStore {
 
     public boolean markReviewed(@Nonnull Path file, @Nonnull TelemetryProjectRegistration project) {
         try {
-            LinkedHashMap<String, ReviewedProjectDocument> reviewed = reviewedEntries(file);
+            StateDocument document = read(file);
+            LinkedHashMap<String, ReviewedProjectDocument> reviewed = reviewedEntries(document);
             reviewed.put(key(project), ReviewedProjectDocument.from(project));
-            write(file, reviewed.values());
+            document.reviewedProjects = new ArrayList<>(reviewed.values());
+            write(file, document);
             return true;
         } catch (Exception ex) {
             warn("Failed to save telemetry consent state to " + file, ex);
@@ -52,7 +54,7 @@ public final class TelemetryConsentStateStore {
     public List<TelemetryProjectRegistration> unreviewedProjects(
             @Nonnull Path file,
             @Nonnull List<TelemetryProjectRegistration> projects) {
-        Map<String, ReviewedProjectDocument> reviewed = reviewedEntries(file);
+        Map<String, ReviewedProjectDocument> reviewed = reviewedEntries(read(file));
         ArrayList<TelemetryProjectRegistration> unreviewed = new ArrayList<>();
         for (TelemetryProjectRegistration project : projects) {
             if (!reviewed.containsKey(key(project))) {
@@ -62,10 +64,36 @@ public final class TelemetryConsentStateStore {
         return List.copyOf(unreviewed);
     }
 
+    public boolean isNoticeShown(@Nonnull Path file,
+                                 @Nonnull String viewerKey,
+                                 @Nonnull List<TelemetryProjectRegistration> projects) {
+        return noticeEntries(read(file)).containsKey(noticeKey(viewerKey, projects));
+    }
+
+    public boolean markNoticeShown(@Nonnull Path file,
+                                   @Nonnull String viewerKey,
+                                   @Nonnull List<TelemetryProjectRegistration> projects) {
+        try {
+            StateDocument document = read(file);
+            LinkedHashMap<String, NoticeDocument> notices = noticeEntries(document);
+            notices.put(noticeKey(viewerKey, projects), NoticeDocument.from(viewerKey, projects));
+            document.shownNotices = new ArrayList<>(notices.values());
+            write(file, document);
+            return true;
+        } catch (Exception ex) {
+            warn("Failed to save telemetry consent notice state to " + file, ex);
+            return false;
+        }
+    }
+
     @Nonnull
     private LinkedHashMap<String, ReviewedProjectDocument> reviewedEntries(@Nonnull Path file) {
+        return reviewedEntries(read(file));
+    }
+
+    @Nonnull
+    private LinkedHashMap<String, ReviewedProjectDocument> reviewedEntries(@Nonnull StateDocument document) {
         LinkedHashMap<String, ReviewedProjectDocument> reviewed = new LinkedHashMap<>();
-        StateDocument document = read(file);
         if (document.reviewedProjects == null) {
             return reviewed;
         }
@@ -76,6 +104,21 @@ public final class TelemetryConsentStateStore {
             reviewed.put(key(entry.projectId, entry.pluginIdentifier, entry.pluginVersion), entry);
         }
         return reviewed;
+    }
+
+    @Nonnull
+    private LinkedHashMap<String, NoticeDocument> noticeEntries(@Nonnull StateDocument document) {
+        LinkedHashMap<String, NoticeDocument> notices = new LinkedHashMap<>();
+        if (document.shownNotices == null) {
+            return notices;
+        }
+        for (NoticeDocument notice : document.shownNotices) {
+            if (notice == null || notice.viewerKey == null || notice.promptKey == null) {
+                continue;
+            }
+            notices.put(noticeKey(notice.viewerKey, notice.promptKey), notice);
+        }
+        return notices;
     }
 
     @Nonnull
@@ -96,14 +139,14 @@ public final class TelemetryConsentStateStore {
         }
     }
 
-    private void write(@Nonnull Path file, @Nonnull Iterable<ReviewedProjectDocument> entries) throws java.io.IOException {
-        StateDocument document = new StateDocument();
+    private void write(@Nonnull Path file, @Nonnull StateDocument document) throws java.io.IOException {
         document.version = CURRENT_VERSION;
-        ArrayList<ReviewedProjectDocument> reviewed = new ArrayList<>();
-        for (ReviewedProjectDocument entry : entries) {
-            reviewed.add(entry);
+        if (document.reviewedProjects == null) {
+            document.reviewedProjects = List.of();
         }
-        document.reviewedProjects = reviewed;
+        if (document.shownNotices == null) {
+            document.shownNotices = List.of();
+        }
 
         Path parent = file.getParent();
         if (parent != null) {
@@ -133,6 +176,31 @@ public final class TelemetryConsentStateStore {
                 + pluginVersion.trim().toLowerCase(Locale.ROOT);
     }
 
+    @Nonnull
+    private static String noticeKey(@Nonnull String viewerKey, @Nonnull List<TelemetryProjectRegistration> projects) {
+        return noticeKey(viewerKey, promptKey(projects));
+    }
+
+    @Nonnull
+    private static String noticeKey(@Nonnull String viewerKey, @Nonnull String promptKey) {
+        return normalize(viewerKey) + "|" + promptKey;
+    }
+
+    @Nonnull
+    private static String promptKey(@Nonnull List<TelemetryProjectRegistration> projects) {
+        return projects.stream()
+                .map(TelemetryConsentStateStore::key)
+                .sorted()
+                .reduce((left, right) -> left + ";" + right)
+                .orElse("none");
+    }
+
+    @Nonnull
+    private static String normalize(@Nonnull String value) {
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return normalized.isBlank() ? "unknown" : normalized;
+    }
+
     private void warn(@Nonnull String message, @Nullable Throwable throwable) {
         if (logger == null) {
             return;
@@ -147,6 +215,7 @@ public final class TelemetryConsentStateStore {
     private static final class StateDocument {
         private Integer version;
         private List<ReviewedProjectDocument> reviewedProjects;
+        private List<NoticeDocument> shownNotices;
     }
 
     private static final class ReviewedProjectDocument {
@@ -160,6 +229,24 @@ public final class TelemetryConsentStateStore {
             document.projectId = project.projectId();
             document.pluginIdentifier = project.pluginIdentifier();
             document.pluginVersion = project.pluginVersion();
+            return document;
+        }
+    }
+
+    private static final class NoticeDocument {
+        private String viewerKey;
+        private String promptKey;
+        private List<ReviewedProjectDocument> projects;
+
+        @Nonnull
+        private static NoticeDocument from(@Nonnull String viewerKey,
+                                           @Nonnull List<TelemetryProjectRegistration> projects) {
+            NoticeDocument document = new NoticeDocument();
+            document.viewerKey = normalize(viewerKey);
+            document.promptKey = promptKey(projects);
+            document.projects = projects.stream()
+                    .map(ReviewedProjectDocument::from)
+                    .toList();
             return document;
         }
     }
