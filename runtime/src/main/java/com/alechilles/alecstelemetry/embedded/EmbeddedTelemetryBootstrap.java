@@ -1,30 +1,18 @@
 package com.alechilles.alecstelemetry.embedded;
 
-import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
-import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
-import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
-import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
-import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
-import com.alechilles.alecstelemetry.crash.CrashReportClient;
-import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
-import com.alechilles.alecstelemetry.crash.HttpCrashReportClient;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
-import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
-import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
-import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHost;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.common.semver.Semver;
 import com.hypixel.hytale.logger.HytaleLogger;
-import com.hypixel.hytale.server.core.HytaleServer;
-import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
-import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 
 import javax.annotation.Nonnull;
@@ -33,7 +21,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
 /**
@@ -42,8 +29,6 @@ import java.util.logging.Level;
 public final class EmbeddedTelemetryBootstrap {
 
     private static final String DESCRIPTOR_RESOURCE = "telemetry/project.json";
-    private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
-
     private EmbeddedTelemetryBootstrap() {
     }
 
@@ -67,11 +52,10 @@ public final class EmbeddedTelemetryBootstrap {
                     "No telemetry/project.json descriptor was found in the owning mod."
             );
         }
-        TelemetryDataPaths dataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
+        TelemetryDataPaths ownerDataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
         TelemetryDataPaths sharedDataPaths = TelemetryDataPaths.forSharedCoordinator(plugin);
-        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
         TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
-        TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, dataPaths, logger, descriptor.projectId());
+        TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, ownerDataPaths, logger, descriptor.projectId());
         String pluginVersion = resolvePluginVersion(plugin);
         Path sourcePath = resolvePluginSourcePath(plugin);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
@@ -80,51 +64,8 @@ public final class EmbeddedTelemetryBootstrap {
                 pluginVersion,
                 sourcePath
         ).withOverride(override);
-        EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
-        registerPlayerCounter(plugin, playerCounter, logger);
-        CrashReportEnvelope.LoadedModMetadata providerLoadedMod = new CrashReportEnvelope.LoadedModMetadata(
-                pluginIdentifier,
-                pluginVersion
-        );
-        CrashReportClient sharedClient = new HttpCrashReportClient(sharedSettings.connectTimeoutMs(), sharedSettings.readTimeoutMs(), logger);
-        TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
-                sharedDataPaths,
-                TelemetryLoadedModSnapshotProvider.hytalePluginManager(List.of(providerLoadedMod), logger)
-        ).withProviderRegistration(registration);
-        TelemetryCoordinatorService coordinatorService = TelemetryCoordinatorService.fromDiscovery(
-                sharedSettings,
-                sharedDataPaths,
-                discovery,
-                sharedClient,
-                logger,
-                HytaleServer.SCHEDULED_EXECUTOR,
-                playerCounter::onlinePlayers
-        );
-        TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
-                "embedded:" + pluginIdentifier,
-                TelemetryRuntimeOrigin.EMBEDDED,
-                resolveRuntimeVersion(),
-                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
-                pluginIdentifier,
-                pluginVersion,
-                sourcePath == null ? plugin.getDataDirectory().toAbsolutePath().normalize() : sourcePath,
-                sharedDataPaths.runtimeRoot()
-        );
-        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
-                settings,
-                dataPaths,
-                registration,
-                List.of(providerLoadedMod),
-                new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger),
-                logger,
-                HytaleServer.SCHEDULED_EXECUTOR,
-                playerCounter,
-                candidate,
-                coordinatorService
-        );
-        registerSharedCommands(plugin, service, logger);
-        registerConsentNotice(plugin, new TelemetryConsentCoordinator(service, logger), logger);
-        return service;
+        TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.bootstrapEmbedded(plugin, descriptor);
+        return EmbeddedTelemetryService.fromHost(sharedSettings, sharedDataPaths, registration, host, logger);
     }
 
     @Nullable
@@ -140,88 +81,14 @@ public final class EmbeddedTelemetryBootstrap {
         return store.load(ownerDataPaths.projectOverrideFile(projectId));
     }
 
-    @Nonnull
-    private static String resolveRuntimeVersion() {
-        Package runtimePackage = EmbeddedTelemetryBootstrap.class.getPackage();
-        String implementationVersion = runtimePackage == null ? null : runtimePackage.getImplementationVersion();
-        return implementationVersion == null || implementationVersion.isBlank()
-                ? FALLBACK_RUNTIME_VERSION
-                : implementationVersion.trim();
-    }
 
-    private static void registerPlayerCounter(@Nonnull JavaPlugin plugin,
-                                              @Nonnull EmbeddedTelemetryPlayerCounter playerCounter,
-                                              @Nullable HytaleLogger logger) {
-        if (plugin.getEventRegistry() == null) {
-            return;
-        }
-        try {
-            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, playerCounter::onPlayerReady);
-            plugin.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, playerCounter::onPlayerDisconnect);
-        } catch (RuntimeException ex) {
-            if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log(
-                        "Embedded telemetry stats player counter could not register player events."
-                );
-            }
-        }
-    }
 
     @Nonnull
     static TelemetryCommandRoot sharedCommandRoot(@Nonnull EmbeddedTelemetryService service) {
         return new TelemetryCommandRoot(service.commandRuntime());
     }
 
-    private static void registerSharedCommands(@Nonnull JavaPlugin plugin,
-                                               @Nonnull EmbeddedTelemetryService service,
-                                               @Nullable HytaleLogger logger) {
-        AtomicBoolean registered = new AtomicBoolean(false);
-        Runnable register = () -> {
-            if (plugin.getCommandRegistry() == null || !registered.compareAndSet(false, true)) {
-                return;
-            }
-            try {
-                plugin.getCommandRegistry().registerCommand(sharedCommandRoot(service));
-            } catch (RuntimeException ex) {
-                registered.set(false);
-                if (logger != null) {
-                    logger.at(Level.WARNING).withCause(ex).log(
-                            "Embedded telemetry commands could not register. Another runtime may already own /telemetry."
-                    );
-                }
-            }
-        };
-        register.run();
-        if (plugin.getEventRegistry() == null) {
-            return;
-        }
-        try {
-            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, event -> register.run());
-        } catch (RuntimeException ex) {
-            if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log(
-                        "Embedded telemetry command registration retry could not register player events."
-                );
-            }
-        }
-    }
 
-    private static void registerConsentNotice(@Nonnull JavaPlugin plugin,
-                                              @Nonnull TelemetryConsentCoordinator notice,
-                                              @Nullable HytaleLogger logger) {
-        if (plugin.getEventRegistry() == null) {
-            return;
-        }
-        try {
-            plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, notice::onPlayerReady);
-        } catch (RuntimeException ex) {
-            if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log(
-                        "Embedded telemetry consent notice could not register player events."
-                );
-            }
-        }
-    }
 
     @Nullable
     private static TelemetryProjectDescriptor loadDescriptor(@Nonnull JavaPlugin plugin, @Nullable HytaleLogger logger) {

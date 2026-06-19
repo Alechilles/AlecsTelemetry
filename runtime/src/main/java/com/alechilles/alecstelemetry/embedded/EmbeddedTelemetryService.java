@@ -27,6 +27,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -59,6 +60,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     private final TelemetryCoreEngine engine;
     private final EmbeddedTelemetryStatsHeartbeat statsHeartbeat;
     private final EmbeddedCoordinatorBridge coordinatorBridge;
+    private final TelemetryRuntimeHostHandle hostHandle;
     private final HytaleLogger logger;
     private final String disabledReason;
     private final TelemetryConsentStateStore consentStateStore;
@@ -109,6 +111,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         this.coordinatorBridge = candidate == null || coordinatorService == null
                 ? null
                 : new EmbeddedCoordinatorBridge(candidate, coordinatorService);
+        this.hostHandle = null;
         this.logger = logger;
         this.disabledReason = null;
         this.consentProjects = coordinatorService == null ? List.of(project) : consentProjects(coordinatorService);
@@ -125,6 +128,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         this.engine = null;
         this.statsHeartbeat = null;
         this.coordinatorBridge = null;
+        this.hostHandle = null;
         this.logger = logger;
         this.disabledReason = disabledReason;
         this.consentStateStore = null;
@@ -134,12 +138,40 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         }
     }
 
+    private EmbeddedTelemetryService(@Nonnull TelemetryRuntimeSettings settings,
+                                     @Nonnull TelemetryDataPaths dataPaths,
+                                     @Nonnull TelemetryProjectRegistration project,
+                                     @Nonnull TelemetryRuntimeHostHandle hostHandle,
+                                     @Nullable HytaleLogger logger) {
+        this.project = project;
+        this.dataPaths = dataPaths;
+        this.overrideStore = new TelemetryProjectOverrideStore(logger);
+        this.consentStateStore = new TelemetryConsentStateStore(logger);
+        this.settings = settings;
+        this.engine = null;
+        this.statsHeartbeat = null;
+        this.coordinatorBridge = null;
+        this.hostHandle = hostHandle;
+        this.logger = logger;
+        this.disabledReason = null;
+        this.consentProjects = List.of(project);
+    }
+
     @Nonnull
     public static EmbeddedTelemetryService disabled(@Nonnull String projectId,
                                                     @Nonnull String displayName,
                                                     @Nullable HytaleLogger logger,
                                                     @Nonnull String disabledReason) {
         return new EmbeddedTelemetryService(projectId, displayName, logger, disabledReason);
+    }
+
+    @Nonnull
+    static EmbeddedTelemetryService fromHost(@Nonnull TelemetryRuntimeSettings settings,
+                                             @Nonnull TelemetryDataPaths dataPaths,
+                                             @Nonnull TelemetryProjectRegistration project,
+                                             @Nonnull TelemetryRuntimeHostHandle hostHandle,
+                                             @Nullable HytaleLogger logger) {
+        return new EmbeddedTelemetryService(settings, dataPaths, project, hostHandle, logger);
     }
 
     @Nonnull
@@ -192,6 +224,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public boolean ownsActiveCoordinator() {
+        if (hostHandle != null) {
+            return hostHandle.ownsActiveCoordinator();
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active != null
                 && coordinatorBridge != null
@@ -713,6 +748,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void start() {
+        if (hostHandle != null) {
+            hostHandle.start();
+            return;
+        }
         if (coordinatorBridge != null) {
             TelemetryCoordinatorRegistry.register(coordinatorBridge);
         } else if (engine != null) {
@@ -725,6 +764,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void shutdown() {
+        if (hostHandle != null) {
+            hostHandle.shutdown();
+            return;
+        }
         if (coordinatorBridge != null) {
             TelemetryCoordinatorRegistry.unregister(coordinatorBridge.providerId());
         } else if (engine != null) {
@@ -1030,6 +1073,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     int pendingReports() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return commandPendingReports(project.projectId());
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.pendingReports(project.projectId());
         }
