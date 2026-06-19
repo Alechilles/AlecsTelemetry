@@ -304,7 +304,7 @@ class TelemetryRuntimeDiscoveryTest {
                                        String version,
                                        String descriptorJson) throws Exception {
         Path modFolder = modsDirectory.resolve(folderName);
-        Files.createDirectories(modFolder.resolve("telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -316,7 +316,7 @@ class TelemetryRuntimeDiscoveryTest {
                 }
                 """.formatted(group, name, version, slug(name))
         );
-        Files.writeString(modFolder.resolve("telemetry").resolve("project.json"), descriptorJson);
+        Files.writeString(modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"), descriptorJson);
     }
 
     private static TelemetryProjectRegistration registration(String projectId,

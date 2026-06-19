@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Declarative project registration loaded from `telemetry/project.json`.
+ * Declarative project registration loaded from `Server/Telemetry/project.json`.
  */
 public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull String projectId,

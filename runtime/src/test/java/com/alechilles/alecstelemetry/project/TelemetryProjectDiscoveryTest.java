@@ -22,7 +22,7 @@ class TelemetryProjectDiscoveryTest {
     @Test
     void discoversProjectDescriptorFromFolder() throws Exception {
         Path modFolder = tempDir.resolve("Example Mod");
-        Files.createDirectories(modFolder.resolve("telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -35,7 +35,7 @@ class TelemetryProjectDiscoveryTest {
                 """
         );
         Files.writeString(
-                modFolder.resolve("telemetry").resolve("project.json"),
+                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
                 """
                 {
                   "projectId": "example-mod"
@@ -56,9 +56,39 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
+    void discoversLegacyProjectDescriptorFromFolder() throws Exception {
+        Path modFolder = tempDir.resolve("Legacy Mod");
+        Files.createDirectories(modFolder.resolve("telemetry"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "Example",
+                  "Name": "Legacy Mod",
+                  "Version": "1.2.3",
+                  "Main": "com.example.telemetry.LegacyMod"
+                }
+                """
+        );
+        Files.writeString(
+                modFolder.resolve("telemetry").resolve("project.json"),
+                """
+                {
+                  "projectId": "legacy-mod"
+                }
+                """
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(1, result.projects().size());
+        assertEquals("legacy-mod", result.projects().getFirst().projectId());
+    }
+
+    @Test
     void registersEmbeddedDescriptorsForCoordinatorRuntime() throws Exception {
         Path modFolder = tempDir.resolve("Embedded Mod");
-        Files.createDirectories(modFolder.resolve("telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -71,7 +101,7 @@ class TelemetryProjectDiscoveryTest {
                 """
         );
         Files.writeString(
-                modFolder.resolve("telemetry").resolve("project.json"),
+                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
                 """
                 {
                   "projectId": "embedded-mod",
@@ -133,7 +163,7 @@ class TelemetryProjectDiscoveryTest {
             stream.putNextEntry(new ZipEntry("manifest.json"));
             stream.write(manifest.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             stream.closeEntry();
-            stream.putNextEntry(new ZipEntry("telemetry/project.json"));
+            stream.putNextEntry(new ZipEntry("Server/Telemetry/project.json"));
             stream.write(descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             stream.closeEntry();
         }

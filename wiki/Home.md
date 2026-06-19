@@ -9,7 +9,7 @@ draft: false
 
 Alec's Telemetry is a standalone crash telemetry runtime for Hytale mods. It helps mod authors ship structured crash reporting without building a custom reporting pipeline, while giving players and server communities a faster path from "something broke" to a useful fix.
 
-The default integration path is dependency mode: install Alec's Telemetry alongside your mod, ship a small `telemetry/project.json`, and connect that project to Alec's hosted telemetry platform.
+The default integration path is dependency mode: install Alec's Telemetry alongside your mod, ship a small `Server/Telemetry/project.json`, and connect that project to Alec's hosted telemetry platform.
 
 ## Start Here
 

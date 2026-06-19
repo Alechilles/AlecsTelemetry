@@ -12,7 +12,7 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 Consumer mods opt into Alec's Telemetry by shipping a descriptor at:
 
 ```text
-telemetry/project.json
+Server/Telemetry/project.json
 ```
 
 The descriptor supports both integration modes:

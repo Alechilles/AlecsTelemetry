@@ -14,7 +14,7 @@ This is the recommended hosted setup for most mods.
 ## Steps
 
 1. Install `Alec's Telemetry` alongside your mod.
-2. Add a `telemetry/project.json` file to your mod project.
+2. Add a `Server/Telemetry/project.json` file to your mod project.
 3. Add the hosted `projectKey` for your project.
 4. Package the descriptor with your mod.
 
@@ -32,7 +32,7 @@ Recommended default:
 Place the file at:
 
 ```text
-telemetry/project.json
+Server/Telemetry/project.json
 ```
 
 ## What Can Be Inferred

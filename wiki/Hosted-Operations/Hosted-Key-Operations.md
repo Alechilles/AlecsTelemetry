@@ -31,7 +31,7 @@ The lightweight reference hosted backend in this repository still uses a single 
 ## Recommended Rotation Flow
 
 1. Rotate the key in the portal.
-2. Update the shipped `telemetry/project.json` with the new `projectKey`.
+2. Update the shipped `Server/Telemetry/project.json` with the new `projectKey`.
 3. Publish the updated mod build.
 4. Wait for the grace period to expire.
 5. Verify old versions are no longer using the grace key.

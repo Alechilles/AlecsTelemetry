@@ -15,7 +15,7 @@ For most modders, the destination is Alec's hosted telemetry platform. That setu
 
 ## Why Modders Use It
 
-- The default integration is small: install Alec's Telemetry and ship `telemetry/project.json`.
+- The default integration is small: install Alec's Telemetry and ship `Server/Telemetry/project.json`.
 - If the mod manifest has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer most project metadata.
 - Hosted `projectKey` values are publishable ingest keys, so normal hosted setup does not require server owners to manage private secrets.
 - The hosted portal gives mod authors a place to review recurring crash issues instead of starting from raw logs.

@@ -9,7 +9,7 @@ draft: false
 
 Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
 
-Dependency mode is the recommended integration path. Alec's Telemetry runs as a standalone dependency and discovers participating mods by reading their packaged `telemetry/project.json` descriptors.
+Dependency mode is the recommended integration path. Alec's Telemetry runs as a standalone dependency and discovers participating mods by reading their packaged `Server/Telemetry/project.json` descriptors.
 
 ## Use This Mode When
 
@@ -33,7 +33,7 @@ If `runtimeMode` is omitted, dependency mode is the default.
 
 ## Packaging Checklist
 
-- Include `telemetry/project.json` in your mod package.
+- Include `Server/Telemetry/project.json` in your mod package.
 - Keep your mod manifest `Group`, `Name`, and `Main` accurate so project metadata can be inferred.
 - Add explicit `projectId`, `displayName`, or `packagePrefixes` only when the inferred values are not enough.
 - Keep hosted setup pointed at the publishable project key for your hosted project.

@@ -44,7 +44,7 @@ Stats are a separate consent category from usage events. A server owner can allo
 anonymous public server/player/environment stats while still disabling
 feature-usage telemetry.
 
-In `telemetry/project.json`, opt in with:
+In `Server/Telemetry/project.json`, opt in with:
 
 ```json
 {

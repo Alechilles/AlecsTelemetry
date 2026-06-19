@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
@@ -28,7 +29,6 @@ import java.util.logging.Level;
  */
 public final class EmbeddedTelemetryBootstrap {
 
-    private static final String DESCRIPTOR_RESOURCE = "telemetry/project.json";
     private EmbeddedTelemetryBootstrap() {
     }
 
@@ -49,7 +49,8 @@ public final class EmbeddedTelemetryBootstrap {
                     projectId,
                     displayName,
                     logger,
-                    "No telemetry/project.json descriptor was found in the owning mod."
+                    "No Server/Telemetry/project.json descriptor was found in the owning mod."
+                            + " Legacy telemetry/project.json was also absent."
             );
         }
         TelemetryDataPaths ownerDataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
@@ -92,7 +93,13 @@ public final class EmbeddedTelemetryBootstrap {
 
     @Nullable
     private static TelemetryProjectDescriptor loadDescriptor(@Nonnull JavaPlugin plugin, @Nullable HytaleLogger logger) {
-        try (InputStream stream = plugin.getClass().getClassLoader().getResourceAsStream(DESCRIPTOR_RESOURCE)) {
+        String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
+        InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
+        if (rawStream == null) {
+            descriptorResource = TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH;
+            rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
+        }
+        try (InputStream stream = rawStream) {
             if (stream == null) {
                 return null;
             }
@@ -100,7 +107,7 @@ public final class EmbeddedTelemetryBootstrap {
             return TelemetryProjectDescriptor.fromJson(rawJson, buildFallbacks(plugin));
         } catch (Exception ex) {
             if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log("Failed to load embedded telemetry descriptor from " + DESCRIPTOR_RESOURCE + ".");
+                logger.at(Level.WARNING).withCause(ex).log("Failed to load embedded telemetry descriptor from " + descriptorResource + ".");
             }
             return null;
         }

@@ -5,7 +5,7 @@ their own mod instead of requiring the standalone `Alec's Telemetry` dependency.
 
 Key pieces:
 
-- `telemetry/project.json` declares `runtimeMode: "embedded"`
+- `Server/Telemetry/project.json` declares `runtimeMode: "embedded"`
 - the mod boots telemetry in its own lifecycle
 - embedded consumers can still declare `reports` in the descriptor and open the
   shared manual report UI through `TelemetryReportOpenRequest` when the standalone

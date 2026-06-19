@@ -4,7 +4,7 @@ Alec's Telemetry is a standalone crash telemetry runtime for Hytale mods and the
 easiest way to connect a mod to Alec's hosted telemetry platform.
 
 For modders, it turns crash reporting into a small integration task: install the
-dependency, ship `telemetry/project.json`, and route real-world crashes into the
+dependency, ship `Server/Telemetry/project.json`, and route real-world crashes into the
 hosted portal and Discord workflows.
 
 For players and server communities, it means faster fixes, less guesswork, and
@@ -32,7 +32,7 @@ broke.
 ## Why Modders Use It
 
 - The main integration path is simple: install Alec's Telemetry and ship
-  `telemetry/project.json`.
+  `Server/Telemetry/project.json`.
 - If your `manifest.json` already has the right `Group`, `Name`, and `Main`,
   Alec's Telemetry can infer most of the rest.
 - Hosted `projectKey` values are publishable ingest keys, so normal hosted setup
@@ -56,7 +56,7 @@ broke.
 
 ## What Integration Looks Like
 
-1. Add a small `telemetry/project.json` file to your mod project.
+1. Add a small `Server/Telemetry/project.json` file to your mod project.
 2. Put in the hosted `projectKey` for your project.
 3. Choose whether to require the standalone runtime or embed the runtime in your mod.
 4. Package and ship your mod with that descriptor included.
@@ -94,7 +94,7 @@ shipped in the descriptor, not treated like hidden operator secrets.
 Place the file at:
 
 ```text
-telemetry/project.json
+Server/Telemetry/project.json
 ```
 
 Then package it with your mod.

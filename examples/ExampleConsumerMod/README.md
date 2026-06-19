@@ -6,7 +6,7 @@ Alec's Telemetry.
 In many cases, the only telemetry-specific file needed is:
 
 ```text
-telemetry/project.json
+Server/Telemetry/project.json
 ```
 
 because the runtime can infer the rest from `manifest.json`.

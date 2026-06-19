@@ -21,7 +21,7 @@ Use embedded mode when a modder wants:
 
 ## Descriptor Requirement
 
-Embedded mode uses the same `telemetry/project.json` descriptor as dependency mode, but it must declare:
+Embedded mode uses the same `Server/Telemetry/project.json` descriptor as dependency mode, but it must declare:
 
 ```json
 {

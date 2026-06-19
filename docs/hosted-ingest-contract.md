@@ -255,6 +255,6 @@ Key rotation is intentionally manual.
 To rotate:
 
 1. update `publicProjectKey` in the hosted project registry
-2. update the mod's `telemetry/project.json`
+2. update the mod's `Server/Telemetry/project.json`
 3. redeploy the mod or descriptor update
 4. restart the hosted service if required by the deployment setup

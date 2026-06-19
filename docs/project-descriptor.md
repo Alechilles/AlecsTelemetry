@@ -3,7 +3,7 @@
 Consumer mods opt into Alec's Telemetry by shipping a descriptor at:
 
 ```text
-telemetry/project.json
+Server/Telemetry/project.json
 ```
 
 The same descriptor is used whether telemetry is provided by the standalone runtime or by an embedded runtime packaged inside a mod. Descriptors no longer need to choose dependency versus embedded mode; runtime ownership is decided by coordinator election at startup.
@@ -443,5 +443,5 @@ Hosted key rotation is manual.
 To rotate a hosted `projectKey`:
 
 1. update the hosted project registry
-2. update the mod's `telemetry/project.json`
+2. update the mod's `Server/Telemetry/project.json`
 3. redeploy the mod or descriptor change

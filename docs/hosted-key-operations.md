@@ -29,7 +29,7 @@ ingesting as soon as that backend key changes.
 ## Recommended Rotation Flow
 
 1. rotate the key in the portal
-2. update the shipped `telemetry/project.json` with the new `projectKey`
+2. update the shipped `Server/Telemetry/project.json` with the new `projectKey`
 3. publish the updated mod build
 4. wait for the grace period to expire
 5. verify old versions are no longer using the grace key

@@ -30,7 +30,8 @@ import java.util.zip.ZipFile;
  */
 public final class TelemetryProjectDiscovery {
 
-    private static final String DESCRIPTOR_PATH = "telemetry/project.json";
+    public static final String DESCRIPTOR_PATH = "Server/Telemetry/project.json";
+    public static final String LEGACY_DESCRIPTOR_PATH = "telemetry/project.json";
     private static final String MANIFEST_PATH = "manifest.json";
 
     private final HytaleLogger logger;
@@ -121,7 +122,7 @@ public final class TelemetryProjectDiscovery {
     @Nullable
     private EntryData readFolderEntry(@Nonnull Path folder) {
         ModManifest manifest = readManifest(folder.resolve(MANIFEST_PATH));
-        Path descriptorPath = folder.resolve("telemetry").resolve("project.json");
+        Path descriptorPath = descriptorPath(folder);
         if (!Files.isRegularFile(descriptorPath)) {
             return manifest == null ? null : new EntryData(null, manifest);
         }
@@ -143,7 +144,7 @@ public final class TelemetryProjectDiscovery {
         }
         try (ZipFile zipFile = new ZipFile(archive.toFile())) {
             ModManifest manifest = readManifest(zipFile, MANIFEST_PATH);
-            ZipEntry descriptorEntry = zipFile.getEntry(DESCRIPTOR_PATH);
+            ZipEntry descriptorEntry = descriptorEntry(zipFile);
             if (descriptorEntry == null) {
                 return manifest == null ? null : new EntryData(null, manifest);
             }
@@ -156,6 +157,21 @@ public final class TelemetryProjectDiscovery {
             warn("Failed to inspect telemetry archive " + archive, ex);
             return null;
         }
+    }
+
+    @Nonnull
+    private static Path descriptorPath(@Nonnull Path folder) {
+        Path descriptorPath = folder.resolve("Server").resolve("Telemetry").resolve("project.json");
+        if (Files.isRegularFile(descriptorPath)) {
+            return descriptorPath;
+        }
+        return folder.resolve("telemetry").resolve("project.json");
+    }
+
+    @Nullable
+    private static ZipEntry descriptorEntry(@Nonnull ZipFile zipFile) {
+        ZipEntry entry = zipFile.getEntry(DESCRIPTOR_PATH);
+        return entry == null ? zipFile.getEntry(LEGACY_DESCRIPTOR_PATH) : entry;
     }
 
     @Nonnull
