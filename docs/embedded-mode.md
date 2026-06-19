@@ -11,16 +11,9 @@ Use embedded mode when a modder wants:
 - no extra CurseForge dependency for players
 - direct ownership of telemetry bootstrap and lifecycle wiring
 
-## Descriptor Requirement
+## Descriptor Shape
 
-Embedded mode uses the same `telemetry/project.json` descriptor as dependency mode,
-but it must declare:
-
-```json
-{
-  "runtimeMode": "embedded"
-}
-```
+Embedded mode uses the same `telemetry/project.json` descriptor as the standalone dependency flow. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and bootstrapping it from the owning mod.
 
 Every installed copy of Alec's Telemetry, standalone or embedded, registers as a
 runtime coordinator candidate. The latest compatible runtime version wins.
@@ -39,7 +32,7 @@ Runtime ownership is selected per server process:
 4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
 
 The active coordinator handles descriptors from all installed enabled mods,
-including descriptors marked `runtimeMode: "embedded"`. Passive embedded copies
+including descriptors with or without the legacy `runtimeMode` field. Passive embedded copies
 do not install their own uncaught exception handlers, stats heartbeats, queues,
 or upload loops.
 
@@ -47,7 +40,6 @@ or upload loops.
 
 ```json
 {
-  "runtimeMode": "embedded",
   "hosted": {
     "projectKey": "pub_proj_abc123"
   }
@@ -139,9 +131,4 @@ and uploads under the shared telemetry coordinator root:
 
 ## Important Rule
 
-Pick one mode per mod:
-
-- `dependency`
-- `embedded`
-
-Do not try to make one mod use both.
+Pick one packaging strategy per mod: either depend on the standalone runtime or embed and bootstrap the runtime yourself. Do not add a descriptor flag to choose the strategy; runtime election handles coexistence when multiple providers are installed.

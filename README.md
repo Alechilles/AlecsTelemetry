@@ -56,14 +56,14 @@ broke.
 
 ## What Integration Looks Like
 
-1. Install `Alec's Telemetry` alongside your mod.
-2. Add a small `telemetry/project.json` file to your mod project.
-3. Put in the hosted `projectKey` for your project.
+1. Add a small `telemetry/project.json` file to your mod project.
+2. Put in the hosted `projectKey` for your project.
+3. Choose whether to require the standalone runtime or embed the runtime in your mod.
 4. Package and ship your mod with that descriptor included.
 
-Recommended default: `runtimeMode: "dependency"`.
+The descriptor no longer needs to choose dependency versus embedded mode. Runtime ownership is decided by installed/embedded runtime candidates at startup.
 
-Advanced alternatives: `embedded` mode and custom endpoints.
+Advanced alternatives: embedded runtime packaging and custom endpoints.
 
 ## Minimal Setup
 
@@ -82,7 +82,6 @@ shipped in the descriptor, not treated like hidden operator secrets.
 
 ```json
 {
-  "runtimeMode": "dependency",
   "ui": {
     "iconTexturePath": "YourMod/Telemetry/YourModConsentIcon.png"
   },
@@ -119,10 +118,10 @@ Portal URL: `https://telemetry.alecsmods.com/portal`
 
 ## Advanced Options
 
-Need something more custom than the default hosted dependency-mode flow?
+Need something more custom than the default hosted flow?
 
-- Use `runtimeMode: "embedded"` if you want to bundle telemetry bootstrap logic
-  directly into your mod. Embedded copies still participate in coordinator
+- Bundle telemetry bootstrap logic directly into your mod if you want one
+  distributable package. Embedded copies still participate in coordinator
   election and can handle telemetry for all installed enabled projects when they
   are the latest compatible runtime.
 - Use a custom endpoint if you want reports to go somewhere other than Alec's
@@ -145,7 +144,6 @@ Minimal custom-endpoint example:
 
 ```json
 {
-  "runtimeMode": "dependency",
   "defaults": {
     "destinationMode": "custom"
   },

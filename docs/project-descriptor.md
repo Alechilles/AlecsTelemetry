@@ -6,15 +6,9 @@ Consumer mods opt into Alec's Telemetry by shipping a descriptor at:
 telemetry/project.json
 ```
 
-This descriptor now supports both integration modes:
+The same descriptor is used whether telemetry is provided by the standalone runtime or by an embedded runtime packaged inside a mod. Descriptors no longer need to choose dependency versus embedded mode; runtime ownership is decided by coordinator election at startup.
 
-- `dependency`
-- `embedded`
-
-Embedded-mode bootstrap details are documented separately in:
-
-- `embedded-mode.md`
-- `embedded-mode-refactor-plan.md`
+Embedded runtime bootstrap details are documented separately in `embedded-mode.md`.
 
 ## Plug-And-Play Default
 
@@ -35,7 +29,6 @@ then you can omit a lot of telemetry fields because Alec's Telemetry will infer:
 
 ```json
 {
-  "runtimeMode": "dependency",
   "hosted": {
     "projectKey": "your_public_project_key"
   }
@@ -52,7 +45,6 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 
 ```json
 {
-  "runtimeMode": "dependency",
   "defaults": {
     "destinationMode": "custom"
   },
@@ -69,7 +61,6 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
   "schemaVersion": 1,
   "projectId": "example-mod",
   "displayName": "Example Mod",
-  "runtimeMode": "dependency",
   "ownerPluginIdentifiers": [
     "Example:Example Mod"
   ],
@@ -154,7 +145,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `schemaVersion`
 - `projectId`
 - `displayName`
-- `runtimeMode`
+- `runtimeMode` (legacy optional)
 - `ownerPluginIdentifiers`
 - `packagePrefixes`
 - `capture`
@@ -389,12 +380,9 @@ messages when a field is intended for breakdowns.
 
 ### `runtimeMode`
 
-- `dependency`
-  - default when omitted
-  - standalone `Alec's Telemetry` runtime may discover and manage the project
-- `embedded`
-  - the owning mod is expected to bootstrap embedded telemetry itself
-  - the active elected telemetry coordinator discovers and manages the project, whether the winning runtime is standalone or embedded
+Legacy optional field. New descriptors should omit it.
+
+When present, `dependency` and `embedded` are still accepted for backwards compatibility and diagnostics, but the field no longer controls discovery, consent, queueing, upload ownership, or coordinator election. The active elected telemetry runtime discovers all installed enabled project descriptors. Embedded behavior is selected by packaging and calling `EmbeddedTelemetryBootstrap`, not by this descriptor field.
 
 ### `defaults`
 
