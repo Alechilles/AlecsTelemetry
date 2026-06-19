@@ -8,17 +8,36 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class RuntimeArtifactBoundaryTest {
 
     @Test
-    void runtimeClasspathContainsEmbeddedRuntimeButNotStandalonePlugin() {
-        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    void runtimeClasspathContainsSharedRuntimeButNotStandalonePlugin() {
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/runtime/host/TelemetryRuntimeHost.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/runtime/host/TelemetryRuntimeProviderHandle.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/runtime/discovery/TelemetryRuntimeDiscovery.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/api/TelemetryRuntimeLocator.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/commands/TelemetryCommandRoot.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/reports/TelemetryReportCoordinator.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/core/TelemetryCoreEngine.class");
+        assertContainsRuntimeClass("com/alechilles/alecstelemetry/consent/TelemetryConsentPage.class");
+        assertContainsRuntimeClass("Common/UI/Custom/TelemetryConsentPage.ui");
+        assertContainsRuntimeClass("Common/UI/Custom/AlecsTelemetryLogo.png");
+        assertContainsRuntimeClass("Common/UI/Custom/TelemetryConsentHeader.png");
 
-        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/embedded/EmbeddedTelemetryBootstrap.class"));
-        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/commands/TelemetryCommandRoot.class"));
-        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/core/TelemetryCoreEngine.class"));
-        assertNotNull(classLoader.getResource("com/alechilles/alecstelemetry/consent/TelemetryConsentPage.class"));
-        assertNotNull(classLoader.getResource("Common/UI/Custom/TelemetryConsentPage.ui"));
-        assertNotNull(classLoader.getResource("Common/UI/Custom/AlecsTelemetryLogo.png"));
-        assertNotNull(classLoader.getResource("Common/UI/Custom/TelemetryConsentHeader.png"));
-        assertNull(classLoader.getResource("com/alechilles/alecstelemetry/AlecsTelemetry.class"));
-        assertNull(classLoader.getResource("manifest.json"));
+        assertDoesNotContainRuntimeClass("com/alechilles/alecstelemetry/AlecsTelemetry.class");
+        assertDoesNotContainRuntimeClass("com/alechilles/alecstelemetry/runtime/TelemetryRuntimeService.class");
+        assertDoesNotContainRuntimeClass("manifest.json");
+    }
+
+    private static void assertContainsRuntimeClass(String entryName) {
+        assertNotNull(
+                Thread.currentThread().getContextClassLoader().getResource(entryName),
+                entryName + " should be packaged in runtime jar"
+        );
+    }
+
+    private static void assertDoesNotContainRuntimeClass(String entryName) {
+        assertNull(
+                Thread.currentThread().getContextClassLoader().getResource(entryName),
+                entryName + " should not be packaged in runtime jar"
+        );
     }
 }
