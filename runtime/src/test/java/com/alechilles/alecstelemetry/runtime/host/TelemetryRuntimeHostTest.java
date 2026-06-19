@@ -24,6 +24,8 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -568,6 +570,57 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void providerUploadsConsentMetricsForFirstReviewAndLaterChanges() {
+        TelemetryProjectRegistration project = registration(
+                hostedTelemetryCategoryDescriptor("alecs-tamework", "Alec's Tamework!"),
+                "Alechilles:Alec's Tamework!",
+                "2.15.0",
+                tempDir.resolve("Alec's Tamework! v2.15.0.jar")
+        );
+        CapturingCrashReportClient client = new CapturingCrashReportClient();
+        ProviderFixture fixture = consentFixture(
+                "consent-metrics",
+                List.of(project),
+                List.of(project),
+                List.of(),
+                tempDir.resolve("consent-metrics"),
+                null,
+                client
+        );
+        TelemetryRuntimeProviderHandle handle = fixture.handle();
+
+        assertTrue(handle.markConsentReviewed("alecs-tamework"));
+
+        assertEquals(7, client.payloads.size());
+        JsonObject firstReviewPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("https://telemetry-dev.alecsmods.com/ingest/consent-metric", client.targets.getFirst().endpoint());
+        assertEquals(1, firstReviewPayload.get("schemaVersion").getAsInt());
+        assertEquals("0.1.3", firstReviewPayload.get("runtimeVersion").getAsString());
+        assertEquals("alecs-tamework", firstReviewPayload.get("projectId").getAsString());
+        assertEquals("Alec's Tamework!", firstReviewPayload.get("projectDisplayName").getAsString());
+        assertEquals("2.15.0", firstReviewPayload.get("projectVersion").getAsString());
+        assertEquals("crash", firstReviewPayload.get("category").getAsString());
+        assertTrue(firstReviewPayload.get("supported").getAsBoolean());
+        assertTrue(firstReviewPayload.get("enabled").getAsBoolean());
+        assertTrue(firstReviewPayload.get("previousEnabled").getAsBoolean());
+        assertEquals("first_run_notice", firstReviewPayload.get("changeSource").getAsString());
+        assertTrue(firstReviewPayload.get("firstReview").getAsBoolean());
+
+        assertTrue(handle.applyConsent(
+                "alecs-tamework",
+                new TelemetryConsentSnapshot(true, true, true, true, true, false, true, true)
+        ));
+
+        assertEquals(8, client.payloads.size());
+        JsonObject laterPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
+        assertEquals("usage", laterPayload.get("category").getAsString());
+        assertTrue(laterPayload.get("previousEnabled").getAsBoolean());
+        assertFalse(laterPayload.get("enabled").getAsBoolean());
+        assertEquals("consent_ui", laterPayload.get("changeSource").getAsString());
+        assertFalse(laterPayload.get("firstReview").getAsBoolean());
+    }
+
+    @Test
     void providerMirrorsEmbeddedConsentOverrideToOwnerSettings() {
         Path root = tempDir.resolve("embedded-consent");
         Path modsDir = tempDir.resolve("mods");
@@ -674,6 +727,16 @@ class TelemetryRuntimeHostTest {
                                            List<String> registrationWarnings,
                                            Path root,
                                            Path modsDir) {
+        return consentFixture(fixtureName, projects, consentProjects, registrationWarnings, root, modsDir, new NoopCrashReportClient());
+    }
+
+    private ProviderFixture consentFixture(String fixtureName,
+                                           List<TelemetryProjectRegistration> projects,
+                                           List<TelemetryProjectRegistration> consentProjects,
+                                           List<String> registrationWarnings,
+                                           Path root,
+                                           Path modsDir,
+                                           CrashReportClient client) {
         TelemetryDataPaths dataPaths = dataPaths(root, modsDir);
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryProjectRegistration providerProject = consentProjects.isEmpty() ? projects.getFirst() : consentProjects.getFirst();
@@ -686,7 +749,8 @@ class TelemetryRuntimeHostTest {
                 projects,
                 consentProjects,
                 registrationWarnings,
-                providerProject
+                providerProject,
+                client
         );
     }
 
@@ -699,13 +763,37 @@ class TelemetryRuntimeHostTest {
                                             List<TelemetryProjectRegistration> consentProjects,
                                             List<String> registrationWarnings,
                                             TelemetryProjectRegistration providerProject) {
+        return providerFixture(
+                providerId,
+                origin,
+                runtimeVersion,
+                settings,
+                dataPaths,
+                projects,
+                consentProjects,
+                registrationWarnings,
+                providerProject,
+                new NoopCrashReportClient()
+        );
+    }
+
+    private ProviderFixture providerFixture(String providerId,
+                                            TelemetryRuntimeOrigin origin,
+                                            String runtimeVersion,
+                                            TelemetryRuntimeSettings settings,
+                                            TelemetryDataPaths dataPaths,
+                                            List<TelemetryProjectRegistration> projects,
+                                            List<TelemetryProjectRegistration> consentProjects,
+                                            List<String> registrationWarnings,
+                                            TelemetryProjectRegistration providerProject,
+                                            CrashReportClient client) {
         TelemetryCoordinatorService service = new TelemetryCoordinatorService(
                 settings,
                 dataPaths,
                 projects,
                 consentProjects,
                 loadedMods(consentProjects.isEmpty() ? projects : consentProjects),
-                new NoopCrashReportClient(),
+                client,
                 null,
                 null
         );
@@ -739,7 +827,8 @@ class TelemetryRuntimeHostTest {
                 registrationWarnings,
                 new TelemetryPlayerCounter(),
                 null,
-                commandRegistrar
+                commandRegistrar,
+                client
         ), commandRegistrar, dataPaths);
     }
 
@@ -828,6 +917,44 @@ class TelemetryRuntimeHostTest {
                   }
                 }
                 """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
+    private static TelemetryProjectDescriptor hostedTelemetryCategoryDescriptor(String projectId, String displayName) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Alechilles:%s"],
+                  "packagePrefixes": ["com.alechilles.alecstamework"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
+                  "performance": {
+                    "enabled": true
+                  },
+                  "usage": {
+                    "enabled": true
+                  },
+                  "stats": {
+                    "enabled": true
+                  },
+                  "hosted": {
+                    "eventEndpoint": "https://telemetry-dev.alecsmods.com/ingest/event"
+                  }
+                }
+                """.formatted(projectId, displayName, displayName),
                 null
         );
     }
@@ -962,6 +1089,18 @@ class TelemetryRuntimeHostTest {
         @Override
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
             return UploadResult.success(200);
+        }
+    }
+
+    private static final class CapturingCrashReportClient implements CrashReportClient {
+        private final ArrayList<DeliveryTarget> targets = new ArrayList<>();
+        private final ArrayList<String> payloads = new ArrayList<>();
+
+        @Override
+        public UploadResult upload(DeliveryTarget target, String payloadJson) {
+            targets.add(target);
+            payloads.add(payloadJson);
+            return UploadResult.success(202);
         }
     }
 

@@ -10,6 +10,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentMetricReporter;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -61,6 +62,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryRuntimePluginEvents pluginEvents;
     private final TelemetryRuntimeCommandRegistrar commandRegistrar;
     private final TelemetryConsentCoordinator consentCoordinator;
+    private final TelemetryConsentMetricReporter consentMetricReporter;
     private final TelemetryRuntimeApi api;
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
@@ -110,7 +112,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 discovery.registrationWarnings(),
                 playerCounter,
                 logger,
-                new TelemetryRuntimeCommandRegistrar()
+                new TelemetryRuntimeCommandRegistrar(),
+                client
         );
     }
 
@@ -154,7 +157,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                    @Nonnull List<String> registrationWarnings,
                                    @Nonnull TelemetryPlayerCounter playerCounter,
                                    @Nullable HytaleLogger logger,
-                                   @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar) {
+                                   @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar,
+                                   @Nonnull CrashReportClient consentMetricClient) {
         this.request = request;
         this.settings = settings;
         this.dataPaths = dataPaths;
@@ -162,6 +166,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.bridge = new ProviderBridge(candidate, coordinator);
         this.commandRegistrar = commandRegistrar;
         this.consentCoordinator = new TelemetryConsentCoordinator(this, logger);
+        this.consentMetricReporter = new TelemetryConsentMetricReporter(settings, consentMetricClient, candidate.runtimeVersion(), logger);
         this.api = new TelemetryRuntimeApiImpl(this);
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
@@ -359,6 +364,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (project == null) {
             return false;
         }
+        boolean reviewed = consentStateStore.isReviewed(dataPaths.consentStateFile(), project);
+        TelemetryConsentSnapshot previous = buildLocalProjectDiagnostics(project).consentSnapshot();
         TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supportedSnapshot(project));
         Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
         boolean saved = saveConsentOverride(overrideFile, normalized);
@@ -373,7 +380,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (override != null) {
             replaceConsentProject(project.withOverride(override));
         }
-        return applyRuntimeConsent(project.projectId(), normalized);
+        boolean applied = applyRuntimeConsent(project.projectId(), normalized);
+        if (applied && reviewed) {
+            consentMetricReporter.recordConsentChange(project, previous, normalized, supportedSnapshot(project));
+        }
+        return applied;
     }
 
     @Override
@@ -383,7 +394,16 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             return active.markConsentReviewed(projectId);
         }
         TelemetryProjectRegistration project = findConsentProject(projectId);
-        return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
+        if (project == null) {
+            return false;
+        }
+        boolean alreadyReviewed = consentStateStore.isReviewed(dataPaths.consentStateFile(), project);
+        boolean marked = consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
+        if (marked && !alreadyReviewed) {
+            TelemetryConsentSnapshot snapshot = buildLocalProjectDiagnostics(project).consentSnapshot();
+            consentMetricReporter.recordFirstReview(project, snapshot, supportedSnapshot(project));
+        }
+        return marked;
     }
 
     @Nonnull
@@ -1464,8 +1484,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
         @Override
         public boolean markConsentReviewed(@Nonnull String projectId) {
-            TelemetryProjectRegistration project = findConsentProject(projectId);
-            return project != null && consentStateStore.markReviewed(dataPaths.consentStateFile(), project);
+            return TelemetryRuntimeProviderHandle.this.markConsentReviewed(projectId);
         }
 
         @Override
