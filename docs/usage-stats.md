@@ -6,9 +6,10 @@ keys.
 
 ## Default Stats
 
-The standalone runtime emits a `stats` `heartbeat` event for each dependency-mode
-project every 5 minutes. Embedded telemetry runtimes emit the same heartbeat for
-their owning project. The hosted stats surface derives:
+The active telemetry runtime emits a `stats` `heartbeat` event every 5 minutes
+for each installed, enabled project that has opted into stats, regardless of
+whether the winning runtime came from the standalone jar or an embedded copy. The
+hosted stats surface derives:
 
 - active servers
 - active players
