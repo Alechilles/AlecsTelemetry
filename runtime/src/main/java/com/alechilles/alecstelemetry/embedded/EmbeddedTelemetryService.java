@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
@@ -174,6 +175,16 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         return new EmbeddedTelemetryService(settings, dataPaths, project, hostHandle, logger);
     }
 
+    @Nullable
+    private TelemetryProjectHandle hostProjectHandle() {
+        return hostProjectHandle(project.projectId());
+    }
+
+    @Nullable
+    private TelemetryProjectHandle hostProjectHandle(@Nonnull String projectId) {
+        return hostHandle == null ? null : hostHandle.api().findProject(projectId);
+    }
+
     @Nonnull
     @Override
     public String projectId() {
@@ -195,6 +206,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 return TelemetryConsentBridgePayload.projectDiagnosticsFromSummary(activeDiagnostics).enabled();
             }
             return active.isProjectEnabled(project.projectId());
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            return hostProject.isEnabled();
         }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.isProjectEnabled(project.projectId());
@@ -292,6 +307,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             }
             return active.isProjectEnabled(projectId);
         }
+        TelemetryProjectHandle hostProject = hostProjectHandle(projectId);
+        if (hostProject != null) {
+            return hostProject.isEnabled();
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.isProjectEnabled(projectId);
         }
@@ -360,6 +379,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (active != null) {
             return active.requestFlush(projectId);
         }
+        if (hostHandle != null) {
+            if (projectId == null) {
+                return hostHandle.api().requestFlush();
+            }
+            TelemetryProjectHandle hostProject = hostProjectHandle(projectId);
+            return hostProject != null && hostProject.requestFlush();
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.requestFlush(projectId);
         }
@@ -376,6 +402,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.captureTestReport(projectId, detail);
+        }
+        if (hostHandle != null) {
+            return hostHandle.captureTestReport(projectId, detail);
         }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.captureTestReport(projectId, detail);
@@ -658,6 +687,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             applied &= coordinatorBridge.service.setBreadcrumbsEnabled(projectId, snapshot.breadcrumbsEnabled());
             return applied;
         }
+        if (hostHandle != null) {
+            TelemetryProjectHandle runtimeProject = hostProjectHandle(projectId);
+            boolean applied = hostHandle.applyConsent(projectId, snapshot);
+            if (runtimeProject == null && !applied) {
+                return findConsentProject(projectId) != null;
+            }
+            return runtimeProject == null || applied;
+        }
         if (engine != null && this.project != null && this.project.projectId().equalsIgnoreCase(projectId)) {
             engine.setProjectEnabled(projectId, snapshot.projectEnabled());
             engine.setCrashEnabled(projectId, snapshot.crashEnabled());
@@ -721,6 +758,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (active != null) {
             return active.setProjectEnabled(project.projectId(), enabled);
         }
+        if (hostHandle != null) {
+            return hostHandle.setProjectEnabled(project.projectId(), enabled);
+        }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.setProjectEnabled(project.projectId(), enabled);
         }
@@ -735,6 +775,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.setBreadcrumbsEnabled(project.projectId(), enabled);
+        }
+        if (hostHandle != null) {
+            return hostHandle.setBreadcrumbsEnabled(project.projectId(), enabled);
         }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.setBreadcrumbsEnabled(project.projectId(), enabled);
@@ -783,6 +826,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordBreadcrumb(project.projectId(), category, detail);
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordBreadcrumb(category, detail);
         } else if (engine != null) {
             engine.recordBreadcrumb(project.projectId(), category, detail);
         }
@@ -799,6 +847,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.captureSetupFailure(project.projectId(), throwable);
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.captureSetupFailure(throwable);
         } else if (engine != null) {
             engine.captureSetupFailure(project.projectId(), throwable);
         }
@@ -809,6 +862,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.captureStartFailure(project.projectId(), throwable);
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.captureStartFailure(throwable);
         } else if (engine != null) {
             engine.captureStartFailure(project.projectId(), throwable);
         }
@@ -819,6 +877,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordError(project.projectId(), eventName, throwable, detailsFrom(detail));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordError(eventName, throwable, detail);
         } else if (engine != null) {
             engine.recordError(project.projectId(), eventName, throwable, detail);
         }
@@ -829,6 +892,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordError(project.projectId(), eventName, throwable, detailsFrom(context));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordErrorWithContext(eventName, throwable, context);
         } else if (engine != null) {
             engine.recordErrorWithContext(project.projectId(), eventName, throwable, context);
         }
@@ -839,6 +907,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordLifecycle(project.projectId(), eventName, durationMs, success, detailsFrom(detail));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordLifecycle(eventName, durationMs, success, detail);
         } else if (engine != null) {
             engine.recordLifecycle(project.projectId(), eventName, durationMs, success, detail);
         }
@@ -849,6 +922,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordLifecycle(project.projectId(), eventName, durationMs, success, detailsFrom(context));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordLifecycleWithContext(eventName, durationMs, success, context);
         } else if (engine != null) {
             engine.recordLifecycleWithContext(project.projectId(), eventName, durationMs, success, context);
         }
@@ -859,6 +937,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordPerformance(project.projectId(), eventName, durationMs, metricValue, detailsFrom(detail));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordPerformance(eventName, durationMs, metricValue, detail);
         } else if (engine != null) {
             engine.recordPerformance(project.projectId(), eventName, durationMs, metricValue, detail);
         }
@@ -869,6 +952,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordPerformance(project.projectId(), eventName, durationMs, metricValue, detailsFrom(context));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordPerformanceWithContext(eventName, durationMs, metricValue, context);
         } else if (engine != null) {
             engine.recordPerformanceWithContext(project.projectId(), eventName, durationMs, metricValue, context);
         }
@@ -879,6 +967,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordUsage(project.projectId(), eventName, detailsFrom(detail));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordUsage(eventName, detail);
         } else if (engine != null) {
             engine.recordUsage(project.projectId(), eventName, detail);
         }
@@ -889,6 +982,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordUsage(project.projectId(), eventName, detailsFrom(context));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordUsageWithContext(eventName, context);
         } else if (engine != null) {
             engine.recordUsageWithContext(project.projectId(), eventName, context);
         }
@@ -899,6 +997,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordStats(project.projectId(), eventName, detailsFrom(detail));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordStats(eventName, detail);
         } else if (engine != null) {
             engine.recordStats(project.projectId(), eventName, detail);
         }
@@ -909,6 +1012,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordStats(project.projectId(), eventName, detailsFrom(context));
+            return;
+        }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            hostProject.recordStatsWithContext(eventName, context);
         } else if (engine != null) {
             engine.recordStatsWithContext(project.projectId(), eventName, context);
         }
@@ -944,6 +1052,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (active != null) {
             return active.requestFlush(project.projectId());
         }
+        TelemetryProjectHandle hostProject = hostProjectHandle();
+        if (hostProject != null) {
+            return hostProject.requestFlush();
+        }
         return engine != null && engine.triggerFlushAsync(project.projectId());
     }
 
@@ -951,6 +1063,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.captureTestReport(project.projectId(), detail);
+        }
+        if (hostHandle != null) {
+            return hostHandle.captureTestReport(project.projectId(), detail);
         }
         return engine != null && engine.captureTestReport(project.projectId(), detail);
     }

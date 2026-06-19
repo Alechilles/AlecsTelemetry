@@ -1,7 +1,11 @@
 package com.alechilles.alecstelemetry.embedded;
 
-import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
+import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
@@ -11,16 +15,22 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
-import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hypixel.hytale.component.Ref;
+import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.universe.PlayerRef;
+import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.annotation.Nonnull;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -33,7 +43,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -111,6 +120,49 @@ class EmbeddedTelemetryServiceTest {
 
         assertNotNull(root);
         assertEquals(TelemetryCommandRoot.ROOT_PERMISSION, root.getPermission());
+    }
+
+    @Test
+    void hostBackedEmbeddedServiceIsAvailableBeforeStart() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        FakeHostHandle host = new FakeHostHandle(registration);
+        EmbeddedTelemetryService service = EmbeddedTelemetryService.fromHost(settings, dataPaths, registration, host, null);
+
+        assertTrue(service.isEnabled());
+        service.recordBreadcrumb("lifecycle", "setup started");
+        service.captureSetupFailure(new RuntimeException("setup failed"));
+        assertEquals(1, host.project.breadcrumbs);
+        assertEquals(1, host.project.setupFailures);
+
+        assertTrue(service.setProjectEnabled(false));
+        assertFalse(service.isEnabled());
+        assertTrue(service.setProjectEnabled(true));
+        assertTrue(service.setBreadcrumbsEnabled(false));
+        assertFalse(host.project.breadcrumbsEnabled);
+        assertTrue(service.captureTestReport("pre-start"));
+
+        if (service.isEnabled()) {
+            service.start();
+        }
+
+        assertTrue(host.started);
+        assertEquals(1, host.captureTestReports);
     }
 
     @Test
@@ -1096,6 +1148,203 @@ class EmbeddedTelemetryServiceTest {
                     "pluginVersion", "2.0.0",
                     "sourcePath", candidate.sourcePath().toString()
             );
+        }
+    }
+    private static final class FakeHostHandle implements TelemetryRuntimeHostHandle {
+        private final FakeProjectHandle project;
+        private final TelemetryRuntimeApi api;
+        private boolean started;
+        private boolean shutdown;
+        private int captureTestReports;
+
+        private FakeHostHandle(@Nonnull TelemetryProjectRegistration registration) {
+            this.project = new FakeProjectHandle(registration);
+            this.api = new TelemetryRuntimeApi() {
+                @Override
+                public boolean isEnabled() {
+                    return project.isEnabled();
+                }
+
+                @Override
+                public List<TelemetryProjectHandle> projects() {
+                    return List.of(project);
+                }
+
+                @Override
+                public TelemetryProjectHandle findProject(@Nonnull String projectId) {
+                    return project.projectId().equalsIgnoreCase(projectId.trim()) ? project : null;
+                }
+
+                @Override
+                public boolean requestFlush() {
+                    return project.requestFlush();
+                }
+            };
+        }
+
+        @Override
+        public void start() {
+            started = true;
+        }
+
+        @Override
+        public void shutdown() {
+            shutdown = true;
+        }
+
+        @Override
+        public boolean ownsActiveCoordinator() {
+            return started && !shutdown;
+        }
+
+        @Override
+        public String activeCoordinatorProviderId() {
+            return ownsActiveCoordinator() ? "embedded:Example:Embedded Mod" : null;
+        }
+
+        @Override
+        public int registeredProjectCount() {
+            return 1;
+        }
+
+        @Override
+        public TelemetryRuntimeApi api() {
+            return api;
+        }
+
+        @Override
+        public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            project.enabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            project.breadcrumbsEnabled = enabled;
+            return true;
+        }
+
+        @Override
+        public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            project.enabled = snapshot.projectEnabled();
+            project.breadcrumbsEnabled = snapshot.breadcrumbsEnabled();
+            return true;
+        }
+
+        @Override
+        public boolean captureTestReport(@Nonnull String projectId, String detail) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            captureTestReports++;
+            return true;
+        }
+    }
+
+    private static final class FakeProjectHandle implements TelemetryProjectHandle {
+        private final TelemetryProjectRegistration registration;
+        private boolean enabled;
+        private boolean breadcrumbsEnabled;
+        private int breadcrumbs;
+        private int setupFailures;
+        private int flushRequests;
+
+        private FakeProjectHandle(@Nonnull TelemetryProjectRegistration registration) {
+            this.registration = registration;
+            this.enabled = registration.isEnabled();
+            this.breadcrumbsEnabled = registration.events().breadcrumbs().enabled();
+        }
+
+        @Override
+        public String projectId() {
+            return registration.projectId();
+        }
+
+        @Override
+        public String displayName() {
+            return registration.displayName();
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        @Override
+        public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
+            breadcrumbs++;
+        }
+
+        @Override
+        public void captureSetupFailure(Throwable throwable) {
+            setupFailures++;
+        }
+
+        @Override
+        public void captureStartFailure(Throwable throwable) {
+        }
+
+        @Override
+        public void recordError(@Nonnull String eventName, Throwable throwable, String detail) {
+        }
+
+        @Override
+        public void recordErrorWithContext(@Nonnull String eventName, Throwable throwable, TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, String detail) {
+        }
+
+        @Override
+        public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordPerformance(@Nonnull String eventName, int durationMs, Double metricValue, String detail) {
+        }
+
+        @Override
+        public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, Double metricValue, TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordUsage(@Nonnull String eventName, String detail) {
+        }
+
+        @Override
+        public void recordUsageWithContext(@Nonnull String eventName, TelemetryEventContext context) {
+        }
+
+        @Override
+        public void recordStats(@Nonnull String eventName, String detail) {
+        }
+
+        @Override
+        public void recordStatsWithContext(@Nonnull String eventName, TelemetryEventContext context) {
+        }
+
+        @Override
+        public boolean openReportPage(@Nonnull Ref<EntityStore> playerEntityRef,
+                                      @Nonnull Store<EntityStore> store,
+                                      @Nonnull PlayerRef playerRef,
+                                      @Nonnull TelemetryReportOpenRequest request) {
+            return false;
+        }
+
+        @Override
+        public boolean requestFlush() {
+            flushRequests++;
+            return true;
         }
     }
 }

@@ -268,6 +268,17 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return active == null ? coordinator.isProjectEnabled(projectId) : activeProjectEnabled(active, projectId);
     }
 
+    @Override
+    public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? coordinator.setProjectEnabled(projectId, enabled) : active.setProjectEnabled(projectId, enabled);
+    }
+
+    @Override
+    public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? coordinator.setBreadcrumbsEnabled(projectId, enabled) : active.setBreadcrumbsEnabled(projectId, enabled);
+    }
     @Nonnull
     @Override
     public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
