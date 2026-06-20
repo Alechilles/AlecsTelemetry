@@ -23,6 +23,8 @@ The default integration path is dependency mode: install Alec's Telemetry alongs
 - [Dependency Mode Setup](/mod/alecs-telemetry/dependency-mode-setup)
 - [Embedded Mode](/mod/alecs-telemetry/embedded-mode)
 - [Runtime Overrides](/mod/alecs-telemetry/runtime-overrides)
+- [Runtime API](/mod/alecs-telemetry/runtime-api)
+- [Command Reference](/mod/alecs-telemetry/command-reference)
 - [Example Mods](/mod/alecs-telemetry/example-mods)
 
 ## Hosted Operations

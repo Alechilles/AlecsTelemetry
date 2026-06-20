@@ -13,7 +13,7 @@ The `hosted/` package in this repository is a local/dev prototype and reference 
 
 ## Purpose
 
-It accepts telemetry uploads from the runtime mod, validates them against the hosted contract, applies basic abuse protections, and routes accepted crash alerts to Discord.
+It accepts telemetry uploads from the runtime mod, validates them against the hosted contract, applies basic abuse protections, routes accepted crash alerts to Discord, accepts manual player reports, and exposes file-backed public stats reference routes.
 
 ## Status
 
@@ -37,5 +37,11 @@ Treat this package as a reference implementation, not the long-term production b
 
 - `GET /healthz`
 - `POST /ingest/crash`
+- `POST /ingest/event`
+- `POST /ingest/report`
+- `POST /reports/status`
+- `GET /api/v1/projects`
+- `GET /api/v1/projects/:projectId/summary`
+- `GET /api/v1/projects/:projectId/charts/:chartId`
 
 For the full hosted payload contract, see [Hosted Ingest Contract](/mod/alecs-telemetry/hosted-ingest-contract).

@@ -65,7 +65,8 @@ These fields are also written by the first-run consent UI and by `/telemetry con
     "breadcrumbs": { "enabled": false }
   },
   "performance": { "enabled": false },
-  "usage": { "enabled": false }
+  "usage": { "enabled": false },
+  "stats": { "enabled": false }
 }
 ```
 
@@ -82,7 +83,25 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 
 ## Example: server-owner manual report controls
 
-These settings live in `Settings/runtime.json`, not per-project override files:
+Global runtime settings live in `Settings/runtime.json`, not per-project override
+files. The runtime creates this file with defaults the first time it starts.
+
+```json
+{
+  "enabled": true,
+  "flushIntervalSeconds": 180,
+  "connectTimeoutMs": 2000,
+  "readTimeoutMs": 3000,
+  "maxPendingReportsPerProject": 200,
+  "maxPendingEventsPerProject": 500,
+  "maxUploadsPerFlush": 10,
+  "maxBreadcrumbsPerProject": 30,
+  "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
+  "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
+}
+```
+
+Manual report controls also live in `Settings/runtime.json`:
 
 ```json
 {
@@ -125,15 +144,18 @@ contact fields, and disable resolution updates. Log attachments are clipped to
 - `performance.enabled`
 - `performance.sampleRate`
 - `performance.thresholdMs`
+- `stats.enabled`
+- `stats.allowedEvents`
 - `usage.enabled`
 - `usage.allowedEvents`
 - `customEndpoint.url`
 - `customEndpoint.eventUrl`
 - `customEndpoint.headers`
 
-Descriptor-declared `usage.details` and `performance.details` allowlists are not
-runtime override fields. They are part of the mod author's packaged telemetry
-contract so uploaded custom details stay predictable for the hosted portal.
+Descriptor-declared `usage.details`, `stats.details`, and `performance.details`
+allowlists are not runtime override fields. They are part of the mod author's
+packaged telemetry contract so uploaded custom details stay predictable for the
+hosted portal.
 
 ## Merge Rules
 

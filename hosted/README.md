@@ -14,8 +14,9 @@ and database-backed crash routing behavior.
 
 It accepts crash telemetry and generic event uploads from the runtime mod,
 validates them against the hosted contract, applies basic abuse protections, and
-routes accepted crash alerts to Discord. It also includes a file-backed reference
-implementation for public aggregate Hytale usage statistics.
+routes accepted crash alerts to Discord. It also accepts manual player reports
+and includes a file-backed reference implementation for public aggregate Hytale
+usage statistics.
 
 ## Trust Model
 
@@ -32,11 +33,16 @@ implementation for public aggregate Hytale usage statistics.
 4. Run `npm install`
 5. Run `npm run dev`
 
+Set `stats.public` to `true` in `config/projects.json` when a project should be
+listed by the public stats API.
+
 ## Endpoints
 
 - `GET /healthz`
 - `POST /ingest/crash`
 - `POST /ingest/event`
+- `POST /ingest/report`
+- `POST /reports/status`
 - `GET /api/v1/projects`
 - `GET /api/v1/projects/:projectId/summary`
 - `GET /api/v1/projects/:projectId/charts/:chartId`

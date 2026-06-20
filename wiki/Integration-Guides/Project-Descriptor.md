@@ -188,6 +188,7 @@ Consumer mods can attach typed context to explicit non-crash events with:
 - `recordLifecycleWithContext`
 - `recordPerformanceWithContext`
 - `recordUsageWithContext`
+- `recordStatsWithContext`
 
 `TelemetryEventContext` supports these standardized fields:
 

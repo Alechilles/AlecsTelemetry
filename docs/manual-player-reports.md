@@ -6,7 +6,7 @@ to automated crash reports and generic telemetry events.
 Consumer mods can open the report page from their own UI:
 
 ```java
-TelemetryRuntimeApi api = TelemetryRuntimeLocator.get();
+TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
 TelemetryProjectHandle project = api == null ? null : api.findProject("example-consumer-mod");
 if (project != null) {
     project.openReportPage(ref, store, playerRef, new TelemetryReportOpenRequest("issue", null, null));

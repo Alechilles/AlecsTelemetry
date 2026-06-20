@@ -206,7 +206,7 @@ Hosted `projectKey` values are designed to be publishable ingest keys.
 - `details`
   - optional heartbeat detail allowlist for future standard stats fields
 
-Stats are intentionally not customizable yet. When `stats.enabled` is true, the
+Stats are intentionally not customizable. When `stats.enabled` is true, the
 runtime can emit the standard `heartbeat` stats event. Core stats fields are
 always sanitized by the runtime:
 

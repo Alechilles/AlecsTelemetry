@@ -11,6 +11,11 @@
       "discord": {
         "channelId": "replace_with_discord_channel_id",
         "guildId": "replace_with_discord_guild_id"
+      },
+      "stats": {
+        "public": true,
+        "slug": "example-consumer-mod",
+        "description": "Example public usage stats."
       }
     }
   ]

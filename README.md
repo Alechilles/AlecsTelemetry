@@ -157,7 +157,10 @@ Minimal custom-endpoint example:
 
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
 - [Embedded mode guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
+- [Runtime API guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-api.md)
+- [Command reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/command-reference.md)
 - [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+- [Manual player reports](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/manual-player-reports.md)
 - [Usage stats guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/usage-stats.md)
 - [Hosted key operations](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-key-operations.md)
 - [Hosted ingest contract](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-ingest-contract.md)

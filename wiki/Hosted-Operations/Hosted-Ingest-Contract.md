@@ -108,8 +108,11 @@ Normal `eventType` values include:
 - `lifecycle`
 - `performance`
 - `usage`
+- `stats`
 
 `details` is reserved for descriptor-validated custom Event Context fields and bounded debug context such as breadcrumbs on error or failed lifecycle events. Standardized context fields are first-class event envelope fields; custom `detail(key, value)` entries are uploaded only after descriptor allowlist validation.
+
+Stats events use `eventType: "stats"` and `eventName: "heartbeat"`. The public stats API exposes standard server/player history and environment breakdown charts without exposing raw `serverId`, `sessionId`, IP addresses, player identifiers, chat, coordinates, secrets, or full config files.
 
 ## Manual Report Body
 

@@ -15,7 +15,7 @@ The sample descriptor also enables manual issue and suggestion reports. A consum
 mod can open the report UI from its own player UI handler with:
 
 ```java
-TelemetryRuntimeApi api = TelemetryRuntimeLocator.get();
+TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
 TelemetryProjectHandle project = api == null ? null : api.findProject("example-consumer-mod");
 if (project != null) {
     project.openReportPage(ref, store, playerRef, new TelemetryReportOpenRequest("issue", null, null));
