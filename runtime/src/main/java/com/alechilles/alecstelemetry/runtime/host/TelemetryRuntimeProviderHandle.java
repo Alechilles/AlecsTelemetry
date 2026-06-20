@@ -459,7 +459,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public TelemetryServerVerificationResult requestServerVerification() {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        return active == null ? coordinator.requestServerVerification() : active.requestServerVerification();
+        if (active != null) {
+            TelemetryServerVerificationResult activeResult = active.requestServerVerification();
+            if (activeResult.status() != TelemetryServerVerificationResult.Status.UNAVAILABLE) {
+                return activeResult;
+            }
+        }
+        return coordinator.requestServerVerification();
     }
 
     @Override

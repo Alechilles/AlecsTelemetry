@@ -384,7 +384,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     public TelemetryServerVerificationResult commandServerVerification() {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            return active.requestServerVerification();
+            TelemetryServerVerificationResult activeResult = active.requestServerVerification();
+            if (activeResult.status() != TelemetryServerVerificationResult.Status.UNAVAILABLE) {
+                return activeResult;
+            }
         }
         if (coordinatorBridge != null) {
             return coordinatorBridge.service.requestServerVerification();

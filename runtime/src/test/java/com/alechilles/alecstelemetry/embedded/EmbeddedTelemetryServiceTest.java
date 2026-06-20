@@ -9,6 +9,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
@@ -607,6 +608,65 @@ class EmbeddedTelemetryServiceTest {
         assertEquals(List.of("provider-mod"), active.reviewedProjectIds);
 
         service.shutdown();
+    }
+
+    @Test
+    void serverVerificationFallsBackToLocalRuntimeWhenActiveBridgeDoesNotSupportIt() throws Exception {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        Files.createDirectories(telemetryRoot.resolve("Settings"));
+        Files.writeString(telemetryRoot.resolve("Settings").resolve("server-identity.json"), """
+                {
+                  "serverId": "023d9570-243a-4bbf-bca7-cf54d286b4cb",
+                  "serverClaimToken": "ms_claim_gvDFjGzV7j-GTUWDrD7jZ_qBiDFmfSVT"
+                }
+                """);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptorWithStats(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryPlayerCounter playerCounter = new EmbeddedTelemetryPlayerCounter();
+        playerCounter.markReady(UUID.randomUUID());
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null,
+                playerCounter
+        );
+        ProviderStyleConsentBridge oldActiveBridge = new ProviderStyleConsentBridge(new TelemetryRuntimeCandidate(
+                "standalone:Example:Old Provider",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.2.1",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Old Provider",
+                "1.0.0",
+                tempDir.resolve("OldProvider.jar"),
+                tempDir.resolve("OldProviderTelemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(oldActiveBridge);
+
+        TelemetryServerVerificationResult result = service.commandServerVerification();
+
+        assertEquals(TelemetryServerVerificationResult.Status.QUEUED, result.status());
+        assertEquals(1, result.flushSummary().attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("ms_claim_gvDFjGzV7j-GTUWDrD7jZ_qBiDFmfSVT", payload.getAsJsonObject("details").get("serverClaimToken").getAsString());
     }
 
     @Test
