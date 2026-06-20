@@ -231,7 +231,7 @@ class EmbeddedTelemetryServiceTest {
         JsonObject firstPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("embedded-mod", firstPayload.get("projectId").getAsString());
         UUID.fromString(firstPayload.get("serverId").getAsString());
-        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-id.txt")));
+        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-identity.json")));
         assertTrue(firstPayload.getAsJsonArray("breadcrumbs").size() > 0);
     }
 
@@ -291,11 +291,11 @@ class EmbeddedTelemetryServiceTest {
         assertEquals("embedded-mod", payload.get("projectId").getAsString());
         assertEquals(2, payload.get("schemaVersion").getAsInt());
         UUID.fromString(payload.get("serverId").getAsString());
-        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-id.txt")));
+        assertTrue(java.nio.file.Files.isRegularFile(telemetryRoot.resolve("Settings").resolve("server-identity.json")));
     }
 
     @Test
-    void embeddedStatsHeartbeatQueuesStandardStatsEvent() {
+    void embeddedStatsHeartbeatQueuesStandardStatsEvent() throws Exception {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
@@ -307,6 +307,13 @@ class EmbeddedTelemetryServiceTest {
                 telemetryRoot.resolve("events"),
                 null
         );
+        Files.createDirectories(telemetryRoot.resolve("Settings"));
+        Files.writeString(telemetryRoot.resolve("Settings").resolve("server-identity.json"), """
+                {
+                  "serverId": "550e8400-e29b-41d4-a716-446655440000",
+                  "serverClaimToken": "ms_claim_test"
+                }
+                """);
         TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
                 descriptorWithStats(),
                 "Example:Embedded Mod",
@@ -335,6 +342,7 @@ class EmbeddedTelemetryServiceTest {
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
         assertEquals(2, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        assertEquals("ms_claim_test", payload.getAsJsonObject("details").get("serverClaimToken").getAsString());
     }
 
     @Test

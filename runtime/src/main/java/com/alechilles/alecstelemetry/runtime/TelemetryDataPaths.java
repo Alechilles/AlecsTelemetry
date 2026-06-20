@@ -120,6 +120,11 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public Path serverIdentityFile() {
+        return settingsFile.getParent().resolve("server-identity.json");
+    }
+
+    @Nonnull
     public Path serverIdFile() {
         return settingsFile.getParent().resolve("server-id.txt");
     }

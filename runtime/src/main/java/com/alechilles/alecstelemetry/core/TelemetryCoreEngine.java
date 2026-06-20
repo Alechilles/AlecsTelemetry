@@ -81,6 +81,7 @@ public final class TelemetryCoreEngine {
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
+    private final String serverClaimToken;
     private final ManualReportLogCollector manualReportLogCollector = new ManualReportLogCollector();
     private final ManualReportReceiptStore manualReportReceiptStore = new ManualReportReceiptStore();
 
@@ -117,7 +118,9 @@ public final class TelemetryCoreEngine {
         this.executor = executor;
         this.enabled = new AtomicBoolean(settings.enabled());
         this.breadcrumbs = new TelemetryBreadcrumbBuffer(settings.maxBreadcrumbsPerProject());
-        this.serverId = TelemetryServerIdentity.loadOrCreate(dataPaths.serverIdFile(), logger);
+        TelemetryServerIdentity.Identity identity = TelemetryServerIdentity.loadOrCreate(dataPaths.serverIdentityFile(), dataPaths.serverIdFile(), logger);
+        this.serverId = identity.serverId();
+        this.serverClaimToken = identity.serverClaimToken();
     }
 
     public void start() {
@@ -534,7 +537,8 @@ public final class TelemetryCoreEngine {
         CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
         LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
         putDetail(attributes, normalizedContext);
-        Map<String, Object> details = project.stats().sanitizeDetails(eventName, normalizedContext.details());
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>(project.stats().sanitizeDetails(eventName, normalizedContext.details()));
+        putIfPresent(details, "serverClaimToken", serverClaimToken);
         TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
                 project.projectId(),
                 project.displayName(),
@@ -1024,6 +1028,14 @@ public final class TelemetryCoreEngine {
                                   @Nonnull TelemetryEventContext context) {
         if (context.detail() != null && !context.detail().isBlank()) {
             attributes.put("detail", context.detail().trim());
+        }
+    }
+
+    private static void putIfPresent(@Nonnull Map<String, Object> details,
+                                     @Nonnull String key,
+                                     @Nullable Object value) {
+        if (value != null) {
+            details.put(key, value);
         }
     }
 
