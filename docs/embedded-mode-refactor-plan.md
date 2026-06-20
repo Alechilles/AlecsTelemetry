@@ -1,10 +1,15 @@
 # Embedded Mode Refactor Plan
 
+> Archived plan, not current setup guidance. Current consumer descriptors belong at
+> `Server/Telemetry/project.json`, and new descriptors should omit `runtimeMode`.
+> Use `docs/embedded-mode.md` and `docs/project-descriptor.md` for modder-facing
+> setup instructions.
+
 > Superseded implementation note: embedded and standalone runtimes now
 > participate in coordinator election. The active latest-compatible coordinator
-> discovers enabled descriptors for all installed mods, including
-> `runtimeMode=embedded`; non-winning copies forward operations to the active
-> bridge.
+> discovers enabled descriptors for all installed mods, including descriptors
+> with legacy `runtimeMode` values; non-winning copies forward operations to the
+> active bridge.
 
 ## Goal
 

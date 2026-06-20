@@ -22,7 +22,6 @@ Recommended default:
 
 ```json
 {
-  "runtimeMode": "dependency",
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
   }
@@ -34,6 +33,8 @@ Place the file at:
 ```text
 Server/Telemetry/project.json
 ```
+
+That is enough for the normal hosted setup when your `manifest.json` has a correct `Group`, `Name`, and `Main`.
 
 ## What Can Be Inferred
 

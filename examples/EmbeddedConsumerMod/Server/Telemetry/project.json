@@ -1,5 +1,4 @@
 {
-  "runtimeMode": "embedded",
   "events": {
     "errors": { "enabled": true },
     "lifecycle": { "enabled": true },

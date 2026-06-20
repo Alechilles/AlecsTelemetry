@@ -21,11 +21,13 @@ Use embedded mode when a modder wants:
 
 ## Descriptor Requirement
 
-Embedded mode uses the same `Server/Telemetry/project.json` descriptor as dependency mode, but it must declare:
+Embedded mode uses the same `Server/Telemetry/project.json` descriptor as dependency mode. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap` from the owning mod.
 
 ```json
 {
-  "runtimeMode": "embedded"
+  "hosted": {
+    "projectKey": "pub_proj_abc123"
+  }
 }
 ```
 
@@ -40,13 +42,12 @@ Runtime ownership is selected per server process:
 3. If versions match, standalone wins over embedded.
 4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
 
-The active coordinator handles descriptors from all installed enabled mods, including descriptors marked `runtimeMode: "embedded"`. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
+The active coordinator handles descriptors from all installed enabled mods, including descriptors with or without the legacy `runtimeMode` field. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
 
 ## Minimal Hosted Example
 
 ```json
 {
-  "runtimeMode": "embedded",
   "hosted": {
     "projectKey": "pub_proj_abc123"
   }
@@ -132,9 +133,9 @@ The elected active coordinator stores runtime settings, queues, server identity,
 
 ## Important Rule
 
-Pick one mode per mod:
+Pick one packaging strategy per mod:
 
-- `dependency`
-- `embedded`
+- depend on the standalone Alec's Telemetry runtime
+- embed and bootstrap the runtime yourself
 
-Do not try to make one mod use both.
+Do not add a descriptor flag to choose the strategy. Runtime election handles coexistence when multiple providers are installed.

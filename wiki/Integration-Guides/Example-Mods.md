@@ -31,7 +31,7 @@ The embedded example shows how a modder can bootstrap telemetry directly in thei
 
 Key pieces:
 
-- `Server/Telemetry/project.json` declares `runtimeMode: "embedded"`.
+- `Server/Telemetry/project.json` declares the same hosted project settings as dependency mode.
 - The mod boots telemetry in its own lifecycle.
 
 Use this example only when embedded mode is an intentional packaging or lifecycle choice.

@@ -22,14 +22,13 @@ Dependency mode is the recommended integration path. Alec's Telemetry runs as a 
 
 ```json
 {
-  "runtimeMode": "dependency",
   "hosted": {
     "projectKey": "your_public_project_key"
   }
 }
 ```
 
-If `runtimeMode` is omitted, dependency mode is the default.
+New descriptors do not need `runtimeMode`. Alec's Telemetry chooses the active runtime from the installed or embedded runtime candidates at startup.
 
 ## Packaging Checklist
 

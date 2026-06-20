@@ -15,10 +15,7 @@ Consumer mods opt into Alec's Telemetry by shipping a descriptor at:
 Server/Telemetry/project.json
 ```
 
-The descriptor supports both integration modes:
-
-- `dependency`
-- `embedded`
+The same descriptor is used whether telemetry is provided by the standalone runtime or by an embedded runtime packaged inside a mod. Descriptors no longer need to choose dependency versus embedded mode; runtime ownership is decided by coordinator election at startup.
 
 ## Plug-And-Play Default
 
@@ -33,7 +30,6 @@ For most hosted projects, the descriptor can stay small:
 
 ```json
 {
-  "runtimeMode": "dependency",
   "hosted": {
     "projectKey": "your_public_project_key"
   }
@@ -46,7 +42,6 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 
 ```json
 {
-  "runtimeMode": "dependency",
   "defaults": {
     "destinationMode": "custom"
   },
@@ -61,13 +56,14 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `schemaVersion`
 - `projectId`
 - `displayName`
-- `runtimeMode`
+- `runtimeMode` (legacy optional)
 - `ownerPluginIdentifiers`
 - `packagePrefixes`
 - `capture`
 - `events`
 - `performance`
 - `usage`
+- `stats`
 - `reports`
 - `ui`
 - `defaults`
@@ -105,7 +101,9 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `allowedEvents`
 - `details`
 
-Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`, and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
+`stats.enabled` controls anonymous public stats separately from feature usage telemetry. When enabled, the runtime can emit the standard `heartbeat` stats event.
+
+Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`, `stats.details`, and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
 
 Supported detail field types:
 
@@ -214,8 +212,9 @@ Consumer mods can attach typed context to explicit non-crash events with:
 
 ## Runtime Mode
 
-- `dependency`: default when omitted. The standalone Alec's Telemetry runtime may discover and manage the project.
-- `embedded`: the owning mod is expected to bootstrap embedded telemetry itself. The active telemetry coordinator still discovers and handles this project; non-winning embedded or standalone copies forward operations to that coordinator.
+`runtimeMode` is a legacy optional field. New descriptors should omit it.
+
+When present, `dependency` and `embedded` are still accepted for backwards compatibility and diagnostics, but the field no longer controls discovery, consent, queueing, upload ownership, or coordinator election. Embedded behavior is selected by packaging and calling `EmbeddedTelemetryBootstrap`, not by this descriptor field.
 
 ## Destination Fields
 
@@ -234,6 +233,7 @@ Alec's Telemetry shows a first-run consent UI when an operator installs a teleme
 - `events.lifecycle.enabled` controls the default lifecycle telemetry category.
 - `performance.enabled` controls the default performance telemetry category.
 - `usage.enabled` controls the default usage telemetry category.
+- `stats.enabled` controls the default anonymous public stats category.
 - `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
 
 Server owners can override each value in the consent UI or through `Settings/projects/<project-id>.json`. Descriptor defaults are used until an override exists.
