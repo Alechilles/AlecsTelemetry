@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.commands;
 
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
+import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
@@ -37,10 +38,7 @@ public final class TelemetryServerVerifyCommand extends AbstractPlayerCommand {
         }
         TelemetryServerVerificationResult result = runtime.requestServerVerification();
         switch (result.status()) {
-            case QUEUED -> TelemetryCommandSupport.send(
-                    commandContext,
-                    "Server verification heartbeat sent. Check the ModStats portal for verification status."
-            );
+            case QUEUED -> TelemetryCommandSupport.send(commandContext, verificationQueuedMessage(result));
             case MISSING_CLAIM_TOKEN -> TelemetryCommandSupport.send(
                     commandContext,
                     "No server claim token is configured. Create or rotate a server profile in the ModStats portal, then add serverClaimToken to Settings/server-identity.json."
@@ -54,5 +52,28 @@ public final class TelemetryServerVerifyCommand extends AbstractPlayerCommand {
                     "Server verification is unavailable from this telemetry runtime."
             );
         }
+    }
+
+    @Nonnull
+    static String verificationQueuedMessage(@Nonnull TelemetryServerVerificationResult result) {
+        TelemetryCoreEngine.FlushSummary summary = result.flushSummary();
+        if (summary.uploaded() > 0) {
+            return "Server verification heartbeat sent. Check the ModStats portal for verification status.";
+        }
+        if (summary.attempted() == 0) {
+            return "Server verification heartbeat was queued but no upload was attempted. Pending telemetry: "
+                    + summary.pendingAfter() + ".";
+        }
+        String failure = summary.lastFailure() == null || summary.lastFailure().isBlank()
+                ? "unknown upload failure"
+                : summary.lastFailure();
+        return "Server verification heartbeat could not be delivered yet. Attempted "
+                + summary.attempted()
+                + ", sent "
+                + summary.uploaded()
+                + ", pending "
+                + summary.pendingAfter()
+                + ". Last failure: "
+                + failure;
     }
 }
