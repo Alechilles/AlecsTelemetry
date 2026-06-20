@@ -9,6 +9,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
@@ -372,6 +373,48 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     public boolean requestFlush(@Nullable String projectId) {
         return commandFlush(projectId);
+    }
+
+    @Nonnull
+    public TelemetryServerVerificationResult requestServerVerification() {
+        return commandServerVerification();
+    }
+
+    @Nonnull
+    public TelemetryServerVerificationResult commandServerVerification() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active != null) {
+            return active.requestServerVerification();
+        }
+        if (coordinatorBridge != null) {
+            return coordinatorBridge.service.requestServerVerification();
+        }
+        if (engine == null || project == null) {
+            return TelemetryServerVerificationResult.unavailable(disabledReason == null ? "runtime_unavailable" : disabledReason);
+        }
+        if (engine.serverClaimToken() == null) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "missing_claim_token")
+            );
+        }
+        if (statsHeartbeat == null
+                || !engine.isStatsEnabled(project.projectId())
+                || !project.stats().allows(EmbeddedTelemetryStatsHeartbeat.EVENT_HEARTBEAT)) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.NO_STATS_PROJECTS,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "no_stats_projects")
+            );
+        }
+        statsHeartbeat.emitHeartbeatNow();
+        TelemetryCoreEngine.FlushSummary flushSummary = engine.flushPendingReportsNow("server-verification", project.projectId());
+        return new TelemetryServerVerificationResult(
+                TelemetryServerVerificationResult.Status.QUEUED,
+                1,
+                flushSummary
+        );
     }
 
     public boolean commandFlush(@Nullable String projectId) {
@@ -1583,6 +1626,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return EmbeddedTelemetryService.this.requestFlush(projectId);
         }
 
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification() {
+            return EmbeddedTelemetryService.this.requestServerVerification();
+        }
+
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return EmbeddedTelemetryService.this.captureTestReport(projectId, detail);
@@ -1937,6 +1986,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Override
         public boolean requestFlush(@Nullable String projectId) {
             return service.requestFlush(projectId);
+        }
+
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification() {
+            return service.requestServerVerification();
         }
 
         @Override

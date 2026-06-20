@@ -26,6 +26,10 @@ class TelemetryCommandRootTest {
                 root.getSubCommands().get("test").getPermission()
         );
         assertEquals(
+                "telemetry.command.telemetry.server",
+                root.getSubCommands().get("server").getPermission()
+        );
+        assertEquals(
                 "telemetry.command.telemetry.consent",
                 root.getSubCommands().get("consent").getPermission()
         );

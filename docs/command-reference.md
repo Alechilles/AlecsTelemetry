@@ -61,6 +61,17 @@ state is kept in the runtime consent state file.
 - `flush` schedules uploads for all projects or one project.
 - `test` queues a manual telemetry test report without crashing the server.
 
+## Server Verification
+
+```text
+/telemetry server verify
+```
+
+`server verify` emits a stats heartbeat containing the configured
+`serverClaimToken` from `Settings/server-identity.json`, then flushes it
+immediately. If no claim token is configured, create or rotate a server profile
+in the ModStats portal and add the generated token to that identity file.
+
 ## Manual Player Reports
 
 Players can open the report UI with:

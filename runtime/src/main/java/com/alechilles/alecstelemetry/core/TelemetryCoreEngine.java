@@ -217,6 +217,11 @@ public final class TelemetryCoreEngine {
         return project != null && isStatsRuntimeEnabled(project);
     }
 
+    @Nullable
+    public String serverClaimToken() {
+        return serverClaimToken;
+    }
+
     public boolean isBreadcrumbsEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
         return project != null && areBreadcrumbsRuntimeEnabled(project);

@@ -12,6 +12,7 @@ import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
@@ -242,6 +243,83 @@ class TelemetryCoordinatorServiceTest {
         assertEquals("heartbeat", dependencyPayload.get("eventName").getAsString());
         assertEquals(3, embeddedPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
         assertEquals(3, dependencyPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
+    }
+
+    @Test
+    void serverVerificationRequiresClaimToken() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null,
+                () -> 2
+        );
+
+        TelemetryServerVerificationResult result = service.requestServerVerification();
+
+        assertEquals(TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN, result.status());
+        assertEquals(0, result.queuedHeartbeats());
+        assertEquals(0, client.payloads.size());
+    }
+
+    @Test
+    void serverVerificationQueuesClaimHeartbeatAndFlushes() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        Files.createDirectories(dataPaths.serverIdentityFile().getParent());
+        Files.writeString(dataPaths.serverIdentityFile(), """
+                {
+                  "serverId": "550e8400-e29b-41d4-a716-446655440000",
+                  "serverClaimToken": "ms_claim_test"
+                }
+                """);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null,
+                () -> 2
+        );
+
+        TelemetryServerVerificationResult result = service.requestServerVerification();
+
+        assertEquals(TelemetryServerVerificationResult.Status.QUEUED, result.status());
+        assertEquals(1, result.queuedHeartbeats());
+        assertEquals(1, result.flushSummary().attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+        assertEquals("ms_claim_test", payload.getAsJsonObject("details").get("serverClaimToken").getAsString());
     }
 
     private TelemetryDataPaths dataPaths(TelemetryRuntimeSettings settings) {

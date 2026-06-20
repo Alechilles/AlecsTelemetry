@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
@@ -43,6 +44,9 @@ public interface TelemetryCommandRuntime {
     String lastFlushResult();
 
     boolean requestFlush(@Nullable String projectId);
+
+    @Nonnull
+    TelemetryServerVerificationResult requestServerVerification();
 
     boolean captureTestReport(@Nonnull String projectId, @Nullable String detail);
 

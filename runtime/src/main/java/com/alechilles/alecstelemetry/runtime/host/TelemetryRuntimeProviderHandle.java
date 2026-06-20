@@ -9,6 +9,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
+import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentMetricReporter;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
@@ -452,6 +453,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public boolean requestFlush(@Nullable String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active == null ? coordinator.requestFlush(projectId) : active.requestFlush(projectId);
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryServerVerificationResult requestServerVerification() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? coordinator.requestServerVerification() : active.requestServerVerification();
     }
 
     @Override
@@ -1600,6 +1608,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public boolean requestFlush(@Nullable String projectId) {
             return service.requestFlush(projectId);
+        }
+
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification() {
+            return service.requestServerVerification();
         }
 
         @Override

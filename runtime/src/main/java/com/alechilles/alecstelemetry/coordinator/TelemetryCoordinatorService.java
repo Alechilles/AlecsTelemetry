@@ -360,6 +360,32 @@ public final class TelemetryCoordinatorService {
         return engine.triggerFlushAsync(projectId);
     }
 
+    @Nonnull
+    public TelemetryServerVerificationResult requestServerVerification() {
+        if (engine.serverClaimToken() == null) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "missing_claim_token")
+            );
+        }
+        int statsProjects = statsHeartbeatProjectCount();
+        if (statsHeartbeat == null || statsProjects == 0) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.NO_STATS_PROJECTS,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "no_stats_projects")
+            );
+        }
+        statsHeartbeat.emitHeartbeatNow();
+        TelemetryCoreEngine.FlushSummary flushSummary = engine.flushPendingReportsNow("server-verification");
+        return new TelemetryServerVerificationResult(
+                TelemetryServerVerificationResult.Status.QUEUED,
+                statsProjects,
+                flushSummary
+        );
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return engine.captureTestReport(projectId, detail);
     }
@@ -412,6 +438,16 @@ public final class TelemetryCoordinatorService {
         if (statsHeartbeat != null) {
             statsHeartbeat.emitHeartbeatNow();
         }
+    }
+
+    private int statsHeartbeatProjectCount() {
+        int count = 0;
+        for (TelemetryProjectRegistration project : engine.projects()) {
+            if (engine.isStatsEnabled(project.projectId()) && project.stats().allows(TelemetryCoordinatorStatsHeartbeat.EVENT_HEARTBEAT)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public boolean flushInProgress() {

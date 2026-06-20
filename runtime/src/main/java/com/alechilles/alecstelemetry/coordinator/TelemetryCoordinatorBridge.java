@@ -203,6 +203,11 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    @Nonnull
+    default TelemetryServerVerificationResult requestServerVerification() {
+        return TelemetryServerVerificationResult.unavailable("active_coordinator_unavailable");
+    }
+
     default boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return false;
     }

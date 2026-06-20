@@ -23,6 +23,7 @@ public final class TelemetryCommandRoot extends AbstractCommandCollection {
         addSubCommand(new TelemetryReportCommand(runtime));
         addSubCommand(new TelemetryReportReviewCommand(runtime));
         addSubCommand(new TelemetryFlushCommand(runtime));
+        addSubCommand(new TelemetryServerCommand(runtime));
         addSubCommand(new TelemetryTestCommand(runtime));
     }
 }
