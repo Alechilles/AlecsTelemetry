@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 - Intake Backoff Hotfix - 2026-06-21
+
+### Fixed
+- Honored hosted intake `Retry-After` and stats heartbeat interval hints so
+  runtimes back off instead of repeatedly sending during platform pressure.
+- Stopped the flush loop after a backoff response so queued uploads do not keep
+  hammering a saturated ingest lane in the same flush pass.
+
 ## 0.2.2 - Aggregate Stats Heartbeat Hotfix - 2026-06-20
 
 ### Changed
