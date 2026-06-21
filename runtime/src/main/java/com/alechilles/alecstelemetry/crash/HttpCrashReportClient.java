@@ -1,6 +1,8 @@
 package com.alechilles.alecstelemetry.crash;
 
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -55,13 +57,27 @@ public final class HttpCrashReportClient implements CrashReportClient {
             }
 
             int statusCode = http.getResponseCode();
+            String responseBody = readString(statusCode >= 200 && statusCode < 300 ? http.getInputStream() : http.getErrorStream());
+            ResponseHints responseHints = parseResponseHints(responseBody);
             if (statusCode >= 200 && statusCode < 300) {
-                closeQuietly(http.getInputStream());
-                return UploadResult.success(statusCode);
+                return UploadResult.success(
+                        statusCode,
+                        responseHints.intakeLane(),
+                        responseHints.recommendedHeartbeatIntervalSec()
+                );
             }
 
-            closeQuietly(http.getErrorStream());
-            return UploadResult.failure(statusCode, "HTTP " + statusCode);
+            int retryAfterSec = parseRetryAfterSec(http.getHeaderField("Retry-After"));
+            if (retryAfterSec <= 0) {
+                retryAfterSec = responseHints.retryAfterSec();
+            }
+            return UploadResult.failure(
+                    statusCode,
+                    responseHints.error() == null ? "HTTP " + statusCode : responseHints.error(),
+                    retryAfterSec,
+                    responseHints.intakeLane(),
+                    responseHints.recommendedHeartbeatIntervalSec()
+            );
         } catch (Exception ex) {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log("Crash telemetry upload request failed.");
@@ -74,14 +90,79 @@ public final class HttpCrashReportClient implements CrashReportClient {
         }
     }
 
-    private static void closeQuietly(@Nullable InputStream stream) {
+    @Nonnull
+    private static String readString(@Nullable InputStream stream) {
         if (stream == null) {
-            return;
+            return "";
+        }
+        try (InputStream input = stream) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static int parseRetryAfterSec(@Nullable String value) {
+        if (value == null || value.trim().isBlank()) {
+            return 0;
         }
         try {
-            stream.close();
-        } catch (Exception ignored) {
-            // Intentionally ignored.
+            return Math.max(0, Integer.parseInt(value.trim()));
+        } catch (NumberFormatException ignored) {
+            return 0;
         }
+    }
+
+    @Nonnull
+    private static ResponseHints parseResponseHints(@Nonnull String responseBody) {
+        if (responseBody.isBlank()) {
+            return ResponseHints.EMPTY;
+        }
+        try {
+            JsonObject root = JsonParser.parseString(responseBody).getAsJsonObject();
+            JsonObject intake = root.has("intake") && root.get("intake").isJsonObject()
+                    ? root.getAsJsonObject("intake")
+                    : null;
+            return new ResponseHints(
+                    stringOrNull(root, "error"),
+                    intOrZero(root, "retryAfterSec"),
+                    intake == null ? null : stringOrNull(intake, "lane"),
+                    intake == null ? null : positiveIntegerOrNull(intake, "recommendedHeartbeatIntervalSec")
+            );
+        } catch (Exception ignored) {
+            return ResponseHints.EMPTY;
+        }
+    }
+
+    @Nullable
+    private static String stringOrNull(@Nonnull JsonObject object, @Nonnull String memberName) {
+        return object.has(memberName) && object.get(memberName).isJsonPrimitive()
+                ? object.get(memberName).getAsString()
+                : null;
+    }
+
+    private static int intOrZero(@Nonnull JsonObject object, @Nonnull String memberName) {
+        Integer value = positiveIntegerOrNull(object, memberName);
+        return value == null ? 0 : value;
+    }
+
+    @Nullable
+    private static Integer positiveIntegerOrNull(@Nonnull JsonObject object, @Nonnull String memberName) {
+        if (!object.has(memberName) || !object.get(memberName).isJsonPrimitive()) {
+            return null;
+        }
+        try {
+            int value = object.get(memberName).getAsInt();
+            return value <= 0 ? null : value;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private record ResponseHints(@Nullable String error,
+                                 int retryAfterSec,
+                                 @Nullable String intakeLane,
+                                 @Nullable Integer recommendedHeartbeatIntervalSec) {
+        private static final ResponseHints EMPTY = new ResponseHints(null, 0, null, null);
     }
 }

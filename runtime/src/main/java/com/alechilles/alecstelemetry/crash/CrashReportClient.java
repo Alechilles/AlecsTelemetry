@@ -40,15 +40,71 @@ public interface CrashReportClient {
     /**
      * Result for one upload attempt.
      */
-    record UploadResult(boolean success, int statusCode, @Nullable String detail) {
+    record UploadResult(boolean success,
+                        int statusCode,
+                        @Nullable String detail,
+                        int retryAfterSec,
+                        @Nullable String intakeLane,
+                        @Nullable Integer recommendedHeartbeatIntervalSec) {
         @Nonnull
         public static UploadResult success(int statusCode) {
-            return new UploadResult(true, statusCode, null);
+            return new UploadResult(true, statusCode, null, 0, null, null);
+        }
+
+        @Nonnull
+        public static UploadResult success(int statusCode,
+                                           @Nullable String intakeLane,
+                                           @Nullable Integer recommendedHeartbeatIntervalSec) {
+            return new UploadResult(true, statusCode, null, 0, normalizeNullable(intakeLane), positiveOrNull(recommendedHeartbeatIntervalSec));
         }
 
         @Nonnull
         public static UploadResult failure(int statusCode, @Nullable String detail) {
-            return new UploadResult(false, statusCode, detail);
+            return new UploadResult(false, statusCode, detail, 0, null, null);
+        }
+
+        @Nonnull
+        public static UploadResult failure(int statusCode,
+                                           @Nullable String detail,
+                                           int retryAfterSec,
+                                           @Nullable String intakeLane,
+                                           @Nullable Integer recommendedHeartbeatIntervalSec) {
+            return new UploadResult(
+                    false,
+                    statusCode,
+                    detail,
+                    Math.max(0, retryAfterSec),
+                    normalizeNullable(intakeLane),
+                    positiveOrNull(recommendedHeartbeatIntervalSec)
+            );
+        }
+
+        public boolean shouldBackOff() {
+            return statusCode == 429 || retryAfterSec > 0;
+        }
+
+        @Nonnull
+        public String describeFailure() {
+            String base = detail == null || detail.isBlank() ? "HTTP status " + statusCode : detail;
+            if (!shouldBackOff()) {
+                return base;
+            }
+            return retryAfterSec > 0
+                    ? base + " (rate limited; retry after " + retryAfterSec + "s)"
+                    : base + " (rate limited)";
+        }
+
+        @Nullable
+        private static String normalizeNullable(@Nullable String value) {
+            if (value == null || value.trim().isBlank()) {
+                return null;
+            }
+            return value.trim();
+        }
+
+        @Nullable
+        private static Integer positiveOrNull(@Nullable Integer value) {
+            return value == null || value <= 0 ? null : value;
         }
     }
 }

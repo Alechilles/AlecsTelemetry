@@ -8,6 +8,7 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -61,6 +62,46 @@ class HttpCrashReportClientTest {
 
             assertFalse(result.success());
             assertTrue(result.statusCode() == 500 || result.statusCode() == 0);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void exposesRetryAfterAndStatsIntakeHints() throws Exception {
+        HttpServer server = startServer(exchange -> {
+            String response = """
+                    {
+                      "error": "rate_limited",
+                      "retryAfterSec": 42,
+                      "intake": {
+                        "lane": "stats",
+                        "recommendedHeartbeatIntervalSec": 180
+                      }
+                    }
+                    """;
+            exchange.getResponseHeaders().add("Retry-After", "41");
+            byte[] responseBytes = response.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(429, responseBytes.length);
+            exchange.getResponseBody().write(responseBytes);
+            exchange.close();
+        });
+
+        try {
+            HttpCrashReportClient client = new HttpCrashReportClient(1000, 1000, null);
+            CrashReportClient.UploadResult result = client.upload(
+                    new CrashReportClient.DeliveryTarget(
+                            "http://127.0.0.1:" + server.getAddress().getPort() + "/telemetry",
+                            Map.of()
+                    ),
+                    "{\"hello\":\"world\"}"
+            );
+
+            assertFalse(result.success());
+            assertEquals(429, result.statusCode());
+            assertEquals(41, result.retryAfterSec());
+            assertEquals("stats", result.intakeLane());
+            assertEquals(180, result.recommendedHeartbeatIntervalSec());
         } finally {
             server.stop(0);
         }

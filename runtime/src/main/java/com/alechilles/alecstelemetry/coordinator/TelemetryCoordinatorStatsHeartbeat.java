@@ -42,12 +42,6 @@ final class TelemetryCoordinatorStatsHeartbeat {
         if (executor == null || !started.compareAndSet(false, true)) {
             return;
         }
-        future = executor.scheduleWithFixedDelay(
-                this::emitHeartbeatSafely,
-                HEARTBEAT_INTERVAL_SECONDS,
-                HEARTBEAT_INTERVAL_SECONDS,
-                TimeUnit.SECONDS
-        );
         emitHeartbeatSafely();
     }
 
@@ -72,6 +66,21 @@ final class TelemetryCoordinatorStatsHeartbeat {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log("Telemetry coordinator stats heartbeat failed.");
             }
+        } finally {
+            if (started.get()) {
+                scheduleNext();
+            }
         }
+    }
+
+    private void scheduleNext() {
+        if (executor == null) {
+            return;
+        }
+        future = executor.schedule(
+                this::emitHeartbeatSafely,
+                Math.max(1, engine.statsHeartbeatIntervalSeconds()),
+                TimeUnit.SECONDS
+        );
     }
 }

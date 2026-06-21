@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.coordinator;
 
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
+import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
@@ -147,6 +148,112 @@ class TelemetryCoordinatorServiceTest {
         assertEquals("embedded-mod", payload.get("projectId").getAsString());
         assertEquals("settings_opened", payload.get("eventName").getAsString());
         assertEquals("test", payload.getAsJsonObject("details").get("source").getAsString());
+    }
+
+    @Test
+    void rateLimitedEventUploadStopsCurrentFlushPassAndLeavesQueueIntact() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                descriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(
+                CrashReportClient.UploadResult.failure(429, "rate_limited", 42, "events", null),
+                CrashReportClient.UploadResult.success(204)
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.recordUsage("embedded-mod", "settings_opened", Map.of("source", "one")));
+        assertTrue(service.recordUsage("embedded-mod", "settings_opened", Map.of("source", "two")));
+
+        TelemetryCoreEngine.FlushSummary summary = service.flushPendingReportsNow("test", "embedded-mod");
+
+        assertEquals(1, summary.attempted());
+        assertEquals(0, summary.uploaded());
+        assertEquals(2, summary.pendingAfter());
+        assertTrue(summary.lastFailure().contains("rate limited"));
+        assertEquals(1, client.calls);
+    }
+
+    @Test
+    void statsUploadHintUpdatesRecommendedHeartbeatInterval() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(
+                CrashReportClient.UploadResult.success(202, "stats", 180)
+        );
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        engine.recordAggregateStatsHeartbeat(List.of(embedded), 3);
+        TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow("test");
+
+        assertEquals(1, summary.uploaded());
+        assertEquals(180, engine.statsHeartbeatIntervalSeconds());
+    }
+
+    @Test
+    void coordinatorStatsHeartbeatSchedulesWithCurrentEngineInterval() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+        engine.applyStatsHeartbeatIntervalHint(180);
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        TelemetryCoordinatorStatsHeartbeat heartbeat = new TelemetryCoordinatorStatsHeartbeat(engine, () -> 3, executor, null);
+
+        heartbeat.start();
+
+        assertEquals(180, executor.lastScheduledDelaySeconds());
     }
 
     @Test
@@ -463,6 +570,7 @@ class TelemetryCoordinatorServiceTest {
     private static final class SequencedClient implements CrashReportClient {
         private final Queue<UploadResult> responses = new ArrayDeque<>();
         private final java.util.ArrayList<String> payloads = new java.util.ArrayList<>();
+        private int calls;
 
         private SequencedClient(UploadResult... uploadResults) {
             for (UploadResult uploadResult : uploadResults) {
@@ -472,6 +580,7 @@ class TelemetryCoordinatorServiceTest {
 
         @Override
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
+            calls++;
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
@@ -480,6 +589,7 @@ class TelemetryCoordinatorServiceTest {
 
     private static final class RecordingScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
         private final Queue<Runnable> tasks = new ArrayDeque<>();
+        private long lastScheduledDelaySeconds = -1;
 
         @Override
         public void shutdown() {
@@ -514,9 +624,14 @@ class TelemetryCoordinatorServiceTest {
             return tasks.size();
         }
 
+        long lastScheduledDelaySeconds() {
+            return lastScheduledDelaySeconds;
+        }
+
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
-            throw new UnsupportedOperationException("schedule");
+            lastScheduledDelaySeconds = TimeUnit.SECONDS.convert(delay, unit);
+            return new NoopScheduledFuture<>();
         }
 
         @Override

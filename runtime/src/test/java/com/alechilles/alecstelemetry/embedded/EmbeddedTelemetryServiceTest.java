@@ -1012,7 +1012,7 @@ class EmbeddedTelemetryServiceTest {
 
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
-            throw new UnsupportedOperationException("schedule");
+            return new NoopScheduledFuture<>();
         }
 
         @Override

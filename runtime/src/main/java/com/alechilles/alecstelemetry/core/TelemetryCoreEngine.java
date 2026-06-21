@@ -41,6 +41,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
 /**
@@ -53,6 +54,9 @@ public final class TelemetryCoreEngine {
     private static final String SOURCE_SETUP_FAILURE = "plugin_setup_failure";
     private static final String SOURCE_START_FAILURE = "plugin_start_failure";
     private static final String SOURCE_MANUAL_TEST = "manual_test";
+    private static final int DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS = 300;
+    private static final int MIN_STATS_HEARTBEAT_INTERVAL_SECONDS = 60;
+    private static final int MAX_STATS_HEARTBEAT_INTERVAL_SECONDS = 3600;
 
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -78,6 +82,7 @@ public final class TelemetryCoreEngine {
     private final ConcurrentHashMap<String, AtomicBoolean> usageEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> statsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> breadcrumbsEnabledOverrides = new ConcurrentHashMap<>();
+    private final AtomicInteger statsHeartbeatIntervalSeconds = new AtomicInteger(DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS);
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
@@ -156,6 +161,20 @@ public final class TelemetryCoreEngine {
 
     public boolean isEnabled() {
         return enabled.get();
+    }
+
+    public int statsHeartbeatIntervalSeconds() {
+        return statsHeartbeatIntervalSeconds.get();
+    }
+
+    public void applyStatsHeartbeatIntervalHint(int intervalSeconds) {
+        if (intervalSeconds <= 0) {
+            return;
+        }
+        statsHeartbeatIntervalSeconds.set(Math.max(
+                MIN_STATS_HEARTBEAT_INTERVAL_SECONDS,
+                Math.min(intervalSeconds, MAX_STATS_HEARTBEAT_INTERVAL_SECONDS)
+        ));
     }
 
     @Nonnull
@@ -920,6 +939,7 @@ public final class TelemetryCoreEngine {
                     for (CrashReportStore.PendingReport pending : store.listPendingReports(settings.maxUploadsPerFlush())) {
                         attempted++;
                         CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
+                        applyUploadHints(uploadResult);
                         if (uploadResult.success()) {
                             if (store.delete(pending.path())) {
                                 uploaded++;
@@ -927,9 +947,10 @@ public final class TelemetryCoreEngine {
                                 lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
                             }
                         } else {
-                            lastFailure = uploadResult.detail() == null
-                                    ? "HTTP status " + uploadResult.statusCode()
-                                    : uploadResult.detail();
+                            lastFailure = uploadResult.describeFailure();
+                            if (uploadResult.shouldBackOff()) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -940,6 +961,7 @@ public final class TelemetryCoreEngine {
                     for (TelemetryEventStore.PendingEvent pending : eventStore.listPendingEvents(settings.maxUploadsPerFlush())) {
                         attempted++;
                         CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
+                        applyUploadHints(uploadResult);
                         if (uploadResult.success()) {
                             if (eventStore.delete(pending.path())) {
                                 uploaded++;
@@ -947,9 +969,10 @@ public final class TelemetryCoreEngine {
                                 lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
                             }
                         } else {
-                            lastFailure = uploadResult.detail() == null
-                                    ? "HTTP status " + uploadResult.statusCode()
-                                    : uploadResult.detail();
+                            lastFailure = uploadResult.describeFailure();
+                            if (uploadResult.shouldBackOff()) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -963,6 +986,7 @@ public final class TelemetryCoreEngine {
                         attempted++;
                         ManualReportEnvelope envelope = parseManualReport(pending.payload());
                         CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
+                        applyUploadHints(uploadResult);
                         if (uploadResult.success()) {
                             if (manualStore.delete(pending.path())) {
                                 uploaded++;
@@ -973,9 +997,10 @@ public final class TelemetryCoreEngine {
                             }
                         } else {
                             updateManualReportReceiptStatus(envelope, "upload_failed");
-                            lastFailure = uploadResult.detail() == null
-                                    ? "HTTP status " + uploadResult.statusCode()
-                                    : uploadResult.detail();
+                            lastFailure = uploadResult.describeFailure();
+                            if (uploadResult.shouldBackOff()) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -988,6 +1013,17 @@ public final class TelemetryCoreEngine {
             updateFlushStatus(reason, summary, ex.getMessage());
             logWarning("Crash telemetry flush pass failed.", ex);
             return summary;
+        }
+    }
+
+    private void applyUploadHints(@Nonnull CrashReportClient.UploadResult uploadResult) {
+        Integer intervalSeconds = uploadResult.recommendedHeartbeatIntervalSec();
+        if (intervalSeconds == null) {
+            return;
+        }
+        String lane = uploadResult.intakeLane();
+        if (lane == null || "stats".equalsIgnoreCase(lane)) {
+            applyStatsHeartbeatIntervalHint(intervalSeconds);
         }
     }
 
