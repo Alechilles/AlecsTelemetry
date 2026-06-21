@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,8 +31,9 @@ class TelemetryStatsHeartbeatServiceTest {
 
         new TelemetryStatsHeartbeatService(runtime, players, null, null).emitHeartbeatNow();
 
-        assertEquals(List.of("example-mod", "second-mod"), runtime.projectIds);
-        assertEquals(List.of(1, 1), runtime.playersOnlineValues);
+        assertEquals(List.of("example-mod"), runtime.projectIds);
+        assertEquals(List.of(1), runtime.playersOnlineValues);
+        assertEquals(List.of("example-mod", "second-mod"), runtime.aggregateProjectIds);
     }
 
     private static TelemetryProjectRegistration registration(String projectId, String displayName) {
@@ -55,6 +57,7 @@ class TelemetryStatsHeartbeatServiceTest {
     private static final class FakeStatsRuntime implements TelemetryStatsRuntime {
         private final List<TelemetryProjectRegistration> projects;
         private final ArrayList<String> projectIds = new ArrayList<>();
+        private final ArrayList<String> aggregateProjectIds = new ArrayList<>();
         private final ArrayList<Integer> playersOnlineValues = new ArrayList<>();
 
         private FakeStatsRuntime(List<TelemetryProjectRegistration> projects) {
@@ -73,6 +76,11 @@ class TelemetryStatsHeartbeatServiceTest {
                                            @Nonnull TelemetryEventContext context) {
             projectIds.add(projectId);
             playersOnlineValues.add(((Number) context.details().get("playersOnline")).intValue());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> projects = (List<Map<String, Object>>) context.details().get("projects");
+            projects.stream()
+                    .map(project -> (String) project.get("projectId"))
+                    .forEach(aggregateProjectIds::add);
         }
     }
 }

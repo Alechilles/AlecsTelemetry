@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.api;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -27,6 +28,8 @@ public record TelemetryEventContext(@Nullable String detail,
                                     @Nonnull Map<String, Object> details) {
 
     private static final int MAX_DETAIL_FIELDS = 20;
+    private static final int MAX_NESTED_DETAIL_VALUES = 20;
+    private static final int MAX_DETAIL_DEPTH = 3;
     private static final TelemetryEventContext EMPTY = builder().build();
 
     @Nonnull
@@ -107,7 +110,7 @@ public record TelemetryEventContext(@Nullable String detail,
                 break;
             }
             String key = normalizeNullable(entry.getKey(), 80);
-            Object value = normalizeDetailValue(entry.getValue());
+            Object value = normalizeDetailValue(entry.getValue(), 0);
             if (key != null && value != null) {
                 normalized.put(key, value);
             }
@@ -116,7 +119,7 @@ public record TelemetryEventContext(@Nullable String detail,
     }
 
     @Nullable
-    private static Object normalizeDetailValue(@Nullable Object value) {
+    private static Object normalizeDetailValue(@Nullable Object value, int depth) {
         if (value == null) {
             return null;
         }
@@ -126,7 +129,42 @@ public record TelemetryEventContext(@Nullable String detail,
         if (value instanceof CharSequence text) {
             return normalizeNullable(text.toString(), 500);
         }
+        if (depth >= MAX_DETAIL_DEPTH) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            LinkedHashMap<String, Object> normalized = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (normalized.size() >= MAX_NESTED_DETAIL_VALUES || entry == null || entry.getKey() == null) {
+                    break;
+                }
+                String key = normalizeNullable(entry.getKey().toString(), 80);
+                Object nestedValue = normalizeDetailValue(entry.getValue(), depth + 1);
+                if (key != null && nestedValue != null) {
+                    normalized.put(key, nestedValue);
+                }
+            }
+            return normalized.isEmpty() ? null : Map.copyOf(normalized);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            return normalizeDetailIterable(iterable, depth);
+        }
         return null;
+    }
+
+    @Nullable
+    private static List<Object> normalizeDetailIterable(@Nonnull Iterable<?> values, int depth) {
+        java.util.ArrayList<Object> normalized = new java.util.ArrayList<>();
+        for (Object value : values) {
+            if (normalized.size() >= MAX_NESTED_DETAIL_VALUES) {
+                break;
+            }
+            Object nestedValue = normalizeDetailValue(value, depth + 1);
+            if (nestedValue != null) {
+                normalized.add(nestedValue);
+            }
+        }
+        return normalized.isEmpty() ? null : List.copyOf(normalized);
     }
 
     public static final class Builder {

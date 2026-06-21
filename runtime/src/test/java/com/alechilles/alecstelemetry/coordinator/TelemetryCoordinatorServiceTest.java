@@ -18,6 +18,11 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -229,20 +234,56 @@ class TelemetryCoordinatorServiceTest {
 
         service.emitStatsHeartbeatNow();
 
-        assertEquals(1, service.flushPendingReportsNow("test", "embedded-mod").attempted());
-        assertEquals(1, service.flushPendingReportsNow("test", "dependency-mod").attempted());
-        assertEquals(2, client.payloads.size());
+        assertEquals(1, service.flushPendingReportsNow("test").attempted());
+        assertEquals(1, client.payloads.size());
 
-        JsonObject embeddedPayload = JsonParser.parseString(client.payloads.get(0)).getAsJsonObject();
-        JsonObject dependencyPayload = JsonParser.parseString(client.payloads.get(1)).getAsJsonObject();
-        assertEquals("embedded-mod", embeddedPayload.get("projectId").getAsString());
-        assertEquals("dependency-mod", dependencyPayload.get("projectId").getAsString());
-        assertEquals("runtime_api", embeddedPayload.get("source").getAsString());
-        assertEquals("runtime_api", dependencyPayload.get("source").getAsString());
-        assertEquals("heartbeat", embeddedPayload.get("eventName").getAsString());
-        assertEquals("heartbeat", dependencyPayload.get("eventName").getAsString());
-        assertEquals(3, embeddedPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
-        assertEquals(3, dependencyPayload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("embedded-mod", payload.get("projectId").getAsString());
+        assertEquals("runtime_stats", payload.get("source").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+        assertEquals(3, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        var projects = payload.getAsJsonObject("details").getAsJsonArray("projects");
+        assertEquals(2, projects.size());
+        assertEquals("embedded-mod", projects.get(0).getAsJsonObject().get("projectId").getAsString());
+        assertEquals("dependency-mod", projects.get(1).getAsJsonObject().get("projectId").getAsString());
+        assertEquals("Example:Dependency Mod", projects.get(1).getAsJsonObject().get("pluginIdentifier").getAsString());
+    }
+
+    @Test
+    void startQueuesStatsHeartbeatImmediately() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                executor,
+                () -> 2
+        );
+
+        service.start();
+
+        assertEquals(1, service.pendingReports(null));
+        assertEquals(1, executor.queuedTasks());
+        assertEquals(1, service.flushPendingReportsNow("startup-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
     }
 
     @Test
@@ -434,6 +475,100 @@ class TelemetryCoordinatorServiceTest {
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
+        }
+    }
+
+    private static final class RecordingScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
+        private final Queue<Runnable> tasks = new ArrayDeque<>();
+
+        @Override
+        public void shutdown() {
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            return List.of();
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return false;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return false;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return false;
+        }
+
+        @Override
+        public void execute(Runnable command) {
+            tasks.add(command);
+        }
+
+        int queuedTasks() {
+            return tasks.size();
+        }
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            throw new UnsupportedOperationException("scheduleAtFixedRate");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+            return new NoopScheduledFuture<>();
+        }
+    }
+
+    private static final class NoopScheduledFuture<V> implements ScheduledFuture<V> {
+        @Override
+        public long getDelay(TimeUnit unit) {
+            return 0;
+        }
+
+        @Override
+        public int compareTo(java.util.concurrent.Delayed other) {
+            return 0;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return false;
+        }
+
+        @Override
+        public V get() {
+            return null;
+        }
+
+        @Override
+        public V get(long timeout, TimeUnit unit) {
+            return null;
         }
     }
 }

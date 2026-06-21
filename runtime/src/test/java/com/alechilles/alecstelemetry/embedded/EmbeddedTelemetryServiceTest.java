@@ -347,6 +347,48 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void startQueuesStatsHeartbeatImmediately() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptorWithStats(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        QueuedScheduledExecutor executor = new QueuedScheduledExecutor();
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                executor,
+                new EmbeddedTelemetryPlayerCounter()
+        );
+
+        service.start();
+
+        assertEquals(1, service.pendingReports());
+        assertEquals(1, executor.queuedTasks());
+        assertEquals(1, service.flushPendingReportsNow("startup-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+    }
+
+    @Test
     void embeddedServiceRegistersCoordinatorCandidateAndForwardsThroughActiveBridge() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -991,9 +1033,46 @@ class EmbeddedTelemetryServiceTest {
                                                          long initialDelay,
                                                          long delay,
                                                          TimeUnit unit) {
-            throw new UnsupportedOperationException("scheduleWithFixedDelay");
+            return new NoopScheduledFuture<>();
         }
 
+    }
+
+    private static final class NoopScheduledFuture<V> implements ScheduledFuture<V> {
+        @Override
+        public long getDelay(TimeUnit unit) {
+            return 0;
+        }
+
+        @Override
+        public int compareTo(java.util.concurrent.Delayed other) {
+            return 0;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return false;
+        }
+
+        @Override
+        public V get() {
+            return null;
+        }
+
+        @Override
+        public V get(long timeout, TimeUnit unit) {
+            return null;
+        }
     }
 
     private static final class ProviderStyleConsentBridge implements TelemetryCoordinatorBridge {

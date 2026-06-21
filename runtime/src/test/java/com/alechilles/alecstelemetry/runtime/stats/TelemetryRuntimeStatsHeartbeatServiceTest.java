@@ -28,6 +28,11 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -116,6 +121,52 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
     }
 
     @Test
+    void heartbeatQueuesOneAggregateStatsEventForAllProjects() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                tempDir,
+                settings.filePath(),
+                tempDir.resolve("Settings").resolve("projects"),
+                tempDir.resolve("Telemetry"),
+                tempDir.resolve("Telemetry").resolve("crash-reports"),
+                tempDir.resolve("Telemetry").resolve("events"),
+                tempDir
+        );
+        TelemetryProjectRegistration first = statsRegistration("first-mod", "First Mod");
+        TelemetryProjectRegistration second = statsRegistration("second-mod", "Second Mod");
+        CapturingClient client = new CapturingClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(first, second),
+                List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:First Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Second Mod", "1.0.0")
+                ),
+                client,
+                null,
+                null
+        );
+        TelemetryPlayerCounter counter = new TelemetryPlayerCounter();
+        counter.markReady(UUID.randomUUID());
+
+        new TelemetryStatsHeartbeatService(TelemetryStatsRuntime.from(new CoreRuntimeOperations(engine)), counter, null, null).emitHeartbeatNow();
+
+        assertEquals(1, engine.flushPendingReportsNow("test-aggregate-stats-heartbeat").attempted());
+        assertEquals(1, client.payloads.size());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("first-mod", payload.get("projectId").getAsString());
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+        assertEquals(1, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        var projects = payload.getAsJsonObject("details").getAsJsonArray("projects");
+        assertEquals(2, projects.size());
+        assertEquals("first-mod", projects.get(0).getAsJsonObject().get("projectId").getAsString());
+        assertEquals("second-mod", projects.get(1).getAsJsonObject().get("projectId").getAsString());
+        assertEquals("Example:Second Mod", projects.get(1).getAsJsonObject().get("pluginIdentifier").getAsString());
+    }
+
+    @Test
     void heartbeatSkipsStatsEmissionWhenRuntimeDisallowsHeartbeat() {
         TelemetryProjectRegistration registration = statsRegistration("passive-mod", "Passive Mod");
         java.util.ArrayList<String> emittedProjectIds = new java.util.ArrayList<>();
@@ -142,6 +193,35 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
         new TelemetryStatsHeartbeatService(runtime, new TelemetryPlayerCounter(), null, null).emitHeartbeatNow();
 
         assertEquals(List.of(), emittedProjectIds);
+    }
+
+    @Test
+    void startQueuesFirstHeartbeatImmediately() {
+        TelemetryProjectRegistration registration = statsRegistration("startup-mod", "Startup Mod");
+        java.util.ArrayList<String> emittedProjectIds = new java.util.ArrayList<>();
+        TelemetryStatsRuntime runtime = new TelemetryStatsRuntime() {
+            @Nonnull
+            @Override
+            public List<TelemetryProjectRegistration> projects() {
+                return List.of(registration);
+            }
+
+            @Override
+            public boolean canEmitHeartbeat() {
+                return true;
+            }
+
+            @Override
+            public void recordStatsWithContext(@Nonnull String projectId,
+                                               @Nonnull String eventName,
+                                               @Nonnull TelemetryEventContext context) {
+                emittedProjectIds.add(projectId + ":" + eventName);
+            }
+        };
+
+        new TelemetryStatsHeartbeatService(runtime, new TelemetryPlayerCounter(), new RecordingScheduledExecutor(), null).start();
+
+        assertEquals(List.of("startup-mod:heartbeat"), emittedProjectIds);
     }
 
     @Test
@@ -312,6 +392,12 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
                                            @Nullable TelemetryEventContext context) {
             engine.recordStatsWithContext(projectId, eventName, context);
         }
+
+        @Override
+        public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                                  int playersOnline) {
+            engine.recordAggregateStatsHeartbeat(projects, playersOnline);
+        }
     }
 
     private static TelemetryProjectRegistration statsRegistration(String projectId, String displayName) {
@@ -347,6 +433,93 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;
+        }
+    }
+
+    private static final class RecordingScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
+        @Override
+        public void shutdown() {
+        }
+
+        @Override
+        public List<Runnable> shutdownNow() {
+            return List.of();
+        }
+
+        @Override
+        public boolean isShutdown() {
+            return false;
+        }
+
+        @Override
+        public boolean isTerminated() {
+            return false;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeout, TimeUnit unit) {
+            return false;
+        }
+
+        @Override
+        public void execute(Runnable command) {
+        }
+
+        @Override
+        public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
+            throw new UnsupportedOperationException("schedule");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
+            throw new UnsupportedOperationException("scheduleAtFixedRate");
+        }
+
+        @Override
+        public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
+            return new NoopScheduledFuture<>();
+        }
+    }
+
+    private static final class NoopScheduledFuture<V> implements ScheduledFuture<V> {
+        @Override
+        public long getDelay(TimeUnit unit) {
+            return 0;
+        }
+
+        @Override
+        public int compareTo(java.util.concurrent.Delayed other) {
+            return 0;
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return true;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return false;
+        }
+
+        @Override
+        public V get() {
+            return null;
+        }
+
+        @Override
+        public V get(long timeout, TimeUnit unit) {
+            return null;
         }
     }
 }

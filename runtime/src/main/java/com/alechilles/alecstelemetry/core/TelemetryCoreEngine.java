@@ -567,6 +567,65 @@ public final class TelemetryCoreEngine {
         requestFlushAsync("event", project.projectId());
     }
 
+    public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                              int playersOnline) {
+        if (!enabled.get() || projects.isEmpty()) {
+            return;
+        }
+        ArrayList<TelemetryProjectRegistration> eligibleProjects = new ArrayList<>();
+        for (TelemetryProjectRegistration project : projects) {
+            if (project == null
+                    || findProject(project.projectId()) == null
+                    || !isProjectRuntimeEnabled(project)
+                    || project.resolveEventDeliveryTarget(settings) == null
+                    || !isStatsRuntimeEnabled(project)
+                    || !project.stats().allows("heartbeat")) {
+                continue;
+            }
+            eligibleProjects.add(project);
+        }
+        if (eligibleProjects.isEmpty()) {
+            return;
+        }
+
+        TelemetryProjectRegistration carrier = eligibleProjects.getFirst();
+        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+        TelemetryEventContext context = TelemetryEventContext.stats()
+                .featureKey("stats")
+                .entryPoint("heartbeat")
+                .runtimeSide("server")
+                .detail("playersOnline", Math.max(0, playersOnline))
+                .build();
+        TelemetryEventContext normalizedContext = normalizeContext(context);
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        putDetail(attributes, normalizedContext);
+        LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+        details.put("playersOnline", Math.max(0, playersOnline));
+        details.put("projects", aggregateProjectDetails(eligibleProjects));
+        putIfPresent(details, "serverClaimToken", serverClaimToken);
+        TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
+                carrier.projectId(),
+                carrier.displayName(),
+                "runtime_stats",
+                sessionId,
+                serverId,
+                "heartbeat",
+                carrier.pluginIdentifier(),
+                carrier.pluginVersion(),
+                normalizedContext.worldName(),
+                environmentFor(carrier, runtimeMetadata),
+                attributes,
+                details,
+                normalizedContext,
+                runtimeMetadata
+        );
+        if (!eventStoreFor(carrier).persist(event)) {
+            logWarning("Failed to store aggregate telemetry stats heartbeat for project " + carrier.projectId() + ".", null);
+            return;
+        }
+        requestFlushAsync("event", carrier.projectId());
+    }
+
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null || !isProjectRuntimeEnabled(project)) {
@@ -580,6 +639,20 @@ public final class TelemetryCoreEngine {
                 new RuntimeException("Manual telemetry test for " + project.displayName() + suffix)
         );
         return true;
+    }
+
+    @Nonnull
+    private static List<Map<String, Object>> aggregateProjectDetails(@Nonnull List<TelemetryProjectRegistration> projects) {
+        ArrayList<Map<String, Object>> details = new ArrayList<>(projects.size());
+        for (TelemetryProjectRegistration project : projects) {
+            LinkedHashMap<String, Object> projectDetails = new LinkedHashMap<>();
+            projectDetails.put("projectId", project.projectId());
+            projectDetails.put("projectDisplayName", project.displayName());
+            projectDetails.put("pluginIdentifier", project.pluginIdentifier());
+            projectDetails.put("pluginVersion", project.pluginVersion());
+            details.add(Map.copyOf(projectDetails));
+        }
+        return List.copyOf(details);
     }
 
     public void captureExceptionalWorldRemoval(@Nullable World world,

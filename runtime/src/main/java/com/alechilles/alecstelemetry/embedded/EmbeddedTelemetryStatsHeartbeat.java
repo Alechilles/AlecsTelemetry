@@ -51,6 +51,7 @@ final class EmbeddedTelemetryStatsHeartbeat {
                 HEARTBEAT_INTERVAL_SECONDS,
                 TimeUnit.SECONDS
         );
+        emitHeartbeatSafely();
     }
 
     void shutdown() {

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 - Aggregate Stats Heartbeat Hotfix - 2026-06-20
+
+### Changed
+- Reduced stats telemetry volume by reporting one aggregate heartbeat for all active projects on a runtime instead of one separate heartbeat per project.
+
+### Fixed
+- Preserved per-project stats attribution in aggregate heartbeat details so the hosted service can fan out one runtime upload into project-specific ModStats rows.
+
 ## 0.2.1 - Consent Metrics Hotfix - 2026-06-19
 
 ### Fixed

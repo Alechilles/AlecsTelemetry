@@ -10,7 +10,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public interface TelemetryRuntimeOperations {
     boolean isEnabled();
@@ -67,4 +69,36 @@ public interface TelemetryRuntimeOperations {
     void recordStatsWithContext(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 @Nullable TelemetryEventContext context);
+
+    default void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                               int playersOnline) {
+        if (projects.isEmpty()) {
+            return;
+        }
+        recordStatsWithContext(
+                projects.getFirst().projectId(),
+                "heartbeat",
+                TelemetryEventContext.stats()
+                        .featureKey("stats")
+                        .entryPoint("heartbeat")
+                        .runtimeSide("server")
+                        .detail("playersOnline", Math.max(0, playersOnline))
+                        .detail("projects", aggregateProjectDetails(projects))
+                        .build()
+        );
+    }
+
+    @Nonnull
+    private static List<Map<String, Object>> aggregateProjectDetails(@Nonnull List<TelemetryProjectRegistration> projects) {
+        return projects.stream()
+                .map(project -> {
+                    LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+                    details.put("projectId", project.projectId());
+                    details.put("projectDisplayName", project.displayName());
+                    details.put("pluginIdentifier", project.pluginIdentifier());
+                    details.put("pluginVersion", project.pluginVersion());
+                    return Map.copyOf(details);
+                })
+                .toList();
+    }
 }

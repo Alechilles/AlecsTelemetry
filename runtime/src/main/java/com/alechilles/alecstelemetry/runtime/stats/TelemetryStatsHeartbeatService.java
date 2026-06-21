@@ -1,6 +1,5 @@
 package com.alechilles.alecstelemetry.runtime.stats;
 
-import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.hypixel.hytale.logger.HytaleLogger;
 
@@ -48,6 +47,7 @@ public final class TelemetryStatsHeartbeatService {
                 HEARTBEAT_INTERVAL_SECONDS,
                 TimeUnit.SECONDS
         );
+        emitHeartbeatSafely();
     }
 
     public void shutdown() {
@@ -64,20 +64,15 @@ public final class TelemetryStatsHeartbeatService {
             return;
         }
         int playersOnline = playerCounter.onlinePlayers();
+        java.util.ArrayList<TelemetryProjectRegistration> projects = new java.util.ArrayList<>();
         for (TelemetryProjectRegistration project : runtime.projects()) {
             if (!runtime.canEmitHeartbeat()) {
                 return;
             }
-            runtime.recordStatsWithContext(
-                    project.projectId(),
-                    EVENT_HEARTBEAT,
-                    TelemetryEventContext.stats()
-                            .featureKey("stats")
-                            .entryPoint(EVENT_HEARTBEAT)
-                            .runtimeSide("server")
-                            .detail("playersOnline", playersOnline)
-                            .build()
-            );
+            projects.add(project);
+        }
+        if (!projects.isEmpty()) {
+            runtime.recordAggregateStatsHeartbeat(projects, playersOnline);
         }
     }
 
