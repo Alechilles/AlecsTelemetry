@@ -377,23 +377,40 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     public TelemetryServerVerificationResult requestServerVerification() {
-        return commandServerVerification();
+        return requestServerVerification(null);
+    }
+
+    @Nonnull
+    public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+        return commandServerVerification(claimToken);
     }
 
     @Nonnull
     public TelemetryServerVerificationResult commandServerVerification() {
+        return commandServerVerification(null);
+    }
+
+    @Nonnull
+    public TelemetryServerVerificationResult commandServerVerification(@Nullable String claimToken) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            TelemetryServerVerificationResult activeResult = active.requestServerVerification();
+            TelemetryServerVerificationResult activeResult = active.requestServerVerification(claimToken);
             if (activeResult.status() != TelemetryServerVerificationResult.Status.UNAVAILABLE) {
                 return activeResult;
             }
         }
         if (coordinatorBridge != null) {
-            return coordinatorBridge.service.requestServerVerification();
+            return coordinatorBridge.service.requestServerVerification(claimToken);
         }
         if (engine == null || project == null) {
             return TelemetryServerVerificationResult.unavailable(disabledReason == null ? "runtime_unavailable" : disabledReason);
+        }
+        if (claimToken != null && !engine.saveServerClaimToken(claimToken)) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "invalid_claim_token")
+            );
         }
         if (engine.serverClaimToken() == null) {
             return new TelemetryServerVerificationResult(
@@ -1635,6 +1652,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return EmbeddedTelemetryService.this.requestServerVerification();
         }
 
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+            return EmbeddedTelemetryService.this.requestServerVerification(claimToken);
+        }
+
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return EmbeddedTelemetryService.this.captureTestReport(projectId, detail);
@@ -1995,6 +2018,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Override
         public TelemetryServerVerificationResult requestServerVerification() {
             return service.requestServerVerification();
+        }
+
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+            return service.requestServerVerification(claimToken);
         }
 
         @Override

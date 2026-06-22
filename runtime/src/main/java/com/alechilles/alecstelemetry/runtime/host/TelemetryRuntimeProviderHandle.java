@@ -458,14 +458,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nonnull
     @Override
     public TelemetryServerVerificationResult requestServerVerification() {
+        return requestServerVerification(null);
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            TelemetryServerVerificationResult activeResult = active.requestServerVerification();
+            TelemetryServerVerificationResult activeResult = active.requestServerVerification(claimToken);
             if (activeResult.status() != TelemetryServerVerificationResult.Status.UNAVAILABLE) {
                 return activeResult;
             }
         }
-        return coordinator.requestServerVerification();
+        return coordinator.requestServerVerification(claimToken);
     }
 
     @Override
@@ -1620,6 +1626,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public TelemetryServerVerificationResult requestServerVerification() {
             return service.requestServerVerification();
+        }
+
+        @Nonnull
+        @Override
+        public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+            return service.requestServerVerification(claimToken);
         }
 
         @Override

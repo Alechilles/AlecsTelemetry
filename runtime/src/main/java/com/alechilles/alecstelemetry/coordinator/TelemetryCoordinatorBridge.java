@@ -208,6 +208,11 @@ public interface TelemetryCoordinatorBridge {
         return TelemetryServerVerificationResult.unavailable("active_coordinator_unavailable");
     }
 
+    @Nonnull
+    default TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+        return requestServerVerification();
+    }
+
     default boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         return false;
     }

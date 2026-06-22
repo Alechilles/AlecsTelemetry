@@ -362,6 +362,18 @@ public final class TelemetryCoordinatorService {
 
     @Nonnull
     public TelemetryServerVerificationResult requestServerVerification() {
+        return requestServerVerification(null);
+    }
+
+    @Nonnull
+    public TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken) {
+        if (claimToken != null && !engine.saveServerClaimToken(claimToken)) {
+            return new TelemetryServerVerificationResult(
+                    TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN,
+                    0,
+                    new TelemetryCoreEngine.FlushSummary(0, 0, 0, "invalid_claim_token")
+            );
+        }
         if (engine.serverClaimToken() == null) {
             return new TelemetryServerVerificationResult(
                     TelemetryServerVerificationResult.Status.MISSING_CLAIM_TOKEN,

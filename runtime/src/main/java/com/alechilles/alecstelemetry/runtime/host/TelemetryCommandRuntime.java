@@ -48,6 +48,9 @@ public interface TelemetryCommandRuntime {
     @Nonnull
     TelemetryServerVerificationResult requestServerVerification();
 
+    @Nonnull
+    TelemetryServerVerificationResult requestServerVerification(@Nullable String claimToken);
+
     boolean captureTestReport(@Nonnull String projectId, @Nullable String detail);
 
     @Nonnull

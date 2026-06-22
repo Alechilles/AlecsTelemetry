@@ -86,7 +86,7 @@ public final class TelemetryCoreEngine {
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
     private final String serverId;
-    private final String serverClaimToken;
+    private volatile String serverClaimToken;
     private final ManualReportLogCollector manualReportLogCollector = new ManualReportLogCollector();
     private final ManualReportReceiptStore manualReportReceiptStore = new ManualReportReceiptStore();
 
@@ -239,6 +239,20 @@ public final class TelemetryCoreEngine {
     @Nullable
     public String serverClaimToken() {
         return serverClaimToken;
+    }
+
+    public boolean saveServerClaimToken(@Nonnull String claimToken) {
+        TelemetryServerIdentity.Identity identity = TelemetryServerIdentity.saveClaimToken(
+                dataPaths.serverIdentityFile(),
+                dataPaths.serverIdFile(),
+                claimToken,
+                logger
+        );
+        if (identity == null) {
+            return false;
+        }
+        serverClaimToken = identity.serverClaimToken();
+        return serverClaimToken != null;
     }
 
     public boolean isBreadcrumbsEnabled(@Nonnull String projectId) {

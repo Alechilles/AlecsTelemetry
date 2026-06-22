@@ -57,6 +57,26 @@ public final class TelemetryServerIdentity {
     }
 
     @Nullable
+    public static Identity saveClaimToken(@Nonnull Path serverIdentityFile,
+                                          @Nullable Path legacyServerIdFile,
+                                          @Nonnull String claimToken,
+                                          @Nullable HytaleLogger logger) {
+        String normalizedClaimToken = normalizeClaimToken(claimToken);
+        if (normalizedClaimToken == null) {
+            return null;
+        }
+        try {
+            Identity current = loadOrCreate(serverIdentityFile, legacyServerIdFile, logger);
+            Identity updated = new Identity(current.serverId(), normalizedClaimToken);
+            writeIdentity(serverIdentityFile, updated);
+            return updated;
+        } catch (Exception ex) {
+            logWarning(logger, "Failed to persist telemetry server claim token.", ex);
+            return null;
+        }
+    }
+
+    @Nullable
     private static Identity readExistingIdentity(@Nonnull Path serverIdentityFile) throws Exception {
         if (!Files.isRegularFile(serverIdentityFile)) {
             return null;

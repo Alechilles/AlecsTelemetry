@@ -427,6 +427,41 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void serverVerificationPersistsSuppliedClaimTokenAndQueuesHeartbeat() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null,
+                () -> 2
+        );
+
+        TelemetryServerVerificationResult result = service.requestServerVerification("ms_claim_from_command");
+
+        assertEquals(TelemetryServerVerificationResult.Status.QUEUED, result.status());
+        JsonObject identity = JsonParser.parseString(Files.readString(dataPaths.serverIdentityFile())).getAsJsonObject();
+        assertEquals("ms_claim_from_command", identity.get("serverClaimToken").getAsString());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("ms_claim_from_command", payload.getAsJsonObject("details").get("serverClaimToken").getAsString());
+    }
+
+    @Test
     void serverVerificationQueuesClaimHeartbeatAndFlushes() throws Exception {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),

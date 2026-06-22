@@ -65,12 +65,13 @@ state is kept in the runtime consent state file.
 
 ```text
 /telemetry server verify
+/telemetry server verify <key>
 ```
 
-`server verify` emits a stats heartbeat containing the configured
-`serverClaimToken` from `Settings/server-identity.json`, then flushes it
-immediately. If no claim token is configured, create or rotate a server profile
-in the ModStats portal and add the generated token to that identity file.
+`server verify <key>` saves the ModStats server claim token to
+`Settings/server-identity.json`, emits a stats heartbeat containing that token,
+and flushes it immediately. Running `server verify` without a key still verifies
+with the already configured `serverClaimToken`.
 
 ## Manual Player Reports
 

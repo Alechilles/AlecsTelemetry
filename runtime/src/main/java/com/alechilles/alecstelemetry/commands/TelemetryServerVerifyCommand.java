@@ -12,6 +12,7 @@ import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 /**
  * Forces a stats heartbeat carrying the server claim token, then flushes it.
@@ -21,9 +22,10 @@ public final class TelemetryServerVerifyCommand extends AbstractPlayerCommand {
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryServerVerifyCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("verify", "Send the configured server claim token to ModStats.");
+        super("verify", "Send a server claim token to ModStats. Usage: /telemetry server verify [key]");
         this.runtime = runtime;
         setPermissionGroups("OP", "Admin", "Operator");
+        setAllowsExtraArguments(true);
     }
 
     @Override
@@ -36,12 +38,12 @@ public final class TelemetryServerVerifyCommand extends AbstractPlayerCommand {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
         }
-        TelemetryServerVerificationResult result = runtime.requestServerVerification();
+        TelemetryServerVerificationResult result = runtime.requestServerVerification(claimTokenArgument(commandContext.getInputString()));
         switch (result.status()) {
             case QUEUED -> TelemetryCommandSupport.send(commandContext, verificationQueuedMessage(result));
             case MISSING_CLAIM_TOKEN -> TelemetryCommandSupport.send(
                     commandContext,
-                    "No server claim token is configured. Create or rotate a server profile in the ModStats portal, then add serverClaimToken to Settings/server-identity.json."
+                    "No server claim token is configured. Create or rotate a server profile in the ModStats portal, then run /telemetry server verify <key>."
             );
             case NO_STATS_PROJECTS -> TelemetryCommandSupport.send(
                     commandContext,
@@ -52,6 +54,19 @@ public final class TelemetryServerVerifyCommand extends AbstractPlayerCommand {
                     "Server verification is unavailable from this telemetry runtime."
             );
         }
+    }
+
+    @Nullable
+    static String claimTokenArgument(@Nullable String input) {
+        if (input == null || input.isBlank()) {
+            return null;
+        }
+        String[] tokens = input.trim().split("\\s+");
+        if (tokens.length <= 3) {
+            return null;
+        }
+        String token = tokens[3].trim();
+        return token.isBlank() ? null : token;
     }
 
     @Nonnull

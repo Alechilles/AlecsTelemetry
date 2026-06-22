@@ -32,4 +32,11 @@ class TelemetryServerVerifyCommandTest {
         assertTrue(message.contains("Attempted 1, sent 0, pending 1"));
         assertTrue(message.contains("HTTP status 403"));
     }
+
+    @Test
+    void claimTokenArgumentReadsVerifyKey() {
+        assertEquals("ms_claim_from_command", TelemetryServerVerifyCommand.claimTokenArgument(
+                "/telemetry server verify ms_claim_from_command"
+        ));
+    }
 }
