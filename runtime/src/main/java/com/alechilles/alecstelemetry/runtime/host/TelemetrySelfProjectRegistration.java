@@ -21,13 +21,13 @@ final class TelemetrySelfProjectRegistration {
               "ownerPluginIdentifiers": ["Alechilles:Alec's Telemetry"],
               "packagePrefixes": ["com.alechilles.alecstelemetry"],
               "capture": {
-                "uncaughtExceptions": false,
-                "setupFailures": false,
-                "startFailures": false,
-                "exceptionalWorldRemovals": false
+                "uncaughtExceptions": true,
+                "setupFailures": true,
+                "startFailures": true,
+                "exceptionalWorldRemovals": true
               },
               "events": {
-                "errors": { "enabled": false },
+                "errors": { "enabled": true },
                 "lifecycle": { "enabled": false },
                 "breadcrumbs": { "enabled": false }
               },

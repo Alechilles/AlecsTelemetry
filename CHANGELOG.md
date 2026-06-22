@@ -3,9 +3,9 @@
 ## 0.2.4 - Server Verification Setup Hotfix - 2026-06-22
 
 ### Changed
-- Added Alec's Telemetry self stats reporting so standalone installs have a
-  stats-enabled project for public usage heartbeats and server verification even
-  when no consumer mods are configured.
+- Added Alec's Telemetry self reporting so standalone installs have a
+  crash/error/stats-enabled project for runtime failures, public usage
+  heartbeats, and server verification even when no consumer mods are configured.
 - Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
 

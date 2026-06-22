@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TelemetrySelfProjectRegistrationTest {
 
     @Test
-    void standaloneSelfProjectReportsOnlyStatsByDefault() {
+    void standaloneSelfProjectReportsCrashErrorsAndStatsByDefault() {
         TelemetryProjectRegistration registration = TelemetrySelfProjectRegistration.create(
                 "Alechilles:Alec's Telemetry",
                 "0.2.5",
@@ -30,8 +30,12 @@ class TelemetrySelfProjectRegistrationTest {
         assertEquals("hosted", registration.destinationMode());
         assertTrue(registration.stats().enabled());
         assertTrue(registration.stats().allows("heartbeat"));
-        assertFalse(registration.isCrashTelemetryEnabled());
-        assertFalse(registration.events().errors().enabled());
+        assertTrue(registration.isCrashTelemetryEnabled());
+        assertTrue(registration.capture().uncaughtExceptions());
+        assertTrue(registration.capture().setupFailures());
+        assertTrue(registration.capture().startFailures());
+        assertTrue(registration.capture().exceptionalWorldRemovals());
+        assertTrue(registration.events().errors().enabled());
         assertFalse(registration.events().lifecycle().enabled());
         assertFalse(registration.performance().enabled());
         assertFalse(registration.usage().enabled());
