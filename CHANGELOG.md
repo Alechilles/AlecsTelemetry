@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 - Server Verification Setup Hotfix - 2026-06-22
+
+### Changed
+- Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
+- Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
+
 ## 0.2.3 - Intake Backoff Hotfix - 2026-06-21
 
 ### Fixed
