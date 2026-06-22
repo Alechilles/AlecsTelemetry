@@ -78,7 +78,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 ? TelemetryDataPaths.forSharedCoordinator(request.plugin())
                 : TelemetryDataPaths.from(request.plugin());
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
-        TelemetryProjectRegistration providerRegistration = embeddedProviderRegistration(request, dataPaths, logger);
+        TelemetryProjectRegistration providerRegistration = providerRegistration(request, dataPaths, logger);
         List<CrashReportEnvelope.LoadedModMetadata> fallbackLoadedMods = providerRegistration == null
                 ? List.of()
                 : List.of(new CrashReportEnvelope.LoadedModMetadata(
@@ -116,6 +116,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 new TelemetryRuntimeCommandRegistrar(),
                 client
         );
+    }
+
+    @Nullable
+    static TelemetryProjectRegistration providerRegistration(@Nonnull TelemetryRuntimeBootstrapRequest request,
+                                                             @Nonnull TelemetryDataPaths dataPaths,
+                                                             @Nullable HytaleLogger logger) {
+        if (request.standalone()) {
+            TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
+                    .load(dataPaths.projectOverrideFile(TelemetrySelfProjectRegistration.PROJECT_ID));
+            return TelemetrySelfProjectRegistration.create(
+                    request.providerPluginIdentifier(),
+                    request.providerPluginVersion(),
+                    request.sourcePath(),
+                    override
+            );
+        }
+        return embeddedProviderRegistration(request, dataPaths, logger);
     }
 
     @Nullable

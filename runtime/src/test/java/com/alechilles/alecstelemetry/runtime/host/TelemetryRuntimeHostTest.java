@@ -135,6 +135,30 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void standaloneProviderRegistersTelemetrySelfStatsProject() {
+        TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-stats"));
+        TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
+                null,
+                TelemetryRuntimeOrigin.STANDALONE,
+                "Alechilles:Alec's Telemetry",
+                "0.2.5",
+                "0.2.5",
+                tempDir.resolve("Alec's Telemetry.jar"),
+                null
+        );
+
+        TelemetryProjectRegistration registration = TelemetryRuntimeProviderHandle.providerRegistration(
+                request,
+                dataPaths,
+                null
+        );
+
+        assertNotNull(registration);
+        assertEquals("alecs-telemetry", registration.projectId());
+        assertTrue(registration.stats().enabled());
+    }
+
+    @Test
     void providerHandleStartsAndExposesApi() {
         TelemetryRuntimeProviderHandle handle = handle("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
 
