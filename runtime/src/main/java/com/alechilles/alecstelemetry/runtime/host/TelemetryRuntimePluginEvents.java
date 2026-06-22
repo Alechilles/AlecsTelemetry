@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
@@ -45,6 +46,14 @@ final class TelemetryRuntimePluginEvents {
         } catch (RuntimeException ex) {
             unregister();
             logWarning("Alec's Telemetry could not register shared runtime events.", ex);
+            handle.recordSelfError(
+                    "runtime_event_register_failed",
+                    ex,
+                    Map.of(
+                            "operation", "event_register",
+                            "event", "shared_runtime"
+                    )
+            );
         }
     }
 
@@ -69,6 +78,14 @@ final class TelemetryRuntimePluginEvents {
             registration.unregister();
         } catch (RuntimeException ex) {
             logWarning("Alec's Telemetry could not unregister shared runtime " + eventName + " event.", ex);
+            handle.recordSelfError(
+                    "runtime_event_unregister_failed",
+                    ex,
+                    Map.of(
+                            "operation", "event_unregister",
+                            "event", eventName
+                    )
+            );
         }
     }
 

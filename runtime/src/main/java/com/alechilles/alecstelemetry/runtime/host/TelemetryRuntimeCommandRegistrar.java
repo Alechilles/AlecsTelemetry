@@ -7,6 +7,7 @@ import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 
@@ -47,6 +48,11 @@ final class TelemetryRuntimeCommandRegistrar {
                         "Telemetry runtime commands could not register. Another runtime may already own /telemetry."
                 );
             }
+            handle.recordSelfError(
+                    "runtime_command_register_failed",
+                    ex,
+                    Map.of("operation", "command_register")
+            );
         }
     }
 

@@ -6,6 +6,9 @@
 - Added Alec's Telemetry self reporting so standalone installs have a
   crash/error/stats-enabled project for runtime failures, public usage
   heartbeats, and server verification even when no consumer mods are configured.
+- Wired the Alec's Telemetry self project to its hosted project key and added
+  internal error events for runtime command and shared event registration
+  failures.
 - Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
 

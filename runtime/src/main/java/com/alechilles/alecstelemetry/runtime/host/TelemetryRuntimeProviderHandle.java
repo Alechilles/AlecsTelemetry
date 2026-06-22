@@ -691,6 +691,27 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
     }
 
+    void recordSelfError(@Nonnull String eventName,
+                         @Nullable Throwable throwable,
+                         @Nonnull Map<String, ?> details) {
+        TelemetryEventContext.Builder context = TelemetryEventContext.error()
+                .featureKey("runtime")
+                .entryPoint(eventName)
+                .runtimeSide("server")
+                .detail("component", "self_runtime");
+        for (Map.Entry<String, ?> entry : details.entrySet()) {
+            if (entry != null && entry.getKey() != null) {
+                if ("operation".equals(entry.getKey()) && entry.getValue() != null) {
+                    context.operation(entry.getValue().toString());
+                    context.detail("operationKind", entry.getValue());
+                } else {
+                    context.detail(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        recordErrorWithContext(TelemetrySelfProjectRegistration.PROJECT_ID, eventName, throwable, context.build());
+    }
+
     @Override
     public void recordLifecycleWithContext(@Nonnull String projectId,
                                            @Nonnull String eventName,

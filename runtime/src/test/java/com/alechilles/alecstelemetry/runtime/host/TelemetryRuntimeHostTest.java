@@ -159,6 +159,50 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void providerReportsInternalErrorsThroughTelemetrySelfProject() {
+        TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-errors"));
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
+        TelemetryProjectRegistration providerProject = TelemetrySelfProjectRegistration.create(
+                "Alechilles:Alec's Telemetry",
+                "0.2.5",
+                tempDir.resolve("Alec's Telemetry.jar"),
+                null
+        );
+        CapturingCrashReportClient client = new CapturingCrashReportClient();
+        ProviderFixture fixture = providerFixture(
+                "standalone:Alechilles:Alec's Telemetry",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.2.5",
+                settings,
+                dataPaths,
+                List.of(providerProject),
+                List.of(providerProject),
+                List.of(),
+                providerProject,
+                client
+        );
+
+        fixture.handle().start();
+        fixture.handle().recordSelfError(
+                "runtime_command_register_failed",
+                new RuntimeException("command registration failed"),
+                Map.of("operation", "command_register")
+        );
+        fixture.handle().shutdown();
+
+        assertEquals(1, client.payloads.size());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("alecs-telemetry", payload.get("projectId").getAsString());
+        assertEquals("error", payload.get("eventType").getAsString());
+        assertEquals("runtime_command_register_failed", payload.get("eventName").getAsString());
+        assertEquals("command_register", payload.get("operation").getAsString());
+        JsonObject details = payload.getAsJsonObject("details");
+        assertEquals("command_register", details.get("operationKind").getAsString());
+        assertEquals("self_runtime", details.get("component").getAsString());
+        assertEquals("proj_aqocXOn4Gw3unr0p22QoNd3k", client.targets.getFirst().headers().get(TelemetryProjectDescriptor.PROJECT_KEY_HEADER));
+    }
+
+    @Test
     void providerHandleStartsAndExposesApi() {
         TelemetryRuntimeProviderHandle handle = handle("standalone:Alechilles:Telemetry", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
 

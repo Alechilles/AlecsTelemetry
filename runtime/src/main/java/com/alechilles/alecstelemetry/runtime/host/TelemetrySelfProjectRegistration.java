@@ -11,7 +11,7 @@ import java.nio.file.Path;
 final class TelemetrySelfProjectRegistration {
     static final String PROJECT_ID = "alecs-telemetry";
 
-    private static final String PUBLIC_PROJECT_KEY = "proj_ZPSm_mSfIhTqg9NlND_G82k1";
+    private static final String PUBLIC_PROJECT_KEY = "proj_aqocXOn4Gw3unr0p22QoNd3k";
     private static final TelemetryProjectDescriptor DESCRIPTOR = TelemetryProjectDescriptor.fromJson(
             """
             {
@@ -27,7 +27,31 @@ final class TelemetrySelfProjectRegistration {
                 "exceptionalWorldRemovals": true
               },
               "events": {
-                "errors": { "enabled": true },
+                "errors": {
+                  "enabled": true,
+                  "details": {
+                    "runtime_command_register_failed": {
+                      "allowedFields": {
+                        "component": { "type": "enum", "values": ["self_runtime"] },
+                        "operationKind": { "type": "enum", "values": ["command_register"] }
+                      }
+                    },
+                    "runtime_event_register_failed": {
+                      "allowedFields": {
+                        "component": { "type": "enum", "values": ["self_runtime"] },
+                        "operationKind": { "type": "enum", "values": ["event_register"] },
+                        "event": { "type": "string", "maxLength": 80 }
+                      }
+                    },
+                    "runtime_event_unregister_failed": {
+                      "allowedFields": {
+                        "component": { "type": "enum", "values": ["self_runtime"] },
+                        "operationKind": { "type": "enum", "values": ["event_unregister"] },
+                        "event": { "type": "string", "maxLength": 80 }
+                      }
+                    }
+                  }
+                },
                 "lifecycle": { "enabled": false },
                 "breadcrumbs": { "enabled": false }
               },
