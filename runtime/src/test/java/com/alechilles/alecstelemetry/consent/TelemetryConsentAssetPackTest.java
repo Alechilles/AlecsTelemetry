@@ -25,6 +25,10 @@ class TelemetryConsentAssetPackTest {
                 "AlecsTelemetryLogo.png must be packaged for the consent page header"
         );
         assertNotNull(
+                getClass().getClassLoader().getResource("Common/UI/Custom/icon-256.png"),
+                "icon-256.png must be packaged for the Alec's Telemetry project row icon"
+        );
+        assertNotNull(
                 getClass().getClassLoader().getResource("Common/UI/Custom/TelemetryConsentHeader.png"),
                 "TelemetryConsentHeader.png must be packaged for the enlarged consent page title bar"
         );

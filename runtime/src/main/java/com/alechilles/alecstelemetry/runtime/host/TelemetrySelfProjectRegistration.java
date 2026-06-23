@@ -66,7 +66,7 @@ final class TelemetrySelfProjectRegistration {
                 "allowedEvents": ["heartbeat"]
               },
               "ui": {
-                "iconTexturePath": "AlecsTelemetryLogo.png"
+                "iconTexturePath": "icon-256.png"
               },
               "hosted": {
                 "projectKey": "%s"
