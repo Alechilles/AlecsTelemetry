@@ -341,8 +341,8 @@ class TelemetryCoordinatorServiceTest {
 
         service.emitStatsHeartbeatNow();
 
-        assertEquals(1, service.flushPendingReportsNow("test").attempted());
-        assertEquals(1, client.payloads.size());
+        assertEquals(2, service.flushPendingReportsNow("test").attempted());
+        assertEquals(2, client.payloads.size());
 
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("embedded-mod", payload.get("projectId").getAsString());
@@ -354,6 +354,10 @@ class TelemetryCoordinatorServiceTest {
         assertEquals("embedded-mod", projects.get(0).getAsJsonObject().get("projectId").getAsString());
         assertEquals("dependency-mod", projects.get(1).getAsJsonObject().get("projectId").getAsString());
         assertEquals("Example:Dependency Mod", projects.get(1).getAsJsonObject().get("pluginIdentifier").getAsString());
+        JsonObject dependencyPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
+        assertEquals("dependency-mod", dependencyPayload.get("projectId").getAsString());
+        assertEquals("runtime_stats", dependencyPayload.get("source").getAsString());
+        assertEquals("heartbeat", dependencyPayload.get("eventName").getAsString());
     }
 
     @Test

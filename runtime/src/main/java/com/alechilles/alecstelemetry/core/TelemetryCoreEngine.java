@@ -621,7 +621,6 @@ public final class TelemetryCoreEngine {
             return;
         }
 
-        TelemetryProjectRegistration carrier = eligibleProjects.getFirst();
         CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
         TelemetryEventContext context = TelemetryEventContext.stats()
                 .featureKey("stats")
@@ -636,27 +635,33 @@ public final class TelemetryCoreEngine {
         details.put("playersOnline", Math.max(0, playersOnline));
         details.put("projects", aggregateProjectDetails(eligibleProjects));
         putIfPresent(details, "serverClaimToken", serverClaimToken);
-        TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
-                carrier.projectId(),
-                carrier.displayName(),
-                "runtime_stats",
-                sessionId,
-                serverId,
-                "heartbeat",
-                carrier.pluginIdentifier(),
-                carrier.pluginVersion(),
-                normalizedContext.worldName(),
-                environmentFor(carrier, runtimeMetadata),
-                attributes,
-                details,
-                normalizedContext,
-                runtimeMetadata
-        );
-        if (!eventStoreFor(carrier).persist(event)) {
-            logWarning("Failed to store aggregate telemetry stats heartbeat for project " + carrier.projectId() + ".", null);
-            return;
+        boolean persistedAny = false;
+        for (TelemetryProjectRegistration project : eligibleProjects) {
+            TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
+                    project.projectId(),
+                    project.displayName(),
+                    "runtime_stats",
+                    sessionId,
+                    serverId,
+                    "heartbeat",
+                    project.pluginIdentifier(),
+                    project.pluginVersion(),
+                    normalizedContext.worldName(),
+                    environmentFor(project, runtimeMetadata),
+                    attributes,
+                    details,
+                    normalizedContext,
+                    runtimeMetadata
+            );
+            if (!eventStoreFor(project).persist(event)) {
+                logWarning("Failed to store aggregate telemetry stats heartbeat for project " + project.projectId() + ".", null);
+                continue;
+            }
+            persistedAny = true;
         }
-        requestFlushAsync("event", carrier.projectId());
+        if (persistedAny) {
+            requestFlushAsync("event", null);
+        }
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
