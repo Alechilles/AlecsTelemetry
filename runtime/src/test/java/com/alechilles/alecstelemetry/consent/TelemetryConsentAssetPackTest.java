@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,7 +49,7 @@ class TelemetryConsentAssetPackTest {
         assertTrue(consentPage.contains("#TelemetryConsentCaptureAllUnsupported"));
         assertTrue(consentPage.contains("TooltipText: \"Crash reports, uncaught exceptions"));
         assertTrue(consentPage.contains("TextTooltipStyle: @TelemetryConsentHintStyle"));
-        assertTrue(consentPage.contains("Anchor: (Width: 728, Height: 64)"));
+        assertTrue(consentPage.contains("Anchor: (Left: 0, Width: 728, Height: 64)"));
         assertTrue(consentPage.contains("Background: #28415f"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentAllToggleButton"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentUsageAllToggleButton"));
@@ -84,8 +85,17 @@ class TelemetryConsentAssetPackTest {
         assertTrue(viewportDefinition.contains("LayoutMode: TopScrolling"));
         assertTrue(viewportDefinition.contains("KeepScrollPosition: true"));
         assertTrue(viewportDefinition.contains("ScrollbarStyle: $C.@DefaultScrollbarStyle"));
+        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentGridHeader {\n          Anchor: (Left: 0, Width: 728, Height: 64);"));
         assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentRows {\n            LayoutMode: Top;\n            Anchor: (Width: 728, Bottom: 0);"));
+        assertTrue(consentPage.contains("Anchor: (Left: 8, Width: 280, Top: 5, Height: 24);"));
+        assertTrue(consentPage.contains("Anchor: (Left: 288, Width: 55, Top: 5, Height: 24);"));
+        assertTrue(consentPage.contains("Anchor: (Left: 673, Width: 55, Top: 5, Height: 24);"));
+        assertTrue(consentPage.contains("Anchor: (Top: 34, Left: 689, Width: 22, Height: 22);"));
         assertTrue(!consentPage.contains("Anchor: (Width: 740, Height: 56)"));
+        assertFalse(consentPage.contains("Left: 685"));
+        assertFalse(consentPage.contains("Left: 701"));
+        assertFalse(consentPage.contains("Width: 292"));
+        assertFalse(consentPage.contains("Width: 228"));
     }
 
     @Test
