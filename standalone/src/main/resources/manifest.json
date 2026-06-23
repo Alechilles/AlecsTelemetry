@@ -1,8 +1,8 @@
 {
   "Group": "Alechilles",
-  "Name": "Alec's Telemetry",
+  "Name": "Alec's Telemetry!",
   "Version": "${project.version}",
-  "Description": "Standalone crash telemetry runtime mod for Hytale mods.",
+  "Description": "Standalone telemetry runtime mod for Hytale mods. Reports crash, error, performance, usage, statistics, and more to help modders find and fix issues and understand how users interact with their mods. Public stats can be found on ModStats.io",
   "Authors": [
     {
       "Name": "Alec (Alechilles)",
