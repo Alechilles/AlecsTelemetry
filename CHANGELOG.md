@@ -9,6 +9,8 @@
 - Wired the Alec's Telemetry self project to its hosted project key and added
   internal error events for runtime command and shared event registration
   failures.
+- Added an explicit standalone consent UI logo asset and embedded Creditor so
+  Alec's Telemetry contributes to `/credits` when installed.
 - Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
 

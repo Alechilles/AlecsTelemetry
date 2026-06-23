@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry;
 
 import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHost;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
+import com.creditor.Creditor;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 
@@ -25,6 +26,13 @@ public final class AlecsTelemetry extends JavaPlugin {
     @Override
     protected void setup() {
         try {
+            Creditor.setup(this);
+        } catch (RuntimeException ex) {
+            getLogger().at(Level.WARNING).withCause(ex).log(
+                    "Failed to initialize Creditor integration; continuing without /credits support."
+            );
+        }
+        try {
             host = TelemetryRuntimeHost.bootstrapStandalone(this);
         } catch (Exception ex) {
             getLogger().at(Level.WARNING).withCause(ex).log(
@@ -36,6 +44,13 @@ public final class AlecsTelemetry extends JavaPlugin {
 
     @Override
     protected void start() {
+        try {
+            Creditor.start(this);
+        } catch (RuntimeException ex) {
+            getLogger().at(Level.WARNING).withCause(ex).log(
+                    "Failed to start Creditor integration; continuing without /credits support."
+            );
+        }
         if (host != null) {
             host.start();
             getLogger().at(Level.INFO).log(

@@ -17,11 +17,23 @@
     <name>Alec's Telemetry</name>
     <description>Standalone crash telemetry runtime mod for Hytale.</description>
 
+    <repositories>
+        <repository>
+            <id>cursemaven</id>
+            <url>https://www.cursemaven.com</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>com.alechilles</groupId>
             <artifactId>alecstelemetry-runtime</artifactId>
             <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>curse.maven</groupId>
+            <artifactId>creditor-1560961</artifactId>
+            <version>8195970</version>
         </dependency>
         <dependency>
             <groupId>com.hypixel.hytale</groupId>
@@ -119,8 +131,25 @@
                             <artifactSet>
                                 <includes>
                                     <include>com.alechilles:alecstelemetry-runtime</include>
+                                    <include>curse.maven:creditor-1560961</include>
                                 </includes>
                             </artifactSet>
+                            <filters>
+                                <filter>
+                                    <artifact>com.alechilles:alecstelemetry-runtime</artifact>
+                                    <excludes>
+                                        <exclude>Common/UI/Custom/AlecsTelemetryLogo.png</exclude>
+                                    </excludes>
+                                </filter>
+                                <filter>
+                                    <artifact>curse.maven:creditor-1560961</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/MANIFEST.MF</exclude>
+                                        <exclude>icon-256.png</exclude>
+                                        <exclude>manifest.json</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                         </configuration>
                     </execution>
                 </executions>
