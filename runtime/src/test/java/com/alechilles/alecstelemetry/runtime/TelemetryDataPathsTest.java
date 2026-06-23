@@ -42,21 +42,47 @@ class TelemetryDataPathsTest {
     }
 
     @Test
-    void sharedCoordinatorRootUsesGlobalUserDataTelemetryDirectory() throws Exception {
+    void sharedCoordinatorRootUsesTelemetryPluginDataDirectoryInsideSaveMods() throws Exception {
         Path hytaleRoot = tempDir.resolve("Hytale");
-        Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Mods").resolve("Alechilles_Alec's Tamework!");
+        Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
+                .resolve("Demo World")
+                .resolve("mods")
+                .resolve("Alechilles_Alec's Tamework!");
+        Files.createDirectories(pluginDataDirectory);
+
+        TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(pluginDataDirectory);
+
+        Path saveModsDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
+                .resolve("Demo World")
+                .resolve("mods")
+                .toAbsolutePath()
+                .normalize();
+        Path expectedRoot = saveModsDirectory.resolve("Alechilles_Alec's Telemetry").toAbsolutePath().normalize();
+        assertEquals(expectedRoot, paths.runtimeRoot());
+        assertEquals(expectedRoot.resolve("Settings").resolve("runtime.json"), paths.settingsFile());
+        assertEquals(expectedRoot.resolve("Settings").resolve("projects"), paths.projectSettingsDirectory());
+        assertEquals(expectedRoot.resolve("Telemetry"), paths.telemetryRoot());
+        assertEquals(saveModsDirectory, paths.modsDirectory());
+    }
+
+    @Test
+    void sharedCoordinatorExposesLegacyCentralRootsForMigration() throws Exception {
+        Path hytaleRoot = tempDir.resolve("Hytale");
+        Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
+                .resolve("Demo World")
+                .resolve("mods")
+                .resolve("Alechilles_Alec's Tamework!");
         Files.createDirectories(pluginDataDirectory);
 
         TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(pluginDataDirectory);
 
         assertEquals(
-                hytaleRoot.resolve("UserData").resolve("Telemetry").toAbsolutePath().normalize(),
-                paths.runtimeRoot()
+                List.of(
+                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("telemetry").toAbsolutePath().normalize(),
+                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("Telemetry").toAbsolutePath().normalize()
+                ),
+                paths.legacyRuntimeRoots()
         );
-        assertEquals(paths.runtimeRoot().resolve("Settings").resolve("runtime.json"), paths.settingsFile());
-        assertEquals(paths.runtimeRoot().resolve("Settings").resolve("projects"), paths.projectSettingsDirectory());
-        assertEquals(paths.runtimeRoot().resolve("Telemetry"), paths.telemetryRoot());
-        assertEquals(hytaleRoot.resolve("UserData").resolve("Mods").toAbsolutePath().normalize(), paths.modsDirectory());
     }
 
     @Test

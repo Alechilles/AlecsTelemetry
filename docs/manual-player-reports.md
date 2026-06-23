@@ -32,7 +32,8 @@ checks.
 
 ## Server Controls
 
-`Settings/runtime.json` controls what reports can include:
+The canonical Alec's Telemetry `Settings/runtime.json` controls what reports can
+include:
 
 - `manualReports.enabled`
 - `manualReports.manualReviewRequired`
@@ -47,7 +48,7 @@ checks.
 Review-required reports are stored under:
 
 ```text
-Telemetry/manual-reports/<projectId>/review/
+mods/Alechilles_Alec's Telemetry/Telemetry/manual-reports/<projectId>/review/
 ```
 
 Operators can use:

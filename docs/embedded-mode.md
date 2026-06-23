@@ -115,19 +115,42 @@ upload.
 
 ## Storage Layout
 
-An embedded owner keeps its local project override files under the owning mod's
-data directory:
+The elected active coordinator stores runtime settings, project overrides,
+server identity, queues, and upload state under one canonical Alec's Telemetry
+data root:
 
 ```text
-<ConsumerModDataDir>/Telemetry/
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/
+  Settings/
+    runtime.json
+    projects/<project-id>.json
+    consent-reviewed-projects.json
+    server-identity.json
+  Telemetry/
+    crash-reports/
+    events/
+    manual-reports/
 ```
 
-The elected active coordinator stores runtime settings, queues, server identity,
-and uploads under the shared telemetry coordinator root:
+Standalone and embedded runtimes use the same root. Embedded owner data
+directories no longer receive mirrored `Telemetry/Settings/projects` override
+files.
+
+On startup, the runtime performs a one-time migration from older Alec-created
+locations into the canonical root when those files exist:
 
 ```text
-<HytaleUserData>/Telemetry/
+<ServerOrSaveRoot>/telemetry/Settings/
+<ServerOrSaveRoot>/telemetry/Telemetry/
+<ServerOrSaveRoot>/Telemetry/Settings/
+<ServerOrSaveRoot>/Telemetry/Telemetry/
+<ConsumerModDataDir>/Telemetry/Settings/projects/
 ```
+
+The migration copies files only when the canonical destination is missing. It
+removes old Alec-created `Settings` and nested `Telemetry` directories once they
+are empty, while leaving unrelated files such as Hytale's lowercase
+`telemetry/*.jsonl.gz` session logs in place.
 
 ## Important Rule
 

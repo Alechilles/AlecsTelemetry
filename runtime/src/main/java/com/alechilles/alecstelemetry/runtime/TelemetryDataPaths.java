@@ -19,22 +19,12 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                                   @Nonnull Path crashReportsRoot,
                                   @Nonnull Path eventReportsRoot,
                                   @Nullable Path modsDirectory) {
+    private static final String TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry";
 
     @Nonnull
     public static TelemetryDataPaths from(@Nonnull JavaPlugin plugin) {
         Path dataDirectory = plugin.getDataDirectory().toAbsolutePath().normalize();
-        Path runtimeRoot = dataDirectory;
-        Path telemetryRoot = runtimeRoot.resolve("Telemetry");
-        Path settingsRoot = runtimeRoot.resolve("Settings");
-        return new TelemetryDataPaths(
-                runtimeRoot,
-                settingsRoot.resolve("runtime.json"),
-                settingsRoot.resolve("projects"),
-                telemetryRoot,
-                telemetryRoot.resolve("crash-reports"),
-                telemetryRoot.resolve("events"),
-                resolveModsDirectory(dataDirectory)
-        );
+        return fromRuntimeRoot(dataDirectory, resolveModsDirectory(dataDirectory));
     }
 
     @Nonnull
@@ -62,10 +52,14 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     static TelemetryDataPaths forSharedCoordinatorDataDirectory(@Nonnull Path dataDirectory) {
         Path normalizedDataDirectory = dataDirectory.toAbsolutePath().normalize();
         Path modsDirectory = resolveModsDirectory(normalizedDataDirectory);
-        Path userDataDirectory = modsDirectory == null ? null : modsDirectory.getParent();
-        Path runtimeRoot = userDataDirectory == null
+        Path runtimeRoot = modsDirectory == null
                 ? normalizedDataDirectory.resolve("TelemetryCoordinator").toAbsolutePath().normalize()
-                : userDataDirectory.resolve("Telemetry").toAbsolutePath().normalize();
+                : modsDirectory.resolve(TELEMETRY_PLUGIN_DATA_DIRECTORY).toAbsolutePath().normalize();
+        return fromRuntimeRoot(runtimeRoot, modsDirectory);
+    }
+
+    @Nonnull
+    private static TelemetryDataPaths fromRuntimeRoot(@Nonnull Path runtimeRoot, @Nullable Path modsDirectory) {
         Path telemetryRoot = runtimeRoot.resolve("Telemetry");
         Path settingsRoot = runtimeRoot.resolve("Settings");
         return new TelemetryDataPaths(
@@ -140,6 +134,39 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     }
 
     @Nonnull
+    public List<Path> legacyRuntimeRoots() {
+        ArrayList<Path> roots = new ArrayList<>();
+        if (modsDirectory == null) {
+            return List.of();
+        }
+        Path ownerRoot = modsDirectory.getParent();
+        if (ownerRoot == null) {
+            return List.of();
+        }
+        addLegacyRuntimeRoot(roots, ownerRoot.resolve("telemetry"));
+        addLegacyRuntimeRoot(roots, ownerRoot.resolve("Telemetry"));
+        return List.copyOf(roots);
+    }
+
+    @Nullable
+    public Path legacyEmbeddedProjectOverrideFile(@Nonnull String pluginIdentifier, @Nonnull String projectId) {
+        if (modsDirectory == null) {
+            return null;
+        }
+        return modsDirectory
+                .resolve(sanitizePluginDataDirectory(pluginIdentifier))
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve(projectId + ".json");
+    }
+
+    @Nonnull
+    public static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
+        return pluginIdentifier.trim().replace(':', '_');
+    }
+
+    @Nonnull
     public List<Path> descriptorDirectories() {
         ArrayList<Path> directories = new ArrayList<>();
         addDirectory(directories, modsDirectory);
@@ -185,5 +212,21 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
             }
         }
         directories.add(normalized);
+    }
+
+    private void addLegacyRuntimeRoot(@Nonnull ArrayList<Path> roots, @Nullable Path root) {
+        if (root == null) {
+            return;
+        }
+        Path normalized = root.toAbsolutePath().normalize();
+        if (normalized.toString().equals(runtimeRoot.toString())) {
+            return;
+        }
+        for (Path existing : roots) {
+            if (existing.toString().equals(normalized.toString())) {
+                return;
+            }
+        }
+        roots.add(normalized);
     }
 }

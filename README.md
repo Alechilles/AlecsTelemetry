@@ -126,8 +126,9 @@ Need something more custom than the default hosted flow?
   are the latest compatible runtime.
 - Use a custom endpoint if you want reports to go somewhere other than Alec's
   hosted service.
-- Server owners can override packaged destination settings at runtime through
-  `Settings/projects/<project-id>.json`.
+- Server owners can override packaged destination settings at runtime under the
+  canonical Alec's Telemetry data root:
+  `mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
 - The optional runtime API is available for richer breadcrumbs, explicit
   lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
   `usage` events with typed `TelemetryEventContext` fields.

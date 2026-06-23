@@ -46,9 +46,10 @@ This opens the shared consent UI. It can change:
 The first-run notice uses the same consent runtime. Descriptor defaults provide
 the initial state until a server owner reviews or changes a project.
 
-Consent choices are persisted under the runtime settings root. Project category
-choices are written to `Settings/projects/<project-id>.json`, and reviewed/notice
-state is kept in the runtime consent state file.
+Consent choices are persisted under the canonical Alec's Telemetry settings
+root. Project category choices are written to
+`mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`, and
+reviewed/notice state is kept in the runtime consent state file.
 
 ## Flush And Test
 
@@ -68,7 +69,7 @@ state is kept in the runtime consent state file.
 /telemetry server verify <key>
 ```
 
-`server verify <key>` saves the ModStats server claim token to
+`server verify <key>` saves the ModStats server claim token to the canonical
 `Settings/server-identity.json`, emits a stats heartbeat containing that token,
 and flushes it immediately. Running `server verify` without a key still verifies
 with the already configured `serverClaimToken`.
@@ -97,4 +98,4 @@ Operators can review locally held reports with:
 ```
 
 These review commands matter when `manualReports.manualReviewRequired` is true
-in `Settings/runtime.json`.
+in the canonical `Settings/runtime.json`.

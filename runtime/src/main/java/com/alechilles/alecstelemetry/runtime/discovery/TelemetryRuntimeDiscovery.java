@@ -197,20 +197,7 @@ public final class TelemetryRuntimeDiscovery {
     private static java.nio.file.Path embeddedProjectOverrideFile(
             @Nonnull TelemetryDataPaths dataPaths,
             @Nonnull TelemetryProjectRegistration project) {
-        if (dataPaths.modsDirectory() == null) {
-            return null;
-        }
-        return dataPaths.modsDirectory()
-                .resolve(sanitizePluginDataDirectory(project.pluginIdentifier()))
-                .resolve("Telemetry")
-                .resolve("Settings")
-                .resolve("projects")
-                .resolve(project.projectId() + ".json");
-    }
-
-    @Nonnull
-    private static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
-        return pluginIdentifier.trim().replace(':', '_');
+        return dataPaths.legacyEmbeddedProjectOverrideFile(project.pluginIdentifier(), project.projectId());
     }
 
     @Nonnull

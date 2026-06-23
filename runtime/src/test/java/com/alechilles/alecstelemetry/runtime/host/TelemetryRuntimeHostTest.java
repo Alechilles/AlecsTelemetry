@@ -135,6 +135,34 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void loadMigratedSettingsMigratesBeforeReadingRuntimeJson() throws Exception {
+        Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
+        Path modsDir = saveRoot.resolve("mods");
+        Path legacyRoot = saveRoot.resolve("Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Files.createDirectories(legacyRoot.resolve("Settings"));
+        Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), """
+                {
+                  "enabled": false,
+                  "flushIntervalSeconds": 99
+                }
+                """);
+        TelemetryDataPaths dataPaths = dataPaths(canonicalRoot, modsDir);
+
+        TelemetryRuntimeSettings settings = TelemetryRuntimeProviderHandle.loadMigratedSettings(dataPaths, null);
+
+        assertFalse(settings.enabled());
+        assertEquals(99, settings.flushIntervalSeconds());
+        assertEquals("""
+                {
+                  "enabled": false,
+                  "flushIntervalSeconds": 99
+                }
+                """, Files.readString(dataPaths.settingsFile()));
+        assertFalse(Files.exists(legacyRoot.resolve("Settings")));
+    }
+
+    @Test
     void standaloneProviderRegistersTelemetrySelfStatsProject() {
         TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-stats"));
         TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
@@ -727,7 +755,7 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
-    void providerMirrorsEmbeddedConsentOverrideToOwnerSettings() {
+    void applyConsentWritesOnlyCanonicalOverrideForEmbeddedProjects() {
         Path root = tempDir.resolve("embedded-consent");
         Path modsDir = tempDir.resolve("mods");
         TelemetryProjectRegistration embedded = registration(
@@ -768,13 +796,10 @@ class TelemetryRuntimeHostTest {
                 .resolve("Settings")
                 .resolve("projects")
                 .resolve("embedded-mod.json");
-        TelemetryProjectOverride embeddedOverride = store.load(embeddedOverrideFile);
         assertNotNull(centralOverride);
-        assertNotNull(embeddedOverride);
         assertEquals(false, centralOverride.enabled());
         assertEquals(false, centralOverride.events().errors().enabled());
-        assertEquals(false, embeddedOverride.enabled());
-        assertEquals(false, embeddedOverride.events().errors().enabled());
+        assertFalse(Files.exists(embeddedOverrideFile));
 
         handle.shutdown();
     }

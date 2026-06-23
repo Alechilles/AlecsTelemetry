@@ -406,7 +406,9 @@ Alec's Telemetry shows a first-run consent UI when an operator installs a teleme
 - `stats.enabled` controls the default anonymous public stats category.
 - `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
 
-Server owners can override each value in the consent UI or through `Settings/projects/<project-id>.json`. Descriptor defaults are used until an override exists.
+Server owners can override each value in the consent UI or through
+`mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
+Descriptor defaults are used until an override exists.
 
 ### `hosted`
 

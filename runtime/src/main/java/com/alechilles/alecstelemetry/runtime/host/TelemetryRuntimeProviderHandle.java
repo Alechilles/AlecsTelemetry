@@ -26,6 +26,7 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
+import com.alechilles.alecstelemetry.runtime.TelemetryDataMigrator;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryManualReportBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
@@ -77,7 +78,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         TelemetryDataPaths dataPaths = request.embedded()
                 ? TelemetryDataPaths.forSharedCoordinator(request.plugin())
                 : TelemetryDataPaths.from(request.plugin());
-        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
+        TelemetryRuntimeSettings settings = loadMigratedSettings(dataPaths, logger);
         List<TelemetryProjectRegistration> providerRegistrations = providerRegistrations(request, dataPaths, logger);
         List<CrashReportEnvelope.LoadedModMetadata> fallbackLoadedMods = providerRegistrations.stream()
                 .map(registration -> new CrashReportEnvelope.LoadedModMetadata(
@@ -116,6 +117,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 new TelemetryRuntimeCommandRegistrar(),
                 client
         );
+    }
+
+    @Nonnull
+    static TelemetryRuntimeSettings loadMigratedSettings(@Nonnull TelemetryDataPaths dataPaths,
+                                                         @Nullable HytaleLogger logger) {
+        TelemetryDataMigrator.migrate(dataPaths, logger);
+        return TelemetryRuntimeSettings.load(dataPaths.settingsFile(), logger);
     }
 
     @Nullable
@@ -185,10 +193,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (sharedOverride != null) {
             return sharedOverride;
         }
-        if (request.plugin() == null) {
-            return null;
-        }
-        return store.load(TelemetryDataPaths.forEmbeddedOwner(request.plugin()).projectOverrideFile(projectId));
+        Path legacyOverrideFile = dataPaths.legacyEmbeddedProjectOverrideFile(
+                request.providerPluginIdentifier(),
+                projectId
+        );
+        return legacyOverrideFile == null ? null : store.load(legacyOverrideFile);
     }
 
     TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,
@@ -412,10 +421,6 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supportedSnapshot(project));
         Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
         boolean saved = saveConsentOverride(overrideFile, normalized);
-        Path embeddedOverrideFile = embeddedProjectOverrideFile(project);
-        if (embeddedOverrideFile != null) {
-            saved = saved && saveConsentOverride(embeddedOverrideFile, normalized);
-        }
         if (!saved) {
             return false;
         }
@@ -1151,23 +1156,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         consentProjects = List.copyOf(updated);
     }
 
-    @Nullable
-    private Path embeddedProjectOverrideFile(@Nonnull TelemetryProjectRegistration project) {
-        if (dataPaths.modsDirectory() == null) {
-            return null;
-        }
-        return dataPaths.modsDirectory()
-                .resolve(sanitizePluginDataDirectory(project.pluginIdentifier()))
-                .resolve("Telemetry")
-                .resolve("Settings")
-                .resolve("projects")
-                .resolve(project.projectId() + ".json");
-    }
 
-    @Nonnull
-    private static String sanitizePluginDataDirectory(@Nonnull String pluginIdentifier) {
-        return pluginIdentifier.trim().replace(':', '_');
-    }
 
     @Nonnull
     private static TelemetryRuntimeCandidate candidate(@Nonnull TelemetryRuntimeBootstrapRequest request,

@@ -6,11 +6,17 @@ descriptor inside another mod.
 This is optional. Hosted telemetry is expected to work from the shipped
 descriptor alone when the mod bakes in a publishable ingest key.
 
-Override files live under Alec's Telemetry data directory:
+Override files live under the canonical Alec's Telemetry data root:
 
 ```text
-Settings/projects/<project-id>.json
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json
 ```
+
+Runtime settings, server identity, queues, and project overrides share this same
+root. Older files under `<ServerOrSaveRoot>/telemetry`,
+`<ServerOrSaveRoot>/Telemetry`, or embedded owner
+`<ConsumerModDataDir>/Telemetry/Settings/projects` folders are migrated into the
+canonical root on startup when the canonical destination is missing.
 
 ## Example: switch hosted to custom endpoint
 
@@ -83,8 +89,10 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 
 ## Example: server-owner manual report controls
 
-Global runtime settings live in `Settings/runtime.json`, not per-project override
-files. The runtime creates this file with defaults the first time it starts.
+Global runtime settings live in
+`<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/runtime.json`, not
+per-project override files. The runtime creates this file with defaults the first
+time it starts.
 
 ```json
 {
@@ -101,7 +109,7 @@ files. The runtime creates this file with defaults the first time it starts.
 }
 ```
 
-Manual report controls also live in `Settings/runtime.json`:
+Manual report controls also live in the canonical `Settings/runtime.json`:
 
 ```json
 {
