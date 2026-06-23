@@ -48,7 +48,7 @@ include:
 Review-required reports are stored under:
 
 ```text
-mods/Alechilles_Alec's Telemetry/Telemetry/manual-reports/<projectId>/review/
+mods/Alechilles_Alec's Telemetry!/Telemetry/manual-reports/<projectId>/review/
 ```
 
 Operators can use:

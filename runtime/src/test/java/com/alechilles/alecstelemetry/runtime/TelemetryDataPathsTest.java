@@ -19,7 +19,7 @@ class TelemetryDataPathsTest {
     @Test
     void descriptorDirectoriesIncludeSaveLocalAndGlobalUserModsDirectories() throws Exception {
         Path runtimeRoot = tempDir.resolve("data").resolve("pre-release").resolve("Saves")
-                .resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry");
+                .resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry!");
         Files.createDirectories(runtimeRoot);
         Path saveModsDirectory = runtimeRoot.getParent();
         Path globalModsDirectory = tempDir.resolve("UserData").resolve("Mods");
@@ -57,7 +57,7 @@ class TelemetryDataPathsTest {
                 .resolve("mods")
                 .toAbsolutePath()
                 .normalize();
-        Path expectedRoot = saveModsDirectory.resolve("Alechilles_Alec's Telemetry").toAbsolutePath().normalize();
+        Path expectedRoot = saveModsDirectory.resolve("Alechilles_Alec's Telemetry!").toAbsolutePath().normalize();
         assertEquals(expectedRoot, paths.runtimeRoot());
         assertEquals(expectedRoot.resolve("Settings").resolve("runtime.json"), paths.settingsFile());
         assertEquals(expectedRoot.resolve("Settings").resolve("projects"), paths.projectSettingsDirectory());
@@ -78,6 +78,7 @@ class TelemetryDataPathsTest {
 
         assertEquals(
                 List.of(
+                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry").toAbsolutePath().normalize(),
                         hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("telemetry").toAbsolutePath().normalize(),
                         hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("Telemetry").toAbsolutePath().normalize()
                 ),

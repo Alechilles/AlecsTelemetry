@@ -19,7 +19,7 @@ class TelemetryDataMigratorTest {
     void migratesLegacyLowercaseCentralSettingsAndQueuesWithoutDeletingHytaleSessionLogs() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path legacyRoot = saveRoot.resolve("telemetry");
         Files.createDirectories(legacyRoot.resolve("Settings").resolve("projects"));
         Files.createDirectories(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-cats").resolve("pending"));
@@ -46,7 +46,7 @@ class TelemetryDataMigratorTest {
     void migratesLegacyUppercaseServerRootTelemetryDirectory() throws Exception {
         Path serverRoot = tempDir.resolve("container");
         Path modsDir = serverRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path legacyRoot = serverRoot.resolve("Telemetry");
         Files.createDirectories(legacyRoot.resolve("Settings").resolve("projects"));
         Files.createDirectories(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending"));
@@ -71,7 +71,7 @@ class TelemetryDataMigratorTest {
     void removesLegacyFilesWhenCanonicalFilesAlreadyExist() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path legacyRoot = saveRoot.resolve("telemetry");
         Files.createDirectories(canonicalRoot.resolve("Settings"));
         Files.createDirectories(legacyRoot.resolve("Settings"));
@@ -88,10 +88,36 @@ class TelemetryDataMigratorTest {
     }
 
     @Test
+    void migratesPreviousNoBangCanonicalRootIntoCurrentBangRoot() throws Exception {
+        Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
+        Path modsDir = saveRoot.resolve("mods");
+        Path ownerRoot = modsDir.resolve("Alechilles_Alec's Tamework!");
+        Path legacyRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
+        Files.createDirectories(ownerRoot);
+        Files.createDirectories(legacyRoot.resolve("Settings").resolve("projects"));
+        Files.createDirectories(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending"));
+        Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), "{\"enabled\":false}");
+        Files.writeString(legacyRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json"), "{\"enabled\":false}");
+        Files.writeString(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending").resolve("event.json"), "{}");
+        TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(ownerRoot);
+
+        TelemetryDataMigrator.migrate(paths, null);
+
+        assertEquals(canonicalRoot.toAbsolutePath().normalize(), paths.runtimeRoot());
+        assertEquals("{\"enabled\":false}", Files.readString(canonicalRoot.resolve("Settings").resolve("runtime.json")));
+        assertEquals("{\"enabled\":false}", Files.readString(canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json")));
+        assertEquals("{}", Files.readString(canonicalRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending").resolve("event.json")));
+        assertFalse(Files.exists(legacyRoot.resolve("Settings")));
+        assertFalse(Files.exists(legacyRoot.resolve("Telemetry")));
+        assertFalse(Files.exists(legacyRoot));
+    }
+
+    @Test
     void migratesEmbeddedOwnerOverridesAndRemovesEmptyTelemetryFolders() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path ownerRoot = modsDir.resolve("Alechilles_Alec's Cats!");
         Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-cats.json");
         Files.createDirectories(ownerOverride.getParent());
@@ -113,7 +139,7 @@ class TelemetryDataMigratorTest {
     void removesEmbeddedOwnerOverrideWhenCanonicalOverrideAlreadyExists() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path canonicalOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
         Path ownerRoot = modsDir.resolve("Alechilles_Alec's Tamework!");
         Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
@@ -143,7 +169,7 @@ class TelemetryDataMigratorTest {
     void keepsEmbeddedOwnerTelemetryFolderWhenItContainsNonSettingsData() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Path ownerRoot = modsDir.resolve("Alechilles_Alec's Tamework!");
         Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
         Files.createDirectories(ownerOverride.getParent());

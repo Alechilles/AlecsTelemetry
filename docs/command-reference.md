@@ -48,7 +48,7 @@ the initial state until a server owner reviews or changes a project.
 
 Consent choices are persisted under the canonical Alec's Telemetry settings
 root. Project category choices are written to
-`mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`, and
+`mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json`, and
 reviewed/notice state is kept in the runtime consent state file.
 
 ## Flush And Test

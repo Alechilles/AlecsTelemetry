@@ -125,7 +125,7 @@ class TelemetryProjectDiscoveryTest {
     void discoversEmbeddedDescriptorFromAdditionalInstalledModsDirectory() throws Exception {
         Path saveModsDirectory = tempDir.resolve("data").resolve("pre-release").resolve("Saves")
                 .resolve("Demo World").resolve("mods");
-        Files.createDirectories(saveModsDirectory.resolve("Alechilles_Alec's Telemetry"));
+        Files.createDirectories(saveModsDirectory.resolve("Alechilles_Alec's Telemetry!"));
         Path installedModsDirectory = tempDir.resolve("UserData").resolve("Mods");
         Files.createDirectories(installedModsDirectory);
         writeJar(

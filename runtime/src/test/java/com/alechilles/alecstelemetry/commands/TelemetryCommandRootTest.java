@@ -42,7 +42,7 @@ class TelemetryCommandRootTest {
     private static final class DisplayNameOwner implements CommandOwner {
         @Override
         public String getName() {
-            return "Alechilles:Alec's Telemetry";
+            return "Alechilles:Alec's Telemetry!";
         }
     }
 }

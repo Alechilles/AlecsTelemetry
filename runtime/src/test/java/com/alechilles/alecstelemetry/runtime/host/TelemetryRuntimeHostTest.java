@@ -139,7 +139,7 @@ class TelemetryRuntimeHostTest {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path legacyRoot = saveRoot.resolve("Telemetry");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
         Files.createDirectories(legacyRoot.resolve("Settings"));
         Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), """
                 {
@@ -168,7 +168,7 @@ class TelemetryRuntimeHostTest {
         TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
                 null,
                 TelemetryRuntimeOrigin.STANDALONE,
-                "Alechilles:Alec's Telemetry",
+                "Alechilles:Alec's Telemetry!",
                 "0.2.5",
                 "0.2.5",
                 tempDir.resolve("Alec's Telemetry.jar"),
@@ -218,7 +218,7 @@ class TelemetryRuntimeHostTest {
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         TelemetryProjectRegistration self = registrations.get(1);
-        assertEquals("Alechilles:Alec's Telemetry", self.pluginIdentifier());
+        assertEquals("Alechilles:Alec's Telemetry!", self.pluginIdentifier());
         assertEquals("0.2.5", self.pluginVersion());
         assertTrue(self.stats().enabled());
         assertTrue(self.stats().allows("heartbeat"));
@@ -229,14 +229,14 @@ class TelemetryRuntimeHostTest {
         TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-errors"));
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryProjectRegistration providerProject = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry",
+                "Alechilles:Alec's Telemetry!",
                 "0.2.5",
                 tempDir.resolve("Alec's Telemetry.jar"),
                 null
         );
         CapturingCrashReportClient client = new CapturingCrashReportClient();
         ProviderFixture fixture = providerFixture(
-                "standalone:Alechilles:Alec's Telemetry",
+                "standalone:Alechilles:Alec's Telemetry!",
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.2.5",
                 settings,

@@ -16,7 +16,7 @@ class TelemetryRuntimeCandidateTest {
                 "standalone",
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.1.3",
-                "Alechilles:Alec's Telemetry"
+                "Alechilles:Alec's Telemetry!"
         );
         TelemetryRuntimeCandidate embedded = candidate(
                 "embedded-tamework",
@@ -34,7 +34,7 @@ class TelemetryRuntimeCandidateTest {
                 "standalone",
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.1.3",
-                "Alechilles:Alec's Telemetry"
+                "Alechilles:Alec's Telemetry!"
         );
         TelemetryRuntimeCandidate incompatible = new TelemetryRuntimeCandidate(
                 "embedded-new",
@@ -56,7 +56,7 @@ class TelemetryRuntimeCandidateTest {
                 "standalone",
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.1.4",
-                "Alechilles:Alec's Telemetry"
+                "Alechilles:Alec's Telemetry!"
         );
         TelemetryRuntimeCandidate embedded = candidate(
                 "embedded-tamework",

@@ -120,7 +120,7 @@ server identity, queues, and upload state under one canonical Alec's Telemetry
 data root:
 
 ```text
-<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
   Settings/
     runtime.json
     projects/<project-id>.json

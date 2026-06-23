@@ -19,7 +19,8 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                                   @Nonnull Path crashReportsRoot,
                                   @Nonnull Path eventReportsRoot,
                                   @Nullable Path modsDirectory) {
-    private static final String TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry";
+    private static final String TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry!";
+    private static final String LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry";
 
     @Nonnull
     public static TelemetryDataPaths from(@Nonnull JavaPlugin plugin) {
@@ -143,6 +144,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
         if (ownerRoot == null) {
             return List.of();
         }
+        addLegacyRuntimeRoot(roots, modsDirectory.resolve(LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY));
         addLegacyRuntimeRoot(roots, ownerRoot.resolve("telemetry"));
         addLegacyRuntimeRoot(roots, ownerRoot.resolve("Telemetry"));
         return List.copyOf(roots);

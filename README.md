@@ -128,7 +128,7 @@ Need something more custom than the default hosted flow?
   hosted service.
 - Server owners can override packaged destination settings at runtime under the
   canonical Alec's Telemetry data root:
-  `mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
+  `mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json`.
 - The optional runtime API is available for richer breadcrumbs, explicit
   lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
   `usage` events with typed `TelemetryEventContext` fields.

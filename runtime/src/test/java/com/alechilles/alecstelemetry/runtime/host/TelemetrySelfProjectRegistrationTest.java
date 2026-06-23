@@ -16,7 +16,7 @@ class TelemetrySelfProjectRegistrationTest {
     @Test
     void standaloneSelfProjectReportsCrashErrorsAndStatsByDefault() {
         TelemetryProjectRegistration registration = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry",
+                "Alechilles:Alec's Telemetry!",
                 "0.2.5",
                 Path.of("Alec's Telemetry.jar"),
                 null
@@ -25,7 +25,7 @@ class TelemetrySelfProjectRegistrationTest {
         assertEquals("alecs-telemetry", registration.projectId());
         assertEquals("Alec's Telemetry", registration.displayName());
         assertEquals("dependency", registration.runtimeMode());
-        assertEquals("Alechilles:Alec's Telemetry", registration.pluginIdentifier());
+        assertEquals("Alechilles:Alec's Telemetry!", registration.pluginIdentifier());
         assertEquals("0.2.5", registration.pluginVersion());
         assertEquals(Path.of("Alec's Telemetry.jar"), registration.sourcePath());
         assertEquals("hosted", registration.destinationMode());
@@ -65,7 +65,7 @@ class TelemetrySelfProjectRegistrationTest {
                 """);
 
         TelemetryProjectRegistration registration = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry",
+                "Alechilles:Alec's Telemetry!",
                 "0.2.5",
                 Path.of("Alec's Telemetry.jar"),
                 override

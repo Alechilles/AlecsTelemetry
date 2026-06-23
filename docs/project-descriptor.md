@@ -407,7 +407,7 @@ Alec's Telemetry shows a first-run consent UI when an operator installs a teleme
 - `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
 
 Server owners can override each value in the consent UI or through
-`mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
+`mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json`.
 Descriptor defaults are used until an override exists.
 
 ### `hosted`

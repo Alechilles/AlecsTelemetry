@@ -16,7 +16,7 @@
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
 - Added one-time telemetry data migration so Windows save-folder data, lowercase
   server-root telemetry folders, and embedded-owner settings are consolidated
-  under the canonical `mods/Alechilles_Alec's Telemetry` runtime root.
+  under the canonical `mods/Alechilles_Alec's Telemetry!` runtime root.
 - Added consent funnel metrics for first-run prompt display, consent UI opens,
   and first-review completion, with per-viewer/project/version dedupe.
 

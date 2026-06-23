@@ -18,7 +18,7 @@ final class TelemetrySelfProjectRegistration {
               "projectId": "alecs-telemetry",
               "displayName": "Alec's Telemetry",
               "runtimeMode": "dependency",
-              "ownerPluginIdentifiers": ["Alechilles:Alec's Telemetry"],
+              "ownerPluginIdentifiers": ["Alechilles:Alec's Telemetry!"],
               "packagePrefixes": ["com.alechilles.alecstelemetry"],
               "capture": {
                 "uncaughtExceptions": true,

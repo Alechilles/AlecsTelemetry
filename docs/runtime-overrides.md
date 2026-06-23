@@ -9,7 +9,7 @@ descriptor alone when the mod bakes in a publishable ingest key.
 Override files live under the canonical Alec's Telemetry data root:
 
 ```text
-<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json
 ```
 
 Runtime settings, server identity, queues, and project overrides share this same
@@ -90,7 +90,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 ## Example: server-owner manual report controls
 
 Global runtime settings live in
-`<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/runtime.json`, not
+`<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/Settings/runtime.json`, not
 per-project override files. The runtime creates this file with defaults the first
 time it starts.
 
