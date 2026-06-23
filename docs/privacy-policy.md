@@ -19,7 +19,7 @@ you.
 
 ## Who Controls The Data
 
-For telemetry sent to Alec's hosted platform, Alec / Alechilles operates the
+For telemetry sent to Alec's hosted platform, Apex Web Solutions LLC operates the
 service and controls the hosted data. Mod authors and server owners control what
 their projects and servers send by choosing telemetry descriptors, consent
 defaults, runtime settings, and manual report settings.
@@ -188,7 +188,8 @@ continue to receive the current immediate website analytics behavior.
 
 ## Legal Bases And Reasons For Processing
 
-Where GDPR-style legal bases are relevant, Alec's hosted platform generally uses:
+Where GDPR-style legal bases are relevant, the hosted platform operated by Apex
+Web Solutions LLC generally uses:
 
 - requested service or contract-like necessity to deliver telemetry ingestion,
   dashboards, public stats, manual reports, account access, configured
@@ -231,8 +232,8 @@ Access depends on the surface:
   summaries.
 - Configured GitHub repositories may receive issue content when project members
   create or sync GitHub issues.
-- Alec and trusted service operators may access data to operate, secure, debug,
-  and support the platform.
+- Apex Web Solutions LLC and trusted service operators may access data to
+  operate, secure, debug, and support the platform.
 - Hosting, analytics, OAuth, payment, and infrastructure providers may process
   data as needed to provide their services.
 - Data may be disclosed if required to comply with law, protect rights, prevent
@@ -314,8 +315,8 @@ Default telemetry is designed around technical diagnostics and aggregate server
 stats, not player identity. Manual report text and optional contact fields are
 player-controlled, so players and server owners should not submit children's
 personal information. If you believe a child has provided personal information
-through the hosted platform, contact Alec so it can be reviewed and deleted where
-appropriate.
+through the hosted platform, contact Apex Web Solutions LLC through the support
+contact below so it can be reviewed and deleted where appropriate.
 
 ## Security
 
@@ -341,10 +342,11 @@ contact below.
 ## Your Rights And Requests
 
 Depending on where you live, you may have rights to access, correct, delete,
-export, or object to certain processing of personal information. Alec will review
-reasonable privacy requests for hosted platform data. Some data may be difficult
-to identify without project IDs, report IDs, portal account IDs, server IDs, or
-other details that connect the request to the relevant records.
+export, or object to certain processing of personal information. Apex Web
+Solutions LLC will review reasonable privacy requests for hosted platform data.
+Some data may be difficult to identify without project IDs, report IDs, portal
+account IDs, server IDs, or other details that connect the request to the
+relevant records.
 
 To make a request, include enough information to locate the data without sending
 extra sensitive information.
@@ -358,12 +360,13 @@ billing, tax, accounting, dispute, abuse-prevention, or security reasons.
 
 ## Incidents
 
-If Alec becomes aware of a privacy or security incident affecting hosted platform
-data, the incident response process includes evidence preservation, containment,
-affected data review, third-party processor notification where relevant, and
-notification decision records. Alec assesses applicable notice obligations,
-deadlines, affected-user notice, processor notice, and elevated sensitivity risks
-based on the facts of the incident.
+If Apex Web Solutions LLC becomes aware of a privacy or security incident
+affecting hosted platform data, the incident response process includes evidence
+preservation, containment, affected data review, third-party processor
+notification where relevant, and notification decision records. Apex Web
+Solutions LLC assesses applicable notice obligations, deadlines, affected-user
+notice, processor notice, and elevated sensitivity risks based on the facts of
+the incident.
 
 ## Changes
 
@@ -372,7 +375,7 @@ The effective date at the top shows when this version was published.
 
 ## Contact
 
-Use the Alec's Mods Discord support link for privacy questions, deletion requests,
-or suspected telemetry abuse:
+Use the Alec's Mods Discord support link for privacy questions, deletion
+requests, or suspected telemetry abuse directed to Apex Web Solutions LLC:
 
 https://discord.gg/E8n8RgTTdq
