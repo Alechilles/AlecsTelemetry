@@ -121,7 +121,7 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
     }
 
     @Test
-    void heartbeatQueuesOneStatsEventPerEligibleProject() {
+    void heartbeatQueuesOneAggregateStatsEventForAllProjects() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
                 tempDir,
@@ -152,8 +152,8 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
 
         new TelemetryStatsHeartbeatService(TelemetryStatsRuntime.from(new CoreRuntimeOperations(engine)), counter, null, null).emitHeartbeatNow();
 
-        assertEquals(2, engine.flushPendingReportsNow("test-aggregate-stats-heartbeat").attempted());
-        assertEquals(2, client.payloads.size());
+        assertEquals(1, engine.flushPendingReportsNow("test-aggregate-stats-heartbeat").attempted());
+        assertEquals(1, client.payloads.size());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("first-mod", payload.get("projectId").getAsString());
         assertEquals("stats", payload.get("eventType").getAsString());
@@ -164,10 +164,6 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
         assertEquals("first-mod", projects.get(0).getAsJsonObject().get("projectId").getAsString());
         assertEquals("second-mod", projects.get(1).getAsJsonObject().get("projectId").getAsString());
         assertEquals("Example:Second Mod", projects.get(1).getAsJsonObject().get("pluginIdentifier").getAsString());
-        JsonObject secondPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
-        assertEquals("second-mod", secondPayload.get("projectId").getAsString());
-        assertEquals("stats", secondPayload.get("eventType").getAsString());
-        assertEquals("heartbeat", secondPayload.get("eventName").getAsString());
     }
 
     @Test

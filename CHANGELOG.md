@@ -11,8 +11,7 @@
   failures.
 - Added an explicit standalone consent UI logo asset and embedded Creditor so
   Alec's Telemetry contributes to `/credits` when installed.
-- Fixed Alec's Telemetry's own consent row icon and changed stats heartbeats to
-  upload one top-level heartbeat per eligible project for ModStats reporting.
+- Fixed Alec's Telemetry's own consent row icon in the consent UI.
 - Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
 
