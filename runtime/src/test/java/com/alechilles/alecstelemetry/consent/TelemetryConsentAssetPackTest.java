@@ -71,6 +71,21 @@ class TelemetryConsentAssetPackTest {
     }
 
     @Test
+    void consentProjectRowsUseScrollableViewport() throws IOException {
+        String consentPage = resourceText("Common/UI/Custom/TelemetryConsentPage.ui");
+        int viewportStart = consentPage.indexOf("Group #TelemetryConsentViewport");
+        assertTrue(viewportStart >= 0);
+
+        int rowsStart = consentPage.indexOf("Group #TelemetryConsentRows", viewportStart);
+        assertTrue(rowsStart > viewportStart);
+
+        String viewportDefinition = consentPage.substring(viewportStart, rowsStart);
+        assertTrue(viewportDefinition.contains("LayoutMode: TopScrolling"));
+        assertTrue(viewportDefinition.contains("KeepScrollPosition: true"));
+        assertTrue(viewportDefinition.contains("ScrollbarStyle: $C.@DefaultScrollbarStyle"));
+    }
+
+    @Test
     void consentPageUsesDeterministicSelectorAndActionContract() {
         assertEquals("toggle_all", TelemetryConsentUiContract.ACTION_TOGGLE_ALL);
         assertEquals("toggle_global_category", TelemetryConsentUiContract.ACTION_TOGGLE_GLOBAL_CATEGORY);
