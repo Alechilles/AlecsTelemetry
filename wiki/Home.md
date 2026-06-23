@@ -36,6 +36,7 @@ The default integration path is dependency mode: install Alec's Telemetry alongs
 ## Useful Links
 
 - [Open Telemetry Portal](https://telemetry.alecsmods.com/portal)
+- [Privacy Policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md)
 - [Join Discord](https://discord.gg/E8n8RgTTdq)
 - [Runtime source](https://github.com/Alechilles/AlecsTelemetry)
 - [Platform source](https://github.com/Alechilles/AlecsTelemetryPlatform)

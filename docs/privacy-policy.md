@@ -1,0 +1,326 @@
+# Alec's Telemetry Privacy Policy
+
+Effective date: June 23, 2026
+
+This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
+ModStats.io collect and use information. It covers:
+
+- the Alec's Telemetry runtime that can run on Hytale servers or local worlds
+- telemetry sent to Alec's hosted platform at `telemetry.alecsmods.com` or
+  related development hosts
+- the hosted portal used by mod authors and project members
+- public ModStats.io stats and server listing pages
+
+This policy is written for players, server owners, and mod authors. It is not a
+substitute for legal advice. If you operate a public server, ship a mod that uses
+Alec's Telemetry, or configure a custom telemetry endpoint, you are responsible
+for making sure your own setup follows the laws and platform rules that apply to
+you.
+
+## Who Controls The Data
+
+For telemetry sent to Alec's hosted platform, Alec / Alechilles operates the
+service and controls the hosted data. Mod authors and server owners control what
+their projects and servers send by choosing telemetry descriptors, consent
+defaults, runtime settings, and manual report settings.
+
+If a mod or server points Alec's Telemetry at a custom endpoint instead of Alec's
+hosted platform, that endpoint operator controls the data sent there. This policy
+does not cover custom endpoints.
+
+## The Short Version
+
+Alec's Telemetry is designed to avoid player identity data by default.
+
+- Server owners can review and change telemetry categories with
+  `/telemetry consent`.
+- Public stats show aggregate counts and breakdowns, not raw server IDs, session
+  IDs, IP addresses, player names, player UUIDs, chat, coordinates, world data,
+  secrets, or full config files.
+- Manual player reports are optional. They can include player-written text,
+  optional contact information, and optional attachments only when the server
+  settings and project descriptor allow them.
+- Crash and event telemetry may include technical diagnostics such as stack
+  traces, error messages, plugin versions, Hytale versions, Java/runtime details,
+  operating system details, loaded mod IDs, server/session identifiers, and
+  descriptor-approved event context.
+- Consent metrics are collected separately and are limited to project/version,
+  category choice, and first-review funnel events.
+- The hosted platform may use IP addresses and request metadata for rate
+  limiting, abuse prevention, server-country derivation, security logging, and
+  normal hosting operations.
+- Alec's Telemetry policy does not allow mod authors to collect non-optional
+  personally identifiable information through telemetry payloads. Third-party
+  mods are configurable, so report any suspected abuse through the support link
+  below.
+
+## What The Runtime Stores Locally
+
+The runtime may store local files under the server or save's Alec's Telemetry data
+directory. These files can include:
+
+- project descriptors discovered from installed mods
+- server-owner consent choices and runtime overrides
+- server identity and verification values used for ModStats server claiming
+- queued telemetry waiting to upload
+- manual report drafts, review queues, submitted receipts, and local follow-up
+  tokens
+- local runtime settings for manual reports, attachments, endpoints, and related
+  controls
+
+Local files stay on the server or local machine unless the configured telemetry
+category or report workflow uploads them.
+
+## Telemetry Sent To The Hosted Platform
+
+The exact payload depends on the telemetry category enabled for a project.
+
+### Crash, Error, Lifecycle, Performance, And Usage Events
+
+When enabled, these events can include:
+
+- project ID, project display name, plugin ID, plugin version, and telemetry
+  source
+- event type, event name, event ID, timestamp, severity, duration, metric value,
+  and fingerprint
+- internal server ID and session ID used for grouping and deduplication
+- descriptor-approved event context fields such as subsystem, operation, feature,
+  runtime side, entity type, item ID, block ID, biome ID, or command name
+- environment and runtime metadata such as Java version, runtime version,
+  operating system name/version/architecture, CPU core count, Hytale build,
+  server version, hosting mode, and loaded mod IDs/versions
+- for crashes, exception type, exception message, stack trace frames, causal
+  chain, attribution information, thread name, breadcrumbs, and limited world
+  failure metadata when available
+
+Crash messages and stack traces come from the running software. Mod authors should
+avoid putting secrets, player names, coordinates, tokens, or other identifying
+values into exception messages, breadcrumbs, or custom event context.
+
+### Public Usage Stats
+
+Stats heartbeats are separate from feature-usage telemetry. When enabled, the
+runtime emits a standard heartbeat roughly every five minutes. The hosted service
+uses it to compute public aggregate stats such as:
+
+- active servers and active players
+- record servers and record players
+- server/player history in activity buckets
+- plugin, Hytale, server, Java, runtime, operating system, architecture, CPU
+  core count, hosting mode, server-country, and loaded-mod breakdowns
+
+The hosted service may use raw server IDs, session IDs, loaded mod evidence, and
+private heartbeat payloads internally to compute aggregates, prevent duplicates,
+verify server claims, and maintain the public stats data. Public stats responses
+must expose only aggregate counts and breakdowns.
+
+### Manual Player Reports
+
+Manual reports are submitted through player-facing issue or suggestion forms.
+They can include:
+
+- report title and description written by the player
+- project-specific form fields
+- optional contact information if both the server settings and project descriptor
+  allow it
+- optional diagnostics, loaded mod lists, current or previous server logs, and
+  other attachments if both the server settings and project descriptor allow them
+- a hashed follow-up token so the player can check report status without exposing
+  the raw token to the hosted database
+
+Server owners can require local review before manual reports upload. Rejected
+reports remain local and are not uploaded. Diagnostic attachments are redacted on
+a best-effort basis for common secrets, Discord tokens, email addresses, IPv4
+addresses, and Windows user paths, but players and server owners should still
+review report text and attachments before sending sensitive information.
+
+### Consent Metrics
+
+The hosted platform may receive privacy-preserving consent metrics so project
+owners can understand whether telemetry defaults are acceptable. These metrics can
+include:
+
+- runtime version
+- project ID, project display name, and project version
+- telemetry category
+- whether the category was supported, enabled, previously enabled, and changed
+  during first review or from the consent UI
+- first-run funnel events such as prompt shown, consent UI opened, and first
+  review completed
+
+Consent metrics do not include project keys, raw server IDs, session IDs, player
+names, player UUIDs, chat, coordinates, or manual report contents.
+
+## Portal Accounts, Billing, And Integrations
+
+The hosted portal lets project members manage projects, keys, memberships, issue
+triage, manual reports, stats, Discord routing, GitHub issue sync, and billing.
+
+When you sign in or are invited to a project, the portal may store:
+
+- portal user ID
+- Discord or GitHub provider ID, username/login, display name, avatar URL, and
+  linked-provider status
+- project memberships, roles, audit log entries, route verification records,
+  saved views, assignees, and workflow activity
+- Discord guild/channel/role routing configuration selected by authorized project
+  members
+- GitHub repository integration settings and GitHub issue-link metadata
+- billing account, Stripe customer, subscription, plan, entitlement, and billing
+  email metadata when billing features are used
+
+Discord, GitHub, and Stripe process information under their own privacy policies
+when you use those integrations.
+
+## Website Analytics
+
+The public website may load Google Tag Manager on ModStats.io and Alec's
+Telemetry landing hosts. This is separate from in-game telemetry. Browser
+analytics can include normal web analytics information such as page views,
+referrers, device/browser details, approximate location, and cookie or similar
+identifiers depending on the active tag configuration and browser settings.
+
+## How Data Is Used
+
+Data is used to:
+
+- deliver crash, error, performance, lifecycle, usage, stats, and manual-report
+  workflows requested by server owners and mod authors
+- show project dashboards and issue triage views to authorized project members
+- compute public aggregate mod stats and server listing data
+- route notifications to configured Discord channels
+- create or update GitHub issues when enabled by project members
+- operate billing and project guardrails
+- rate-limit requests, prevent abuse, investigate service issues, and protect
+  the platform
+- improve the reliability and privacy posture of Alec's Telemetry
+
+Telemetry payloads are not sold. Player report contents and raw telemetry
+payloads are not used for targeted advertising.
+
+## Who Can See Data
+
+Access depends on the surface:
+
+- Public ModStats.io pages show aggregate stats and public project/server profile
+  information.
+- Project owners, admins, maintainers, and viewers can see the portal data their
+  role allows for that project.
+- Configured Discord channels may receive crash, event, or manual-report alert
+  summaries.
+- Configured GitHub repositories may receive issue content when project members
+  create or sync GitHub issues.
+- Alec and trusted service operators may access data to operate, secure, debug,
+  and support the platform.
+- Hosting, analytics, OAuth, payment, and infrastructure providers may process
+  data as needed to provide their services.
+- Data may be disclosed if required to comply with law, protect rights, prevent
+  abuse, or respond to valid legal process.
+
+## Retention
+
+Retention depends on the data type and operational need.
+
+- Stats raw private payloads are intended to be short-lived. The platform's
+  current default retention settings prune raw stats payloads, loaded-mod
+  evidence, and retained heartbeat rows after 14 days once compact rollups or
+  evidence records exist.
+- Compact stats heartbeat receipts are currently retained for 90 days by default.
+- Completed ingest jobs are currently retained for 2 days by default, and
+  dead-letter ingest jobs for 30 days by default.
+- Crash reports, event records, manual reports, issue records, account records,
+  audit logs, integration settings, billing metadata, and public stats rollups may
+  be retained while needed to provide the service, preserve project history,
+  secure the platform, satisfy billing or legal obligations, or until deletion is
+  requested and feasible.
+
+Backups and logs may retain copies for a limited period after deletion from the
+primary database.
+
+## Choices And Controls
+
+Server owners can:
+
+- use `/telemetry consent` to review and change project/category telemetry
+  choices
+- use runtime override files to disable telemetry categories or change endpoints
+- disable manual reports or require local review before upload
+- disable optional report contact fields, resolution updates, log attachments,
+  loaded mod lists, diagnostics, and other report extras
+- use a custom endpoint instead of Alec's hosted platform
+- remove Alec's Telemetry or remove telemetry-enabled project descriptors
+
+Players can:
+
+- choose whether to submit manual reports
+- leave optional contact fields blank
+- ask a server operator what telemetry settings are enabled on that server
+- use report receipts and follow-up tokens when status lookup is enabled
+
+Portal users can:
+
+- sign out of the portal
+- unlink a provider when another provider remains available for the account
+- ask for account deletion or correction through the support contact below
+
+Mod authors can:
+
+- keep descriptors small and avoid high-risk custom Event Context fields
+- disable categories by default when telemetry is not necessary
+- avoid collecting player names, UUIDs, chat, exact coordinates, secrets, tokens,
+  or other personally identifying values
+- document any project-specific fields they add through Alec's Telemetry
+
+## Children
+
+Alec's Telemetry is not intended to collect personal information from children.
+Default telemetry is designed around technical diagnostics and aggregate server
+stats, not player identity. Manual report text and optional contact fields are
+player-controlled, so players and server owners should not submit children's
+personal information. If you believe a child has provided personal information
+through the hosted platform, contact Alec so it can be reviewed and deleted where
+appropriate.
+
+## Security
+
+The hosted platform uses validation, payload size limits, rate limits, project
+keys, role-based portal access, CSRF protections for authenticated actions, and
+segmented public/private stats storage. No service can guarantee perfect
+security, and telemetry payloads can still contain sensitive data if a mod author
+or player puts that data into an allowed text field, exception, breadcrumb, log,
+or attachment.
+
+## Third-Party Mods And Custom Fields
+
+Alec's Telemetry is configurable. Third-party mod authors can define descriptors,
+choose defaults, add report fields, and send descriptor-approved Event Context.
+Alec's Telemetry policy forbids non-optional collection of personally
+identifiable information through telemetry payloads, but Alec cannot guarantee
+that every third-party mod author follows the intended privacy standards.
+
+If you believe a mod is using Alec's Telemetry to collect identifiable user
+information without a clear optional choice, report it through the support
+contact below.
+
+## Your Rights And Requests
+
+Depending on where you live, you may have rights to access, correct, delete,
+export, or object to certain processing of personal information. Alec will review
+reasonable privacy requests for hosted platform data. Some data may be difficult
+to identify without project IDs, report IDs, portal account IDs, server IDs, or
+other details that connect the request to the relevant records.
+
+To make a request, include enough information to locate the data without sending
+extra sensitive information.
+
+## Changes
+
+This policy may be updated as Alec's Telemetry and the hosted platform change.
+The effective date at the top shows when this version was published.
+
+## Contact
+
+Use the Alec's Mods Discord support link for privacy questions, deletion requests,
+or suspected telemetry abuse:
+
+https://discord.gg/E8n8RgTTdq

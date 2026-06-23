@@ -213,6 +213,9 @@ same stable `telemetry.command.telemetry.*` prefix.
 - Manual reports can require local operator review before upload, and optional
   attachments are controlled by runtime settings.
 
+For the full runtime, hosted platform, portal, and ModStats.io policy, see
+[Alec's Telemetry Privacy Policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md).
+
 ## Docs and Examples
 
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
@@ -220,6 +223,7 @@ same stable `telemetry.command.telemetry.*` prefix.
 - [Runtime API guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-api.md)
 - [Command reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/command-reference.md)
 - [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+- [Privacy policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md)
 - [Manual player reports](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/manual-player-reports.md)
 - [Usage stats guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/usage-stats.md)
 - [Hosted key operations](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/hosted-key-operations.md)
