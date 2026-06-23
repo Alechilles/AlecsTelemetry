@@ -87,7 +87,7 @@ $C.@PageOverlay {
         Padding: (Left: 8, Right: 8, Top: 8, Bottom: 8);
 
         Group #TelemetryConsentGridHeader {
-          Anchor: (Width: 740, Height: 64);
+          Anchor: (Width: 728, Height: 64);
           Background: #172b45;
           Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
           Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -289,9 +289,9 @@ $C.@PageOverlay {
 
           Group #TelemetryConsentRows {
             LayoutMode: Top;
-            Anchor: (Width: 740, Bottom: 0);
+            Anchor: (Width: 728, Bottom: 0);
 
-            Group #TelemetryConsentProjectRow0 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow0 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -328,7 +328,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow1 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow1 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -365,7 +365,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow2 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow2 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -402,7 +402,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow3 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow3 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -439,7 +439,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow4 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow4 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -476,7 +476,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow5 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow5 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -513,7 +513,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow6 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow6 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
@@ -550,7 +550,7 @@ $C.@PageOverlay {
               TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 685, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
               Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 701, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
             }
-            Group #TelemetryConsentProjectRow7 { Anchor: (Width: 740, Height: 56); Background: #0f1e30;
+            Group #TelemetryConsentProjectRow7 { Anchor: (Width: 728, Height: 56); Background: #0f1e30;
               Group { Anchor: (Left: 300, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 355, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
               Group { Anchor: (Left: 410, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }

@@ -48,7 +48,7 @@ class TelemetryConsentAssetPackTest {
         assertTrue(consentPage.contains("#TelemetryConsentCaptureAllUnsupported"));
         assertTrue(consentPage.contains("TooltipText: \"Crash reports, uncaught exceptions"));
         assertTrue(consentPage.contains("TextTooltipStyle: @TelemetryConsentHintStyle"));
-        assertTrue(consentPage.contains("Anchor: (Width: 740, Height: 64)"));
+        assertTrue(consentPage.contains("Anchor: (Width: 728, Height: 64)"));
         assertTrue(consentPage.contains("Background: #28415f"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentAllToggleButton"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentUsageAllToggleButton"));
@@ -73,6 +73,7 @@ class TelemetryConsentAssetPackTest {
     @Test
     void consentProjectRowsUseScrollableViewport() throws IOException {
         String consentPage = resourceText("Common/UI/Custom/TelemetryConsentPage.ui");
+        String normalizedConsentPage = consentPage.replace("\r\n", "\n");
         int viewportStart = consentPage.indexOf("Group #TelemetryConsentViewport");
         assertTrue(viewportStart >= 0);
 
@@ -83,6 +84,8 @@ class TelemetryConsentAssetPackTest {
         assertTrue(viewportDefinition.contains("LayoutMode: TopScrolling"));
         assertTrue(viewportDefinition.contains("KeepScrollPosition: true"));
         assertTrue(viewportDefinition.contains("ScrollbarStyle: $C.@DefaultScrollbarStyle"));
+        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentRows {\n            LayoutMode: Top;\n            Anchor: (Width: 728, Bottom: 0);"));
+        assertTrue(!consentPage.contains("Anchor: (Width: 740, Height: 56)"));
     }
 
     @Test
