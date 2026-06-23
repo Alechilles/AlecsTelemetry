@@ -251,8 +251,9 @@ Retention depends on the data type and operational need.
   are pruned after 14 days by default once compact rollups or evidence records
   exist.
 - Compact stats heartbeat receipts are retained for 90 days by default.
-- Completed ingest jobs are retained for 2 days by default, and dead-letter
-  ingest jobs for 30 days by default.
+- Completed ingest jobs are retained for 2 days by default. Dead-letter ingest
+  jobs, which are failed queue records the worker has stopped retrying, are
+  retained for 30 days by default.
 - Crash report metadata and raw JSON, event metadata and raw JSON, and manual
   report metadata and raw JSON are retained for 730 days by default.
 - Manual report attachments and log attachments are retained for 180 days by
@@ -360,18 +361,9 @@ billing, tax, accounting, dispute, abuse-prevention, or security reasons.
 If Alec becomes aware of a privacy or security incident affecting hosted platform
 data, the incident response process includes evidence preservation, containment,
 affected data review, third-party processor notification where relevant, and
-notification decision records. For GDPR-style incidents, Alec assesses the
-72-hour supervisory authority notification window. For Pennsylvania incidents,
-Alec assesses affected-user notice and Pennsylvania Attorney General notice if
-more than 500 Pennsylvania residents are affected. Possible children's personal
-information is escalated for COPPA/FTC review.
-
-## EU/UK Representative Status
-
-Alec has not appointed an EU or UK representative as of this policy date. That
-decision is being tracked separately and should be revisited before EU/UK
-marketing, paid EU/UK customers, EU/UK-targeted server/mod support, regular
-EU/UK behavioral monitoring, or another material EU/UK privacy expansion.
+notification decision records. Alec assesses applicable notice obligations,
+deadlines, affected-user notice, processor notice, and elevated sensitivity risks
+based on the facts of the incident.
 
 ## Changes
 
