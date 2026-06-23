@@ -1156,8 +1156,6 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         consentProjects = List.copyOf(updated);
     }
 
-
-
     @Nonnull
     private static TelemetryRuntimeCandidate candidate(@Nonnull TelemetryRuntimeBootstrapRequest request,
                                                        @Nonnull TelemetryDataPaths dataPaths) {
