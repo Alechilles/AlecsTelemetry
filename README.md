@@ -1,84 +1,95 @@
 # Alec's Telemetry
 
-Alec's Telemetry is a standalone crash telemetry runtime for Hytale mods and the
-easiest way to connect a mod to Alec's hosted telemetry platform.
+[![Alec's Telemetry! ModStats](https://www.modstats.io/api/v1/stats/projects/alecs-telemetry/embed/card.svg?layout=live)](https://www.modstats.io/stats/alecs-telemetry)
 
-For modders, it turns crash reporting into a small integration task: install the
-dependency, ship `Server/Telemetry/project.json`, and route real-world crashes into the
-hosted portal and Discord workflows.
+Alec's Telemetry is the shared telemetry layer for Hytale mods: a runtime that
+runs in-game, a hosted portal for mod authors, and a public stats surface for
+communities that want aggregate usage visibility.
 
-For players and server communities, it means faster fixes, less guesswork, and
-fewer situations where someone has to manually gather logs just to explain what
-broke.
+It started as crash reporting, but it now covers the broader support loop around
+a mod: attributed crashes, structured errors, lifecycle and performance events,
+anonymous usage stats, manual player issue reports, project access, ingest keys,
+and portal-based triage.
 
-[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Join Discord](https://discord.gg/E8n8RgTTdq) | [Runtime Source + Docs](https://github.com/Alechilles/AlecsTelemetry) 
+[Open Telemetry Portal](https://telemetry-dev.alecsmods.com/portal) | [View Public Stats](https://www.modstats.io/stats/alecs-telemetry) | [Join Discord](https://discord.gg/E8n8RgTTdq)
 
-## What Alec's Telemetry Is
+## The Combined Solution
 
-- A standalone runtime mod for crash telemetry in Hytale mods.
-- Designed around `dependency` mode as the default integration path.
-- Also supports `embedded` mode for advanced integrations that want to bundle the
-  telemetry bootstrap directly.
-- If multiple standalone or embedded telemetry copies are installed, the latest
-  compatible runtime version becomes the active coordinator for all enabled
-  telemetry projects. Standalone wins only when runtime versions tie.
-- Captures attributed crashes and startup/setup failures, queues reports locally,
-  and flushes them to the configured destination.
-- Emits anonymous Hytale usage statistics for active servers, active players,
-  environment breakdowns, and descriptor-validated custom charts.
-- Uses your mod metadata as fallback where possible, so many mods only need one
-  small descriptor file to get started.
+Alec's Telemetry works best as a pair:
 
-## Why Modders Use It
+- the runtime discovers telemetry-enabled mods, applies consent and server-owner
+  overrides, queues reports locally, and uploads sanitized envelopes
+- the portal owns projects, keys, memberships, issues, manual reports, stats,
+  public visibility, and operator workflows
 
-- The main integration path is simple: install Alec's Telemetry and ship
-  `Server/Telemetry/project.json`.
-- If your `manifest.json` already has the right `Group`, `Name`, and `Main`,
-  Alec's Telemetry can infer most of the rest.
-- Hosted `projectKey` values are publishable ingest keys, so normal hosted setup
-  does not depend on server owners managing secrets.
-- The hosted platform pairs portal-based crash triage with Discord-based access
-  and routing workflows.
-- Project keys, project memberships, and project management live in the hosted
-  platform instead of being spread across ad-hoc scripts and manual edits.
-- Most mods do not need custom Java code for the default hosted flow.
+```mermaid
+flowchart LR
+    Mod["Hytale mod\nServer/Telemetry/project.json"] --> Runtime["Alec's Telemetry runtime\nstandalone or embedded"]
+    Runtime --> Consent["Consent and runtime overrides"]
+    Runtime --> Queue["Local queues\ncrashes, events, reports"]
+    Queue --> Hosted["Alec's hosted ingest\n/ingest/event, /ingest/report"]
+    Hosted --> Portal["Telemetry portal\nissues, reports, stats, projects"]
+    Hosted --> PublicStats["ModStats.io\npublic aggregate stats"]
+    Portal --> Maintainer["Mod author\ntriage and follow-up"]
+```
 
-## Why Players Benefit
+Most mods should use the hosted portal. If you need to send data to your own
+backend, the same runtime can target custom endpoints instead.
 
-- Mod authors can see recurring crash issues faster instead of waiting on manual
-  bug reports with incomplete logs.
-- Real-world failures are easier to group and investigate, which shortens the
-  path from "something broke" to "here is the actual fix."
-- Server communities spend less time reproducing the same crash by hand just to
-  get useful debugging context.
-- Support conversations can move faster because the modder already has structured
-  telemetry instead of starting from guesswork.
+## What It Handles
 
-## What Integration Looks Like
+```mermaid
+flowchart TD
+    Runtime["Runtime"] --> Crashes["Crash and setup failure attribution"]
+    Runtime --> Events["Error, lifecycle, performance, and usage events"]
+    Runtime --> Stats["Anonymous 5-minute stats heartbeats"]
+    Runtime --> Reports["Player-submitted issue and suggestion reports"]
+    Runtime --> Commands["/telemetry commands for status, consent, reports, and flushes"]
+    Crashes --> Portal["Portal triage"]
+    Events --> Portal
+    Reports --> Portal
+    Stats --> StatsApi["Public and portal stats APIs"]
+```
 
-1. Add a small `Server/Telemetry/project.json` file to your mod project.
-2. Put in the hosted `projectKey` for your project.
-3. Choose whether to require the standalone runtime or embed the runtime in your mod.
-4. Package and ship your mod with that descriptor included.
+- Crash and setup failure capture: attributed stack traces, fingerprints,
+  breadcrumbs, local queueing, and hosted issue grouping.
+- Structured runtime events: explicit errors, lifecycle timings, performance
+  measurements, feature usage events, and descriptor-validated Event Context.
+- Public usage stats: aggregate active servers, active players, environment
+  breakdowns, versions, loaded mods, and public embed cards through ModStats.io.
+- Manual player reports: in-game issue and suggestion forms with local receipts,
+  optional log attachments, server-owner review controls, and portal follow-up.
+- Runtime coordination: standalone and embedded copies participate in version
+  election so one active runtime can serve all enabled projects.
+- Consent and overrides: descriptor defaults seed the first-run consent UI, while
+  server owners keep final control through runtime settings and per-project
+  overrides.
 
-The descriptor no longer needs to choose dependency versus embedded mode. Runtime ownership is decided by installed/embedded runtime candidates at startup.
+## Who It Is For
 
-Advanced alternatives: embedded runtime packaging and custom endpoints.
+For mod authors, Alec's Telemetry turns real-world support signals into a small,
+repeatable integration: ship a descriptor, add a hosted project key, and let the
+runtime and portal handle the plumbing.
 
-## Minimal Setup
+For server owners, it keeps telemetry visible and controllable. Crash capture,
+usage events, performance telemetry, stats, breadcrumbs, and reports are separate
+categories with runtime-level controls.
 
-If your mod manifest already has a correct `Group`, `Name`, and `Main`, Alec's
-Telemetry can infer:
+For players and communities, it shortens the path from "something broke" to a
+real fix, while public stats can show whether a mod is actively used without
+exposing raw server or player data.
 
-- `projectId`
-- `displayName`
-- `ownerPluginIdentifiers`
-- `packagePrefixes`
+## Quick Setup
 
-That means many mods only need destination settings plus a hosted key.
+Most hosted integrations only need a descriptor at:
 
-Hosted `projectKey` values are publishable ingest keys. They are meant to be
-shipped in the descriptor, not treated like hidden operator secrets.
+```text
+Server/Telemetry/project.json
+```
+
+If your `manifest.json` already has the right `Group`, `Name`, and `Main`,
+Alec's Telemetry can infer the project id, display name, plugin identifier, and
+package prefix.
 
 ```json
 {
@@ -87,61 +98,37 @@ shipped in the descriptor, not treated like hidden operator secrets.
   },
   "hosted": {
     "projectKey": "replace_with_your_public_project_key"
+  },
+  "stats": {
+    "enabled": true
   }
 }
 ```
 
-Place the file at:
-
-```text
-Server/Telemetry/project.json
-```
-
-Then package it with your mod.
+Hosted `projectKey` values are publishable ingest keys. They are meant to ship
+inside the descriptor; admin capabilities stay in the portal, not in the key.
 
 If you want your mod logo in the consent UI, package the texture under
 `Common/UI/Custom/...` and set `ui.iconTexturePath` to that custom UI texture
 path. Root mod icons such as `icon-256.png` are not used automatically.
 
-## Hosted Platform Highlights
+## Runtime Options
 
-- Sign in to the portal with Discord and manage project access through
-  memberships.
-- Manage project keys and related project settings through the hosted platform.
-- Review recurring crash issues in the portal instead of starting from raw logs.
-- Use Explore workflows when you need to inspect individual telemetry
-  occurrences more closely.
-- Keep Discord in the loop through the hosted stack's Discord-based access and
-  routing workflows.
+### Standalone Dependency
 
-Portal URL: `https://telemetry.alecsmods.com/portal`
+Use the standalone Alec's Telemetry mod when you want the normal dependency
+model. The runtime discovers enabled project descriptors from installed mods and
+coordinates uploads for those projects.
 
-## Advanced Options
+### Embedded Runtime
 
-Need something more custom than the default hosted flow?
+Use embedded mode when your mod needs to bundle the telemetry bootstrap directly.
+Embedded copies still participate in coordinator election, and the latest
+compatible runtime can serve all installed enabled projects.
 
-- Bundle telemetry bootstrap logic directly into your mod if you want one
-  distributable package. Embedded copies still participate in coordinator
-  election and can handle telemetry for all installed enabled projects when they
-  are the latest compatible runtime.
-- Use a custom endpoint if you want reports to go somewhere other than Alec's
-  hosted service.
-- Server owners can override packaged destination settings at runtime under the
-  canonical Alec's Telemetry data root:
-  `mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json`.
-- The optional runtime API is available for richer breadcrumbs, explicit
-  lifecycle forwarding, and non-crash `error`, `lifecycle`, `performance`, and
-  `usage` events with typed `TelemetryEventContext` fields.
-- Stats are a separate consent category from usage. Runtime heartbeats use
-  `eventType: "stats"` and are controlled by the project descriptor's
-  `stats.enabled` toggle.
-- Admin commands are available for inspection and manual testing:
-  `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`,
-  `/telemetry flush [project-id]`, `/telemetry test <project-id> [detail]`
-- The root command permission is `telemetry.command.telemetry`; subcommands use
-  the same stable `telemetry.command.telemetry.*` prefix.
+### Custom Endpoint
 
-Minimal custom-endpoint example:
+Use a custom endpoint when you want the runtime but not Alec's hosted service.
 
 ```json
 {
@@ -149,10 +136,102 @@ Minimal custom-endpoint example:
     "destinationMode": "custom"
   },
   "customEndpoint": {
-    "url": "https://example.com/api/telemetry/crash"
+    "url": "https://example.com/api/telemetry/crash",
+    "eventUrl": "https://example.com/api/telemetry/event"
   }
 }
 ```
+
+Server owners can also override packaged destination settings at runtime under:
+
+```text
+mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json
+```
+
+## Hosted Portal
+
+The hosted portal is the canonical management surface for Alec's Telemetry
+projects.
+
+- Sign in with Discord.
+- Manage project memberships and publishable project keys.
+- Review crash groups, issue-producing events, and individual occurrences.
+- Inspect manual player reports and link or promote them into issue workflows.
+- View public and portal-only stats dashboards.
+- Configure public stats visibility and ModStats.io slugs.
+
+Portal URL:
+
+```text
+https://telemetry-dev.alecsmods.com/portal
+```
+
+Public stats:
+
+```text
+https://www.modstats.io/stats/alecs-telemetry
+```
+
+## Runtime API
+
+Mods can stay descriptor-only, but richer integrations can call the runtime API
+for explicit events and custom player-report entry points.
+
+```java
+TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
+if (api == null || !api.isEnabled()) {
+    return;
+}
+
+TelemetryProjectHandle project = api.findProject("example-consumer-mod");
+if (project == null || !project.isEnabled()) {
+    return;
+}
+
+project.recordPerformanceWithContext(
+        "reload_config_duration",
+        durationMs,
+        null,
+        TelemetryEventContext.performance()
+                .subsystem("config")
+                .phase("reload")
+                .operation("apply")
+                .runtimeSide("server")
+                .detail("configFileCount", configFileCount)
+                .build()
+);
+```
+
+The runtime ignores events that are disabled by consent, descriptor defaults,
+runtime overrides, sampling, or descriptor allowlists.
+
+## Useful Commands
+
+```text
+/telemetry status
+/telemetry projects
+/telemetry project <project-id>
+/telemetry consent
+/telemetry report [project-id] [issue|suggestion]
+/telemetry reports pending
+/telemetry flush [project-id]
+/telemetry test <project-id> [detail]
+```
+
+The root command permission is `telemetry.command.telemetry`; subcommands use the
+same stable `telemetry.command.telemetry.*` prefix.
+
+## Privacy Model
+
+- Server owners control telemetry categories through consent and runtime
+  overrides.
+- Public stats expose aggregate counts and breakdowns, not raw server ids,
+  session ids, IP addresses, player names, player UUIDs, chat, coordinates,
+  secrets, or full config files.
+- Custom Event Context fields must be descriptor-declared and type-checked before
+  upload.
+- Manual reports can require local operator review before upload, and optional
+  attachments are controlled by runtime settings.
 
 ## Docs and Examples
 
