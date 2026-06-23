@@ -30,7 +30,7 @@ class TelemetrySelfProjectRegistrationTest {
         assertEquals(Path.of("Alec's Telemetry.jar"), registration.sourcePath());
         assertEquals("hosted", registration.destinationMode());
         assertEquals("proj_aqocXOn4Gw3unr0p22QoNd3k", registration.descriptor().hosted().projectKey());
-        assertEquals("Common/UI/Custom/AlecsTelemetryLogo.png", registration.descriptor().ui().iconTexturePath());
+        assertEquals("AlecsTelemetryLogo.png", registration.descriptor().ui().iconTexturePath());
         assertTrue(registration.stats().enabled());
         assertTrue(registration.stats().allows("heartbeat"));
         assertTrue(registration.isCrashTelemetryEnabled());
