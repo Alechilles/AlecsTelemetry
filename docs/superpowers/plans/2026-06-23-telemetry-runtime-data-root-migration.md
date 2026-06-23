@@ -4,7 +4,7 @@
 
 **Goal:** Move Alec's Telemetry runtime state into the standalone telemetry plugin data root, migrate existing save data once, and remove old Alec-created clutter without deleting Hytale-owned session telemetry logs.
 
-**Architecture:** Keep `mods/Alechilles_Alec's Telemetry` as the canonical runtime root for both standalone and embedded/shared coordinator modes. Add a small runtime migration helper that runs before settings/discovery load, copies missing old central and embedded-owner state into the canonical root, then removes only empty or known Alec-created old directories after successful copy. Stop writing embedded owner override mirrors so consumer mod data directories no longer accumulate telemetry settings.
+**Architecture:** Keep `mods/Alechilles_Alec's Telemetry` as the canonical runtime root for both standalone and embedded/shared coordinator modes. Add a small runtime migration helper that runs before settings/discovery load, copies missing old central and embedded-owner state into the canonical root, then removes only empty or known Alec-created old directories after successful copy. Legacy central roots include both save-local lowercase `<SaveRoot>/telemetry` and hosted Linux/server-root uppercase `<ServerRoot>/Telemetry`; lowercase root telemetry logs remain protected. Stop writing embedded owner override mirrors so consumer mod data directories no longer accumulate telemetry settings.
 
 **Tech Stack:** Java 25, Maven, JUnit 5, Gson, `java.nio.file`, Hytale `JavaPlugin` data directories.
 
@@ -33,10 +33,24 @@ Canonical runtime root for a save-local install:
       receipts.json
 ```
 
+Canonical runtime root for a hosted Linux/server-root install such as BisectHosting:
+
+```text
+/home/container/mods/Alechilles_Alec's Telemetry/
+```
+
+Legacy central roots that must be imported if present:
+
+```text
+<SaveRoot>/telemetry/
+<ServerRoot>/Telemetry/
+```
+
 Do not remove root-level Hytale logs:
 
 ```text
 <SaveRoot>/telemetry/*.jsonl.gz
+<ServerRoot>/telemetry/*.jsonl.gz
 ```
 
 Those are Hytale session telemetry files, not Alec's Telemetry runtime queue files.
@@ -45,13 +59,13 @@ Those are Hytale session telemetry files, not Alec's Telemetry runtime queue fil
 
 - Modify: `C:\Users\22ale\AppData\Roaming\Hytale\Modding\AlecsTelemetry\runtime\src\main\java\com\alechilles\alecstelemetry\runtime\TelemetryDataPaths.java`
   - Add constants and path helpers for the canonical telemetry plugin data directory.
-  - Change shared coordinator path resolution from `<SaveRoot>/Telemetry` to `<SaveRoot>/mods/Alechilles_Alec's Telemetry`.
+  - Change shared coordinator path resolution from old central roots to `<Root>/mods/Alechilles_Alec's Telemetry`.
   - Expose legacy path candidates used by migration and fallback override reads.
 
 - Create: `C:\Users\22ale\AppData\Roaming\Hytale\Modding\AlecsTelemetry\runtime\src\main\java\com\alechilles\alecstelemetry\runtime\TelemetryDataMigrator.java`
   - Copy settings, project overrides, server identity, consent state, queues, and manual report data from old roots into the canonical root when the destination file is absent.
   - Clean old Alec-created central directories and embedded owner override folders when they become empty.
-  - Never delete root-level `<SaveRoot>/telemetry/*.jsonl.gz` files.
+  - Never delete root-level lowercase telemetry log folders such as `<SaveRoot>/telemetry/*.jsonl.gz` or `<ServerRoot>/telemetry/*.jsonl.gz`.
 
 - Modify: `C:\Users\22ale\AppData\Roaming\Hytale\Modding\AlecsTelemetry\runtime\src\main\java\com\alechilles\alecstelemetry\runtime\host\TelemetryRuntimeProviderHandle.java`
   - Run migration before `TelemetryRuntimeSettings.load(...)`.
@@ -120,7 +134,7 @@ Add this new legacy-root candidate test:
 
 ```java
 @Test
-void sharedCoordinatorExposesLegacySaveTelemetryRootForMigration() throws Exception {
+void sharedCoordinatorExposesLegacyCentralRootsForMigration() throws Exception {
     Path hytaleRoot = tempDir.resolve("Hytale");
     Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
             .resolve("Demo World")
@@ -131,7 +145,10 @@ void sharedCoordinatorExposesLegacySaveTelemetryRootForMigration() throws Except
     TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(pluginDataDirectory);
 
     assertEquals(
-            List.of(hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("telemetry").toAbsolutePath().normalize()),
+            List.of(
+                    hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("telemetry").toAbsolutePath().normalize(),
+                    hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("Telemetry").toAbsolutePath().normalize()
+            ),
             paths.legacyRuntimeRoots()
     );
 }
@@ -204,23 +221,32 @@ Add this legacy root method below `projectOverrideFile(...)`:
 @Nonnull
 public List<Path> legacyRuntimeRoots() {
     ArrayList<Path> roots = new ArrayList<>();
-    Path legacySaveRoot = legacySaveTelemetryRoot();
-    if (legacySaveRoot != null && !legacySaveRoot.equals(runtimeRoot)) {
-        roots.add(legacySaveRoot);
+    if (modsDirectory == null) {
+        return List.of();
     }
+    Path ownerRoot = modsDirectory.getParent();
+    if (ownerRoot == null) {
+        return List.of();
+    }
+    addLegacyRuntimeRoot(roots, ownerRoot.resolve("telemetry"));
+    addLegacyRuntimeRoot(roots, ownerRoot.resolve("Telemetry"));
     return List.copyOf(roots);
 }
 
-@Nullable
-private Path legacySaveTelemetryRoot() {
-    if (modsDirectory == null) {
-        return null;
+private void addLegacyRuntimeRoot(@Nonnull ArrayList<Path> roots, @Nullable Path root) {
+    if (root == null) {
+        return;
     }
-    Path saveRoot = modsDirectory.getParent();
-    if (saveRoot == null) {
-        return null;
+    Path normalized = root.toAbsolutePath().normalize();
+    if (normalized.equals(runtimeRoot)) {
+        return;
     }
-    return saveRoot.resolve("telemetry").toAbsolutePath().normalize();
+    for (Path existing : roots) {
+        if (existing.equals(normalized)) {
+            return;
+        }
+    }
+    roots.add(normalized);
 }
 ```
 
@@ -271,7 +297,7 @@ class TelemetryDataMigratorTest {
     Path tempDir;
 
     @Test
-    void migratesLegacyCentralSettingsAndQueuesWithoutDeletingHytaleSessionLogs() throws Exception {
+    void migratesLegacyLowercaseCentralSettingsAndQueuesWithoutDeletingHytaleSessionLogs() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
@@ -295,6 +321,30 @@ class TelemetryDataMigratorTest {
         assertFalse(Files.exists(legacyRoot.resolve("Settings")));
         assertFalse(Files.exists(legacyRoot.resolve("Telemetry")));
         assertTrue(Files.isDirectory(legacyRoot));
+    }
+
+    @Test
+    void migratesLegacyUppercaseServerRootTelemetryDirectory() throws Exception {
+        Path serverRoot = tempDir.resolve("container");
+        Path modsDir = serverRoot.resolve("mods");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path legacyRoot = serverRoot.resolve("Telemetry");
+        Files.createDirectories(legacyRoot.resolve("Settings").resolve("projects"));
+        Files.createDirectories(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending"));
+        Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), "{\"flushIntervalSeconds\":99}");
+        Files.writeString(legacyRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json"), "{\"enabled\":false}");
+        Files.writeString(legacyRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending").resolve("event.json"), "{}");
+        Files.createDirectories(serverRoot.resolve("telemetry"));
+        Files.writeString(serverRoot.resolve("telemetry").resolve("2026-06-20_12-58-00_server.jsonl.gz"), "hytale-log");
+        TelemetryDataPaths paths = paths(canonicalRoot, modsDir);
+
+        TelemetryDataMigrator.migrate(paths, null);
+
+        assertEquals("{\"flushIntervalSeconds\":99}", Files.readString(canonicalRoot.resolve("Settings").resolve("runtime.json")));
+        assertEquals("{\"enabled\":false}", Files.readString(canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json")));
+        assertEquals("{}", Files.readString(canonicalRoot.resolve("Telemetry").resolve("events").resolve("alecs-tamework").resolve("pending").resolve("event.json")));
+        assertFalse(Files.exists(legacyRoot));
+        assertTrue(Files.isRegularFile(serverRoot.resolve("telemetry").resolve("2026-06-20_12-58-00_server.jsonl.gz")));
     }
 
     @Test
@@ -568,7 +618,7 @@ In `TelemetryRuntimeHostTest.java`, add this test near the existing provider cre
 @Test
 void loadMigratedSettingsMigratesBeforeReadingRuntimeJson() throws Exception {
     Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
-    Path legacyRoot = saveRoot.resolve("telemetry");
+    Path legacyRoot = saveRoot.resolve("Telemetry");
     Files.createDirectories(legacyRoot.resolve("Settings"));
     Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), """
             {
@@ -803,7 +853,7 @@ Override files live under the active Alec's Telemetry runtime data directory. In
 <SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json
 ```
 
-Older releases also read legacy files from `<SaveRoot>/telemetry/Settings/projects` and `<SaveRoot>/mods/<ConsumerMod>/Telemetry/Settings/projects` during migration. New writes use the canonical path only.
+Older releases also read legacy files from `<SaveRoot>/telemetry/Settings/projects`, `<ServerRoot>/Telemetry/Settings/projects`, and `<SaveRoot>/mods/<ConsumerMod>/Telemetry/Settings/projects` during migration. New writes use the canonical path only.
 ```
 
 Replace:
@@ -816,7 +866,7 @@ files. The runtime creates this file with defaults the first time it starts.
 with:
 
 ```text
-Global runtime settings live in `<SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/runtime.json`, not per-project override files. The runtime creates this file with defaults the first time it starts.
+Global runtime settings live in `<SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/runtime.json` or `<ServerRoot>/mods/Alechilles_Alec's Telemetry/Settings/runtime.json`, not per-project override files. The runtime creates this file with defaults the first time it starts.
 ```
 
 - [ ] **Step 2: Update embedded mode docs**
@@ -830,6 +880,7 @@ Standalone and embedded runtime providers share one canonical runtime data root 
 
 ```text
 <SaveRoot>/mods/Alechilles_Alec's Telemetry/
+<ServerRoot>/mods/Alechilles_Alec's Telemetry/
 ```
 
 That root stores runtime settings, project overrides, consent review state, server identity, local queues, and manual report files:
@@ -837,6 +888,8 @@ That root stores runtime settings, project overrides, consent review state, serv
 ```text
 <SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/
 <SaveRoot>/mods/Alechilles_Alec's Telemetry/Telemetry/
+<ServerRoot>/mods/Alechilles_Alec's Telemetry/Settings/
+<ServerRoot>/mods/Alechilles_Alec's Telemetry/Telemetry/
 ```
 
 Older embedded releases wrote owner override mirrors under:
@@ -845,7 +898,13 @@ Older embedded releases wrote owner override mirrors under:
 <ConsumerModDataDir>/Telemetry/Settings/projects/
 ```
 
-The current runtime imports those files into the canonical root during startup and writes new consent changes only to the canonical root. Hytale's own root-level `<SaveRoot>/telemetry/*.jsonl.gz` session logs are not Alec's Telemetry queue files and are left alone.
+Older hosted Linux/server-root installs can also have the Alec-owned runtime root here:
+
+```text
+<ServerRoot>/Telemetry/
+```
+
+The current runtime imports those files into the canonical root during startup and writes new consent changes only to the canonical root. Hytale's own root-level lowercase `<SaveRoot>/telemetry/*.jsonl.gz` and `<ServerRoot>/telemetry/*.jsonl.gz` session logs are not Alec's Telemetry queue files and are left alone.
 ```
 
 - [ ] **Step 3: Update README advanced options**
@@ -861,7 +920,8 @@ with:
 
 ```text
 - Server owners can override packaged destination settings at runtime through
-  `<SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
+  `<SaveRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`
+  or `<ServerRoot>/mods/Alechilles_Alec's Telemetry/Settings/projects/<project-id>.json`.
 ```
 
 - [ ] **Step 4: Run docs grep verification**
@@ -869,7 +929,7 @@ with:
 Run:
 
 ```powershell
-rg -n "<HytaleUserData>/Telemetry|<ConsumerModDataDir>/Telemetry|Settings/projects/<project-id>\\.json|UserData\\\\Telemetry|UserData/Telemetry" README.md docs wiki
+rg -n "<HytaleUserData>/Telemetry|<ConsumerModDataDir>/Telemetry|Settings/projects/<project-id>\\.json|UserData\\\\Telemetry|UserData/Telemetry|<ServerRoot>/Telemetry" README.md docs wiki
 ```
 
 Expected: remaining matches are either updated canonical paths, examples explicitly labeled as legacy migration paths, or unrelated descriptor packaging references.
@@ -940,6 +1000,7 @@ Run:
 $save = 'C:\Users\22ale\AppData\Roaming\Hytale\UserData\Saves\Update5Test'
 Get-ChildItem -LiteralPath $save -Directory | Select-Object FullName
 Get-ChildItem -LiteralPath "$save\telemetry" -Force -ErrorAction SilentlyContinue | Select-Object FullName,Mode,Length
+Get-ChildItem -LiteralPath "$save\Telemetry" -Force -ErrorAction SilentlyContinue | Select-Object FullName,Mode,Length
 Get-ChildItem -LiteralPath "$save\mods" -Directory -Filter 'Alechilles_*' | ForEach-Object {
     [PSCustomObject]@{
         Name = $_.Name
@@ -985,6 +1046,7 @@ $canonical = "$save\mods\Alechilles_Alec's Telemetry"
 Get-ChildItem -LiteralPath "$canonical\Settings" -Recurse -Force | Select-Object FullName,Mode,Length
 Get-ChildItem -LiteralPath "$canonical\Telemetry" -Recurse -Force | Select-Object -First 80 FullName,Mode,Length
 Get-ChildItem -LiteralPath "$save\telemetry" -Force -ErrorAction SilentlyContinue | Select-Object FullName,Mode,Length
+Get-ChildItem -LiteralPath "$save\Telemetry" -Force -ErrorAction SilentlyContinue | Select-Object FullName,Mode,Length
 Get-ChildItem -LiteralPath "$save\mods" -Directory -Filter 'Alechilles_*' | ForEach-Object {
     [PSCustomObject]@{
         Name = $_.Name
@@ -998,6 +1060,7 @@ Expected:
 - `mods\Alechilles_Alec's Telemetry\Settings` contains runtime settings, identity, consent state, and project overrides.
 - `mods\Alechilles_Alec's Telemetry\Telemetry` contains queues/manual report folders.
 - `telemetry\Settings` and `telemetry\Telemetry` are gone if fully migrated.
+- `Telemetry` is gone if an uppercase Alec-owned central root existed in the save.
 - `telemetry\*.jsonl.gz` files remain.
 - Consumer mod folders no longer contain `Telemetry\Settings\projects` if those folders were empty after migration.
 - Tamework-owned non-telemetry folders such as `AssetPatchSelfTestPack` and `GeneratedPatches` remain untouched.
@@ -1012,8 +1075,82 @@ git status --short
 
 Expected: only repo source/docs/test changes are present. Save data under `UserData\Saves\Update5Test` is outside the repo and must not be staged.
 
+## Task 8: Manual Hosted Linux Server-Root Migration Verification
+
+**Files:**
+- Runtime server data only, under `/home/container` on the hosted server.
+- Do not stage or commit server data.
+
+- [ ] **Step 1: Capture before snapshot**
+
+Run through SFTP/console on the hosted server:
+
+```bash
+cd /home/container
+find . -maxdepth 2 \( -path './Telemetry' -o -path './Telemetry/*' -o -path './telemetry' -o -path './telemetry/*' -o -path "./mods/Alechilles_Alec's Telemetry" -o -path "./mods/Alechilles_Alec's Telemetry/*" \) -print | sort
+```
+
+Expected before migration, based on the BisectHosting screenshot:
+- `/home/container/Telemetry/Settings` exists.
+- `/home/container/Telemetry/Telemetry` exists.
+- `/home/container/telemetry` may also exist and must be treated as Hytale-owned lowercase telemetry/log storage.
+- `/home/container/mods/Alechilles_Alec's Telemetry` may be missing or may contain older standalone data.
+
+- [ ] **Step 2: Install or run the newly built telemetry runtime**
+
+Install the built Alec's Telemetry jar on the hosted server using the same deployment path used for the current server.
+
+Verification command before upload, from the local repo:
+
+```powershell
+.\mvnw.cmd -pl standalone package
+```
+
+Expected: standalone package build succeeds and produces an updated Alec's Telemetry jar.
+
+- [ ] **Step 3: Start the hosted server once and let telemetry initialize**
+
+Start the hosted Hytale server from the BisectHosting panel or server console. Wait until the server reaches a stable ready state and telemetry commands are available.
+
+In game or server console, run:
+
+```text
+/telemetry status
+/telemetry projects
+```
+
+Expected: commands work, the active coordinator is present, and projects are discovered.
+
+- [ ] **Step 4: Capture after snapshot**
+
+Run through SFTP/console on the hosted server:
+
+```bash
+cd /home/container
+find "./mods/Alechilles_Alec's Telemetry" -maxdepth 4 -print | sort
+find ./Telemetry -maxdepth 4 -print 2>/dev/null | sort
+find ./telemetry -maxdepth 2 -print 2>/dev/null | sort
+```
+
+Expected:
+- `/home/container/mods/Alechilles_Alec's Telemetry/Settings` contains runtime settings, identity, consent state, and project overrides.
+- `/home/container/mods/Alechilles_Alec's Telemetry/Telemetry` contains queues/manual report folders.
+- `/home/container/Telemetry` is gone if its `Settings` and nested `Telemetry` data were fully migrated and no unrelated files remained.
+- `/home/container/telemetry` remains if Hytale is still using it for lowercase session telemetry/log storage.
+- Consumer mod folders no longer contain `Telemetry/Settings/projects` if those folders were empty after migration.
+
+- [ ] **Step 5: Commit no files from server data**
+
+Run locally:
+
+```powershell
+git status --short
+```
+
+Expected: only repo source/docs/test changes are present. Hosted `/home/container` server data is outside the repo and must not be staged.
+
 ## Self-Review
 
-- Spec coverage: The plan covers choosing `mods/Alechilles_Alec's Telemetry` as the canonical root, one-time migration from `Saves/<world>/telemetry`, one-time migration from per-consumer embedded owner override folders, cleanup of old Alec-created clutter, Hytale root session-log preservation, tests, docs, and manual Update5Test verification.
+- Spec coverage: The plan covers choosing `mods/Alechilles_Alec's Telemetry` as the canonical root, one-time migration from `Saves/<world>/telemetry`, one-time migration from hosted Linux/server-root `<ServerRoot>/Telemetry`, one-time migration from per-consumer embedded owner override folders, cleanup of old Alec-created clutter, Hytale lowercase root session-log preservation, tests, docs, manual Update5Test verification, and manual hosted Linux verification.
 - Placeholder scan: The plan contains no deferred implementation slots. Each code task includes exact file paths, concrete snippets, commands, and expected results.
 - Type consistency: New methods are consistently named `legacyRuntimeRoots()`, `legacyEmbeddedProjectOverrideFile(...)`, and `TelemetryDataMigrator.migrate(...)`. The same names are used in tests and implementation steps.
