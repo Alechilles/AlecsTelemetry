@@ -363,6 +363,37 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     }
 
     @Override
+    public void recordConsentPromptShown(@Nonnull String viewerKey,
+                                         @Nonnull List<TelemetryProjectRegistration> projects) {
+        recordConsentFunnelEvents(viewerKey, "prompt_shown", projects);
+    }
+
+    @Override
+    public void recordConsentUiOpened(@Nonnull String viewerKey,
+                                      @Nonnull List<TelemetryProjectRegistration> projects) {
+        recordConsentFunnelEvents(viewerKey, "ui_opened", projects);
+    }
+
+    private void recordConsentFunnelEvents(@Nonnull String viewerKey,
+                                           @Nonnull String eventType,
+                                           @Nonnull List<TelemetryProjectRegistration> projects) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return;
+        }
+        for (TelemetryProjectRegistration project : projects) {
+            if (!consentStateStore.markFunnelEventRecorded(dataPaths.consentStateFile(), viewerKey, eventType, project)) {
+                continue;
+            }
+            if ("prompt_shown".equals(eventType)) {
+                consentMetricReporter.recordPromptShown(project);
+            } else if ("ui_opened".equals(eventType)) {
+                consentMetricReporter.recordUiOpened(project);
+            }
+        }
+    }
+
+    @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {
@@ -450,6 +481,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (marked && !alreadyReviewed) {
             TelemetryConsentSnapshot snapshot = buildLocalProjectDiagnostics(project).consentSnapshot();
             consentMetricReporter.recordFirstReview(project, snapshot, supportedSnapshot(project));
+            consentMetricReporter.recordFirstReviewCompleted(project);
         }
         return marked;
     }

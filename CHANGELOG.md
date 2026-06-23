@@ -14,6 +14,19 @@
 - Fixed Alec's Telemetry's own consent row icon in the consent UI.
 - Added `/telemetry server verify <key>` so server owners can save a ModStats server claim token from the command instead of editing the identity file by hand.
 - Server verification now uses the newly saved token immediately while still reporting real heartbeat delivery state from the flush summary.
+- Added one-time telemetry data migration so Windows save-folder data, lowercase
+  server-root telemetry folders, and embedded-owner settings are consolidated
+  under the canonical `mods/Alechilles_Alec's Telemetry` runtime root.
+- Added consent funnel metrics for first-run prompt display, consent UI opens,
+  and first-review completion, with per-viewer/project/version dedupe.
+
+### Fixed
+- Removed stale legacy telemetry files after successful migration when canonical
+  files already exist, preventing old save and embedded-owner telemetry folders
+  from lingering after the runtime has adopted the canonical root.
+- Fixed embedded-owner cleanup so `Telemetry/Settings/runtime.json` and
+  `Telemetry/Settings/server-id.txt` are pruned along with project override
+  files after migration.
 
 ## 0.2.3 - Intake Backoff Hotfix - 2026-06-21
 

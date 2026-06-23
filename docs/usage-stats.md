@@ -1,8 +1,7 @@
 # Usage Stats
 
 Alec's Telemetry can publish anonymous Hytale mod usage statistics similar to
-HStats and bStats, but scoped to Hytale projects and Alec's existing project
-keys.
+HStats and bStats.
 
 ## Default Stats
 
@@ -64,5 +63,5 @@ The hosted service may use `serverId` internally to compute active and record
 server counts, but public responses should expose only aggregate counts and
 breakdowns.
 
-Stats are intentionally not customizable yet. Enabling stats reports the
+Stats are intentionally not customizable. Enabling stats reports the
 standard heartbeat/environment fields only.

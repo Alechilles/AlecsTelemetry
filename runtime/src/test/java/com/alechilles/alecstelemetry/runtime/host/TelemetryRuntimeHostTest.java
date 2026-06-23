@@ -725,7 +725,7 @@ class TelemetryRuntimeHostTest {
 
         assertTrue(handle.markConsentReviewed("alecs-tamework"));
 
-        assertEquals(7, client.payloads.size());
+        assertEquals(8, client.payloads.size());
         JsonObject firstReviewPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("https://telemetry-dev.alecsmods.com/ingest/consent-metric", client.targets.getFirst().endpoint());
         assertEquals(1, firstReviewPayload.get("schemaVersion").getAsInt());
@@ -739,19 +739,58 @@ class TelemetryRuntimeHostTest {
         assertTrue(firstReviewPayload.get("previousEnabled").getAsBoolean());
         assertEquals("first_run_notice", firstReviewPayload.get("changeSource").getAsString());
         assertTrue(firstReviewPayload.get("firstReview").getAsBoolean());
+        JsonObject completedPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
+        assertEquals("consent_funnel", completedPayload.get("metricKind").getAsString());
+        assertEquals("first_review_completed", completedPayload.get("funnelEvent").getAsString());
+        assertEquals("consent_ui", completedPayload.get("source").getAsString());
 
         assertTrue(handle.applyConsent(
                 "alecs-tamework",
                 new TelemetryConsentSnapshot(true, true, true, true, true, false, true, true)
         ));
 
-        assertEquals(8, client.payloads.size());
+        assertEquals(9, client.payloads.size());
         JsonObject laterPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
         assertEquals("usage", laterPayload.get("category").getAsString());
         assertTrue(laterPayload.get("previousEnabled").getAsBoolean());
         assertFalse(laterPayload.get("enabled").getAsBoolean());
         assertEquals("consent_ui", laterPayload.get("changeSource").getAsString());
         assertFalse(laterPayload.get("firstReview").getAsBoolean());
+    }
+
+    @Test
+    void providerUploadsPromptAndOpenFunnelMetricsOncePerViewerAndProjectVersion() {
+        TelemetryProjectRegistration project = registration(
+                hostedTelemetryCategoryDescriptor("alecs-tamework", "Alec's Tamework!"),
+                "Alechilles:Alec's Tamework!",
+                "2.15.0",
+                tempDir.resolve("Alec's Tamework! v2.15.0.jar")
+        );
+        CapturingCrashReportClient client = new CapturingCrashReportClient();
+        TelemetryRuntimeProviderHandle handle = consentFixture(
+                "consent-funnel",
+                List.of(project),
+                List.of(project),
+                List.of(),
+                tempDir.resolve("consent-funnel"),
+                null,
+                client
+        ).handle();
+
+        handle.recordConsentPromptShown("player-a", List.of(project));
+        handle.recordConsentPromptShown("player-a", List.of(project));
+        handle.recordConsentUiOpened("player-a", List.of(project));
+        handle.recordConsentUiOpened("player-a", List.of(project));
+
+        assertEquals(2, client.payloads.size());
+        JsonObject promptedPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        JsonObject openedPayload = JsonParser.parseString(client.payloads.getLast()).getAsJsonObject();
+        assertEquals("consent_funnel", promptedPayload.get("metricKind").getAsString());
+        assertEquals("prompt_shown", promptedPayload.get("funnelEvent").getAsString());
+        assertEquals("chat_first_run", promptedPayload.get("source").getAsString());
+        assertEquals("consent_funnel", openedPayload.get("metricKind").getAsString());
+        assertEquals("ui_opened", openedPayload.get("funnelEvent").getAsString());
+        assertEquals("command_after_prompt", openedPayload.get("source").getAsString());
     }
 
     @Test

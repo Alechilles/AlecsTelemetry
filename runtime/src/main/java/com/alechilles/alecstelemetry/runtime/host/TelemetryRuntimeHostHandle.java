@@ -2,9 +2,11 @@ package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
 
 public interface TelemetryRuntimeHostHandle {
     void start();
@@ -31,6 +33,14 @@ public interface TelemetryRuntimeHostHandle {
 
     default boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         return false;
+    }
+
+    default void recordConsentPromptShown(@Nonnull String viewerKey,
+                                          @Nonnull List<TelemetryProjectRegistration> projects) {
+    }
+
+    default void recordConsentUiOpened(@Nonnull String viewerKey,
+                                       @Nonnull List<TelemetryProjectRegistration> projects) {
     }
 
     default boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {

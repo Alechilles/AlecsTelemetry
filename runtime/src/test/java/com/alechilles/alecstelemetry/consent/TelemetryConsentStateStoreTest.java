@@ -60,6 +60,24 @@ class TelemetryConsentStateStoreTest {
         assertTrue(reviewed.isReviewed(stateFile, firstVersion));
     }
 
+    @Test
+    void recordsConsentFunnelEventsOncePerViewerProjectVersionAndEvent() {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration firstVersion = registration("example-mod", "Example:Example Mod", "1.0.0");
+        TelemetryProjectRegistration secondVersion = registration("example-mod", "Example:Example Mod", "1.1.0");
+
+        assertTrue(store.markFunnelEventRecorded(stateFile, "player-a", "prompt_shown", firstVersion));
+        assertFalse(store.markFunnelEventRecorded(stateFile, "player-a", "prompt_shown", firstVersion));
+        assertTrue(store.markFunnelEventRecorded(stateFile, "player-a", "ui_opened", firstVersion));
+        assertTrue(store.markFunnelEventRecorded(stateFile, "player-b", "prompt_shown", firstVersion));
+        assertTrue(store.markFunnelEventRecorded(stateFile, "player-a", "prompt_shown", secondVersion));
+
+        TelemetryConsentStateStore reloaded = new TelemetryConsentStateStore(null);
+        assertFalse(reloaded.markFunnelEventRecorded(stateFile, "player-a", "prompt_shown", firstVersion));
+        assertFalse(reloaded.isReviewed(stateFile, firstVersion));
+    }
+
     private static TelemetryProjectRegistration registration(String projectId,
                                                             String pluginIdentifier,
                                                             String pluginVersion) {

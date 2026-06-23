@@ -77,6 +77,18 @@ public final class TelemetryConsentMetricReporter {
         }
     }
 
+    public void recordPromptShown(@Nonnull TelemetryProjectRegistration project) {
+        uploadFunnel(project, "prompt_shown", "chat_first_run");
+    }
+
+    public void recordUiOpened(@Nonnull TelemetryProjectRegistration project) {
+        uploadFunnel(project, "ui_opened", "command_after_prompt");
+    }
+
+    public void recordFirstReviewCompleted(@Nonnull TelemetryProjectRegistration project) {
+        uploadFunnel(project, "first_review_completed", "consent_ui");
+    }
+
     private void upload(@Nonnull TelemetryProjectRegistration project,
                         @Nonnull String category,
                         boolean supported,
@@ -106,6 +118,31 @@ public final class TelemetryConsentMetricReporter {
         CrashReportClient.UploadResult result = client.upload(target, GSON.toJson(envelope) + System.lineSeparator());
         if (!result.success() && logger != null) {
             logger.at(Level.FINE).log("Telemetry consent metric upload failed: " + result.detail());
+        }
+    }
+
+    private void uploadFunnel(@Nonnull TelemetryProjectRegistration project,
+                              @Nonnull String funnelEvent,
+                              @Nonnull String source) {
+        CrashReportClient.DeliveryTarget target = resolveConsentMetricTarget(project);
+        if (target == null) {
+            return;
+        }
+        ConsentFunnelEnvelope envelope = new ConsentFunnelEnvelope(
+                1,
+                "consent_funnel",
+                UUID.randomUUID().toString(),
+                Instant.now().toString(),
+                runtimeVersion,
+                project.projectId(),
+                project.displayName(),
+                project.pluginVersion(),
+                funnelEvent,
+                source
+        );
+        CrashReportClient.UploadResult result = client.upload(target, GSON.toJson(envelope) + System.lineSeparator());
+        if (!result.success() && logger != null) {
+            logger.at(Level.FINE).log("Telemetry consent funnel metric upload failed: " + result.detail());
         }
     }
 
@@ -178,5 +215,17 @@ public final class TelemetryConsentMetricReporter {
                                          boolean previousEnabled,
                                          @Nonnull String changeSource,
                                          boolean firstReview) {
+    }
+
+    private record ConsentFunnelEnvelope(int schemaVersion,
+                                         @Nonnull String metricKind,
+                                         @Nonnull String eventId,
+                                         @Nonnull String capturedAtUtc,
+                                         @Nonnull String runtimeVersion,
+                                         @Nonnull String projectId,
+                                         @Nonnull String projectDisplayName,
+                                         @Nonnull String projectVersion,
+                                         @Nonnull String funnelEvent,
+                                         @Nonnull String source) {
     }
 }

@@ -671,6 +671,22 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     @Override
+    public void recordConsentPromptShown(@Nonnull String viewerKey,
+                                         @Nonnull List<TelemetryProjectRegistration> projects) {
+        if (hostHandle != null) {
+            hostHandle.recordConsentPromptShown(viewerKey, projects);
+        }
+    }
+
+    @Override
+    public void recordConsentUiOpened(@Nonnull String viewerKey,
+                                      @Nonnull List<TelemetryProjectRegistration> projects) {
+        if (hostHandle != null) {
+            hostHandle.recordConsentUiOpened(viewerKey, projects);
+        }
+    }
+
+    @Override
     public boolean applyConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {

@@ -65,7 +65,9 @@ public final class TelemetryConsentCoordinator {
         }
         if (!runtimeService.markConsentNoticeShown(viewerKey, unreviewed)) {
             warn("Unable to save telemetry consent notice state.", null);
+            return;
         }
+        runtimeService.recordConsentPromptShown(viewerKey, unreviewed);
     }
 
     public boolean openConsentPage(@Nonnull Ref<EntityStore> playerEntityRef,
@@ -77,11 +79,16 @@ public final class TelemetryConsentCoordinator {
             warn("Unable to open telemetry consent page because the player component is unavailable.", null);
             return false;
         }
+        String viewerKey = viewerKey(playerRef);
+        List<TelemetryProjectRegistration> promptedFirstReviewProjects = firstReviewPromptedProjects(viewerKey);
         player.getPageManager().openCustomPage(
                 playerEntityRef,
                 store,
                 new TelemetryConsentPage(playerRef, runtimeService, firstRun)
         );
+        if (!promptedFirstReviewProjects.isEmpty()) {
+            runtimeService.recordConsentUiOpened(viewerKey, promptedFirstReviewProjects);
+        }
         return true;
     }
 
@@ -104,6 +111,15 @@ public final class TelemetryConsentCoordinator {
 
     private static boolean isLocalSingleplayerOwner(@Nonnull PlayerRef playerRef) {
         return SingleplayerModule.get() != null && SingleplayerModule.isOwner(playerRef);
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> firstReviewPromptedProjects(@Nonnull String viewerKey) {
+        List<TelemetryProjectRegistration> unreviewed = runtimeService.unreviewedConsentProjects();
+        if (unreviewed.isEmpty() || !runtimeService.isConsentNoticeShown(viewerKey, unreviewed)) {
+            return List.of();
+        }
+        return unreviewed;
     }
 
     @Nonnull

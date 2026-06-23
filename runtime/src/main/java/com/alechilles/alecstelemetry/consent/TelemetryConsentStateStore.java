@@ -86,6 +86,27 @@ public final class TelemetryConsentStateStore {
         }
     }
 
+    public boolean markFunnelEventRecorded(@Nonnull Path file,
+                                           @Nonnull String viewerKey,
+                                           @Nonnull String eventType,
+                                           @Nonnull TelemetryProjectRegistration project) {
+        try {
+            StateDocument document = read(file);
+            LinkedHashMap<String, FunnelEventDocument> events = funnelEventEntries(document);
+            String key = funnelEventKey(viewerKey, eventType, project);
+            if (events.containsKey(key)) {
+                return false;
+            }
+            events.put(key, FunnelEventDocument.from(viewerKey, eventType, project));
+            document.funnelEvents = new ArrayList<>(events.values());
+            write(file, document);
+            return true;
+        } catch (Exception ex) {
+            warn("Failed to save telemetry consent funnel state to " + file, ex);
+            return false;
+        }
+    }
+
     @Nonnull
     private LinkedHashMap<String, ReviewedProjectDocument> reviewedEntries(@Nonnull Path file) {
         return reviewedEntries(read(file));
@@ -122,6 +143,26 @@ public final class TelemetryConsentStateStore {
     }
 
     @Nonnull
+    private LinkedHashMap<String, FunnelEventDocument> funnelEventEntries(@Nonnull StateDocument document) {
+        LinkedHashMap<String, FunnelEventDocument> events = new LinkedHashMap<>();
+        if (document.funnelEvents == null) {
+            return events;
+        }
+        for (FunnelEventDocument event : document.funnelEvents) {
+            if (event == null
+                    || event.viewerKey == null
+                    || event.eventType == null
+                    || event.projectId == null
+                    || event.pluginIdentifier == null
+                    || event.pluginVersion == null) {
+                continue;
+            }
+            events.put(funnelEventKey(event.viewerKey, event.eventType, event.projectId, event.pluginIdentifier, event.pluginVersion), event);
+        }
+        return events;
+    }
+
+    @Nonnull
     private StateDocument read(@Nonnull Path file) {
         try {
             if (!Files.isRegularFile(file)) {
@@ -146,6 +187,9 @@ public final class TelemetryConsentStateStore {
         }
         if (document.shownNotices == null) {
             document.shownNotices = List.of();
+        }
+        if (document.funnelEvents == null) {
+            document.funnelEvents = List.of();
         }
 
         Path parent = file.getParent();
@@ -187,6 +231,26 @@ public final class TelemetryConsentStateStore {
     }
 
     @Nonnull
+    private static String funnelEventKey(@Nonnull String viewerKey,
+                                         @Nonnull String eventType,
+                                         @Nonnull TelemetryProjectRegistration project) {
+        return funnelEventKey(viewerKey, eventType, project.projectId(), project.pluginIdentifier(), project.pluginVersion());
+    }
+
+    @Nonnull
+    private static String funnelEventKey(@Nonnull String viewerKey,
+                                         @Nonnull String eventType,
+                                         @Nonnull String projectId,
+                                         @Nonnull String pluginIdentifier,
+                                         @Nonnull String pluginVersion) {
+        return normalize(viewerKey)
+                + "|"
+                + normalize(eventType)
+                + "|"
+                + key(projectId, pluginIdentifier, pluginVersion);
+    }
+
+    @Nonnull
     private static String promptKey(@Nonnull List<TelemetryProjectRegistration> projects) {
         return projects.stream()
                 .map(TelemetryConsentStateStore::key)
@@ -216,6 +280,7 @@ public final class TelemetryConsentStateStore {
         private Integer version;
         private List<ReviewedProjectDocument> reviewedProjects;
         private List<NoticeDocument> shownNotices;
+        private List<FunnelEventDocument> funnelEvents;
     }
 
     private static final class ReviewedProjectDocument {
@@ -247,6 +312,27 @@ public final class TelemetryConsentStateStore {
             document.projects = projects.stream()
                     .map(ReviewedProjectDocument::from)
                     .toList();
+            return document;
+        }
+    }
+
+    private static final class FunnelEventDocument {
+        private String viewerKey;
+        private String eventType;
+        private String projectId;
+        private String pluginIdentifier;
+        private String pluginVersion;
+
+        @Nonnull
+        private static FunnelEventDocument from(@Nonnull String viewerKey,
+                                                @Nonnull String eventType,
+                                                @Nonnull TelemetryProjectRegistration project) {
+            FunnelEventDocument document = new FunnelEventDocument();
+            document.viewerKey = normalize(viewerKey);
+            document.eventType = normalize(eventType);
+            document.projectId = project.projectId();
+            document.pluginIdentifier = project.pluginIdentifier();
+            document.pluginVersion = project.pluginVersion();
             return document;
         }
     }

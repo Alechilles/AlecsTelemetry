@@ -154,4 +154,4 @@ are empty, while leaving unrelated files such as Hytale's lowercase
 
 ## Important Rule
 
-Pick one packaging strategy per mod: either depend on the standalone runtime or embed and bootstrap the runtime yourself. Do not add a descriptor flag to choose the strategy; runtime election handles coexistence when multiple providers are installed.
+Pick one packaging strategy per mod: either depend on the standalone runtime or embed and bootstrap the runtime yourself. Runtime election handles coexistence when multiple providers are installed.
