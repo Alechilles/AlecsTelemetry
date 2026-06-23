@@ -1,10 +1,9 @@
-# Alec's Telemetry
+# Alec's Telemetry & ModStats.io
 
 [![Alec's Telemetry! ModStats](https://www.modstats.io/api/v1/stats/projects/alecs-telemetry/embed/card.svg?layout=live)](https://www.modstats.io/stats/alecs-telemetry)
 
-Alec's Telemetry is the shared telemetry layer for Hytale mods: a runtime that
-runs in-game, a hosted portal for mod authors, and a public stats surface for
-communities that want aggregate usage visibility.
+Alec's Telemetry is the all-in-one telemetry solution for Hytale mods: a runtime that
+runs in-game, a [hosted portal](https://telemetry-dev.alecsmods.com/portal) for mod authors, a [public mod stats](https://www.modstats.io/stats) list, and even a [server list](https://www.modstats.io/servers) filterable by mod for players to find servers verified to be running the mods they're looking for.
 
 It started as crash reporting, but it now covers the broader support loop around
 a mod: attributed crashes, structured errors, lifecycle and performance events,
@@ -22,34 +21,14 @@ Alec's Telemetry works best as a pair:
 - the portal owns projects, keys, memberships, issues, manual reports, stats,
   public visibility, and operator workflows
 
-```mermaid
-flowchart LR
-    Mod["Hytale mod\nServer/Telemetry/project.json"] --> Runtime["Alec's Telemetry runtime\nstandalone or embedded"]
-    Runtime --> Consent["Consent and runtime overrides"]
-    Runtime --> Queue["Local queues\ncrashes, events, reports"]
-    Queue --> Hosted["Alec's hosted ingest\n/ingest/event, /ingest/report"]
-    Hosted --> Portal["Telemetry portal\nissues, reports, stats, projects"]
-    Hosted --> PublicStats["ModStats.io\npublic aggregate stats"]
-    Portal --> Maintainer["Mod author\ntriage and follow-up"]
-```
+<img src="docs/images/telemetry-combined-solution.png" alt="Diagram showing a Hytale mod sending telemetry through the Alec's Telemetry runtime, consent controls, local queues, the hosted portal endpoint, the Telemetry portal, ModStats.io, and mod author triage." width="849" />
 
 Most mods should use the hosted portal. If you need to send data to your own
 backend, the same runtime can target custom endpoints instead.
 
 ## What It Handles
 
-```mermaid
-flowchart TD
-    Runtime["Runtime"] --> Crashes["Crash and setup failure attribution"]
-    Runtime --> Events["Error, lifecycle, performance, and usage events"]
-    Runtime --> Stats["Anonymous 5-minute stats heartbeats"]
-    Runtime --> Reports["Player-submitted issue and suggestion reports"]
-    Runtime --> Commands["/telemetry commands for status, consent, reports, and flushes"]
-    Crashes --> Portal["Portal triage"]
-    Events --> Portal
-    Reports --> Portal
-    Stats --> StatsApi["Public and portal stats APIs"]
-```
+<img src="docs/images/telemetry-runtime-lanes.png" alt="Diagram showing Alec's Telemetry runtime lanes for crash attribution, structured events, stats heartbeats, player reports, telemetry commands, portal triage, and stats APIs." width="849" />
 
 - Crash and setup failure capture: attributed stack traces, fingerprints,
   breadcrumbs, local queueing, and hosted issue grouping.
@@ -66,6 +45,7 @@ flowchart TD
   overrides.
 
 ## Who It Is For
+Alec's Telemetry is meant to benefit _everyone_ in the Hytale modding ecosystem.
 
 For mod authors, Alec's Telemetry turns real-world support signals into a small,
 repeatable integration: ship a descriptor, add a hosted project key, and let the
