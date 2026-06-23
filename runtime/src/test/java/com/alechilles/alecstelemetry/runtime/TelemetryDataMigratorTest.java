@@ -68,7 +68,7 @@ class TelemetryDataMigratorTest {
     }
 
     @Test
-    void doesNotOverwriteCanonicalFiles() throws Exception {
+    void removesLegacyFilesWhenCanonicalFilesAlreadyExist() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
@@ -82,7 +82,9 @@ class TelemetryDataMigratorTest {
         TelemetryDataMigrator.migrate(paths, null);
 
         assertEquals("{\"enabled\":true}", Files.readString(canonicalRoot.resolve("Settings").resolve("runtime.json")));
-        assertEquals("{\"enabled\":false}", Files.readString(legacyRoot.resolve("Settings").resolve("runtime.json")));
+        assertFalse(Files.exists(legacyRoot.resolve("Settings").resolve("runtime.json")));
+        assertFalse(Files.exists(legacyRoot.resolve("Settings")));
+        assertFalse(Files.exists(legacyRoot));
     }
 
     @Test
@@ -99,6 +101,28 @@ class TelemetryDataMigratorTest {
         TelemetryDataMigrator.migrate(paths, null);
 
         assertEquals("{\"enabled\":false}", Files.readString(canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-cats.json")));
+        assertFalse(Files.exists(ownerRoot.resolve("Telemetry")));
+        assertTrue(Files.isDirectory(ownerRoot));
+    }
+
+    @Test
+    void removesEmbeddedOwnerOverrideWhenCanonicalOverrideAlreadyExists() throws Exception {
+        Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
+        Path modsDir = saveRoot.resolve("mods");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry");
+        Path canonicalOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
+        Path ownerRoot = modsDir.resolve("Alechilles_Alec's Tamework!");
+        Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
+        Files.createDirectories(canonicalOverride.getParent());
+        Files.createDirectories(ownerOverride.getParent());
+        Files.writeString(canonicalOverride, "{\"enabled\":true}");
+        Files.writeString(ownerOverride, "{\"enabled\":false}");
+        TelemetryDataPaths paths = paths(canonicalRoot, modsDir);
+
+        TelemetryDataMigrator.migrate(paths, null);
+
+        assertEquals("{\"enabled\":true}", Files.readString(canonicalOverride));
+        assertFalse(Files.exists(ownerOverride));
         assertFalse(Files.exists(ownerRoot.resolve("Telemetry")));
         assertTrue(Files.isDirectory(ownerRoot));
     }

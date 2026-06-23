@@ -86,17 +86,21 @@ public final class TelemetryDataMigrator {
             @Nonnull Path destination,
             @Nullable HytaleLogger logger) throws IOException {
         if (Files.exists(destination)) {
-            return;
+            if (!Files.isRegularFile(destination)) {
+                warn(logger, "Could not migrate old telemetry file because destination is not a file: " + destination, null);
+                return;
+            }
+        } else {
+            Path parent = destination.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
         }
-        Path parent = destination.getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-        Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
         try {
             Files.delete(source);
         } catch (Exception ex) {
-            warn(logger, "Copied telemetry data but could not remove old file " + source, ex);
+            warn(logger, "Migrated telemetry data but could not remove old file " + source, ex);
         }
     }
 
