@@ -17,6 +17,9 @@
 - Added one-time telemetry data migration so Windows save-folder data, lowercase
   server-root telemetry folders, and embedded-owner settings are consolidated
   under the canonical `mods/Alechilles_Alec's Telemetry!` runtime root.
+- Fixed consent override saves so unsupported telemetry categories are left
+  undefined instead of being pinned to `false`, preserving future descriptor
+  defaults when a mod later adds support for those categories.
 - Added consent funnel metrics for first-run prompt display, consent UI opens,
   and first-review completion, with per-viewer/project/version dedupe.
 

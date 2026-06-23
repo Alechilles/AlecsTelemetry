@@ -658,6 +658,34 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void applyConsentDoesNotPersistUnsupportedCategoriesAsFalseOverrides() throws Exception {
+        TelemetryProjectRegistration project = registration(
+                statsOnlyTelemetryDescriptor("animal-husbandry", "Animal Husbandry"),
+                "Example:Animal Husbandry",
+                "1.0.0",
+                tempDir.resolve("Animal Husbandry")
+        );
+        ProviderFixture fixture = consentFixture("stats-only-consent-save", List.of(project), List.of(project));
+        TelemetryRuntimeProviderHandle handle = fixture.handle();
+
+        assertTrue(handle.applyConsent(
+                "animal-husbandry",
+                new TelemetryConsentSnapshot(true, true, true, true, true, true, false, true)
+        ));
+
+        JsonObject saved = JsonParser.parseString(
+                Files.readString(fixture.dataPaths().projectOverrideFile("animal-husbandry"))
+        ).getAsJsonObject();
+        assertTrue(saved.has("enabled"));
+        assertFalse(saved.has("capture"));
+        assertFalse(saved.has("events"));
+        assertFalse(saved.has("performance"));
+        assertFalse(saved.has("usage"));
+        assertTrue(saved.has("stats"));
+        assertFalse(saved.getAsJsonObject("stats").get("enabled").getAsBoolean());
+    }
+
+    @Test
     void providerReviewedStateAndDiagnosticsUseConsentProjectView() {
         TelemetryProjectRegistration first = registration(
                 telemetryCategoryDescriptor("first-mod", "First Mod"),

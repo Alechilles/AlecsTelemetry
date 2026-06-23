@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime.discovery;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
@@ -67,8 +68,15 @@ public final class TelemetryRuntimeDiscovery {
                 discoveryResult.consentProjects(),
                 activeLoadedMods
         );
-        Map<String, TelemetryProjectOverride> overrides = new TelemetryProjectOverrideStore(logger)
+        TelemetryProjectOverrideStore overrideStore = new TelemetryProjectOverrideStore(logger);
+        Map<String, TelemetryProjectOverride> overrides = overrideStore
                 .loadAll(dataPaths.projectSettingsDirectory());
+        overrides = cleanUnsupportedCentralConsentOverrides(
+                activeConsentProjects,
+                overrides,
+                dataPaths,
+                overrideStore
+        );
         Map<String, TelemetryProjectOverride> consentOverrides = loadConsentOverrides(
                 activeConsentProjects,
                 overrides,
@@ -147,6 +155,90 @@ public final class TelemetryRuntimeDiscovery {
             }
         }
         return Map.copyOf(resolved);
+    }
+
+    @Nonnull
+    private Map<String, TelemetryProjectOverride> cleanUnsupportedCentralConsentOverrides(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull Map<String, TelemetryProjectOverride> overrides,
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nonnull TelemetryProjectOverrideStore store) {
+        LinkedHashMap<String, TelemetryProjectOverride> cleaned = new LinkedHashMap<>(overrides);
+        for (TelemetryProjectRegistration project : projects) {
+            String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
+            TelemetryProjectOverride override = cleaned.get(projectIdKey);
+            if (override == null || !hasUnsupportedConsentValues(project, override)) {
+                continue;
+            }
+            java.nio.file.Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
+            if (store.removeUnsupportedConsentValues(overrideFile, supportedSnapshot(project))) {
+                TelemetryProjectOverride reloaded = store.load(overrideFile);
+                if (reloaded == null) {
+                    cleaned.remove(projectIdKey);
+                } else {
+                    cleaned.put(projectIdKey, reloaded);
+                }
+            }
+        }
+        return Map.copyOf(cleaned);
+    }
+
+    private static boolean hasUnsupportedConsentValues(@Nonnull TelemetryProjectRegistration project,
+                                                       @Nonnull TelemetryProjectOverride override) {
+        TelemetryConsentSnapshot supported = supportedSnapshot(project);
+        boolean hasUnsupportedCapture = !supported.crashEnabled()
+                && override.capture() != null
+                && override.capture().hasAnyValue();
+        boolean hasUnsupportedErrors = !supported.errorEnabled()
+                && override.events() != null
+                && override.events().errors() != null
+                && override.events().errors().enabled() != null;
+        boolean hasUnsupportedLifecycle = !supported.lifecycleEnabled()
+                && override.events() != null
+                && override.events().lifecycle() != null
+                && override.events().lifecycle().enabled() != null;
+        boolean hasUnsupportedBreadcrumbs = !supported.breadcrumbsEnabled()
+                && override.events() != null
+                && override.events().breadcrumbs() != null
+                && override.events().breadcrumbs().enabled() != null;
+        boolean hasUnsupportedPerformance = !supported.performanceEnabled()
+                && override.performance() != null
+                && override.performance().enabled() != null;
+        boolean hasUnsupportedUsage = !supported.usageEnabled()
+                && override.usage() != null
+                && override.usage().enabled() != null;
+        boolean hasUnsupportedStats = !supported.statsEnabled()
+                && override.stats() != null
+                && override.stats().enabled() != null;
+        return hasUnsupportedCapture
+                || hasUnsupportedErrors
+                || hasUnsupportedLifecycle
+                || hasUnsupportedBreadcrumbs
+                || hasUnsupportedPerformance
+                || hasUnsupportedUsage
+                || hasUnsupportedStats;
+    }
+
+    @Nonnull
+    private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
+        return new TelemetryConsentSnapshot(
+                true,
+                supportsCrash(project),
+                project.descriptor().events().errors().enabled(),
+                project.descriptor().events().lifecycle().enabled(),
+                project.descriptor().performance().enabled(),
+                project.descriptor().usage().enabled(),
+                project.descriptor().stats().enabled(),
+                project.descriptor().events().breadcrumbs().enabled()
+        );
+    }
+
+    private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
+        var capture = project.descriptor().capture();
+        return capture.uncaughtExceptions()
+                || capture.setupFailures()
+                || capture.startFailures()
+                || capture.exceptionalWorldRemovals();
     }
 
     private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,

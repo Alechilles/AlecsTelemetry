@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -115,6 +116,49 @@ public final class TelemetryProjectOverrideStore {
         return update(file, root -> object(root, "stats").addProperty("enabled", enabled));
     }
 
+    public boolean saveConsentSnapshot(@Nonnull Path file,
+                                       @Nonnull TelemetryConsentSnapshot snapshot,
+                                       @Nonnull TelemetryConsentSnapshot supported) {
+        return update(file, root -> {
+            root.addProperty("enabled", snapshot.projectEnabled());
+            if (supported.crashEnabled()) {
+                JsonObject capture = object(root, "capture");
+                capture.addProperty("uncaughtExceptions", snapshot.crashEnabled());
+                capture.addProperty("setupFailures", snapshot.crashEnabled());
+                capture.addProperty("startFailures", snapshot.crashEnabled());
+                capture.addProperty("exceptionalWorldRemovals", snapshot.crashEnabled());
+            } else {
+                root.remove("capture");
+            }
+            updateEventType(root, "errors", supported.errorEnabled(), snapshot.errorEnabled());
+            updateEventType(root, "lifecycle", supported.lifecycleEnabled(), snapshot.lifecycleEnabled());
+            updateEventType(root, "breadcrumbs", supported.breadcrumbsEnabled(), snapshot.breadcrumbsEnabled());
+            updateCategory(root, "performance", supported.performanceEnabled(), snapshot.performanceEnabled());
+            updateCategory(root, "usage", supported.usageEnabled(), snapshot.usageEnabled());
+            updateCategory(root, "stats", supported.statsEnabled(), snapshot.statsEnabled());
+        });
+    }
+
+    public boolean removeUnsupportedConsentValues(@Nonnull Path file, @Nonnull TelemetryConsentSnapshot supported) {
+        return update(file, root -> {
+            if (!supported.crashEnabled()) {
+                root.remove("capture");
+            }
+            removeUnsupportedEventType(root, "errors", supported.errorEnabled());
+            removeUnsupportedEventType(root, "lifecycle", supported.lifecycleEnabled());
+            removeUnsupportedEventType(root, "breadcrumbs", supported.breadcrumbsEnabled());
+            if (!supported.performanceEnabled()) {
+                root.remove("performance");
+            }
+            if (!supported.usageEnabled()) {
+                root.remove("usage");
+            }
+            if (!supported.statsEnabled()) {
+                root.remove("stats");
+            }
+        });
+    }
+
     @Nonnull
     private static String projectIdFromFileName(@Nonnull String fileName) {
         String trimmed = fileName.trim();
@@ -153,6 +197,46 @@ public final class TelemetryProjectOverrideStore {
             JsonObject eventObject = object(events, eventType);
             eventObject.addProperty("enabled", enabled);
         });
+    }
+
+    private static void updateEventType(@Nonnull JsonObject root,
+                                        @Nonnull String eventType,
+                                        boolean supported,
+                                        boolean enabled) {
+        if (!supported) {
+            removeUnsupportedEventType(root, eventType, supported);
+            return;
+        }
+        JsonObject events = object(root, "events");
+        JsonObject eventObject = object(events, eventType);
+        eventObject.addProperty("enabled", enabled);
+    }
+
+    private static void removeUnsupportedEventType(@Nonnull JsonObject root,
+                                                   @Nonnull String eventType,
+                                                   boolean supported) {
+        if (supported) {
+            return;
+        }
+        JsonElement eventsElement = root.get("events");
+        if (eventsElement != null && eventsElement.isJsonObject()) {
+            JsonObject events = eventsElement.getAsJsonObject();
+            events.remove(eventType);
+            if (events.isEmpty()) {
+                root.remove("events");
+            }
+        }
+    }
+
+    private static void updateCategory(@Nonnull JsonObject root,
+                                       @Nonnull String category,
+                                       boolean supported,
+                                       boolean enabled) {
+        if (!supported) {
+            root.remove(category);
+            return;
+        }
+        object(root, category).addProperty("enabled", enabled);
     }
 
     @Nonnull

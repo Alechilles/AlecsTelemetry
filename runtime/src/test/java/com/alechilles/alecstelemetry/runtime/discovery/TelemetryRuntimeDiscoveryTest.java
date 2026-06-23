@@ -77,6 +77,79 @@ class TelemetryRuntimeDiscoveryTest {
     }
 
     @Test
+    void discoverActiveRemovesUnsupportedCentralConsentOverrides() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Stats Mod",
+                "Example",
+                "Stats Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "stats-project",
+                  "displayName": "Stats Mod",
+                  "packagePrefixes": ["example.stats"],
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "performance": { "enabled": false },
+                  "usage": { "enabled": false },
+                  "stats": { "enabled": true }
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("stats-project"),
+                """
+                {
+                  "enabled": true,
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "performance": { "enabled": false },
+                  "usage": { "enabled": false },
+                  "stats": { "enabled": false }
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Stats Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.consentProjects().size());
+        assertFalse(result.consentProjects().getFirst().stats().enabled());
+        String cleaned = Files.readString(dataPaths.projectOverrideFile("stats-project"));
+        assertFalse(cleaned.contains("\"capture\""));
+        assertFalse(cleaned.contains("\"events\""));
+        assertFalse(cleaned.contains("\"performance\""));
+        assertFalse(cleaned.contains("\"usage\""));
+        assertTrue(cleaned.contains("\"stats\""));
+    }
+
+    @Test
     void discoverActiveFallsBackToEmbeddedOverrideWhenCentralOverrideIsAbsent() throws Exception {
         Path modsDirectory = tempDir.resolve("mods");
         writeModFolder(

@@ -449,9 +449,10 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
         boolean reviewed = consentStateStore.isReviewed(dataPaths.consentStateFile(), project);
         TelemetryConsentSnapshot previous = buildLocalProjectDiagnostics(project).consentSnapshot();
-        TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supportedSnapshot(project));
+        TelemetryConsentSnapshot supported = supportedSnapshot(project);
+        TelemetryConsentSnapshot normalized = clampToSupported(snapshot, supported);
         Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
-        boolean saved = saveConsentOverride(overrideFile, normalized);
+        boolean saved = saveConsentOverride(overrideFile, normalized, supported);
         if (!saved) {
             return false;
         }
@@ -461,7 +462,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
         boolean applied = applyRuntimeConsent(project.projectId(), normalized);
         if (applied && reviewed) {
-            consentMetricReporter.recordConsentChange(project, previous, normalized, supportedSnapshot(project));
+            consentMetricReporter.recordConsentChange(project, previous, normalized, supported);
         }
         return applied;
     }
@@ -896,15 +897,10 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return request;
     }
 
-    private boolean saveConsentOverride(@Nonnull Path overrideFile, @Nonnull TelemetryConsentSnapshot snapshot) {
-        return overrideStore.saveProjectEnabled(overrideFile, snapshot.projectEnabled())
-                && overrideStore.saveCrashEnabled(overrideFile, snapshot.crashEnabled())
-                && overrideStore.saveErrorEventsEnabled(overrideFile, snapshot.errorEnabled())
-                && overrideStore.saveLifecycleEventsEnabled(overrideFile, snapshot.lifecycleEnabled())
-                && overrideStore.savePerformanceEnabled(overrideFile, snapshot.performanceEnabled())
-                && overrideStore.saveUsageEnabled(overrideFile, snapshot.usageEnabled())
-                && overrideStore.saveStatsEnabled(overrideFile, snapshot.statsEnabled())
-                && overrideStore.saveBreadcrumbsEnabled(overrideFile, snapshot.breadcrumbsEnabled());
+    private boolean saveConsentOverride(@Nonnull Path overrideFile,
+                                        @Nonnull TelemetryConsentSnapshot snapshot,
+                                        @Nonnull TelemetryConsentSnapshot supported) {
+        return overrideStore.saveConsentSnapshot(overrideFile, snapshot, supported);
     }
 
     private boolean applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
