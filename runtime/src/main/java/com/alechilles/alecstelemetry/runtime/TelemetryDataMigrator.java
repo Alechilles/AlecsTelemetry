@@ -46,12 +46,12 @@ public final class TelemetryDataMigrator {
                 if (!Files.isDirectory(modRoot) || modRoot.toAbsolutePath().normalize().equals(paths.runtimeRoot())) {
                     continue;
                 }
-                Path ownerProjects = modRoot.resolve("Telemetry").resolve("Settings").resolve("projects");
-                if (!Files.isDirectory(ownerProjects)) {
+                Path ownerSettings = modRoot.resolve("Telemetry").resolve("Settings");
+                if (!Files.isDirectory(ownerSettings)) {
                     continue;
                 }
-                copyKnownTree(ownerProjects, paths.projectSettingsDirectory(), logger);
-                pruneEmptyDirectories(ownerProjects, logger);
+                copyKnownTree(ownerSettings, paths.runtimeRoot().resolve("Settings"), logger);
+                pruneEmptyDirectories(ownerSettings, logger);
                 pruneEmptyDirectories(modRoot.resolve("Telemetry"), logger);
             }
         } catch (Exception ex) {

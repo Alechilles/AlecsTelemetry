@@ -95,11 +95,15 @@ class TelemetryDataMigratorTest {
         Path ownerRoot = modsDir.resolve("Alechilles_Alec's Cats!");
         Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-cats.json");
         Files.createDirectories(ownerOverride.getParent());
+        Files.writeString(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("runtime.json"), "{\"enabled\":true}");
+        Files.writeString(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("server-id.txt"), "owner-server");
         Files.writeString(ownerOverride, "{\"enabled\":false}");
         TelemetryDataPaths paths = paths(canonicalRoot, modsDir);
 
         TelemetryDataMigrator.migrate(paths, null);
 
+        assertEquals("{\"enabled\":true}", Files.readString(canonicalRoot.resolve("Settings").resolve("runtime.json")));
+        assertEquals("owner-server", Files.readString(canonicalRoot.resolve("Settings").resolve("server-id.txt")));
         assertEquals("{\"enabled\":false}", Files.readString(canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-cats.json")));
         assertFalse(Files.exists(ownerRoot.resolve("Telemetry")));
         assertTrue(Files.isDirectory(ownerRoot));
@@ -115,13 +119,21 @@ class TelemetryDataMigratorTest {
         Path ownerOverride = ownerRoot.resolve("Telemetry").resolve("Settings").resolve("projects").resolve("alecs-tamework.json");
         Files.createDirectories(canonicalOverride.getParent());
         Files.createDirectories(ownerOverride.getParent());
+        Files.writeString(canonicalRoot.resolve("Settings").resolve("runtime.json"), "{\"enabled\":true}");
+        Files.writeString(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("runtime.json"), "{\"enabled\":false}");
+        Files.writeString(canonicalRoot.resolve("Settings").resolve("server-id.txt"), "canonical-server");
+        Files.writeString(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("server-id.txt"), "owner-server");
         Files.writeString(canonicalOverride, "{\"enabled\":true}");
         Files.writeString(ownerOverride, "{\"enabled\":false}");
         TelemetryDataPaths paths = paths(canonicalRoot, modsDir);
 
         TelemetryDataMigrator.migrate(paths, null);
 
+        assertEquals("{\"enabled\":true}", Files.readString(canonicalRoot.resolve("Settings").resolve("runtime.json")));
+        assertEquals("canonical-server", Files.readString(canonicalRoot.resolve("Settings").resolve("server-id.txt")));
         assertEquals("{\"enabled\":true}", Files.readString(canonicalOverride));
+        assertFalse(Files.exists(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("runtime.json")));
+        assertFalse(Files.exists(ownerRoot.resolve("Telemetry").resolve("Settings").resolve("server-id.txt")));
         assertFalse(Files.exists(ownerOverride));
         assertFalse(Files.exists(ownerRoot.resolve("Telemetry")));
         assertTrue(Files.isDirectory(ownerRoot));
