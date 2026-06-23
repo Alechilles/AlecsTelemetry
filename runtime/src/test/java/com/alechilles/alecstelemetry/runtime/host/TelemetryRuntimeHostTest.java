@@ -159,6 +159,44 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void embeddedProviderAlsoRegistersTelemetrySelfStatsProject() {
+        TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("embedded-self-stats"));
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson("""
+                {
+                  "projectId": "embedded-provider",
+                  "displayName": "Embedded Provider",
+                  "ownerPluginIdentifiers": ["Example:Embedded Provider"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "stats": { "enabled": true, "allowedEvents": ["heartbeat"] }
+                }
+                """, null);
+        TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
+                null,
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "Example:Embedded Provider",
+                "1.2.3",
+                "0.2.5",
+                tempDir.resolve("Embedded Provider.jar"),
+                descriptor
+        );
+
+        List<TelemetryProjectRegistration> registrations = TelemetryRuntimeProviderHandle.providerRegistrations(
+                request,
+                dataPaths,
+                null
+        );
+
+        assertEquals(List.of("embedded-provider", "alecs-telemetry"), registrations.stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        TelemetryProjectRegistration self = registrations.get(1);
+        assertEquals("Alechilles:Alec's Telemetry", self.pluginIdentifier());
+        assertEquals("0.2.5", self.pluginVersion());
+        assertTrue(self.stats().enabled());
+        assertTrue(self.stats().allows("heartbeat"));
+    }
+
+    @Test
     void providerReportsInternalErrorsThroughTelemetrySelfProject() {
         TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-errors"));
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
