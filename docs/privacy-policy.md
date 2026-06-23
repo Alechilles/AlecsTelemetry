@@ -180,6 +180,27 @@ analytics can include normal web analytics information such as page views,
 referrers, device/browser details, approximate location, and cookie or similar
 identifiers depending on the active tag configuration and browser settings.
 
+For visitors identified by trusted hosting headers as being in the EU, EEA, UK,
+or an unknown region, Google Tag Manager should not load until the visitor
+accepts optional website analytics. The choice is stored in the browser as
+accepted or declined and is versioned by this policy date. Likely-US visitors may
+continue to receive the current immediate website analytics behavior.
+
+## Legal Bases And Reasons For Processing
+
+Where GDPR-style legal bases are relevant, Alec's hosted platform generally uses:
+
+- requested service or contract-like necessity to deliver telemetry ingestion,
+  dashboards, public stats, manual reports, account access, configured
+  integrations, and billing features
+- legitimate interests to secure the platform, prevent abuse, debug service
+  issues, preserve project history, and maintain public aggregate stats
+- consent or user choice for website analytics in opt-in regions, optional manual
+  reports, optional report contact fields, optional attachments, and runtime
+  telemetry categories controlled by server owners
+- legal obligation where billing, tax, accounting, dispute, security, or valid
+  legal process requires retention or disclosure
+
 ## How Data Is Used
 
 Data is used to:
@@ -217,22 +238,36 @@ Access depends on the surface:
 - Data may be disclosed if required to comply with law, protect rights, prevent
   abuse, or respond to valid legal process.
 
+Known third-party processors or subprocessors include Google / Google Tag
+Manager, Discord, GitHub, Stripe, and hosting/database/infrastructure providers.
+Any hosting or database provider not discoverable from code or deployment
+configuration should be confirmed before production launch.
+
 ## Retention
 
 Retention depends on the data type and operational need.
 
-- Stats raw private payloads are intended to be short-lived. The platform's
-  current default retention settings prune raw stats payloads, loaded-mod
-  evidence, and retained heartbeat rows after 14 days once compact rollups or
-  evidence records exist.
-- Compact stats heartbeat receipts are currently retained for 90 days by default.
-- Completed ingest jobs are currently retained for 2 days by default, and
-  dead-letter ingest jobs for 30 days by default.
-- Crash reports, event records, manual reports, issue records, account records,
-  audit logs, integration settings, billing metadata, and public stats rollups may
-  be retained while needed to provide the service, preserve project history,
-  secure the platform, satisfy billing or legal obligations, or until deletion is
-  requested and feasible.
+- Stats raw private payloads, loaded-mod evidence, and retained heartbeat rows
+  are pruned after 14 days by default once compact rollups or evidence records
+  exist.
+- Compact stats heartbeat receipts are retained for 90 days by default.
+- Completed ingest jobs are retained for 2 days by default, and dead-letter
+  ingest jobs for 30 days by default.
+- Crash report metadata and raw JSON, event metadata and raw JSON, and manual
+  report metadata and raw JSON are retained for 730 days by default.
+- Manual report attachments and log attachments are retained for 180 days by
+  default.
+- Consent metrics and first-review funnel events are retained for 730 days by
+  default.
+- Portal audit logs and security records are retained for 1095 days by default.
+- Public stats rollups, issue workflow/activity, project configuration, and public
+  server listing history are retained while the project or server profile exists.
+- Billing customer and subscription metadata may be retained for 2555 days or as
+  otherwise needed for tax, accounting, dispute, chargeback, legal, or security
+  reasons.
+- Account and provider identity records are retained while the account exists,
+  then deleted or anonymized on verified deletion request unless legal, billing,
+  or security reasons require retention.
 
 Backups and logs may retain copies for a limited period after deletion from the
 primary database.
@@ -312,6 +347,31 @@ other details that connect the request to the relevant records.
 
 To make a request, include enough information to locate the data without sending
 extra sensitive information.
+
+Privacy requests are handled through the support contact below. There is no
+public self-service request portal in v1. Internal tooling supports dry-run
+exports and apply-only deletion or anonymization using portal user IDs,
+Discord/GitHub identities, report IDs, follow-up tokens, project IDs, server
+profile IDs, server IDs, and session IDs. Some records may be retained for legal,
+billing, tax, accounting, dispute, abuse-prevention, or security reasons.
+
+## Incidents
+
+If Alec becomes aware of a privacy or security incident affecting hosted platform
+data, the incident response process includes evidence preservation, containment,
+affected data review, third-party processor notification where relevant, and
+notification decision records. For GDPR-style incidents, Alec assesses the
+72-hour supervisory authority notification window. For Pennsylvania incidents,
+Alec assesses affected-user notice and Pennsylvania Attorney General notice if
+more than 500 Pennsylvania residents are affected. Possible children's personal
+information is escalated for COPPA/FTC review.
+
+## EU/UK Representative Status
+
+Alec has not appointed an EU or UK representative as of this policy date. That
+decision is being tracked separately and should be revisited before EU/UK
+marketing, paid EU/UK customers, EU/UK-targeted server/mod support, regular
+EU/UK behavioral monitoring, or another material EU/UK privacy expansion.
 
 ## Changes
 
