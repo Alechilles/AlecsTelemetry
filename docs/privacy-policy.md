@@ -257,10 +257,13 @@ configuration should be confirmed before production launch.
 
 Retention depends on the data type and operational need.
 
-- Stats raw private payloads, loaded-mod evidence, and retained heartbeat rows
-  are pruned after 14 days by default once compact rollups or evidence records
-  exist.
-- Compact stats heartbeat receipts are retained for 90 days by default.
+- Successful stats raw private payloads and retained heartbeat rows are deleted
+  after compact rollups or snapshots exist. Loaded-mod heartbeat evidence is
+  deleted after compact loaded-mod snapshots exist. Operators may temporarily
+  keep successful stats raw rows longer during rollout or incident debugging.
+- Compact stats heartbeat receipts are retained for 24 hours by default after
+  the normal retry and idempotency window, unless a retained heartbeat still
+  references the receipt.
 - Completed ingest jobs are retained for 2 days by default. Dead-letter ingest
   jobs, which are failed queue records the worker has stopped retrying, are
   retained for 30 days by default.
