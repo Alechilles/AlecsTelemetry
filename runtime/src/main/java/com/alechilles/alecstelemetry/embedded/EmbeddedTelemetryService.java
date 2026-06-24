@@ -828,6 +828,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (!usesLocalCoordinator(active)) {
             return active.markConsentReviewed(projectId);
         }
+        if (hostHandle != null && hostHandle.markConsentReviewed(projectId)) {
+            return true;
+        }
         TelemetryProjectRegistration project = findConsentProject(projectId);
         TelemetryDataPaths consentPaths = consentDataPaths();
         return project != null

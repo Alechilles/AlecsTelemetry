@@ -35,6 +35,10 @@ public interface TelemetryRuntimeHostHandle {
         return false;
     }
 
+    default boolean markConsentReviewed(@Nonnull String projectId) {
+        return false;
+    }
+
     default void recordConsentPromptShown(@Nonnull String viewerKey,
                                           @Nonnull List<TelemetryProjectRegistration> projects) {
     }

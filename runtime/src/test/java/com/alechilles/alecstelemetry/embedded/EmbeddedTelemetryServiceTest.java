@@ -167,6 +167,33 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void hostBackedEmbeddedConsentReviewDelegatesToHostForMetricReporting() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        FakeHostHandle host = new FakeHostHandle(registration);
+        EmbeddedTelemetryService service = EmbeddedTelemetryService.fromHost(settings, dataPaths, registration, host, null);
+
+        assertTrue(service.markConsentReviewed("embedded-mod"));
+
+        assertEquals(List.of("embedded-mod"), host.reviewedProjectIds);
+    }
+
+    @Test
     void embeddedServiceCapturesAndFlushesForOneOwningProject() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -1365,6 +1392,7 @@ class EmbeddedTelemetryServiceTest {
         private boolean started;
         private boolean shutdown;
         private int captureTestReports;
+        private final java.util.ArrayList<String> reviewedProjectIds = new java.util.ArrayList<>();
 
         private FakeHostHandle(@Nonnull TelemetryProjectRegistration registration) {
             this.project = new FakeProjectHandle(registration);
@@ -1455,6 +1483,15 @@ class EmbeddedTelemetryServiceTest {
                 return false;
             }
             captureTestReports++;
+            return true;
+        }
+
+        @Override
+        public boolean markConsentReviewed(@Nonnull String projectId) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            reviewedProjectIds.add(project.projectId());
             return true;
         }
     }
