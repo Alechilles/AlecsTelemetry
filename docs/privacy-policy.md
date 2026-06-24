@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: June 23, 2026
+Effective date: June 24, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -171,6 +171,10 @@ When you sign in or are invited to a project, the portal may store:
 - Discord guild/channel/role routing configuration selected by authorized project
   members
 - GitHub repository integration settings and GitHub issue-link metadata
+- account author profile settings, such as public slug, display name, avatar
+  URL, bio, website URL, Discord URL, GitHub URL, CurseForge profile URL,
+  Modtale profile URL, Modifold profile URL, featured link, theme tokens, and
+  public visibility settings
 - billing account, account-project links, Stripe Checkout, Billing Portal,
   webhook, customer, subscription, plan, entitlement, billing email, downgrade
   grace, public plan recognition opt-out setting, and quota/guardrail metadata
@@ -235,9 +239,11 @@ Access depends on the surface:
   information, optional public author profile information, sanitized public
   profile theme fields, and optional Supporter, Pro, or Partner plan badges when
   public badges are enabled. Public author profiles can include a display name,
-  slug, avatar URL, bio, cover image URL, featured link URL/label, and bounded
-  theme tokens. Public pages do not show Stripe customer IDs, subscription IDs,
-  billing email, invoices, payment methods, or private billing account details.
+  slug, avatar URL, bio, website URL, Discord URL, GitHub URL, CurseForge
+  profile URL, Modtale profile URL, Modifold profile URL, cover image URL,
+  featured link URL/label, and bounded theme tokens. Public pages do not show
+  Stripe customer IDs, subscription IDs, billing email, invoices, payment
+  methods, or private billing account details.
   Paid recognition does not change public ranking, active counts, or verified
   telemetry evidence.
 - Project owners, admins, maintainers, and viewers can see the portal data their
@@ -327,6 +333,10 @@ Portal users can:
 
 - sign out of the portal
 - unlink a provider when another provider remains available for the account
+- edit account author profile fields and choose whether public plan recognition
+  is shown where supported
+- use Stripe Checkout or the Stripe Billing Portal for self-service billing when
+  available for the selected plan
 - ask for account deletion or correction through the support contact below
 
 Mod authors can:
