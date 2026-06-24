@@ -272,7 +272,8 @@ Retention depends on the data type and operational need.
   retained for 14 days on Free by default after daily rollups exist.
   Error/warning diagnostics keep the longer investigation window, starting at 90
   days on Free. Aggregate daily event and issue-context rollups are retained
-  while the project exists.
+  while the project exists. Repeated diagnostics may be summarized after a
+  raw-sample cap while aggregate counts remain available.
 - Crash report metadata and raw JSON, manual report metadata, and manual report
   raw JSON are retained for 730 days by default.
 - Manual report attachments and log attachments are retained for 180 days by
