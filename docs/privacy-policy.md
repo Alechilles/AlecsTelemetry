@@ -168,9 +168,9 @@ When you sign in or are invited to a project, the portal may store:
 - Discord guild/channel/role routing configuration selected by authorized project
   members
 - GitHub repository integration settings and GitHub issue-link metadata
-- billing account, account-project links, Stripe customer, subscription, plan,
-  entitlement, billing email, and quota/guardrail metadata when billing features
-  are used
+- billing account, account-project links, Stripe Checkout, Billing Portal,
+  webhook, customer, subscription, plan, entitlement, billing email, downgrade
+  grace, and quota/guardrail metadata when billing features are used
 
 Discord, GitHub, and Stripe process information under their own privacy policies
 when you use those integrations.
