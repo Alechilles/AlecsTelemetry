@@ -3,6 +3,7 @@ package com.alechilles.alecstelemetry.api.internal;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -27,6 +28,10 @@ public interface TelemetryRuntimeOperations {
 
     default boolean canEmitStatsHeartbeat() {
         return true;
+    }
+
+    default int statsHeartbeatDelaySeconds(boolean firstHeartbeat) {
+        return firstHeartbeat ? 120 : 1800;
     }
 
     boolean requestFlush(@Nullable String projectId);
@@ -71,7 +76,7 @@ public interface TelemetryRuntimeOperations {
                                 @Nullable TelemetryEventContext context);
 
     default void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
-                                               int playersOnline) {
+                                               @Nonnull TelemetryPlayerIntervalSnapshot players) {
         if (projects.isEmpty()) {
             return;
         }
@@ -82,10 +87,17 @@ public interface TelemetryRuntimeOperations {
                         .featureKey("stats")
                         .entryPoint("heartbeat")
                         .runtimeSide("server")
-                        .detail("playersOnline", Math.max(0, playersOnline))
+                        .detail("playersOnline", Math.max(0, players.currentPlayers()))
+                        .detail("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()))
+                        .detail("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()))
                         .detail("projects", aggregateProjectDetails(projects))
                         .build()
         );
+    }
+
+    default void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                               int playersOnline) {
+        recordAggregateStatsHeartbeat(projects, TelemetryPlayerIntervalSnapshot.single(playersOnline));
     }
 
     @Nonnull

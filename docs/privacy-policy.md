@@ -100,8 +100,9 @@ values into exception messages, breadcrumbs, or custom event context.
 ### Public Usage Stats
 
 Stats heartbeats are separate from feature-usage telemetry. When enabled, the
-runtime emits a standard heartbeat roughly every five minutes. The hosted service
-uses it to compute public aggregate stats such as:
+runtime emits the first standard heartbeat 2-5 minutes after startup, then emits
+roughly every 30 minutes with stable jitter. The hosted service uses it to
+compute public aggregate stats such as:
 
 - active servers and active players
 - record servers and record players

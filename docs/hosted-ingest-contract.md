@@ -110,8 +110,13 @@ project's telemetry.
 Supported stats event names:
 
 - `heartbeat`
-  - emitted by standalone and embedded runtimes every 5 minutes
+  - emitted by standalone and embedded runtimes 2-5 minutes after startup, then
+    roughly every 30 minutes with stable jitter
   - includes `details.playersOnline` as a non-negative integer
+  - may include `details.maxPlayersSinceLastReport` as an optional non-negative
+    integer peak player count observed since the previous stats heartbeat
+  - may include `details.avgPlayersSinceLastReport` as an optional non-negative
+    number average player count observed since the previous stats heartbeat
   - derives plugin version, Hytale build, Hytale server version, Java version,
     Java runtime version, OS name/version, architecture, CPU cores, server
     hosting mode, loaded mods, server id, and session id from the normal event

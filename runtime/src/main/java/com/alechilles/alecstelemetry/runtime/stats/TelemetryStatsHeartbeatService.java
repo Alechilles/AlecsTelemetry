@@ -17,7 +17,7 @@ import java.util.logging.Level;
 public final class TelemetryStatsHeartbeatService {
 
     public static final String EVENT_HEARTBEAT = "heartbeat";
-    public static final int HEARTBEAT_INTERVAL_SECONDS = 300;
+    public static final int HEARTBEAT_INTERVAL_SECONDS = 1800;
 
     private final TelemetryStatsRuntime runtime;
     private final TelemetryPlayerCounter playerCounter;
@@ -41,13 +41,7 @@ public final class TelemetryStatsHeartbeatService {
         if (executor == null || !started.compareAndSet(false, true)) {
             return;
         }
-        future = executor.scheduleWithFixedDelay(
-                this::emitHeartbeatSafely,
-                HEARTBEAT_INTERVAL_SECONDS,
-                HEARTBEAT_INTERVAL_SECONDS,
-                TimeUnit.SECONDS
-        );
-        emitHeartbeatSafely();
+        scheduleNext(true);
     }
 
     public void shutdown() {
@@ -56,14 +50,17 @@ public final class TelemetryStatsHeartbeatService {
         if (scheduled != null) {
             scheduled.cancel(false);
         }
-        started.set(false);
+        boolean wasStarted = started.getAndSet(false);
+        if (wasStarted) {
+            emitHeartbeatSafelyWithoutReschedule();
+        }
     }
 
     public void emitHeartbeatNow() {
         if (!runtime.canEmitHeartbeat()) {
             return;
         }
-        int playersOnline = playerCounter.onlinePlayers();
+        TelemetryPlayerIntervalSnapshot players = playerCounter.snapshotAndResetInterval();
         java.util.ArrayList<TelemetryProjectRegistration> projects = new java.util.ArrayList<>();
         for (TelemetryProjectRegistration project : runtime.projects()) {
             if (!runtime.canEmitHeartbeat()) {
@@ -72,7 +69,7 @@ public final class TelemetryStatsHeartbeatService {
             projects.add(project);
         }
         if (!projects.isEmpty()) {
-            runtime.recordAggregateStatsHeartbeat(projects, playersOnline);
+            runtime.recordAggregateStatsHeartbeat(projects, players);
         }
     }
 
@@ -83,6 +80,31 @@ public final class TelemetryStatsHeartbeatService {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log("Telemetry stats heartbeat failed.");
             }
+        } finally {
+            if (started.get()) {
+                scheduleNext(false);
+            }
         }
+    }
+
+    private void emitHeartbeatSafelyWithoutReschedule() {
+        try {
+            emitHeartbeatNow();
+        } catch (Exception ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log("Telemetry stats shutdown heartbeat failed.");
+            }
+        }
+    }
+
+    private void scheduleNext(boolean firstHeartbeat) {
+        if (executor == null) {
+            return;
+        }
+        future = executor.schedule(
+                this::emitHeartbeatSafely,
+                runtime.statsHeartbeatDelaySeconds(firstHeartbeat),
+                TimeUnit.SECONDS
+        );
     }
 }

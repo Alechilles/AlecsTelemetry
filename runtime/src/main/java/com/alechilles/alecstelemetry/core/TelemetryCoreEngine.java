@@ -18,6 +18,7 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBuffer;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.alechilles.alecstelemetry.runtime.TelemetryServerIdentity;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -54,9 +55,12 @@ public final class TelemetryCoreEngine {
     private static final String SOURCE_SETUP_FAILURE = "plugin_setup_failure";
     private static final String SOURCE_START_FAILURE = "plugin_start_failure";
     private static final String SOURCE_MANUAL_TEST = "manual_test";
-    private static final int DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS = 300;
-    private static final int MIN_STATS_HEARTBEAT_INTERVAL_SECONDS = 60;
+    private static final int DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS = 1800;
+    private static final int MIN_STATS_HEARTBEAT_INTERVAL_SECONDS = 300;
     private static final int MAX_STATS_HEARTBEAT_INTERVAL_SECONDS = 3600;
+    private static final int STATS_HEARTBEAT_JITTER_SECONDS = 300;
+    private static final int STATS_HEARTBEAT_STARTUP_MIN_SECONDS = 120;
+    private static final int STATS_HEARTBEAT_STARTUP_MAX_SECONDS = 300;
 
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -165,6 +169,16 @@ public final class TelemetryCoreEngine {
 
     public int statsHeartbeatIntervalSeconds() {
         return statsHeartbeatIntervalSeconds.get();
+    }
+
+    public int statsHeartbeatDelaySeconds(boolean firstHeartbeat) {
+        int seed = Math.floorMod(serverId.hashCode(), Integer.MAX_VALUE);
+        if (firstHeartbeat) {
+            int span = STATS_HEARTBEAT_STARTUP_MAX_SECONDS - STATS_HEARTBEAT_STARTUP_MIN_SECONDS + 1;
+            return STATS_HEARTBEAT_STARTUP_MIN_SECONDS + (seed % span);
+        }
+        int jitter = (seed % (STATS_HEARTBEAT_JITTER_SECONDS * 2 + 1)) - STATS_HEARTBEAT_JITTER_SECONDS;
+        return Math.max(MIN_STATS_HEARTBEAT_INTERVAL_SECONDS, statsHeartbeatIntervalSeconds() + jitter);
     }
 
     public void applyStatsHeartbeatIntervalHint(int intervalSeconds) {
@@ -602,6 +616,11 @@ public final class TelemetryCoreEngine {
 
     public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
                                               int playersOnline) {
+        recordAggregateStatsHeartbeat(projects, TelemetryPlayerIntervalSnapshot.single(playersOnline));
+    }
+
+    public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                              @Nonnull TelemetryPlayerIntervalSnapshot players) {
         if (!enabled.get() || projects.isEmpty()) {
             return;
         }
@@ -627,13 +646,17 @@ public final class TelemetryCoreEngine {
                 .featureKey("stats")
                 .entryPoint("heartbeat")
                 .runtimeSide("server")
-                .detail("playersOnline", Math.max(0, playersOnline))
+                .detail("playersOnline", Math.max(0, players.currentPlayers()))
+                .detail("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()))
+                .detail("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()))
                 .build();
         TelemetryEventContext normalizedContext = normalizeContext(context);
         LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
         putDetail(attributes, normalizedContext);
         LinkedHashMap<String, Object> details = new LinkedHashMap<>();
-        details.put("playersOnline", Math.max(0, playersOnline));
+        details.put("playersOnline", Math.max(0, players.currentPlayers()));
+        details.put("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()));
+        details.put("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()));
         details.put("projects", aggregateProjectDetails(eligibleProjects));
         putIfPresent(details, "serverClaimToken", serverClaimToken);
         TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(

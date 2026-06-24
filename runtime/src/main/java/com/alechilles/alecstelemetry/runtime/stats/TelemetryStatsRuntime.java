@@ -21,12 +21,16 @@ public interface TelemetryStatsRuntime {
         return true;
     }
 
+    default int statsHeartbeatDelaySeconds(boolean firstHeartbeat) {
+        return firstHeartbeat ? 120 : 1800;
+    }
+
     void recordStatsWithContext(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 @Nonnull TelemetryEventContext context);
 
     default void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
-                                               int playersOnline) {
+                                               @Nonnull TelemetryPlayerIntervalSnapshot players) {
         if (projects.isEmpty()) {
             return;
         }
@@ -37,10 +41,17 @@ public interface TelemetryStatsRuntime {
                         .featureKey("stats")
                         .entryPoint("heartbeat")
                         .runtimeSide("server")
-                        .detail("playersOnline", Math.max(0, playersOnline))
+                        .detail("playersOnline", Math.max(0, players.currentPlayers()))
+                        .detail("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()))
+                        .detail("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()))
                         .detail("projects", aggregateProjectDetails(projects))
                         .build()
         );
+    }
+
+    default void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                               int playersOnline) {
+        recordAggregateStatsHeartbeat(projects, TelemetryPlayerIntervalSnapshot.single(playersOnline));
     }
 
     @Nonnull
@@ -58,6 +69,11 @@ public interface TelemetryStatsRuntime {
             }
 
             @Override
+            public int statsHeartbeatDelaySeconds(boolean firstHeartbeat) {
+                return runtimeService.statsHeartbeatDelaySeconds(firstHeartbeat);
+            }
+
+            @Override
             public void recordStatsWithContext(@Nonnull String projectId,
                                                @Nonnull String eventName,
                                                @Nonnull TelemetryEventContext context) {
@@ -66,8 +82,8 @@ public interface TelemetryStatsRuntime {
 
             @Override
             public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
-                                                      int playersOnline) {
-                runtimeService.recordAggregateStatsHeartbeat(projects, playersOnline);
+                                                      @Nonnull TelemetryPlayerIntervalSnapshot players) {
+                runtimeService.recordAggregateStatsHeartbeat(projects, players);
             }
 
         };

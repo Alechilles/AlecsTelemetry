@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.embedded;
 
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
@@ -12,6 +13,8 @@ import javax.annotation.Nullable;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Tracks connected players for embedded anonymous stats heartbeats.
@@ -19,6 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 final class EmbeddedTelemetryPlayerCounter {
 
     private final Set<UUID> activePlayers = ConcurrentHashMap.newKeySet();
+    private final AtomicInteger intervalSampleCount = new AtomicInteger();
+    private final AtomicLong intervalPlayerTotal = new AtomicLong();
+    private final AtomicInteger intervalMaxPlayers = new AtomicInteger();
 
     void onPlayerReady(@Nonnull PlayerReadyEvent event) {
         Ref<EntityStore> playerEntityRef = event.getPlayerRef();
@@ -45,13 +51,31 @@ final class EmbeddedTelemetryPlayerCounter {
 
     void markReady(@Nonnull UUID playerUuid) {
         activePlayers.add(playerUuid);
+        recordPlayerSample();
     }
 
     void markDisconnected(@Nonnull UUID playerUuid) {
         activePlayers.remove(playerUuid);
+        recordPlayerSample();
     }
 
     int onlinePlayers() {
         return activePlayers.size();
+    }
+
+    TelemetryPlayerIntervalSnapshot snapshotAndResetInterval() {
+        recordPlayerSample();
+        int current = onlinePlayers();
+        int samples = Math.max(1, intervalSampleCount.getAndSet(0));
+        long total = intervalPlayerTotal.getAndSet(0);
+        int max = Math.max(current, intervalMaxPlayers.getAndSet(current));
+        return new TelemetryPlayerIntervalSnapshot(current, max, total / (double) samples);
+    }
+
+    private void recordPlayerSample() {
+        int current = onlinePlayers();
+        intervalSampleCount.incrementAndGet();
+        intervalPlayerTotal.addAndGet(current);
+        intervalMaxPlayers.updateAndGet(previous -> Math.max(previous, current));
     }
 }

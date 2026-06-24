@@ -5,7 +5,9 @@ HStats and bStats.
 
 ## Default Stats
 
-The active telemetry runtime emits a `stats` `heartbeat` event every 5 minutes
+The active telemetry runtime emits the first standard `stats` `heartbeat` event
+2-5 minutes after startup, then emits roughly every 30 minutes with stable
+jitter so servers do not all report at the same instant. Heartbeats are emitted
 for each installed, enabled project that has opted into stats, regardless of
 whether the winning runtime came from the standalone jar or an embedded copy. The
 hosted stats surface derives:
@@ -33,9 +35,10 @@ charts. Local client worlds are reported as `local_client` when the Hytale serve
 is launched with its singleplayer mode; normal external servers are reported as
 `dedicated`.
 
-The heartbeat interval is fixed at 5 minutes. It is intentionally not exposed in
-runtime settings so servers cannot accidentally or deliberately report at an
-unsafe cadence.
+The heartbeat interval is intentionally not exposed in runtime settings so
+servers cannot accidentally or deliberately report at an unsafe cadence. Hosted
+interval hints may temporarily keep older 5-minute clients working during
+rollout, but new runtime clients target the 30-minute cadence.
 
 ## Consent
 
@@ -63,5 +66,7 @@ The hosted service may use `serverId` internally to compute active and record
 server counts, but public responses should expose only aggregate counts and
 breakdowns.
 
-Stats are intentionally not customizable. Enabling stats reports the
-standard heartbeat/environment fields only.
+Stats are intentionally not customizable. Enabling stats reports the standard
+heartbeat/environment fields only. Heartbeats include the current player count
+plus optional interval peak and average player counts so lower cadence reporting
+does not lose short-lived player peaks.

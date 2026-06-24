@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -18,7 +19,7 @@ import java.util.logging.Level;
 final class EmbeddedTelemetryStatsHeartbeat {
 
     static final String EVENT_HEARTBEAT = "heartbeat";
-    static final int HEARTBEAT_INTERVAL_SECONDS = 300;
+    static final int HEARTBEAT_INTERVAL_SECONDS = 1800;
 
     private final String projectId;
     private final TelemetryCoreEngine engine;
@@ -45,7 +46,7 @@ final class EmbeddedTelemetryStatsHeartbeat {
         if (executor == null || !started.compareAndSet(false, true)) {
             return;
         }
-        emitHeartbeatSafely();
+        scheduleNext(true);
     }
 
     void shutdown() {
@@ -54,10 +55,14 @@ final class EmbeddedTelemetryStatsHeartbeat {
         if (scheduled != null) {
             scheduled.cancel(false);
         }
-        started.set(false);
+        boolean wasStarted = started.getAndSet(false);
+        if (wasStarted) {
+            emitHeartbeatSafelyWithoutReschedule();
+        }
     }
 
     void emitHeartbeatNow() {
+        TelemetryPlayerIntervalSnapshot players = playerCounter.snapshotAndResetInterval();
         engine.recordStatsWithContext(
                 projectId,
                 EVENT_HEARTBEAT,
@@ -65,7 +70,9 @@ final class EmbeddedTelemetryStatsHeartbeat {
                         .featureKey("stats")
                         .entryPoint(EVENT_HEARTBEAT)
                         .runtimeSide("server")
-                        .detail("playersOnline", playerCounter.onlinePlayers())
+                        .detail("playersOnline", players.currentPlayers())
+                        .detail("maxPlayersSinceLastReport", players.maxPlayersSinceLastReport())
+                        .detail("avgPlayersSinceLastReport", players.avgPlayersSinceLastReport())
                         .build()
         );
     }
@@ -79,18 +86,28 @@ final class EmbeddedTelemetryStatsHeartbeat {
             }
         } finally {
             if (started.get()) {
-                scheduleNext();
+                scheduleNext(false);
             }
         }
     }
 
-    private void scheduleNext() {
+    private void emitHeartbeatSafelyWithoutReschedule() {
+        try {
+            emitHeartbeatNow();
+        } catch (Exception ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log("Embedded telemetry stats shutdown heartbeat failed.");
+            }
+        }
+    }
+
+    private void scheduleNext(boolean firstHeartbeat) {
         if (executor == null) {
             return;
         }
         future = executor.schedule(
                 this::emitHeartbeatSafely,
-                Math.max(1, engine.statsHeartbeatIntervalSeconds()),
+                engine.statsHeartbeatDelaySeconds(firstHeartbeat),
                 TimeUnit.SECONDS
         );
     }

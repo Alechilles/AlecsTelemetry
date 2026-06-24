@@ -826,6 +826,14 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 if (playersOnline instanceof Number) {
                     withCoreFields.putIfAbsent("playersOnline", playersOnline);
                 }
+                Object maxPlayersSinceLastReport = rawDetails.get("maxPlayersSinceLastReport");
+                if (maxPlayersSinceLastReport instanceof Number) {
+                    withCoreFields.putIfAbsent("maxPlayersSinceLastReport", maxPlayersSinceLastReport);
+                }
+                Object avgPlayersSinceLastReport = rawDetails.get("avgPlayersSinceLastReport");
+                if (avgPlayersSinceLastReport instanceof Number) {
+                    withCoreFields.putIfAbsent("avgPlayersSinceLastReport", avgPlayersSinceLastReport);
+                }
             }
             return Map.copyOf(withCoreFields);
         }

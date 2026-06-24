@@ -221,7 +221,7 @@ class TelemetryCoordinatorServiceTest {
         TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow("test");
 
         assertEquals(1, summary.uploaded());
-        assertEquals(180, engine.statsHeartbeatIntervalSeconds());
+        assertEquals(300, engine.statsHeartbeatIntervalSeconds());
     }
 
     @Test
@@ -253,7 +253,8 @@ class TelemetryCoordinatorServiceTest {
 
         heartbeat.start();
 
-        assertEquals(180, executor.lastScheduledDelaySeconds());
+        assertTrue(executor.lastScheduledDelaySeconds() >= 120);
+        assertTrue(executor.lastScheduledDelaySeconds() <= 300);
     }
 
     @Test
@@ -357,7 +358,7 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
-    void startQueuesStatsHeartbeatImmediately() {
+    void startSchedulesStatsHeartbeatAfterStartupDelay() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),
                 null
@@ -385,9 +386,51 @@ class TelemetryCoordinatorServiceTest {
 
         service.start();
 
-        assertEquals(1, service.pendingReports(null));
-        assertEquals(1, executor.queuedTasks());
+        assertEquals(0, service.pendingReports(null));
+        assertEquals(2, executor.queuedTasks());
+        assertTrue(executor.lastScheduledDelaySeconds() >= 120);
+        assertTrue(executor.lastScheduledDelaySeconds() <= 300);
+
+        executor.runNext();
+        executor.runNext();
+
         assertEquals(1, service.flushPendingReportsNow("startup-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+    }
+
+    @Test
+    void shutdownQueuesBestEffortStatsHeartbeatAfterStart() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                executor,
+                () -> 2
+        );
+
+        service.start();
+        service.shutdown();
+
+        assertEquals(1, client.payloads.size());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
@@ -659,6 +702,13 @@ class TelemetryCoordinatorServiceTest {
             return tasks.size();
         }
 
+        void runNext() {
+            Runnable task = tasks.poll();
+            if (task != null) {
+                task.run();
+            }
+        }
+
         long lastScheduledDelaySeconds() {
             return lastScheduledDelaySeconds;
         }
@@ -666,6 +716,7 @@ class TelemetryCoordinatorServiceTest {
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
             lastScheduledDelaySeconds = TimeUnit.SECONDS.convert(delay, unit);
+            tasks.add(command);
             return new NoopScheduledFuture<>();
         }
 

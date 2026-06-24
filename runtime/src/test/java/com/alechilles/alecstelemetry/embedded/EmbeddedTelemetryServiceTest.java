@@ -343,11 +343,13 @@ class EmbeddedTelemetryServiceTest {
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
         assertEquals(2, payload.getAsJsonObject("details").get("playersOnline").getAsInt());
+        assertEquals(2, payload.getAsJsonObject("details").get("maxPlayersSinceLastReport").getAsInt());
+        assertEquals(1.67, payload.getAsJsonObject("details").get("avgPlayersSinceLastReport").getAsDouble(), 0.01);
         assertEquals("ms_claim_test", payload.getAsJsonObject("details").get("serverClaimToken").getAsString());
     }
 
     @Test
-    void startQueuesStatsHeartbeatImmediately() {
+    void startSchedulesStatsHeartbeatAfterStartupDelay() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
         TelemetryDataPaths dataPaths = new TelemetryDataPaths(
@@ -380,9 +382,55 @@ class EmbeddedTelemetryServiceTest {
 
         service.start();
 
-        assertEquals(1, service.pendingReports());
-        assertEquals(1, executor.queuedTasks());
+        assertEquals(0, service.pendingReports());
+        assertEquals(2, executor.queuedTasks());
+        assertTrue(executor.lastScheduledDelaySeconds() >= 120);
+        assertTrue(executor.lastScheduledDelaySeconds() <= 300);
+
+        executor.runNext();
+        executor.runNext();
+
         assertEquals(1, service.flushPendingReportsNow("startup-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        assertEquals("stats", payload.get("eventType").getAsString());
+        assertEquals("heartbeat", payload.get("eventName").getAsString());
+    }
+
+    @Test
+    void shutdownQueuesBestEffortStatsHeartbeatAfterStart() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptorWithStats(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                new QueuedScheduledExecutor(),
+                new EmbeddedTelemetryPlayerCounter()
+        );
+
+        service.start();
+        service.shutdown();
+
+        assertEquals(1, client.payloads.size());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
@@ -971,6 +1019,7 @@ class EmbeddedTelemetryServiceTest {
 
     private static final class QueuedScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
         private final Queue<Runnable> tasks = new ArrayDeque<>();
+        private long lastScheduledDelaySeconds = -1;
         private boolean shutdown;
 
         @Override
@@ -1010,8 +1059,21 @@ class EmbeddedTelemetryServiceTest {
             return tasks.size();
         }
 
+        long lastScheduledDelaySeconds() {
+            return lastScheduledDelaySeconds;
+        }
+
+        void runNext() {
+            Runnable task = tasks.poll();
+            if (task != null) {
+                task.run();
+            }
+        }
+
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
+            lastScheduledDelaySeconds = TimeUnit.SECONDS.convert(delay, unit);
+            tasks.add(command);
             return new NoopScheduledFuture<>();
         }
 
