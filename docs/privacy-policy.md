@@ -99,10 +99,12 @@ values into exception messages, breadcrumbs, or custom event context.
 
 ### Public Usage Stats
 
-Stats heartbeats are separate from feature-usage telemetry. When enabled, the
-runtime emits the first standard heartbeat 2-5 minutes after startup, then emits
-roughly every 30 minutes with stable jitter. The hosted service uses it to
-compute public aggregate stats such as:
+Stats heartbeats are separate from feature-usage telemetry. Current runtimes send
+the first stats heartbeat a few minutes after startup, then normally report about
+every 30 minutes with stable jitter. Existing five-minute clients remain
+accepted during rollout, and runtimes may send a best-effort final heartbeat on
+clean shutdown. The hosted service uses these heartbeats to compute public
+aggregate stats such as:
 
 - active servers and active players
 - record servers and record players
@@ -171,7 +173,8 @@ When you sign in or are invited to a project, the portal may store:
 - GitHub repository integration settings and GitHub issue-link metadata
 - billing account, account-project links, Stripe Checkout, Billing Portal,
   webhook, customer, subscription, plan, entitlement, billing email, downgrade
-  grace, and quota/guardrail metadata when billing features are used
+  grace, public plan recognition opt-out setting, and quota/guardrail metadata
+  when billing features are used
 
 Discord, GitHub, and Stripe process information under their own privacy policies
 when you use those integrations.
@@ -235,6 +238,8 @@ Access depends on the surface:
   slug, avatar URL, bio, cover image URL, featured link URL/label, and bounded
   theme tokens. Public pages do not show Stripe customer IDs, subscription IDs,
   billing email, invoices, payment methods, or private billing account details.
+  Paid recognition does not change public ranking, active counts, or verified
+  telemetry evidence.
 - Project owners, admins, maintainers, and viewers can see the portal data their
   role allows for that project.
 - Configured Discord channels may receive crash, event, or manual-report alert
