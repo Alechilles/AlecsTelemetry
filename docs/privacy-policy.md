@@ -267,8 +267,14 @@ Retention depends on the data type and operational need.
 - Completed ingest jobs are retained for 2 days by default. Dead-letter ingest
   jobs, which are failed queue records the worker has stopped retrying, are
   retained for 30 days by default.
-- Crash report metadata and raw JSON, event metadata and raw JSON, and manual
-  report metadata and raw JSON are retained for 730 days by default.
+- Routine lifecycle/performance raw diagnostics are retained for 7 days on Free
+  by default after daily rollups exist. Routine usage raw diagnostics are
+  retained for 14 days on Free by default after daily rollups exist.
+  Error/warning diagnostics keep the longer investigation window, starting at 90
+  days on Free. Aggregate daily event and issue-context rollups are retained
+  while the project exists.
+- Crash report metadata and raw JSON, manual report metadata, and manual report
+  raw JSON are retained for 730 days by default.
 - Manual report attachments and log attachments are retained for 180 days by
   default.
 - Consent metrics and first-review funnel events are retained for 730 days by
