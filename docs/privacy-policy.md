@@ -133,6 +133,8 @@ reports remain local and are not uploaded. Diagnostic attachments are redacted o
 a best-effort basis for common secrets, Discord tokens, email addresses, IPv4
 addresses, and Windows user paths, but players and server owners should still
 review report text and attachments before sending sensitive information.
+The hosted platform stores attachment byte counts and may use them to enforce
+per-file, per-report, and billing-account attachment storage quotas.
 
 ### Consent Metrics
 
@@ -166,8 +168,9 @@ When you sign in or are invited to a project, the portal may store:
 - Discord guild/channel/role routing configuration selected by authorized project
   members
 - GitHub repository integration settings and GitHub issue-link metadata
-- billing account, Stripe customer, subscription, plan, entitlement, and billing
-  email metadata when billing features are used
+- billing account, account-project links, Stripe customer, subscription, plan,
+  entitlement, billing email, and quota/guardrail metadata when billing features
+  are used
 
 Discord, GitHub, and Stripe process information under their own privacy policies
 when you use those integrations.
