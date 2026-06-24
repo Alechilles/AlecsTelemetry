@@ -270,8 +270,13 @@ Retention depends on the data type and operational need.
 - Consent metrics and first-review funnel events are retained for 730 days by
   default.
 - Portal audit logs and security records are retained for 1095 days by default.
-- Public stats rollups, issue workflow/activity, project configuration, and public
-  server listing history are retained while the project or server profile exists.
+- Aggregate public stats headline rollups, issue workflow/activity, project
+  configuration, and public server listing history are retained while the project
+  or server profile exists. Per-server stats bucket snapshots are retained only
+  for recent active/evidence windows and near-term breakdowns, and are deleted
+  after matching aggregate rollups exist. Per-server loaded-mod bucket snapshots
+  are retained until compact breakdown rollups exist, then old detailed evidence
+  can be deleted after the compact replacement is present.
 - Billing customer and subscription metadata may be retained for 2555 days or as
   otherwise needed for tax, accounting, dispute, chargeback, legal, or security
   reasons.
