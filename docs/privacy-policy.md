@@ -228,10 +228,12 @@ payloads are not used for targeted advertising.
 Access depends on the surface:
 
 - Public ModStats.io pages show aggregate stats, public project/server profile
-  information, and optional Supporter, Pro, or Partner plan badges when public
-  badges are enabled. Public pages do not show Stripe customer IDs,
-  subscription IDs, billing email, invoices, payment methods, or private billing
-  account details.
+  information, optional public author profile information, sanitized public
+  profile theme fields, and optional Supporter, Pro, or Partner plan badges when
+  public badges are enabled. Public author profiles can include a display name,
+  slug, avatar URL, bio, cover image URL, featured link URL/label, and bounded
+  theme tokens. Public pages do not show Stripe customer IDs, subscription IDs,
+  billing email, invoices, payment methods, or private billing account details.
 - Project owners, admins, maintainers, and viewers can see the portal data their
   role allows for that project.
 - Configured Discord channels may receive crash, event, or manual-report alert
