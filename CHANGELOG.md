@@ -7,6 +7,9 @@
   delegated to the active runtime host, allowing Tamework-embedded installs to
   upload `first_review_completed` consent funnel metrics instead of only marking
   local consent state.
+- Fixed embedded runtime version reporting so shaded hosts read Alec's
+  Telemetry runtime metadata from packaged Maven properties instead of falling
+  back to the stale `0.1.3` value.
 
 ## 0.2.4 - Server Verification Setup Hotfix - 2026-06-22
 
