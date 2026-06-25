@@ -8,6 +8,7 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -24,6 +25,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -91,14 +93,17 @@ class TelemetryCoordinatorServiceTest {
                 List.of()
         );
 
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        IntSupplier onlinePlayers = () -> 7;
         TelemetryCoordinatorService service = TelemetryCoordinatorService.fromDiscovery(
                 settings,
                 dataPaths,
                 discovery,
-                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                client,
                 null,
-                null,
-                null
+                executor,
+                onlinePlayers
         );
 
         assertEquals(1, service.registeredProjectCount());
@@ -110,6 +115,17 @@ class TelemetryCoordinatorServiceTest {
         assertEquals(2, service.manualReportProjects().size());
         assertEquals("stats-mod", service.manualReportProjects().get(0).projectId());
         assertEquals("report-mod", service.manualReportProjects().get(1).projectId());
+
+        service.start();
+        executor.runNext();
+        executor.runNext();
+
+        assertEquals(1, service.flushPendingReportsNow("legacy-discovery-heartbeat").attempted());
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        JsonObject details = payload.getAsJsonObject("details");
+        assertEquals(7, details.get("playersOnline").getAsInt());
+        assertEquals(7, details.get("maxPlayersSinceLastReport").getAsInt());
+        assertEquals(7.0, details.get("avgPlayersSinceLastReport").getAsDouble(), 0.01);
     }
 
     @Test
@@ -255,6 +271,47 @@ class TelemetryCoordinatorServiceTest {
 
         assertTrue(executor.lastScheduledDelaySeconds() >= 120);
         assertTrue(executor.lastScheduledDelaySeconds() <= 300);
+    }
+
+    @Test
+    void coordinatorStatsHeartbeatPreservesIntervalPeakAndAverage() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                statsDescriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+        TelemetryCoordinatorStatsHeartbeat heartbeat = new TelemetryCoordinatorStatsHeartbeat(
+                engine,
+                () -> new TelemetryPlayerIntervalSnapshot(1, 5, 2.75),
+                null,
+                null
+        );
+
+        heartbeat.emitHeartbeatNow();
+        engine.flushPendingReportsNow("test-coordinator-interval-stats");
+
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        JsonObject details = payload.getAsJsonObject("details");
+        assertEquals(1, details.get("playersOnline").getAsInt());
+        assertEquals(5, details.get("maxPlayersSinceLastReport").getAsInt());
+        assertEquals(2.75, details.get("avgPlayersSinceLastReport").getAsDouble(), 0.01);
     }
 
     @Test

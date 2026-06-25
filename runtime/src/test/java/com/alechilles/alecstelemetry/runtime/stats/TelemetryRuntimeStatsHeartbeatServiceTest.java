@@ -196,7 +196,7 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
     }
 
     @Test
-    void startQueuesFirstHeartbeatImmediately() {
+    void startSchedulesFirstHeartbeatAfterStartupDelay() {
         TelemetryProjectRegistration registration = statsRegistration("startup-mod", "Startup Mod");
         java.util.ArrayList<String> emittedProjectIds = new java.util.ArrayList<>();
         TelemetryStatsRuntime runtime = new TelemetryStatsRuntime() {
@@ -219,9 +219,12 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
             }
         };
 
-        new TelemetryStatsHeartbeatService(runtime, new TelemetryPlayerCounter(), new RecordingScheduledExecutor(), null).start();
+        RecordingScheduledExecutor executor = new RecordingScheduledExecutor();
+        new TelemetryStatsHeartbeatService(runtime, new TelemetryPlayerCounter(), executor, null).start();
 
-        assertEquals(List.of("startup-mod:heartbeat"), emittedProjectIds);
+        assertEquals(List.of(), emittedProjectIds);
+        assertEquals(List.of(120L), executor.delays);
+        assertEquals(List.of(TimeUnit.SECONDS), executor.units);
     }
 
     @Test
@@ -395,6 +398,12 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
 
         @Override
         public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
+                                                  @Nonnull TelemetryPlayerIntervalSnapshot players) {
+            engine.recordAggregateStatsHeartbeat(projects, players);
+        }
+
+        @Override
+        public void recordAggregateStatsHeartbeat(@Nonnull List<TelemetryProjectRegistration> projects,
                                                   int playersOnline) {
             engine.recordAggregateStatsHeartbeat(projects, playersOnline);
         }
@@ -437,6 +446,9 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
     }
 
     private static final class RecordingScheduledExecutor extends AbstractExecutorService implements ScheduledExecutorService {
+        private final java.util.ArrayList<Long> delays = new java.util.ArrayList<>();
+        private final java.util.ArrayList<TimeUnit> units = new java.util.ArrayList<>();
+
         @Override
         public void shutdown() {
         }
@@ -467,7 +479,9 @@ class TelemetryRuntimeStatsHeartbeatServiceTest {
 
         @Override
         public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
-            throw new UnsupportedOperationException("schedule");
+            delays.add(delay);
+            units.add(unit);
+            return new NoopScheduledFuture<>();
         }
 
         @Override

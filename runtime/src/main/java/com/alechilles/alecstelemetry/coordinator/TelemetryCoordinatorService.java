@@ -13,6 +13,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -24,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 /**
  * Active runtime coordinator that owns telemetry capture, queueing, and upload for all projects.
@@ -43,7 +45,7 @@ public final class TelemetryCoordinatorService {
                                        @Nonnull CrashReportClient client,
                                        @Nullable HytaleLogger logger,
                                        @Nullable ScheduledExecutorService executor) {
-        this(settings, dataPaths, projects, manualReportProjects, loadedMods, client, logger, executor, null);
+        this(settings, dataPaths, projects, manualReportProjects, loadedMods, client, logger, executor, (IntSupplier) null);
     }
 
     public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
@@ -72,14 +74,40 @@ public final class TelemetryCoordinatorService {
                 : new TelemetryCoordinatorStatsHeartbeat(engine, onlinePlayers, executor, logger);
     }
 
+    private TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
+                                        @Nonnull TelemetryDataPaths dataPaths,
+                                        @Nonnull List<TelemetryProjectRegistration> projects,
+                                        @Nonnull List<TelemetryProjectRegistration> manualReportProjects,
+                                        @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                        @Nonnull CrashReportClient client,
+                                        @Nullable HytaleLogger logger,
+                                        @Nullable ScheduledExecutorService executor,
+                                        @Nullable Supplier<TelemetryPlayerIntervalSnapshot> playerIntervalSnapshot) {
+        this.settings = settings;
+        this.dataPaths = dataPaths;
+        this.engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                projects,
+                manualReportProjects,
+                loadedMods,
+                client,
+                logger,
+                executor
+        );
+        this.statsHeartbeat = playerIntervalSnapshot == null
+                ? null
+                : new TelemetryCoordinatorStatsHeartbeat(engine, playerIntervalSnapshot, executor, logger);
+    }
+
     @Nonnull
-    public static TelemetryCoordinatorService fromDiscovery(@Nonnull TelemetryRuntimeSettings settings,
-                                                            @Nonnull TelemetryDataPaths dataPaths,
-                                                            @Nonnull TelemetryRuntimeDiscoveryResult discovery,
-                                                            @Nonnull CrashReportClient client,
-                                                            @Nullable HytaleLogger logger,
-                                                            @Nullable ScheduledExecutorService executor,
-                                                            @Nullable IntSupplier onlinePlayers) {
+    public static TelemetryCoordinatorService fromDiscoveryWithPlayerIntervalSnapshot(@Nonnull TelemetryRuntimeSettings settings,
+                                                                                      @Nonnull TelemetryDataPaths dataPaths,
+                                                                                      @Nonnull TelemetryRuntimeDiscoveryResult discovery,
+                                                                                      @Nonnull CrashReportClient client,
+                                                                                      @Nullable HytaleLogger logger,
+                                                                                      @Nullable ScheduledExecutorService executor,
+                                                                                      @Nullable Supplier<TelemetryPlayerIntervalSnapshot> playerIntervalSnapshot) {
         return new TelemetryCoordinatorService(
                 settings,
                 dataPaths,
@@ -89,7 +117,26 @@ public final class TelemetryCoordinatorService {
                 client,
                 logger,
                 executor,
-                onlinePlayers
+                playerIntervalSnapshot
+        );
+    }
+
+    @Nonnull
+    public static TelemetryCoordinatorService fromDiscovery(@Nonnull TelemetryRuntimeSettings settings,
+                                                            @Nonnull TelemetryDataPaths dataPaths,
+                                                            @Nonnull TelemetryRuntimeDiscoveryResult discovery,
+                                                            @Nonnull CrashReportClient client,
+                                                            @Nullable HytaleLogger logger,
+                                                            @Nullable ScheduledExecutorService executor,
+                                                            @Nullable IntSupplier onlinePlayers) {
+        return fromDiscoveryWithPlayerIntervalSnapshot(
+                settings,
+                dataPaths,
+                discovery,
+                client,
+                logger,
+                executor,
+                playerIntervalSnapshotFrom(onlinePlayers)
         );
     }
 
@@ -118,6 +165,13 @@ public final class TelemetryCoordinatorService {
                 executor,
                 onlinePlayers
         );
+    }
+
+    @Nullable
+    private static Supplier<TelemetryPlayerIntervalSnapshot> playerIntervalSnapshotFrom(@Nullable IntSupplier onlinePlayers) {
+        return onlinePlayers == null
+                ? null
+                : () -> TelemetryPlayerIntervalSnapshot.single(onlinePlayers.getAsInt());
     }
 
     public void start() {

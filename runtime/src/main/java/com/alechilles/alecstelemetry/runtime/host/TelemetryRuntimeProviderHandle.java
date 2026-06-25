@@ -95,14 +95,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
         TelemetryPlayerCounter playerCounter = new TelemetryPlayerCounter();
         CrashReportClient client = new HttpCrashReportClient(settings.connectTimeoutMs(), settings.readTimeoutMs(), logger);
-        TelemetryCoordinatorService coordinator = TelemetryCoordinatorService.fromDiscovery(
+        TelemetryCoordinatorService coordinator = TelemetryCoordinatorService.fromDiscoveryWithPlayerIntervalSnapshot(
                 settings,
                 dataPaths,
                 discovery,
                 client,
                 logger,
                 HytaleServer.SCHEDULED_EXECUTOR,
-                playerCounter::onlinePlayers
+                playerCounter::snapshotAndResetInterval
         );
         return new TelemetryRuntimeProviderHandle(
                 request,

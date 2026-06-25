@@ -11,6 +11,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 
 /**
@@ -22,7 +23,7 @@ final class TelemetryCoordinatorStatsHeartbeat {
     static final int HEARTBEAT_INTERVAL_SECONDS = 1800;
 
     private final TelemetryCoreEngine engine;
-    private final IntSupplier onlinePlayers;
+    private final Supplier<TelemetryPlayerIntervalSnapshot> playerIntervalSnapshot;
     private final ScheduledExecutorService executor;
     private final HytaleLogger logger;
     private final AtomicBoolean started = new AtomicBoolean(false);
@@ -33,8 +34,15 @@ final class TelemetryCoordinatorStatsHeartbeat {
                                        @Nonnull IntSupplier onlinePlayers,
                                        @Nullable ScheduledExecutorService executor,
                                        @Nullable HytaleLogger logger) {
+        this(engine, () -> TelemetryPlayerIntervalSnapshot.single(onlinePlayers.getAsInt()), executor, logger);
+    }
+
+    TelemetryCoordinatorStatsHeartbeat(@Nonnull TelemetryCoreEngine engine,
+                                       @Nonnull Supplier<TelemetryPlayerIntervalSnapshot> playerIntervalSnapshot,
+                                       @Nullable ScheduledExecutorService executor,
+                                       @Nullable HytaleLogger logger) {
         this.engine = engine;
-        this.onlinePlayers = onlinePlayers;
+        this.playerIntervalSnapshot = playerIntervalSnapshot;
         this.executor = executor;
         this.logger = logger;
     }
@@ -59,8 +67,7 @@ final class TelemetryCoordinatorStatsHeartbeat {
     }
 
     void emitHeartbeatNow() {
-        int playersOnline = onlinePlayers.getAsInt();
-        engine.recordAggregateStatsHeartbeat(engine.projects(), TelemetryPlayerIntervalSnapshot.single(playersOnline));
+        engine.recordAggregateStatsHeartbeat(engine.projects(), playerIntervalSnapshot.get());
     }
 
     private void emitHeartbeatSafely() {

@@ -10,6 +10,9 @@
 - Fixed embedded runtime version reporting so shaded hosts read Alec's
   Telemetry runtime metadata from packaged Maven properties instead of falling
   back to the stale `0.1.3` value.
+- Fixed embedded stats heartbeats so player interval peak and average counts are
+  preserved by the active runtime coordinator instead of collapsing to only the
+  current online-player count.
 
 ## 0.2.4 - Server Verification Setup Hotfix - 2026-06-22
 
