@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: June 24, 2026
+Effective date: June 25, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -297,8 +297,9 @@ Retention depends on the data type and operational need.
   or server profile exists. Per-server stats bucket snapshots are retained only
   for recent active/evidence windows and near-term breakdowns, and are deleted
   after matching aggregate rollups exist. Per-server loaded-mod bucket snapshots
-  are retained until compact breakdown rollups exist, then old detailed evidence
-  can be deleted after the compact replacement is present.
+  are retained only for recent active/evidence windows and near-term breakdowns,
+  and are deleted after matching compact loaded-mod breakdown rollups exist.
+  Compact loaded-mod breakdown rollups are retained while the project exists.
 - Billing customer and subscription metadata may be retained for 2555 days or as
   otherwise needed for tax, accounting, dispute, chargeback, legal, or security
   reasons.
