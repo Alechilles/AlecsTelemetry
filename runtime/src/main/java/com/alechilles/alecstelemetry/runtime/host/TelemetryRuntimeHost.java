@@ -8,10 +8,16 @@ import com.hypixel.hytale.common.semver.Semver;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Path;
+import java.util.Properties;
 
 public final class TelemetryRuntimeHost {
-    private static final String FALLBACK_RUNTIME_VERSION = "0.1.3";
+    private static final String FALLBACK_RUNTIME_VERSION = "unknown";
+    private static final String RUNTIME_MAVEN_PROPERTIES =
+            "META-INF/maven/com.alechilles/alecstelemetry-runtime/pom.properties";
 
     private TelemetryRuntimeHost() {
     }
@@ -50,11 +56,34 @@ public final class TelemetryRuntimeHost {
 
     @Nonnull
     private static String resolveRuntimeVersion() {
+        String mavenVersion = resolveRuntimeVersionFromMavenProperties();
+        if (mavenVersion != null) {
+            return mavenVersion;
+        }
         Package runtimePackage = TelemetryRuntimeHost.class.getPackage();
         String implementationVersion = runtimePackage == null ? null : runtimePackage.getImplementationVersion();
         return implementationVersion == null || implementationVersion.isBlank()
                 ? FALLBACK_RUNTIME_VERSION
                 : implementationVersion.trim();
+    }
+
+    @Nullable
+    private static String resolveRuntimeVersionFromMavenProperties() {
+        ClassLoader loader = TelemetryRuntimeHost.class.getClassLoader();
+        InputStream stream = loader == null
+                ? ClassLoader.getSystemResourceAsStream(RUNTIME_MAVEN_PROPERTIES)
+                : loader.getResourceAsStream(RUNTIME_MAVEN_PROPERTIES);
+        if (stream == null) {
+            return null;
+        }
+        try (InputStream closeable = stream) {
+            Properties properties = new Properties();
+            properties.load(closeable);
+            String version = properties.getProperty("version");
+            return version == null || version.isBlank() ? null : version.trim();
+        } catch (IOException ignored) {
+            return null;
+        }
     }
 
     @Nonnull

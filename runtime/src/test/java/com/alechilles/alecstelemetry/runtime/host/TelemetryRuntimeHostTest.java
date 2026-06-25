@@ -74,6 +74,14 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void resolvesRuntimeVersionFromPackagedMavenMetadata() throws Exception {
+        Method resolver = TelemetryRuntimeHost.class.getDeclaredMethod("resolveRuntimeVersion");
+        resolver.setAccessible(true);
+
+        assertEquals("9.8.7-test-runtime", resolver.invoke(null));
+    }
+
+    @Test
     void embeddedProviderDescriptorIsRegisteredWithoutRuntimeMode() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson("""
                 {
