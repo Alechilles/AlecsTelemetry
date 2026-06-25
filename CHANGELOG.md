@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5 - Embedded Consent Funnel Hotfix - 2026-06-24
+
+### Fixed
+- Fixed host-backed embedded runtimes so first-review consent completion is
+  delegated to the active runtime host, allowing Tamework-embedded installs to
+  upload `first_review_completed` consent funnel metrics instead of only marking
+  local consent state.
+
 ## 0.2.4 - Server Verification Setup Hotfix - 2026-06-22
 
 ### Changed
