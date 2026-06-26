@@ -11,7 +11,7 @@ Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-teleme
 
 Alec's Telemetry is a telemetry runtime and hosted portal workflow for Hytale plugins and asset packs. It helps mod authors collect structured operational signals from installed projects without building their own ingest service, issue workspace, stats dashboard, consent UI, or upload queue.
 
-For most modders, the destination is Alec's hosted telemetry platform. The runtime discovers packaged project descriptors, applies consent and server-owner overrides, queues telemetry locally, and uploads accepted data to the portal project identified by the hosted project key.
+For most modders, the destination is Alec's web portal. The runtime discovers packaged project descriptors, applies consent and server-owner overrides, queues telemetry locally, and uploads accepted data to the portal project identified by the hosted project key.
 
 ## What It Can Collect
 

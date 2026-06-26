@@ -17,7 +17,7 @@ It accepts telemetry uploads from the runtime mod, validates them against the ho
 
 ## Status
 
-Treat this package as a reference implementation, not the long-term production backend. The hosted platform owns the production portal, database-backed project model, and richer routing behavior.
+Treat this package as a reference implementation, not the long-term production backend. The web portal and production backend own the database-backed project model and richer routing behavior.
 
 ## Trust Model
 

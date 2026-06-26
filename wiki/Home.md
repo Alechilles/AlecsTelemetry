@@ -19,7 +19,7 @@ Start with the portal-first setup route. It walks from a blank project through p
 - [Quick Setup](/mod/alecs-telemetry/quick-setup)
 - [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup)
 - [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup)
-- [Hosted Platform Overview](/mod/alecs-telemetry/hosted-platform-overview)
+- [Web Portal Overview](/mod/alecs-telemetry/web-portal-overview)
 
 ## Integration Guides
 

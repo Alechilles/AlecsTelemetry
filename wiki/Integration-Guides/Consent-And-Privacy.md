@@ -81,7 +81,7 @@ Runtime settings and consent state also live under the same canonical root.
 
 ## Hosted Versus Custom Endpoints
 
-Alec's hosted platform behavior is covered by the Alec's Telemetry privacy policy. If a server owner redirects telemetry to a custom endpoint, that endpoint is controlled by whoever configured it, not by Alec's hosted portal.
+Alec's web portal behavior is covered by the Alec's Telemetry privacy policy. If a server owner redirects telemetry to a custom endpoint, that endpoint is controlled by whoever configured it, not by Alec's hosted service.
 
 ## Verify
 
