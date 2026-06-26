@@ -14,73 +14,25 @@ Standalone dependency mode is the recommended default. Alec's Telemetry is insta
 ## Use This Mode When
 
 - You want the smallest integration.
-- Your project can require Alec's Telemetry as an external dependency.
+- You want to use Alec's Telemetry as an external dependency.
 - You do not need telemetry bootstrap code.
-- You are making an asset pack or descriptor-only package.
+- Your mod is an asset pack.
 - You want crash/error telemetry, anonymous stats, or manual reports without owning the runtime lifecycle.
 
-## Step 1: Create The Portal Project
+## Before This Page
 
-1. Open [the official portal](https://telemetry.alecsmods.com/portal).
-2. Sign in with Discord or GitHub.
-3. Create a project.
-4. Copy the one-time project key.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. That page owns the repeated setup details: portal project creation, project key, `Server/Telemetry/project.json`, explicit identity fields, optional consent icon, and packaging checks.
 
-The project key is a publishable ingest key. It belongs in the descriptor that ships with your project.
+Then return here for the standalone-specific install and verification flow.
 
-## Step 2: Add The Descriptor
-
-Create:
-
-```text
-Server/Telemetry/project.json
-```
-
-Minimal hosted plugin descriptor:
-
-```json
-{
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
-
-Minimal stats-only asset pack descriptor:
-
-```json
-{
-  "projectId": "example-asset-pack",
-  "displayName": "Example Asset Pack",
-  "stats": {
-    "enabled": true
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
-
-If your plugin manifest has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer most identity fields. If not, set `projectId` and `displayName` explicitly.
-
-## Step 3: Package Your Project
-
-Make sure the final distributable includes:
-
-```text
-Server/Telemetry/project.json
-```
-
-If you configured `ui.iconTexturePath`, also include the icon under the matching `Common/UI/Custom/...` path.
-
-## Step 4: Install For Testing
+## Step 1: Install For Testing
 
 1. Install Alec's Telemetry.
 2. Install your plugin or asset pack.
 3. Start a local server or test world.
 4. Review the first-run consent UI if it appears.
 
-## Step 5: Verify Discovery
+## Step 2: Verify Discovery
 
 Run:
 
@@ -98,7 +50,7 @@ Confirm:
 - the destination is hosted
 - pending queue counts are reasonable
 
-## Step 6: Verify Upload
+## Step 3: Verify Upload
 
 For crash/error setup:
 

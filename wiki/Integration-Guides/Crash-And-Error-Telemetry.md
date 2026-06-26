@@ -20,27 +20,13 @@ Crash and error telemetry is the core Alec's Telemetry workflow. It sends struct
 - explicit non-fatal error events recorded through the runtime API
 - breadcrumbs attached to crash/error reports when breadcrumbs are enabled
 
-## Portal Setup
+## Before This Page
 
-1. Create a project in [the portal](https://telemetry.alecsmods.com/portal).
-2. Copy the project key.
-3. Add the key to `Server/Telemetry/project.json`.
-4. Configure Discord routing if crash alerts should post to a channel.
-5. Configure GitHub issue sync if portal issues should link to GitHub.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Configure [Discord Routing](/mod/alecs-telemetry/discord-routing) or [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync) only if your project needs those hosted operations.
 
-## Descriptor Setup
+## Descriptor Block
 
-Minimal hosted crash setup:
-
-```json
-{
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
-
-Explicit capture settings:
+The minimal shared descriptor is enough for normal crash setup. Add this block only when you want capture and related event defaults to be explicit:
 
 ```json
 {
@@ -57,9 +43,6 @@ Explicit capture settings:
     "breadcrumbs": {
       "enabled": true
     }
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
   }
 }
 ```

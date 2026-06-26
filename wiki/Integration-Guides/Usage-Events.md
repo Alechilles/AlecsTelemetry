@@ -11,7 +11,13 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Usage events track how players or server operators use specific plugin features. They are not the same as anonymous public stats.
 
-## Descriptor Setup
+## Before This Page
+
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+
+## Descriptor Block
+
+Add this block to the shared descriptor:
 
 ```json
 {
@@ -26,9 +32,6 @@ Usage events track how players or server operators use specific plugin features.
         }
       }
     }
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
   }
 }
 ```

@@ -11,7 +11,13 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Breadcrumbs are short recent notes attached to crash and error reports. They help explain what the plugin was doing before a failure.
 
-## Descriptor Setup
+## Before This Page
+
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+
+## Descriptor Block
+
+Add this block to the shared descriptor:
 
 ```json
 {
@@ -20,9 +26,6 @@ Breadcrumbs are short recent notes attached to crash and error reports. They hel
       "enabled": true,
       "automatic": true
     }
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
   }
 }
 ```

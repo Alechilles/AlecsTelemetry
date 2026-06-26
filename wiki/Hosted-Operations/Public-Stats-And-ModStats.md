@@ -11,22 +11,9 @@ Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mo
 
 Public stats turn anonymous heartbeat data into a public project page. ModStats is the public stats host for browsing public Hytale mod stats.
 
-## Enable Runtime Stats
+## Before This Page
 
-First, make sure the descriptor enables stats:
-
-```json
-{
-  "stats": {
-    "enabled": true
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
-
-Then install the project and wait for the first heartbeat.
+Use [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) or [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats) to enable runtime stats in the shared descriptor. Then install the project and wait for the first heartbeat.
 
 ## Make Stats Public
 

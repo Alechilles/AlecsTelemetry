@@ -11,7 +11,13 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Manual player reports let players submit issue or suggestion reports from in game. Reports can include project-defined fields and optional attachments allowed by the server owner.
 
-## Descriptor Setup
+## Before This Page
+
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+
+## Descriptor Block
+
+Add this block to the shared descriptor:
 
 ```json
 {
@@ -31,9 +37,6 @@ Manual player reports let players submit issue or suggestion reports from in gam
     "suggestion": {
       "enabled": true
     }
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
   }
 }
 ```
@@ -85,4 +88,4 @@ Approved reports move to the pending upload queue. Rejected reports stay local a
 - No report-enabled projects: check `reports.enabled`.
 - Attachment option missing: server runtime settings may disable it.
 - Report not uploaded: it may still be waiting for local review.
-- Portal issue missing: check `/telemetry reports submitted` and project key configuration.
+- Portal issue missing: check `/telemetry reports submitted` and the shared descriptor's hosted key.

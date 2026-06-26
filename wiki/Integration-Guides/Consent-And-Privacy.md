@@ -34,7 +34,11 @@ Stats are separate from usage events. A server owner can allow anonymous public 
 
 The first-run notice uses the same consent runtime. A project that has not been reviewed before can appear in the first-run consent UI.
 
-## Descriptor Defaults
+## Before This Page
+
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Consent defaults live in the same shared descriptor as the hosted key and optional icon.
+
+## Consent Defaults Block
 
 ```json
 {

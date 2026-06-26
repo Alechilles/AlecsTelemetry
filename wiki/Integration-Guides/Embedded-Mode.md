@@ -20,33 +20,13 @@ Embedded mode lets a plugin bundle the telemetry runtime inside its own package 
 
 Asset packs normally use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) because embedded mode requires plugin lifecycle code.
 
-## Step 1: Create The Portal Project
+## Before This Page
 
-1. Open [the portal](https://telemetry.alecsmods.com/portal).
-2. Create a project.
-3. Copy the one-time project key.
-
-## Step 2: Ship The Same Descriptor
-
-Embedded mode uses the same descriptor as standalone mode:
-
-```text
-Server/Telemetry/project.json
-```
-
-Minimal hosted descriptor:
-
-```json
-{
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, hosted key, `Server/Telemetry/project.json`, identity fields, and optional consent icon as standalone mode.
 
 Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 
-## Step 3: Bootstrap From Your Plugin
+## Step 1: Bootstrap From Your Plugin
 
 The owning plugin boots telemetry directly:
 
@@ -144,7 +124,7 @@ The migration copies files only when the canonical destination is missing. It le
 ## Verify Embedded Setup
 
 1. Package your plugin.
-2. Inspect the final package for the embedded runtime classes and `Server/Telemetry/project.json`.
+2. Inspect the final package for the embedded runtime classes, `Server/Telemetry/project.json`, and any configured consent icon.
 3. Install the plugin.
 4. Start a local server.
 5. Run `/telemetry status` and confirm the active coordinator.

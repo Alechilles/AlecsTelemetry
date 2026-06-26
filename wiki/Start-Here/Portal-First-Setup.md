@@ -27,10 +27,10 @@ Content-only asset packs should normally use standalone dependency mode. They ca
 1. Open `https://telemetry.alecsmods.com/portal`.
 2. Sign in with Discord or GitHub.
 3. Link the other provider later from Account if you need Discord routing and GitHub issue sync.
-4. Accept the Terms of Service when prompted.
+4. Review and accept the Terms of Service when prompted.
 5. On the projects page, choose `Create project`.
 6. Enter a stable project ID.
-7. Enter a clear display name players and support staff will recognize.
+7. Enter a clear display name players will recognize, especially if you choose to display live stats.
 8. Create the project.
 9. Copy the new project key immediately. The key is shown so you can place it in your packaged descriptor.
 
@@ -43,7 +43,7 @@ Use a short lowercase project ID such as `example-mod`, `alecs-cats`, or `my-ass
 Use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) when:
 
 - you want the easiest setup
-- your plugin or asset pack can require Alec's Telemetry as an external dependency
+- your plugin or asset pack can use Alec's Telemetry as an external dependency
 - your package does not need to own telemetry startup code
 - your asset pack has no Java code
 
@@ -51,7 +51,6 @@ Use [Embedded Mode](/mod/alecs-telemetry/embedded-mode) when:
 
 - your plugin should ship one distributable package
 - you are comfortable bundling the telemetry runtime
-- your plugin can call `EmbeddedTelemetryBootstrap`
 - you want direct lifecycle hooks for setup, start, and shutdown
 
 If you are unsure, use standalone dependency mode first.
@@ -76,29 +75,50 @@ Start with this descriptor:
 
 Replace `replace_with_your_portal_project_key` with the key from the portal. Hosted project keys are publishable ingest keys. They are meant to ship in the descriptor.
 
-If your package manifest cannot provide a stable identity, add explicit fields:
+The project key is like an API key, so avoid posting it casually. It still cannot be kept truly secret once shipped in a Hytale package, so Alec's hosted portal treats it as a scoped ingest key rather than an admin secret. You can rotate it from the portal if needed.
+
+If another guide says "add this to your descriptor," add that block to this same file instead of creating a second descriptor.
+
+## Add Explicit Identity When Needed
+
+Plugins with a correct `Group`, `Name`, and `Main` can often use only the hosted key. Asset packs, descriptor-only packages, or plugins with unusual identity should add explicit identity alongside the existing `hosted` block:
 
 ```json
 {
   "projectId": "example-mod",
   "displayName": "Example Mod",
   "ownerPluginIdentifiers": ["Example:Example Mod"],
-  "packagePrefixes": ["com.example.examplemod"],
-  "hosted": {
-    "projectKey": "replace_with_your_portal_project_key"
+  "packagePrefixes": ["com.example.examplemod"]
+}
+```
+
+## Add An Optional Consent Icon
+
+If you want your project to show a custom icon in `/telemetry consent`, add `ui.iconTexturePath` to the same descriptor:
+
+```json
+{
+  "ui": {
+    "iconTexturePath": "MyModAssets/MyModIcon.png"
   }
 }
 ```
 
+Package the PNG under:
+
+```text
+Common/UI/Custom/MyModAssets/MyModIcon.png
+```
+
+The descriptor path is relative to `Common/UI/Custom/`, so do not start it with a slash.
+
 ## Package The File
 
 1. Build your plugin or asset pack.
-2. Open the built package and confirm `Server/Telemetry/project.json` is inside it.
-3. If you configured a consent icon, confirm the PNG is also inside `Common/UI/Custom/...`.
+2. Confirm the built package contains `Server/Telemetry/project.json`.
+3. If you configured an icon, confirm the built package contains the PNG under `Common/UI/Custom/...`.
 4. Install the package on a local or private test server.
 5. Install Alec's Telemetry too if you chose standalone dependency mode.
-
-Do not test from source files alone. The runtime discovers packaged descriptors from installed packages.
 
 ## Verify In Game
 

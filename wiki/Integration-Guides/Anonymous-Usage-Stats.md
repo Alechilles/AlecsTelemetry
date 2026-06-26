@@ -11,30 +11,18 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Anonymous usage stats publish aggregate server, player, version, and environment information. They are separate from feature usage events and have their own consent category.
 
-## Descriptor Setup
+## Before This Page
+
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. If this is an asset pack or descriptor-only project, put `projectId` and `displayName` in the shared descriptor there.
+
+## Descriptor Block
+
+Add this block to the shared descriptor:
 
 ```json
 {
   "stats": {
     "enabled": true
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
-  }
-}
-```
-
-For asset packs, add explicit identity:
-
-```json
-{
-  "projectId": "example-asset-pack",
-  "displayName": "Example Asset Pack",
-  "stats": {
-    "enabled": true
-  },
-  "hosted": {
-    "projectKey": "paste_your_project_key_here"
   }
 }
 ```
