@@ -22,7 +22,7 @@ Asset packs normally use [Standalone Dependency Mode](/mod/alecs-telemetry/stand
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, hosted key, `Server/Telemetry/project.json`, identity fields, and optional consent icon as standalone mode.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, hosted key, `Server/Telemetry/project.json`, optional identity overrides, and optional consent icon as standalone mode.
 
 Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 

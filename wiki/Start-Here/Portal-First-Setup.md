@@ -77,11 +77,22 @@ Replace `replace_with_your_portal_project_key` with the key from the portal. Hos
 
 The project key is like an API key, so avoid posting it casually. It still cannot be kept truly secret once shipped in a Hytale package, so Alec's hosted portal treats it as a scoped ingest key rather than an admin secret. You can rotate it from the portal if needed.
 
+The portal project is the hosted source of truth. The project key resolves to one portal project, and hosted ingest rejects uploads when the descriptor's `projectId` does not match that portal project ID. If you omit `projectId`, Alec's Telemetry infers it from your manifest `Name`, so choose the portal project ID to match the inferred value or add an explicit override.
+
 If another guide says "add this to your descriptor," add that block to this same file instead of creating a second descriptor.
 
 ## Add Explicit Identity When Needed
 
-Plugins with a correct `Group`, `Name`, and `Main` can often use only the hosted key. Asset packs, descriptor-only packages, or plugins with unusual identity should add explicit identity alongside the existing `hosted` block:
+Do not add identity fields by default. Plugins with a correct `Group`, `Name`, and `Main` can usually use only the hosted key. Asset packs with correct `Group` and `Name` can still infer `projectId` and `displayName` from `Name`, plus `ownerPluginIdentifiers` from `Group:Name`; they only lack an inferred Java package prefix when there is no `Main`.
+
+Add explicit identity only when the inferred values are not enough:
+
+- `projectId`: use this when the inferred project ID would not match the portal project ID.
+- `displayName`: use this for local runtime, consent, and envelope metadata. The hosted portal project name is managed in the portal.
+- `ownerPluginIdentifiers`: use this for renamed plugins, aliases, or unusual ownership matching.
+- `packagePrefixes`: use this when Java crash attribution needs packages outside the `Main` class package, or when there is no `Main` but Java stack-prefix attribution still matters.
+
+Example override block:
 
 ```json
 {

@@ -25,7 +25,7 @@ Do these once in [Portal First Setup](/mod/alecs-telemetry/portal-first-setup):
 - create the portal project
 - copy the hosted project key
 - create `Server/Telemetry/project.json`
-- add explicit `projectId` and `displayName` when automatic identity is not enough
+- confirm the inferred `projectId` matches the portal project ID, or add an explicit `projectId` override
 - optionally add `ui.iconTexturePath` for the consent UI icon
 - package the descriptor and icon into your final release file
 
@@ -46,7 +46,11 @@ After that, the quick crash and stats guides only add the telemetry-specific set
 
 ## What Can Be Inferred
 
-If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a hosted key. Asset packs without plugin code should use explicit identity fields.
+If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a hosted key.
+
+For asset packs or descriptor-only packages, `Name` can still infer `projectId` and `displayName`, while `Group:Name` provides the owner plugin identifier. `packagePrefixes` is only inferred from `Main`, so content-only packages usually leave it empty unless Java crash attribution is relevant.
+
+The portal project key chooses the hosted portal project. The descriptor `projectId` must match that portal project ID, but descriptor `displayName` does not rename the hosted portal project.
 
 ## Descriptor Reference
 

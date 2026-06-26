@@ -21,7 +21,7 @@ Standalone dependency mode is the recommended default. Alec's Telemetry is insta
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. That page owns the repeated setup details: portal project creation, project key, `Server/Telemetry/project.json`, explicit identity fields, optional consent icon, and packaging checks.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. That page owns the repeated setup details: portal project creation, project key, `Server/Telemetry/project.json`, optional identity overrides, optional consent icon, and packaging checks.
 
 Then return here for the standalone-specific install and verification flow.
 

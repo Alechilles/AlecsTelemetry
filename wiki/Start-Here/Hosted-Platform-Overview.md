@@ -27,7 +27,7 @@ https://telemetry.alecsmods.com/portal
 
 ## What The Runtime Sends
 
-The runtime sends crash envelopes and event envelopes for configured projects. Hosted projects are identified by the descriptor `projectId` and authenticated with the publishable hosted `projectKey`.
+The runtime sends crash envelopes and event envelopes for configured projects. The hosted `projectKey` resolves to the portal project, and the descriptor `projectId` must match that portal project ID.
 
 ## When To Use Something Else
 

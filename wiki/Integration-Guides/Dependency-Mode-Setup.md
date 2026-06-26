@@ -30,7 +30,8 @@ New descriptors do not need `runtimeMode`. Alec's Telemetry chooses the active r
 
 - Include `Server/Telemetry/project.json` in your mod package.
 - Keep your mod manifest `Group`, `Name`, and `Main` accurate so project metadata can be inferred.
-- Add explicit `projectId`, `displayName`, or `packagePrefixes` only when the inferred values are not enough.
+- Add explicit `projectId` only when the inferred ID would not match the portal project ID.
+- Add `displayName`, `ownerPluginIdentifiers`, or `packagePrefixes` only for local metadata or attribution overrides.
 - Keep hosted setup pointed at the publishable project key from the shared descriptor.
 
 ## Advanced Alternatives

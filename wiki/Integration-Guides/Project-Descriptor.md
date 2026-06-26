@@ -26,6 +26,8 @@ If your `manifest.json` has a correct `Group`, `Name`, and `Main`, then Alec's T
 - plugin identifier
 - package prefix from the `Main` class package
 
+If `Main` is absent, Alec's Telemetry can still infer project id and display name from `Name`, plus the plugin identifier from `Group:Name`. Only the Java package prefix fallback is empty.
+
 For most hosted projects, the descriptor can stay small:
 
 ```json
@@ -37,6 +39,8 @@ For most hosted projects, the descriptor can stay small:
 ```
 
 Hosted `projectKey` values are designed to be publishable ingest keys. Bake them into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
+
+The official portal project remains the hosted source of truth. The `projectKey` resolves to one portal project, and hosted ingest rejects payloads whose `projectId` does not match that portal project ID. Descriptor `displayName` is local runtime and envelope metadata; the hosted portal project name is managed in the portal.
 
 ## Custom Endpoint Example
 
@@ -69,6 +73,15 @@ Hosted `projectKey` values are designed to be publishable ingest keys. Bake them
 - `defaults`
 - `hosted`
 - `customEndpoint`
+
+## Identity Overrides
+
+Identity fields are optional overrides, not required setup fields.
+
+- `projectId`: override this only when the inferred ID would not match the portal project ID or a custom endpoint expects a different stable ID.
+- `displayName`: override this for local consent/runtime text or envelope metadata. It does not rename the hosted portal project.
+- `ownerPluginIdentifiers`: override this for aliases, renamed plugins, or unusual plugin ownership matching.
+- `packagePrefixes`: override this for crash attribution when Java code lives outside the package inferred from `Main`, or when there is no `Main` but Java stack-prefix attribution still matters.
 
 ## Capture Fields
 
@@ -254,4 +267,4 @@ Server owners can override each value in the consent UI or through `Settings/pro
 
 ## Recommendation
 
-Keep the file small unless your mod needs explicit ids, extra package prefixes, custom event allowlists, or a custom destination.
+Keep the file small unless your mod needs a `projectId` override to match the portal project, extra attribution aliases, extra package prefixes, custom event allowlists, or a custom destination.

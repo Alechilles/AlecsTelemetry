@@ -54,7 +54,7 @@ If your package is an asset pack or another content-only package, use standalone
 1. Create the portal project.
 2. Add `Server/Telemetry/project.json` to the asset pack.
 3. Include the hosted project key.
-4. Add explicit `projectId` and `displayName` if automatic identity is not enough.
+4. Add explicit `projectId` only if the inferred ID would not match the portal project ID.
 5. Install Alec's Telemetry alongside the asset pack on the server.
 6. Use `/telemetry projects` to confirm the descriptor was discovered.
 

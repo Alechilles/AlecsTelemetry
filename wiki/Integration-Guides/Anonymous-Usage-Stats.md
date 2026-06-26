@@ -13,7 +13,7 @@ Anonymous usage stats publish aggregate server, player, version, and environment
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. If this is an asset pack or descriptor-only project, put `projectId` and `displayName` in the shared descriptor there.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. If this is an asset pack or descriptor-only project, make sure the inferred `projectId` matches the portal project ID. Add an explicit `projectId` only when inference would not match.
 
 ## Descriptor Block
 
@@ -55,5 +55,5 @@ Public stats do not expose raw server IDs, session IDs, IP addresses, player nam
 
 - Stats are not immediate; wait for the first heartbeat.
 - The project is collecting stats but is not public; update portal visibility.
-- Asset pack display is wrong; add explicit `projectId` and `displayName`.
+- Ingest is rejected with a project mismatch; make the descriptor `projectId` match the portal project ID.
 - Server owner disabled stats; check `/telemetry consent` or the project override file.
