@@ -1,6 +1,6 @@
 ---
 title: "Hosted Ingest Contract"
-order: 3
+order: 7
 published: true
 draft: false
 ---
@@ -13,7 +13,7 @@ This page describes the Alec-hosted telemetry ingest contract used by the standa
 
 ## Trust Model
 
-- The client includes a `publicProjectKey`.
+- The client includes the hosted `projectKey`.
 - The key is treated as public, not secret.
 - Protection comes from validation and backend limits, not from the client keeping the key hidden.
 - Key rotation is handled by updating hosted project config and the mod descriptor.
@@ -38,7 +38,7 @@ checks a local player receipt using `reportId` plus the raw follow-up token.
 ## Required Headers
 
 - `Content-Type: application/json`
-- `X-Telemetry-Project-Key: <publicProjectKey>`
+- `X-Telemetry-Project-Key: <projectKey>`
 
 ## Crash Report Body
 

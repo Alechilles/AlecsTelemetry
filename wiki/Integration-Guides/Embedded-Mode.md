@@ -9,57 +9,51 @@ draft: false
 
 Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
 
-Embedded mode lets a modder bundle telemetry runtime bootstrap logic inside their own mod instead of requiring the standalone Alec's Telemetry dependency.
+Embedded mode lets a plugin bundle the telemetry runtime inside its own package instead of requiring the standalone Alec's Telemetry dependency.
 
-## When To Use It
+## Use This Mode When
 
-Use embedded mode when a modder wants:
+- You want one distributable plugin package.
+- You have Java lifecycle code.
+- You want to capture setup and start failures around your own startup logic.
+- You are comfortable validating the packaged runtime.
 
-- one distributable mod package
-- no extra CurseForge dependency for players
-- direct ownership of telemetry bootstrap and lifecycle wiring
+Asset packs normally use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) because embedded mode requires plugin lifecycle code.
 
-## Descriptor Requirement
+## Step 1: Create The Portal Project
 
-Embedded mode uses the same `Server/Telemetry/project.json` descriptor as dependency mode. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap` from the owning mod.
+1. Open [the portal](https://telemetry.alecsmods.com/portal).
+2. Create a project.
+3. Copy the one-time project key.
+
+## Step 2: Ship The Same Descriptor
+
+Embedded mode uses the same descriptor as standalone mode:
+
+```text
+Server/Telemetry/project.json
+```
+
+Minimal hosted descriptor:
 
 ```json
 {
   "hosted": {
-    "projectKey": "pub_proj_abc123"
+    "projectKey": "paste_your_project_key_here"
   }
 }
 ```
 
-Every installed copy of Alec's Telemetry, standalone or embedded, registers as a runtime coordinator candidate. The latest compatible runtime version wins. Non-winning copies become passive clients and forward telemetry operations to the active coordinator. If standalone is installed but an embedded copy is newer, standalone can still provide commands and UI while the newer embedded runtime owns capture, queueing, and upload.
+Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 
-## Runtime Precedence
+## Step 3: Bootstrap From Your Plugin
 
-Runtime ownership is selected per server process:
-
-1. Only coordinator candidates with the current coordinator protocol are eligible.
-2. The highest telemetry runtime version wins.
-3. If versions match, standalone wins over embedded.
-4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
-
-The active coordinator handles descriptors from all installed enabled mods, including descriptors with or without the legacy `runtimeMode` field. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
-
-## Minimal Hosted Example
-
-```json
-{
-  "hosted": {
-    "projectKey": "pub_proj_abc123"
-  }
-}
-```
-
-## Bootstrap Shape
-
-The owning mod boots telemetry directly:
+The owning plugin boots telemetry directly:
 
 ```java
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryBootstrap;
+import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
 
 private EmbeddedTelemetryService telemetry;
 
@@ -91,16 +85,6 @@ protected void start() {
         startInternal();
         telemetry.start();
         telemetry.recordBreadcrumb("lifecycle", "Start completed.");
-        telemetry.recordUsageWithContext(
-                "settings_opened",
-                TelemetryEventContext.usage()
-                        .subsystem("settings")
-                        .featureKey("settings_page")
-                        .entryPoint("/example settings")
-                        .runtimeSide("server")
-                        .detail("source", "command")
-                        .build()
-        );
     } catch (Throwable throwable) {
         telemetry.captureStartFailure(throwable);
         throw throwable;
@@ -115,27 +99,64 @@ protected void shutdown() {
 }
 ```
 
-The `*WithContext` helpers accept `TelemetryEventContext` so embedded mods can attach standardized fields such as `subsystem`, `phase`, `featureKey`, `entryPoint`, `runtimeSide`, `commandName`, and `worldName`. Custom `detail(key, value)` entries are filtered by the descriptor allowlist before upload.
+Wrap your own setup/start code so telemetry can capture failures before rethrowing them.
+
+## Runtime Election
+
+Every installed standalone or embedded copy registers as a runtime coordinator candidate. The active runtime is selected per server process:
+
+1. Only coordinator candidates with the current coordinator protocol are eligible.
+2. The highest telemetry runtime version wins.
+3. If versions match, standalone wins over embedded.
+4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
+
+The active coordinator handles descriptors from all installed enabled projects. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
 
 ## Storage Layout
 
-An embedded owner keeps its local project override files under the owning mod's data directory:
+Standalone and embedded runtimes use the same canonical Alec's Telemetry data root:
 
 ```text
-<ConsumerModDataDir>/Telemetry/
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
+  Settings/
+    runtime.json
+    projects/<project-id>.json
+    consent-reviewed-projects.json
+    server-identity.json
+  Telemetry/
+    crash-reports/
+    events/
+    manual-reports/
 ```
 
-The elected active coordinator stores runtime settings, queues, server identity, and uploads under the shared telemetry coordinator root:
+Older Alec-created locations are migrated into the canonical root on startup when the canonical destination is missing:
 
 ```text
-<HytaleUserData>/Telemetry/
+<ServerOrSaveRoot>/telemetry/Settings/
+<ServerOrSaveRoot>/telemetry/Telemetry/
+<ServerOrSaveRoot>/Telemetry/Settings/
+<ServerOrSaveRoot>/Telemetry/Telemetry/
+<ConsumerModDataDir>/Telemetry/Settings/projects/
 ```
+
+The migration copies files only when the canonical destination is missing. It leaves unrelated files such as Hytale lowercase `telemetry/*.jsonl.gz` session logs in place.
+
+## Verify Embedded Setup
+
+1. Package your plugin.
+2. Inspect the final package for the embedded runtime classes and `Server/Telemetry/project.json`.
+3. Install the plugin.
+4. Start a local server.
+5. Run `/telemetry status` and confirm the active coordinator.
+6. Run `/telemetry project <project-id>` and confirm your project source path.
+7. Run `/telemetry test <project-id> embedded-check`.
+8. Confirm the test report appears in the portal.
 
 ## Important Rule
 
-Pick one packaging strategy per mod:
+Pick one primary packaging strategy per plugin:
 
-- depend on the standalone Alec's Telemetry runtime
+- depend on standalone Alec's Telemetry
 - embed and bootstrap the runtime yourself
 
-Do not add a descriptor flag to choose the strategy. Runtime election handles coexistence when multiple providers are installed.
+Runtime election handles coexistence when multiple providers are installed, but your project docs and packaging should clearly tell server owners which setup you expect.

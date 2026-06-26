@@ -1,6 +1,6 @@
 ---
 title: "Hosted Platform Overview"
-order: 4
+order: 8
 published: true
 draft: false
 ---

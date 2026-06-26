@@ -9,10 +9,14 @@ draft: false
 
 Parent: [Alec's Telemetry Wiki](/mod/alecs-telemetry/home)
 
-Use these pages first if you are deciding whether to add Alec's Telemetry to a mod or setting up a hosted project for the first time.
+Use these pages first if you are deciding whether to add Alec's Telemetry to a plugin or asset pack, or if you are setting up a hosted portal project for the first time.
 
 ## Child Pages
 
 - [What Is Alec's Telemetry](/mod/alecs-telemetry/what-is-alecs-telemetry)
+- [Portal First Setup](/mod/alecs-telemetry/portal-first-setup)
+- [Choose Standalone Or Embedded](/mod/alecs-telemetry/choose-standalone-or-embedded)
 - [Quick Setup](/mod/alecs-telemetry/quick-setup)
+- [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup)
+- [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup)
 - [Hosted Platform Overview](/mod/alecs-telemetry/hosted-platform-overview)

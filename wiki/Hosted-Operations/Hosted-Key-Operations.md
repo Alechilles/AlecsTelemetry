@@ -1,6 +1,6 @@
 ---
 title: "Hosted Key Operations"
-order: 2
+order: 3
 published: true
 draft: false
 ---
@@ -20,9 +20,7 @@ Hosted `projectKey` values are publishable ingest keys. They are intended to be 
 
 ## Rotation Model
 
-Dual-key rotation is supported in Alec's Telemetry Platform deployments that include the grace-key feature.
-
-The lightweight reference hosted backend in this repository still uses a single publishable key with manual rotation, so older mod versions stop ingesting as soon as that backend key changes.
+Rotate keys from the official portal project admin surface. The portal shows the active key and, when the deployment supports it, a temporary grace key so older released packages can continue ingesting while a new package rolls out.
 
 - One active key remains the primary key shown in the portal.
 - One grace key may continue to ingest temporarily after rotation.
@@ -33,8 +31,8 @@ The lightweight reference hosted backend in this repository still uses a single 
 1. Rotate the key in the portal.
 2. Update the shipped `Server/Telemetry/project.json` with the new `projectKey`.
 3. Publish the updated mod build.
-4. Wait for the grace period to expire.
-5. Verify old versions are no longer using the grace key.
+4. If a grace key is shown, wait for the grace period to expire.
+5. Verify old versions are no longer ingesting with the old key.
 
 ## Abuse Response
 

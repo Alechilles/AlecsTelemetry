@@ -1,6 +1,6 @@
 ---
 title: "Hosted Service Reference"
-order: 4
+order: 8
 published: true
 draft: false
 ---

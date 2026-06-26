@@ -1,6 +1,6 @@
 ---
 title: "Dependency Mode Setup"
-order: 3
+order: 18
 published: true
 draft: false
 ---
@@ -9,7 +9,9 @@ draft: false
 
 Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
 
-Dependency mode is the recommended integration path. Alec's Telemetry runs as a standalone dependency and discovers participating mods by reading their packaged `Server/Telemetry/project.json` descriptors.
+This page remains for older links. The current guide is [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode).
+
+Dependency mode means Alec's Telemetry runs as a standalone external dependency and discovers participating plugins or asset packs by reading their packaged `Server/Telemetry/project.json` descriptors.
 
 ## Use This Mode When
 
@@ -39,5 +41,6 @@ New descriptors do not need `runtimeMode`. Alec's Telemetry chooses the active r
 
 ## Advanced Alternatives
 
+- Use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) for the complete step-by-step dependency-mode guide.
 - Use [Embedded Mode](/mod/alecs-telemetry/embedded-mode) if your mod needs to bundle telemetry bootstrap logic directly.
 - Use [Runtime Overrides](/mod/alecs-telemetry/runtime-overrides) when a server owner needs to disable telemetry or redirect reports locally.

@@ -1,6 +1,6 @@
 ---
 title: "Example Mods"
-order: 6
+order: 17
 published: true
 draft: false
 ---

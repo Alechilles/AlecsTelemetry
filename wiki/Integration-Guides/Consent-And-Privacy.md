@@ -1,0 +1,88 @@
+---
+title: "Consent And Privacy"
+order: 12
+published: true
+draft: false
+---
+
+# Consent And Privacy
+
+Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+
+Alec's Telemetry has project-level and category-level consent. Descriptor defaults provide the initial state; server owners can review and change the final state in game.
+
+## Consent Categories
+
+The consent UI can control:
+
+- project enabled state
+- crash capture
+- error events
+- lifecycle events
+- performance events
+- usage events
+- anonymous public stats
+- breadcrumbs
+
+Stats are separate from usage events. A server owner can allow anonymous public stats while disabling feature usage telemetry.
+
+## Open Consent
+
+```text
+/telemetry consent
+```
+
+The first-run notice uses the same consent runtime. A project that has not been reviewed before can appear in the first-run consent UI.
+
+## Descriptor Defaults
+
+```json
+{
+  "defaults": {
+    "enabled": true,
+    "destinationMode": "hosted"
+  },
+  "capture": {
+    "uncaughtExceptions": true,
+    "setupFailures": true,
+    "startFailures": true,
+    "exceptionalWorldRemovals": true
+  },
+  "stats": {
+    "enabled": true
+  }
+}
+```
+
+Server owner choices override descriptor defaults.
+
+## Stored Settings
+
+Project category choices are stored under the canonical Alec's Telemetry settings root:
+
+```text
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json
+```
+
+Runtime settings and consent state also live under the same canonical root.
+
+## Privacy Rules For Mod Authors
+
+- Use stable reason codes instead of raw player data.
+- Avoid names, UUIDs, tokens, secrets, chat, exact coordinates, and private config values.
+- Declare custom detail allowlists in the descriptor.
+- Keep manual report fields bounded and understandable.
+- Explain your telemetry behavior in your own mod documentation.
+- Link users to the canonical Privacy Policy when discussing hosted behavior.
+
+## Hosted Versus Custom Endpoints
+
+Alec's hosted platform behavior is covered by the Alec's Telemetry privacy policy. If a server owner redirects telemetry to a custom endpoint, that endpoint is controlled by whoever configured it, not by Alec's hosted portal.
+
+## Verify
+
+1. Run `/telemetry consent`.
+2. Confirm your project appears with the expected defaults.
+3. Toggle one category.
+4. Run `/telemetry project <project-id>`.
+5. Confirm the effective category state matches the consent choice.

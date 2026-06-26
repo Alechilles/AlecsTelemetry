@@ -7,29 +7,46 @@ draft: false
 
 # Alec's Telemetry Wiki
 
-Alec's Telemetry is a standalone crash telemetry runtime for Hytale mods. It helps mod authors ship structured crash reporting without building a custom reporting pipeline, while giving players and server communities a faster path from "something broke" to a useful fix.
+Alec's Telemetry helps Hytale plugin and asset pack authors connect their projects to Alec's hosted telemetry portal. Use it for crash and error triage, anonymous public usage stats, manual player reports, and explicit runtime events without building your own hosted reporting stack.
 
-The default integration path is dependency mode: install Alec's Telemetry alongside your mod, ship a small `Server/Telemetry/project.json`, and connect that project to Alec's hosted telemetry platform.
+Start with the portal-first setup route. It walks from a blank project through portal project creation, project-key setup, descriptor packaging, local verification, and portal confirmation.
 
 ## Start Here
 
 - [What Is Alec's Telemetry](/mod/alecs-telemetry/what-is-alecs-telemetry)
+- [Portal First Setup](/mod/alecs-telemetry/portal-first-setup)
+- [Choose Standalone Or Embedded](/mod/alecs-telemetry/choose-standalone-or-embedded)
 - [Quick Setup](/mod/alecs-telemetry/quick-setup)
+- [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup)
+- [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup)
 - [Hosted Platform Overview](/mod/alecs-telemetry/hosted-platform-overview)
 
 ## Integration Guides
 
 - [Project Descriptor](/mod/alecs-telemetry/project-descriptor)
+- [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode)
 - [Dependency Mode Setup](/mod/alecs-telemetry/dependency-mode-setup)
 - [Embedded Mode](/mod/alecs-telemetry/embedded-mode)
-- [Runtime Overrides](/mod/alecs-telemetry/runtime-overrides)
+- [Crash And Error Telemetry](/mod/alecs-telemetry/crash-and-error-telemetry)
+- [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats)
+- [Breadcrumbs](/mod/alecs-telemetry/breadcrumbs)
+- [Lifecycle Events](/mod/alecs-telemetry/lifecycle-events)
+- [Performance Telemetry](/mod/alecs-telemetry/performance-telemetry)
+- [Usage Events](/mod/alecs-telemetry/usage-events)
+- [Manual Player Reports](/mod/alecs-telemetry/manual-player-reports)
+- [Consent And Privacy](/mod/alecs-telemetry/consent-and-privacy)
 - [Runtime API](/mod/alecs-telemetry/runtime-api)
+- [Runtime Overrides](/mod/alecs-telemetry/runtime-overrides)
 - [Command Reference](/mod/alecs-telemetry/command-reference)
 - [Example Mods](/mod/alecs-telemetry/example-mods)
 
 ## Hosted Operations
 
+- [Portal Project Management](/mod/alecs-telemetry/portal-project-management)
 - [Hosted Key Operations](/mod/alecs-telemetry/hosted-key-operations)
+- [Discord Routing](/mod/alecs-telemetry/discord-routing)
+- [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync)
+- [Public Stats And ModStats](/mod/alecs-telemetry/public-stats-and-modstats)
 - [Hosted Ingest Contract](/mod/alecs-telemetry/hosted-ingest-contract)
 - [Hosted Service Reference](/mod/alecs-telemetry/hosted-service-reference)
 
