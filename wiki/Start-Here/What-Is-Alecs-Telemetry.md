@@ -43,12 +43,13 @@ The hosted portal is the normal destination for Alec's Telemetry data. It gives 
 
 ## Why Modders Use It
 
-- The first setup can be small: create a portal project, add the hosted key to `Server/Telemetry/project.json`, package the descriptor, and verify with `/telemetry test`.
-- Plugin manifests can provide most project identity, so many projects do not need explicit identity fields in the descriptor.
-- Hosted project keys are publishable ingest keys, so normal hosted setup does not require server owners to manage private admin secrets.
-- Server-owner consent and override files can disable or narrow telemetry categories locally.
-- The same runtime can handle quick crash setup, stats-only setup, and deeper Java API integrations.
-- The portal keeps triage, stats, report review, Discord routing, and GitHub sync tied to one project instead of scattered across logs and ad hoc tools.
+- Find issues that only happen in real servers, real modpacks, and real player workflows.
+- Prioritize fixes by impact instead of guessing from the loudest support thread.
+- See which plugin versions, server versions, environments, and installed-mod combinations are tied to recurring problems.
+- Catch regressions after a release and confirm whether a fix reduced new reports.
+- Give players and server owners a structured way to report problems without asking them to copy logs by hand.
+- Publish adoption and compatibility stats without exposing private server or player data.
+- Keep operations in one place: triage, Explore, stats, reports, alerts, GitHub sync, consent, and project access.
 
 ## Why Players Benefit
 
