@@ -21,7 +21,7 @@ Treat this package as a reference implementation, not the long-term production b
 
 ## Trust Model
 
-- `publicProjectKey` is not treated as secret.
+- hosted `projectKey` values are not treated as secrets
 - Key rotation is manual for the reference service.
 - The backend protects itself with validation, size limits, rate limits, and alert suppression.
 
