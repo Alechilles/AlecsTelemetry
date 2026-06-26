@@ -9,27 +9,59 @@ draft: false
 
 Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
 
-Alec's Telemetry is a standalone runtime mod for crash telemetry in Hytale mods. It captures attributed crashes and startup/setup failures, queues reports locally, and flushes them to the configured destination.
+Alec's Telemetry is a telemetry runtime and hosted portal workflow for Hytale plugins and asset packs. It helps mod authors collect structured operational signals from installed projects without building their own ingest service, issue workspace, stats dashboard, consent UI, or upload queue.
 
-For most modders, the destination is Alec's hosted telemetry platform. That setup keeps crash triage, project access, and Discord-connected workflows in one place.
+For most modders, the destination is Alec's hosted telemetry platform. The runtime discovers packaged project descriptors, applies consent and server-owner overrides, queues telemetry locally, and uploads accepted data to the portal project identified by the hosted project key.
+
+## What It Can Collect
+
+Alec's Telemetry can support several different telemetry routes:
+
+- crash reports, setup failures, start failures, and safe manual test reports
+- explicit non-fatal error events recorded by plugin code
+- anonymous public usage stats for server, player, version, and environment trends
+- lifecycle events for setup, start, shutdown, migrations, reloads, and other plugin phases
+- performance telemetry for bounded timing or numeric measurements
+- feature usage events for low-volume product and support signals
+- breadcrumbs that explain recent plugin activity before a failure
+- manual player issue and suggestion reports with bounded project-defined fields
+
+Not every project needs every category. A stats-only asset pack can stay descriptor-driven. A Java plugin can add richer runtime API events. A crash-only integration can keep the descriptor small and use the default crash capture behavior.
+
+## What The Portal Adds
+
+The hosted portal is the normal destination for Alec's Telemetry data. It gives project owners:
+
+- project creation and hosted project-key management
+- issue and occurrence views for crashes and issue-worthy events
+- Explore views for raw events, grouped signals, versions, and context
+- private and public stats dashboards, including ModStats-style pages
+- manual player report review
+- Discord alert routing
+- GitHub issue sync
+- team access, billing, guardrails, and project operations
 
 ## Why Modders Use It
 
-- The default integration is small: install Alec's Telemetry and ship `Server/Telemetry/project.json`.
-- If the mod manifest has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer most project metadata.
-- Hosted `projectKey` values are publishable ingest keys, so normal hosted setup does not require server owners to manage private secrets.
-- The hosted portal gives mod authors a place to review recurring crash issues instead of starting from raw logs.
-- Most dependency-mode integrations do not need custom Java code.
+- The first setup can be small: create a portal project, add the hosted key to `Server/Telemetry/project.json`, package the descriptor, and verify with `/telemetry test`.
+- Plugin manifests can provide most project identity, so many projects do not need explicit identity fields in the descriptor.
+- Hosted project keys are publishable ingest keys, so normal hosted setup does not require server owners to manage private admin secrets.
+- Server-owner consent and override files can disable or narrow telemetry categories locally.
+- The same runtime can handle quick crash setup, stats-only setup, and deeper Java API integrations.
+- The portal keeps triage, stats, report review, Discord routing, and GitHub sync tied to one project instead of scattered across logs and ad hoc tools.
 
 ## Why Players Benefit
 
-- Mod authors can see recurring crash issues faster.
-- Support conversations can start from structured telemetry instead of incomplete manual reports.
-- Server communities spend less time reproducing the same failure just to gather context.
+- Mod authors can spot recurring failures, compatibility patterns, and version-specific problems faster.
+- Support conversations can start from structured reports instead of incomplete screenshots or copied logs.
+- Server communities can choose telemetry categories through consent and overrides.
+- Public stats can show project adoption without exposing raw server IDs, player identifiers, chat, coordinates, secrets, or full config files.
 
 ## Integration Modes
 
-- `dependency`: the recommended default. Alec's Telemetry runs as a standalone dependency and discovers participating mods.
-- `embedded`: an advanced option where the owning mod bundles telemetry bootstrap logic directly.
+- standalone dependency mode: the recommended default. Alec's Telemetry is installed as its own runtime package and discovers participating plugins or asset packs.
+- embedded mode: an advanced plugin-only option where the owning plugin bundles the runtime and calls telemetry bootstrap code directly.
 
-Start with [Quick Setup](/mod/alecs-telemetry/quick-setup) unless you know you need embedded mode or a custom endpoint.
+Both modes use the same portal project, hosted key, `Server/Telemetry/project.json`, consent UI, local overrides, queues, and hosted workflows.
+
+Start with [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) for the full first-time route, then use [Quick Setup](/mod/alecs-telemetry/quick-setup) to choose crash, stats, standalone, or embedded follow-up guides.
