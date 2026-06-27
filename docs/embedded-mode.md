@@ -30,7 +30,7 @@ For Maven builds, add the public repository and depend on the runtime artifact:
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>0.2.6</version>
+  <version>1.0.0</version>
 </dependency>
 ```
 

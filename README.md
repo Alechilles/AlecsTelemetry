@@ -163,7 +163,7 @@ https://telemetry.alecsmods.com/maven/releases
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>0.2.6</version>
+  <version>1.0.0</version>
 </dependency>
 ```
 
