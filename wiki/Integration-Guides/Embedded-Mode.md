@@ -26,7 +26,36 @@ Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Emb
 
 Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 
-## Step 1: Bootstrap From Your Plugin
+## Step 1: Add The Runtime Artifact
+
+Open the Alec's Telemetry downloads page:
+
+```text
+https://telemetry.alecsmods.com/downloads
+```
+
+For Maven builds, add the public repository:
+
+```xml
+<repository>
+  <id>alecs-telemetry</id>
+  <url>https://telemetry.alecsmods.com/maven/releases</url>
+</repository>
+```
+
+Then add the embeddable runtime dependency:
+
+```xml
+<dependency>
+  <groupId>com.alechilles</groupId>
+  <artifactId>alecstelemetry-runtime</artifactId>
+  <version>0.2.6</version>
+</dependency>
+```
+
+Package that runtime jar inside your plugin. Server owners should not need to download a separate runtime jar when your plugin uses embedded mode.
+
+## Step 2: Bootstrap From Your Plugin
 
 The owning plugin boots telemetry directly:
 

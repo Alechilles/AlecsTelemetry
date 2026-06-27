@@ -1,7 +1,7 @@
 # Embedded Mode
 
 Embedded mode lets a modder bundle the telemetry runtime inside their own mod instead
-of requiring the standalone `Alec's Telemetry` dependency.
+of requiring the standalone `Alec's Telemetry!` dependency.
 
 ## When To Use It
 
@@ -10,6 +10,32 @@ Use embedded mode when a modder wants:
 - one distributable mod package
 - no extra CurseForge dependency for players
 - direct ownership of telemetry bootstrap and lifecycle wiring
+
+## Runtime Artifact
+
+Get the embeddable runtime from Alec's Telemetry downloads:
+
+```text
+https://telemetry.alecsmods.com/downloads
+```
+
+For Maven builds, add the public repository and depend on the runtime artifact:
+
+```xml
+<repository>
+  <id>alecs-telemetry</id>
+  <url>https://telemetry.alecsmods.com/maven/releases</url>
+</repository>
+
+<dependency>
+  <groupId>com.alechilles</groupId>
+  <artifactId>alecstelemetry-runtime</artifactId>
+  <version>0.2.6</version>
+</dependency>
+```
+
+Package that runtime jar inside your mod. Do not ask server owners to install the
+runtime jar separately when you choose embedded mode.
 
 ## Descriptor Shape
 

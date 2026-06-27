@@ -10,7 +10,7 @@ a mod: attributed crashes, structured errors, lifecycle and performance events,
 anonymous usage stats, manual player issue reports, project access, ingest keys,
 and portal-based triage.
 
-[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [View Public Stats](https://www.modstats.io/stats/alecs-telemetry) | [Browse Servers](https://www.modstats.io/servers) | [Join Discord](https://discord.gg/E8n8RgTTdq)
+[Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Runtime Downloads](https://telemetry.alecsmods.com/downloads) | [View Public Stats](https://www.modstats.io/stats/alecs-telemetry) | [Browse Servers](https://www.modstats.io/servers) | [Join Discord](https://discord.gg/E8n8RgTTdq)
 
 ## The Combined Solution
 
@@ -146,6 +146,27 @@ Use embedded mode when your mod needs to bundle the telemetry bootstrap directly
 Embedded copies still participate in coordinator election, and the latest
 compatible runtime can serve all installed enabled projects.
 
+The embeddable runtime artifact is published through the Telemetry downloads
+page and Maven repository:
+
+```text
+https://telemetry.alecsmods.com/downloads
+https://telemetry.alecsmods.com/maven/releases
+```
+
+```xml
+<repository>
+  <id>alecs-telemetry</id>
+  <url>https://telemetry.alecsmods.com/maven/releases</url>
+</repository>
+
+<dependency>
+  <groupId>com.alechilles</groupId>
+  <artifactId>alecstelemetry-runtime</artifactId>
+  <version>0.2.6</version>
+</dependency>
+```
+
 ### Custom Endpoint
 
 Use a custom endpoint when you want the runtime but not Alec's web portal.
@@ -271,6 +292,7 @@ For the full runtime, web portal, and ModStats.io policy, see
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
 - [Embedded mode guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
 - [Runtime API guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-api.md)
+- [Runtime downloads](https://telemetry.alecsmods.com/downloads)
 - [Command reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/command-reference.md)
 - [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
 - [Privacy policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md)
