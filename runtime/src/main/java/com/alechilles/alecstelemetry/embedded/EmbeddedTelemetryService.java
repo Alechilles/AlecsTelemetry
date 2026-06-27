@@ -1259,12 +1259,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 commandStatsEnabled(project),
                 commandBreadcrumbsEnabled(project),
                 supportsCrash(project),
-                project.descriptor().events().errors().enabled(),
-                project.descriptor().events().lifecycle().enabled(),
-                project.descriptor().performance().enabled(),
-                project.descriptor().usage().enabled(),
-                project.descriptor().stats().enabled(),
-                project.descriptor().events().breadcrumbs().enabled()
+                project.descriptor().events().errors().supported(),
+                project.descriptor().events().lifecycle().supported(),
+                project.descriptor().performance().supported(),
+                project.descriptor().usage().supported(),
+                project.descriptor().stats().supported(),
+                project.descriptor().events().breadcrumbs().supported()
         );
     }
 
@@ -1432,21 +1432,17 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         return new TelemetryConsentSnapshot(
                 true,
                 supportsCrash(project),
-                project.descriptor().events().errors().enabled(),
-                project.descriptor().events().lifecycle().enabled(),
-                project.descriptor().performance().enabled(),
-                project.descriptor().usage().enabled(),
-                project.descriptor().stats().enabled(),
-                project.descriptor().events().breadcrumbs().enabled()
+                project.descriptor().events().errors().supported(),
+                project.descriptor().events().lifecycle().supported(),
+                project.descriptor().performance().supported(),
+                project.descriptor().usage().supported(),
+                project.descriptor().stats().supported(),
+                project.descriptor().events().breadcrumbs().supported()
         );
     }
 
     private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
-        TelemetryProjectDescriptor.CaptureOptions capture = project.descriptor().capture();
-        return capture.uncaughtExceptions()
-                || capture.setupFailures()
-                || capture.startFailures()
-                || capture.exceptionalWorldRemovals();
+        return project.descriptor().capture().supportsAnySource();
     }
 
     @Nonnull
@@ -2255,7 +2251,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                         com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.RUNTIME_MODE_EMBEDDED,
                         List.of(),
                         List.of(),
-                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.CaptureOptions(true, true, true, true),
+                        new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.CaptureOptions(false, false, false, false),
                         com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.EventOptions.defaults(),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.PerformanceOptions(false, 1.0d, 100, java.util.Map.of()),
                         new com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor.UsageOptions(false, java.util.List.of(), java.util.Map.of()),

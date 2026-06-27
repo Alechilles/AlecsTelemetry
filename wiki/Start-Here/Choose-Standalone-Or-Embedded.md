@@ -9,78 +9,51 @@ draft: false
 
 Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
 
-Alec's Telemetry can run as a standalone dependency or as an embedded runtime inside a plugin. Both modes use the same `Server/Telemetry/project.json` descriptor and the same official portal.
+Use this page only to choose the packaging route. It is not the setup guide.
 
-## Recommended Default
+If you are unsure, choose [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode). It is the default route for first-time integrations, asset packs, and most plugins.
 
-Choose standalone dependency mode unless you have a concrete reason to embed.
+## Quick Decision
 
-Standalone dependency mode is best for:
+Choose standalone dependency mode when:
 
-- first-time integrations
-- asset packs and content-only packages
-- plugins that only need crash capture and anonymous stats
-- packages that can declare or document Alec's Telemetry as a dependency
-- modders who want fewer lifecycle hooks to maintain
+- your project is an asset pack or content-only package
+- you want the smallest integration
+- you can tell server owners to install Alec's Telemetry alongside your project
+- you only need descriptor-driven crash reporting, anonymous stats, or manual reports
+- your plugin can optionally call the runtime API when Alec's Telemetry is installed
 
-Embedded mode is best for:
+Choose embedded mode only when:
 
-- plugins that need one distributable package
-- plugins that want to record setup, start, usage, lifecycle, or performance events from their own code
-- teams willing to update and validate the bundled runtime when Alec's Telemetry changes
-- releases where the plugin owner wants direct bootstrap ownership
+- your project is a Java plugin, not a content-only asset pack
+- you need one plugin package that bundles telemetry instead of requiring a separate dependency
+- you want direct control over telemetry startup and shutdown in your plugin lifecycle
+- you want to capture setup or start failures around your own bootstrap code
+- you are willing to update and validate the bundled runtime when Alec's Telemetry changes
 
-## What Stays The Same
+Custom error, lifecycle, performance, usage, breadcrumb, stats, and report API calls do not automatically require embedded mode. A standalone-dependent plugin can call the runtime API too. Embedded mode is a packaging and lifecycle ownership choice.
 
-Both modes still use:
+## What Does Not Change
+
+Both routes still use:
 
 - the official portal project
-- the hosted project key
+- the portal project key
 - `Server/Telemetry/project.json`
-- the same consent UI
-- the same local override files
-- the same hosted ingest endpoints
-- the same portal issue, event, stats, report, Discord, and GitHub workflows
+- the same consent UI and local overrides
+- the same portal ingest endpoints
+- the same portal issue, event, stats, report, Discord, GitHub, ModStats, and server listing workflows
 
-The descriptor does not choose the mode. New descriptors should omit `runtimeMode`. The mode is chosen by packaging and startup:
+The descriptor does not choose standalone or embedded mode. New descriptors should omit `runtimeMode`. The mode is chosen by how you package and start telemetry:
 
 - standalone mode installs Alec's Telemetry as its own runtime package
 - embedded mode bundles the runtime and calls `EmbeddedTelemetryBootstrap`
 
-## Asset Pack Route
+## Next Step
 
-If your package is an asset pack or another content-only package, use standalone dependency mode.
+After you choose:
 
-1. Create the portal project.
-2. Add `Server/Telemetry/project.json` to the asset pack.
-3. Include the hosted project key.
-4. Add explicit `projectId` only if the inferred ID would not match the portal project ID.
-5. Install Alec's Telemetry alongside the asset pack on the server.
-6. Use `/telemetry projects` to confirm the descriptor was discovered.
+- Use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) for the full standalone setup and verification flow.
+- Use [Embedded Mode](/mod/alecs-telemetry/embedded-mode) for the full embedded bootstrap and verification flow.
 
-An asset pack cannot record custom Java API events by itself. It can still have a portal project, descriptor defaults, consent visibility, hosted key routing, and telemetry handled by the installed runtime when the runtime can discover the packaged descriptor.
-
-## Plugin Route
-
-If your package is a plugin with code, choose based on how much control you need.
-
-Use standalone mode for a quick release:
-
-1. Add the descriptor.
-2. Depend on Alec's Telemetry.
-3. Optionally call the runtime API if the dependency is present.
-4. Verify with `/telemetry test <project-id>`.
-
-Use embedded mode for direct ownership:
-
-1. Add the descriptor.
-2. Bundle the runtime.
-3. Call `EmbeddedTelemetryBootstrap.bootstrap(this)` during setup.
-4. Start and shut down the returned service with your plugin lifecycle.
-5. Record setup/start failures around your own lifecycle code.
-
-## Runtime Election
-
-Only one active telemetry coordinator owns capture, queues, heartbeats, and uploads in a server process. When multiple standalone or embedded copies are present, the latest compatible runtime wins. If versions match, standalone wins over embedded.
-
-This means multiple mods can include telemetry safely, but each mod should still pick one strategy for its own release.
+If you have not created the portal project yet, start with [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) before either route.

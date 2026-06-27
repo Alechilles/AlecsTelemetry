@@ -21,10 +21,12 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "events": {
-    "breadcrumbs": {
-      "enabled": true,
-      "automatic": true
+  "telemetry": {
+    "events": {
+      "breadcrumbs": {
+        "supported": true,
+        "automatic": true
+      }
     }
   }
 }
@@ -55,6 +57,6 @@ Embedded plugins can call the same helper on `EmbeddedTelemetryService`.
 
 ## Troubleshooting
 
-- Breadcrumbs missing: check `events.breadcrumbs.enabled` and server consent.
+- Breadcrumbs missing: check `telemetry.events.breadcrumbs.supported` and server consent.
 - Breadcrumbs too noisy: use fewer categories and only record meaningful state changes.
 - Sensitive data risk: replace raw values with stable reason codes or coarse labels.

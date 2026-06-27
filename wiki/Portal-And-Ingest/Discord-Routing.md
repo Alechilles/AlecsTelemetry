@@ -7,7 +7,7 @@ draft: false
 
 # Discord Routing
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
 Discord routing sends portal alerts to configured Discord channels. Use it for crash, event, and manual-report notifications when a project team wants alerts outside the portal.
 
@@ -20,8 +20,6 @@ Discord routing sends portal alerts to configured Discord channels. Use it for c
 5. Choose the guild and channel you manage.
 6. Follow any verification steps shown by the portal.
 7. Save routing.
-
-> [Screenshot Placeholder: Project admin Discord routing panel]
 
 ## What Routing Uses
 

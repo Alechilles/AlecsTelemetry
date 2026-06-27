@@ -7,7 +7,7 @@ draft: false
 
 # GitHub Issue Sync
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
 GitHub issue sync lets project members create linked GitHub issues from portal issues and optionally mirror recurring issue activity.
 
@@ -22,8 +22,6 @@ GitHub issue sync lets project members create linked GitHub issues from portal i
 7. Set whether auto-create is enabled.
 8. Set the auto-create threshold.
 9. Save GitHub integration.
-
-> [Screenshot Placeholder: Project admin GitHub issue integration panel]
 
 ## Manual Issue Creation
 

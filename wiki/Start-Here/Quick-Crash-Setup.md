@@ -9,7 +9,7 @@ draft: false
 
 Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
 
-Use this route when you only want hosted crash and error reporting. It is the quickest useful Alec's Telemetry setup for most plugins.
+Use this route when you only want hosted crash reporting. It is the quickest useful Alec's Telemetry setup for most plugins.
 
 ## Before This Page
 
@@ -19,20 +19,25 @@ This page only covers the crash-specific settings.
 
 ## Crash Descriptor Block
 
-For an explicit crash-only default, add this block to the shared descriptor:
+Add this block to the shared descriptor:
 
 ```json
 {
-  "capture": {
-    "uncaughtExceptions": true,
-    "setupFailures": true,
-    "startFailures": true,
-    "exceptionalWorldRemovals": true
+  "telemetry": {
+    "crash": {
+      "supported": true,
+      "uncaughtExceptions": true,
+      "setupFailures": true,
+      "startFailures": true,
+      "exceptionalWorldRemovals": true
+    }
   }
 }
 ```
 
-The minimal descriptor from [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) is enough when defaults are acceptable. Add the block above only when you want the crash category to be explicit.
+Omitted telemetry categories are unsupported and hidden from consent. A supported category defaults on unless you set `defaultEnabled: false`. The minimal descriptor from [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) gives the runtime the portal project key, but it does not support crash capture by itself.
+
+To make crash reporting available but off by default, add `"defaultEnabled": false` inside `telemetry.crash`.
 
 ## Install And Verify Locally
 
@@ -62,7 +67,5 @@ Crash setup can include:
 - setup failures
 - start failures
 - exceptional world removals
-- explicit non-fatal errors recorded through the runtime API
-- breadcrumbs attached to reports
 
-For custom non-fatal errors, use [Crash And Error Telemetry](/mod/alecs-telemetry/crash-and-error-telemetry).
+For non-fatal error events or breadcrumbs, use [Crash And Error Telemetry](/mod/alecs-telemetry/crash-and-error-telemetry).

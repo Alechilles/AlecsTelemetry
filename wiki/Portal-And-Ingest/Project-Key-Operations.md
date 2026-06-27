@@ -1,15 +1,15 @@
 ---
-title: "Hosted Key Operations"
+title: "Project Key Operations"
 order: 3
 published: true
 draft: false
 ---
 
-# Hosted Key Operations
+# Project Key Operations
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
-Hosted `projectKey` values are publishable ingest keys. They are intended to be baked into shipped mod descriptors so telemetry works out of the box for the mod author.
+Portal `projectKey` values are publishable ingest keys. They are intended to be baked into shipped mod descriptors so telemetry works out of the box for the mod author.
 
 ## Security Model
 
@@ -46,7 +46,7 @@ If a publishable ingest key is abused:
 
 ## Operator Overrides
 
-Server owners do not need an override for normal hosted telemetry.
+Server owners do not need an override for normal portal-bound telemetry.
 
 Overrides remain useful for:
 

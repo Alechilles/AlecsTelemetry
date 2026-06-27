@@ -21,8 +21,10 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "stats": {
-    "enabled": true
+  "telemetry": {
+    "stats": {
+      "supported": true
+    }
   }
 }
 ```
@@ -35,7 +37,7 @@ The active runtime emits the first standard stats heartbeat 2-5 minutes after st
 
 Stats ingest and public visibility are separate:
 
-- `stats.enabled` lets the runtime send anonymous heartbeat data.
+- `telemetry.stats.supported` makes stats available, and stats consent controls whether the runtime sends anonymous heartbeat data.
 - Portal Public Stats visibility controls whether the project is visible on public stats surfaces.
 
 To make stats public, open project admin, set Public Stats visibility to `Public`, choose a slug, and save stats display.

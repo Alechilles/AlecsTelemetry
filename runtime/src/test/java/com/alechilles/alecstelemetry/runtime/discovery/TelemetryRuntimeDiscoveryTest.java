@@ -90,20 +90,11 @@ class TelemetryRuntimeDiscoveryTest {
                   "projectId": "stats-project",
                   "displayName": "Stats Mod",
                   "packagePrefixes": ["example.stats"],
-                  "capture": {
-                    "uncaughtExceptions": false,
-                    "setupFailures": false,
-                    "startFailures": false,
-                    "exceptionalWorldRemovals": false
-                  },
-                  "events": {
-                    "errors": { "enabled": false },
-                    "lifecycle": { "enabled": false },
-                    "breadcrumbs": { "enabled": false }
-                  },
-                  "performance": { "enabled": false },
-                  "usage": { "enabled": false },
-                  "stats": { "enabled": true }
+                  "telemetry": {
+                    "stats": {
+                      "supported": true
+                    }
+                  }
                 }
                 """
         );

@@ -1,75 +1,77 @@
 {
-  "events": {
-    "errors": { "enabled": true },
-    "lifecycle": { "enabled": true },
-    "breadcrumbs": { "enabled": true, "automatic": true }
-  },
-  "performance": {
-    "enabled": true,
-    "sampleRate": 1.0,
-    "thresholdMs": 100,
-    "details": {
-      "reload_config_duration": {
-        "allowedFields": {
-          "configFileCount": { "type": "number" },
-          "phase": { "type": "enum", "values": ["read", "parse", "apply"] }
-        }
-      }
-    }
-  },
-  "usage": {
-    "enabled": true,
-    "allowedEvents": ["settings_opened"],
-    "details": {
-      "settings_opened": {
-        "allowedFields": {
-          "source": { "type": "enum", "values": ["command", "settings_ui"] }
-        }
-      }
-    }
-  },
-  "stats": {
-    "enabled": true
-  },
-  "reports": {
-    "enabled": true,
-    "issue": {
-      "enabled": true,
-      "fields": {
-        "severity": {
-          "type": "enum",
-          "label": "Severity",
-          "required": true,
-          "values": ["minor", "moderate", "major", "blocking"]
-        },
-        "steps": {
-          "type": "text",
-          "label": "Steps to reproduce",
-          "maxLength": 2000
+  "telemetry": {
+    "events": {
+      "errors": { "supported": true },
+      "lifecycle": { "supported": true },
+      "breadcrumbs": { "supported": true, "automatic": true }
+    },
+    "performance": {
+      "supported": true,
+      "sampleRate": 1.0,
+      "thresholdMs": 100,
+      "details": {
+        "reload_config_duration": {
+          "allowedFields": {
+            "configFileCount": { "type": "number" },
+            "phase": { "type": "enum", "values": ["read", "parse", "apply"] }
+          }
         }
       }
     },
-    "suggestion": {
-      "enabled": true,
-      "fields": {
-        "category": {
-          "type": "enum",
-          "label": "Category",
-          "values": ["balance", "content", "quality_of_life", "other"]
+    "usage": {
+      "supported": true,
+      "allowedEvents": ["settings_opened"],
+      "details": {
+        "settings_opened": {
+          "allowedFields": {
+            "source": { "type": "enum", "values": ["command", "settings_ui"] }
+          }
         }
       }
     },
-    "attachments": {
-      "currentServerLog": true,
-      "previousServerLog": true,
-      "maxBytes": 262144
+    "stats": {
+      "supported": true
     },
-    "contact": {
-      "enabled": true,
-      "maxLength": 160
-    },
-    "resolutionUpdates": {
-      "enabled": true
+    "reports": {
+      "supported": true,
+      "issue": {
+        "enabled": true,
+        "fields": {
+          "severity": {
+            "type": "enum",
+            "label": "Severity",
+            "required": true,
+            "values": ["minor", "moderate", "major", "blocking"]
+          },
+          "steps": {
+            "type": "text",
+            "label": "Steps to reproduce",
+            "maxLength": 2000
+          }
+        }
+      },
+      "suggestion": {
+        "enabled": true,
+        "fields": {
+          "category": {
+            "type": "enum",
+            "label": "Category",
+            "values": ["balance", "content", "quality_of_life", "other"]
+          }
+        }
+      },
+      "attachments": {
+        "currentServerLog": true,
+        "previousServerLog": true,
+        "maxBytes": 262144
+      },
+      "contact": {
+        "enabled": true,
+        "maxLength": 160
+      },
+      "resolutionUpdates": {
+        "enabled": true
+      }
     }
   },
   "hosted": {

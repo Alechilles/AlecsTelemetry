@@ -11,7 +11,7 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Server owners can override destination settings without editing the packaged descriptor inside another mod.
 
-This is optional. Hosted telemetry is expected to work from the shipped descriptor alone when the mod bakes in a publishable ingest key.
+This is optional. Portal uploads are expected to work from the shipped descriptor alone when the mod bakes in a publishable ingest key.
 
 Override files live under Alec's Telemetry data directory:
 
@@ -19,7 +19,7 @@ Override files live under Alec's Telemetry data directory:
 Settings/projects/<project-id>.json
 ```
 
-## Switch Hosted To A Custom Endpoint
+## Switch Portal Uploads To A Custom Endpoint
 
 ```json
 {
@@ -77,7 +77,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 }
 ```
 
-## Override Hosted Key
+## Override Project Key
 
 ```json
 {
@@ -114,7 +114,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 - `customEndpoint.eventUrl`
 - `customEndpoint.headers`
 
-Descriptor-declared `usage.details`, `stats.details`, and `performance.details` allowlists are not runtime override fields. They are part of the mod author's packaged telemetry contract so uploaded custom details stay predictable for the hosted portal.
+Descriptor-declared `usage.details`, `stats.details`, and `performance.details` allowlists are not runtime override fields. They are part of the mod author's packaged telemetry contract so uploaded custom details stay predictable for the web portal.
 
 ## Global Runtime Settings
 

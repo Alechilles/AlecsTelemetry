@@ -7,7 +7,7 @@ draft: false
 
 # Public Stats And ModStats
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
 Public stats turn anonymous heartbeat data into a public project page. ModStats is the public stats host for browsing public Hytale mod stats.
 
@@ -29,8 +29,6 @@ Use [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) or [Anonymous Us
    - GitHub repo URL
 7. Save stats display.
 8. Resync mod metadata if needed.
-
-> [Screenshot Placeholder: Public Stats project admin form]
 
 ## Public Page Data
 

@@ -214,6 +214,16 @@ class EmbeddedTelemetryServiceTest {
                   "runtimeMode": "embedded",
                   "ownerPluginIdentifiers": ["Example:Embedded Mod"],
                   "packagePrefixes": ["com.example.embedded"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
                   "defaults": {
                     "destinationMode": "custom"
                   },
@@ -284,6 +294,9 @@ class EmbeddedTelemetryServiceTest {
                   "runtimeMode": "embedded",
                   "ownerPluginIdentifiers": ["Example:Embedded Mod"],
                   "packagePrefixes": ["com.example.embedded"],
+                  "events": {
+                    "errors": { "enabled": true }
+                  },
                   "defaults": {
                     "destinationMode": "custom"
                   },
@@ -939,6 +952,16 @@ class EmbeddedTelemetryServiceTest {
                   "runtimeMode": "embedded",
                   "ownerPluginIdentifiers": ["Example:Embedded Mod"],
                   "packagePrefixes": ["com.example.embedded"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
                   "defaults": {
                     "destinationMode": "custom"
                   },

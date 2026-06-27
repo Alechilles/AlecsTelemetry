@@ -50,8 +50,10 @@ In `Server/Telemetry/project.json`, opt in with:
 
 ```json
 {
-  "stats": {
-    "enabled": true
+  "telemetry": {
+    "stats": {
+      "supported": true
+    }
   }
 }
 ```

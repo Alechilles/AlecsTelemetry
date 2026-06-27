@@ -22,7 +22,7 @@ Asset packs normally use [Standalone Dependency Mode](/mod/alecs-telemetry/stand
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, hosted key, `Server/Telemetry/project.json`, optional identity overrides, and optional consent icon as standalone mode.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, portal project key, `Server/Telemetry/project.json`, optional identity overrides, and optional consent icon as standalone mode.
 
 Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 
@@ -31,7 +31,6 @@ Do not add a descriptor flag to choose embedded mode. New descriptors should omi
 The owning plugin boots telemetry directly:
 
 ```java
-import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryBootstrap;
 import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
 
@@ -42,17 +41,6 @@ protected void setup() {
     telemetry = EmbeddedTelemetryBootstrap.bootstrap(this);
     try {
         setupInternal();
-        telemetry.recordBreadcrumb("lifecycle", "Setup completed.");
-        telemetry.recordLifecycleWithContext(
-                "plugin_setup",
-                0,
-                true,
-                TelemetryEventContext.lifecycle()
-                        .subsystem("plugin")
-                        .phase("setup")
-                        .runtimeSide("server")
-                        .build()
-        );
     } catch (Throwable throwable) {
         telemetry.captureSetupFailure(throwable);
         throw throwable;
@@ -64,7 +52,6 @@ protected void start() {
     try {
         startInternal();
         telemetry.start();
-        telemetry.recordBreadcrumb("lifecycle", "Start completed.");
     } catch (Throwable throwable) {
         telemetry.captureStartFailure(throwable);
         throw throwable;
@@ -85,16 +72,15 @@ Wrap your own setup/start code so telemetry can capture failures before rethrowi
 
 Every installed standalone or embedded copy registers as a runtime coordinator candidate. The active runtime is selected per server process:
 
-1. Only coordinator candidates with the current coordinator protocol are eligible.
-2. The highest telemetry runtime version wins.
-3. If versions match, standalone wins over embedded.
-4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
+1. The highest telemetry runtime version wins.
+2. If versions match, standalone wins over embedded.
+3. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
 
 The active coordinator handles descriptors from all installed enabled projects. Passive embedded copies do not install their own uncaught exception handlers, stats heartbeats, queues, or upload loops.
 
 ## Storage Layout
 
-Standalone and embedded runtimes use the same canonical Alec's Telemetry data root:
+Standalone and embedded runtimes use the same Alec's Telemetry data root:
 
 ```text
 <ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
@@ -109,28 +95,15 @@ Standalone and embedded runtimes use the same canonical Alec's Telemetry data ro
     manual-reports/
 ```
 
-Older Alec-created locations are migrated into the canonical root on startup when the canonical destination is missing:
-
-```text
-<ServerOrSaveRoot>/telemetry/Settings/
-<ServerOrSaveRoot>/telemetry/Telemetry/
-<ServerOrSaveRoot>/Telemetry/Settings/
-<ServerOrSaveRoot>/Telemetry/Telemetry/
-<ConsumerModDataDir>/Telemetry/Settings/projects/
-```
-
-The migration copies files only when the canonical destination is missing. It leaves unrelated files such as Hytale lowercase `telemetry/*.jsonl.gz` session logs in place.
-
 ## Verify Embedded Setup
 
 1. Package your plugin.
-2. Inspect the final package for the embedded runtime classes, `Server/Telemetry/project.json`, and any configured consent icon.
-3. Install the plugin.
-4. Start a local server.
-5. Run `/telemetry status` and confirm the active coordinator.
-6. Run `/telemetry project <project-id>` and confirm your project source path.
-7. Run `/telemetry test <project-id> embedded-check`.
-8. Confirm the test report appears in the portal.
+2. Install the plugin.
+3. Start a local server.
+4. Run `/telemetry status` and confirm the active coordinator.
+5. Run `/telemetry project <project-id>` and confirm your project source path.
+6. Run `/telemetry test <project-id> embedded-check`.
+7. Confirm the test report appears in the portal.
 
 ## Important Rule
 

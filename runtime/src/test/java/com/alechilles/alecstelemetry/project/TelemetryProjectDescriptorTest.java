@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -46,6 +47,163 @@ class TelemetryProjectDescriptorTest {
         assertEquals("com.example.telemetry", descriptor.packagePrefixes().getFirst());
         assertEquals("hosted", descriptor.defaults().destinationMode());
         assertNotNull(descriptor.resolveDeliveryTarget(settings));
+    }
+
+    @Test
+    void disablesAllTelemetryCategoriesWhenOmitted() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "schemaVersion": 1,
+                  "hosted": {
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                new TelemetryProjectDescriptor.Fallbacks(
+                        "example-mod",
+                        "Example Mod",
+                        "Example:Example Mod",
+                        java.util.List.of("com.example.telemetry")
+                )
+        );
+
+        assertFalse(descriptor.capture().uncaughtExceptions());
+        assertFalse(descriptor.capture().setupFailures());
+        assertFalse(descriptor.capture().startFailures());
+        assertFalse(descriptor.capture().exceptionalWorldRemovals());
+        assertFalse(descriptor.capture().capturesSource("uncaught_exception"));
+        assertFalse(descriptor.capture().supportsAnySource());
+        assertFalse(descriptor.capture().capturesSource("unknown_source"));
+        assertFalse(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertFalse(descriptor.events().lifecycle().supported());
+        assertFalse(descriptor.events().lifecycle().enabled());
+        assertFalse(descriptor.events().breadcrumbs().supported());
+        assertFalse(descriptor.events().breadcrumbs().enabled());
+        assertFalse(descriptor.events().breadcrumbs().automatic());
+        assertFalse(descriptor.performance().supported());
+        assertFalse(descriptor.performance().enabled());
+        assertFalse(descriptor.usage().supported());
+        assertFalse(descriptor.usage().enabled());
+        assertFalse(descriptor.stats().supported());
+        assertFalse(descriptor.stats().enabled());
+        assertFalse(descriptor.reports().supported());
+        assertFalse(descriptor.reports().enabled());
+    }
+
+    @Test
+    void presentTelemetrySectionsAreSupportedAndDefaultEnabledWhenUnspecified() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "partial-mod",
+                  "displayName": "Partial Mod",
+                  "capture": {},
+                  "events": {
+                    "errors": {
+                      "details": {
+                        "needs_seek_failed": {
+                          "allowedFields": {
+                            "reason": { "type": "string", "maxLength": 120 }
+                          }
+                        }
+                      }
+                    },
+                    "lifecycle": {},
+                    "breadcrumbs": {}
+                  }
+                }
+                """,
+                null
+        );
+
+        assertFalse(descriptor.capture().uncaughtExceptions());
+        assertFalse(descriptor.capture().setupFailures());
+        assertFalse(descriptor.capture().startFailures());
+        assertFalse(descriptor.capture().exceptionalWorldRemovals());
+        assertTrue(descriptor.capture().supported());
+        assertTrue(descriptor.capture().enabled());
+        assertFalse(descriptor.capture().supportsAnySource());
+        assertTrue(descriptor.events().errors().supported());
+        assertTrue(descriptor.events().errors().enabled());
+        assertTrue(descriptor.events().lifecycle().supported());
+        assertTrue(descriptor.events().lifecycle().enabled());
+        assertTrue(descriptor.events().breadcrumbs().supported());
+        assertTrue(descriptor.events().breadcrumbs().enabled());
+        assertFalse(descriptor.events().breadcrumbs().automatic());
+        assertEquals("missing_resource", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("reason", "missing_resource")
+        ).get("reason"));
+    }
+
+    @Test
+    void separatesSupportedCategoriesFromDefaultEnabledState() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "opt-in-mod",
+                  "displayName": "Opt In Mod",
+                  "telemetry": {
+                    "crash": {
+                      "supported": true,
+                      "defaultEnabled": false,
+                      "uncaughtExceptions": true,
+                      "setupFailures": true
+                    },
+                    "events": {
+                      "errors": {
+                        "supported": true,
+                        "defaultEnabled": false
+                      }
+                    },
+                    "stats": {
+                      "supported": true
+                    },
+                    "usage": {
+                      "supported": false,
+                      "defaultEnabled": true,
+                      "allowedEvents": ["settings_page_opened"]
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.capture().supported());
+        assertFalse(descriptor.capture().enabled());
+        assertTrue(descriptor.capture().supportsSource("uncaught_exception"));
+        assertFalse(descriptor.capture().capturesSource("uncaught_exception"));
+        assertTrue(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertTrue(descriptor.stats().supported());
+        assertTrue(descriptor.stats().enabled());
+        assertFalse(descriptor.usage().supported());
+        assertFalse(descriptor.usage().enabled());
+    }
+
+    @Test
+    void acceptsLegacyEnabledAsDefaultEnabledAlias() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "legacy-mod",
+                  "displayName": "Legacy Mod",
+                  "events": {
+                    "errors": { "enabled": false }
+                  },
+                  "stats": { "enabled": true }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertTrue(descriptor.stats().supported());
+        assertTrue(descriptor.stats().enabled());
     }
 
     @Test

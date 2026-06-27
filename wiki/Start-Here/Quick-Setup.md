@@ -13,7 +13,7 @@ Use this page as a route map. If you are setting up Alec's Telemetry for the fir
 
 ## Fastest Routes
 
-- [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup): collect crash reports, setup failures, start failures, and explicit error events.
+- [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup): collect crash reports, setup failures, and start failures.
 - [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup): publish anonymous public server/player/environment stats.
 - [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode): require Alec's Telemetry as an external dependency and ship only a descriptor with your plugin or asset pack.
 - [Embedded Mode](/mod/alecs-telemetry/embedded-mode): bundle and bootstrap telemetry from your own plugin when you want one distributable package.
@@ -23,7 +23,7 @@ Use this page as a route map. If you are setting up Alec's Telemetry for the fir
 Do these once in [Portal First Setup](/mod/alecs-telemetry/portal-first-setup):
 
 - create the portal project
-- copy the hosted project key
+- copy the portal project key
 - create `Server/Telemetry/project.json`
 - confirm the inferred `projectId` matches the portal project ID, or add an explicit `projectId` override
 - optionally add `ui.iconTexturePath` for the consent UI icon
@@ -42,15 +42,15 @@ After that, the quick crash and stats guides only add the telemetry-specific set
 7. Package and install your project.
 8. Start a local server or test world.
 9. Use `/telemetry status`, `/telemetry projects`, and `/telemetry project <project-id>` to confirm discovery.
-10. Confirm data appears in the portal.
+10. Continue to a category guide, then verify that category in the portal.
 
 ## What Can Be Inferred
 
-If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a hosted key.
+If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a portal project key.
 
 For asset packs or descriptor-only packages, `Name` can still infer `projectId` and `displayName`, while `Group:Name` provides the owner plugin identifier. `packagePrefixes` is only inferred from `Main`, so content-only packages usually leave it empty unless Java crash attribution is relevant.
 
-The portal project key chooses the hosted portal project. The descriptor `projectId` must match that portal project ID, but descriptor `displayName` does not rename the hosted portal project.
+The portal project key chooses the portal project. The descriptor `projectId` must match that portal project ID, but descriptor `displayName` does not rename the portal project.
 
 ## Descriptor Reference
 

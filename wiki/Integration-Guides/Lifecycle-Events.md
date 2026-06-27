@@ -21,13 +21,15 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "events": {
-    "lifecycle": {
-      "enabled": true,
-      "details": {
-        "plugin_setup": {
-          "allowedFields": {
-            "phase": { "type": "enum", "values": ["setup", "start", "shutdown"] }
+  "telemetry": {
+    "events": {
+      "lifecycle": {
+        "supported": true,
+        "details": {
+          "plugin_setup": {
+            "allowedFields": {
+              "phase": { "type": "enum", "values": ["setup", "start", "shutdown"] }
+            }
           }
         }
       }
@@ -62,6 +64,6 @@ Use lifecycle events for coarse phases, not per-tick or high-volume work.
 
 ## Troubleshooting
 
-- Event missing: check `events.lifecycle.enabled` and consent.
+- Event missing: check `telemetry.events.lifecycle.supported` and consent.
 - Custom detail missing: add the field to the descriptor allowlist.
 - Too many events: report phase boundaries instead of repeated loop activity.

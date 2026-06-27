@@ -9,7 +9,7 @@ draft: false
 
 Parent: [Alec's Telemetry Wiki](/mod/alecs-telemetry/home)
 
-Use these pages first if you are deciding whether to add Alec's Telemetry to a plugin or asset pack, or if you are setting up a hosted portal project for the first time.
+Use these pages first if you are deciding whether to add Alec's Telemetry to a plugin or asset pack, or if you are setting up a web portal project for the first time.
 
 ## Child Pages
 

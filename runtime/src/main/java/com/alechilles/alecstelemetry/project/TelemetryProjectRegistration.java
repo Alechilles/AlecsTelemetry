@@ -83,10 +83,8 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
     public boolean isCrashTelemetryEnabled() {
         TelemetryProjectDescriptor.CaptureOptions capture = capture();
         return isEnabled()
-                && (capture.uncaughtExceptions()
-                || capture.setupFailures()
-                || capture.startFailures()
-                || capture.exceptionalWorldRemovals());
+                && capture.enabled()
+                && capture.supportsAnySource();
     }
 
     @Nonnull
@@ -110,11 +108,18 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         }
         TelemetryProjectDescriptor.CaptureOptions defaults = descriptor.capture();
         TelemetryProjectOverride.CaptureOverride captureOverride = override.capture();
+        boolean crashEnabled = captureOverride.hasAnyValue()
+                && (boolOrDefault(captureOverride.uncaughtExceptions(), false)
+                || boolOrDefault(captureOverride.setupFailures(), false)
+                || boolOrDefault(captureOverride.startFailures(), false)
+                || boolOrDefault(captureOverride.exceptionalWorldRemovals(), false));
         return new TelemetryProjectDescriptor.CaptureOptions(
-                captureOverride.uncaughtExceptions() == null ? defaults.uncaughtExceptions() : captureOverride.uncaughtExceptions(),
-                captureOverride.setupFailures() == null ? defaults.setupFailures() : captureOverride.setupFailures(),
-                captureOverride.startFailures() == null ? defaults.startFailures() : captureOverride.startFailures(),
-                captureOverride.exceptionalWorldRemovals() == null ? defaults.exceptionalWorldRemovals() : captureOverride.exceptionalWorldRemovals()
+                defaults.supported(),
+                crashEnabled,
+                defaults.uncaughtExceptions(),
+                defaults.setupFailures(),
+                defaults.startFailures(),
+                defaults.exceptionalWorldRemovals()
         );
     }
 
@@ -130,18 +135,21 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         TelemetryProjectOverride.BreadcrumbsOverride breadcrumbsOverride = eventsOverride.breadcrumbs();
         return new TelemetryProjectDescriptor.EventOptions(
                 new TelemetryProjectDescriptor.EventTypeOptions(
+                        defaults.errors().supported(),
                         errorsOverride == null || errorsOverride.enabled() == null
                                 ? defaults.errors().enabled()
                                 : errorsOverride.enabled(),
                         defaults.errors().details()
                 ),
                 new TelemetryProjectDescriptor.EventTypeOptions(
+                        defaults.lifecycle().supported(),
                         lifecycleOverride == null || lifecycleOverride.enabled() == null
                                 ? defaults.lifecycle().enabled()
                                 : lifecycleOverride.enabled(),
                         defaults.lifecycle().details()
                 ),
                 new TelemetryProjectDescriptor.BreadcrumbOptions(
+                        defaults.breadcrumbs().supported(),
                         breadcrumbsOverride == null || breadcrumbsOverride.enabled() == null
                                 ? defaults.breadcrumbs().enabled()
                                 : breadcrumbsOverride.enabled(),
@@ -158,6 +166,7 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         TelemetryProjectDescriptor.PerformanceOptions defaults = descriptor.performance();
         TelemetryProjectOverride.PerformanceOverride performanceOverride = override.performance();
         return new TelemetryProjectDescriptor.PerformanceOptions(
+                defaults.supported(),
                 performanceOverride.enabled() == null ? defaults.enabled() : performanceOverride.enabled(),
                 performanceOverride.sampleRate() == null ? defaults.sampleRate() : performanceOverride.sampleRate(),
                 performanceOverride.thresholdMs() == null ? defaults.thresholdMs() : performanceOverride.thresholdMs(),
@@ -173,6 +182,7 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         TelemetryProjectDescriptor.UsageOptions defaults = descriptor.usage();
         TelemetryProjectOverride.UsageOverride usageOverride = override.usage();
         return new TelemetryProjectDescriptor.UsageOptions(
+                defaults.supported(),
                 usageOverride.enabled() == null ? defaults.enabled() : usageOverride.enabled(),
                 usageOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : usageOverride.allowedEvents(),
                 defaults.details()
@@ -187,6 +197,7 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
         TelemetryProjectDescriptor.StatsOptions defaults = descriptor.stats();
         TelemetryProjectOverride.StatsOverride statsOverride = override.stats();
         return new TelemetryProjectDescriptor.StatsOptions(
+                defaults.supported(),
                 statsOverride.enabled() == null ? defaults.enabled() : statsOverride.enabled(),
                 statsOverride.allowedEvents().isEmpty() ? defaults.allowedEvents() : statsOverride.allowedEvents(),
                 defaults.details()
@@ -343,6 +354,10 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
             }
         }
         return null;
+    }
+
+    private static boolean boolOrDefault(@Nullable Boolean value, boolean fallback) {
+        return value == null ? fallback : value;
     }
 
     @Nullable

@@ -17,6 +17,7 @@ Standalone dependency mode is the recommended default. Alec's Telemetry is insta
 - You want to use Alec's Telemetry as an external dependency.
 - You do not need telemetry bootstrap code.
 - Your mod is an asset pack.
+- Your release can list Alec's Telemetry as a dependency on the sites where players download it.
 - You want crash/error telemetry, anonymous stats, or manual reports without owning the runtime lifecycle.
 
 ## Before This Page
@@ -25,14 +26,35 @@ Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Tha
 
 Then return here for the standalone-specific install and verification flow.
 
-## Step 1: Install For Testing
+## Step 1: Declare The Dependency
+
+Standalone mode only works when server owners install Alec's Telemetry with your project. Make that requirement visible in both places players and launchers check:
+
+1. On CurseForge, Modtale, and Modifold, set `Alec's Telemetry!` as a required dependency for the release.
+2. In your project's `manifest.json`, add Alec's Telemetry to `Dependencies` when your project expects the runtime to be present.
+3. Use `OptionalDependencies` only when your plugin still works normally without telemetry and your Java code treats the runtime API as optional.
+
+A required manifest dependency looks like this:
+
+```json
+{
+  "Dependencies": {
+    "Alechilles:Alec's Telemetry!": ">=0.1.0"
+  },
+  "OptionalDependencies": {}
+}
+```
+
+An optional manifest dependency uses the same identifier under `OptionalDependencies` instead.
+
+## Step 2: Install For Testing
 
 1. Install Alec's Telemetry.
 2. Install your plugin or asset pack.
 3. Start a local server or test world.
 4. Review the first-run consent UI if it appears.
 
-## Step 2: Verify Discovery
+## Step 3: Verify Discovery
 
 Run:
 
@@ -50,7 +72,7 @@ Confirm:
 - the destination is hosted
 - pending queue counts are reasonable
 
-## Step 3: Verify Upload
+## Step 4: Verify Upload
 
 For crash/error setup:
 
@@ -76,7 +98,7 @@ Then resolve your project handle and record breadcrumbs, lifecycle events, perfo
 
 ## Asset Pack Notes
 
-Asset packs can use descriptor-driven setup for hosted identity and stats-only telemetry. Runtime API events require plugin Java code, so an asset pack without code should not try to document lifecycle, performance, usage, or explicit error events as if they are automatic.
+Asset packs can use descriptor-driven setup for portal identity and stats-only telemetry. Runtime API events require plugin Java code, so an asset pack without code should not try to document lifecycle, performance, usage, or explicit error events as if they are automatic.
 
 ## Next Pages
 

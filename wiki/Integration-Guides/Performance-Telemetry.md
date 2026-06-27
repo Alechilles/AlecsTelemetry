@@ -21,15 +21,17 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "performance": {
-    "enabled": true,
-    "sampleRate": 1.0,
-    "thresholdMs": 100,
-    "details": {
-      "reload_config_duration": {
-        "allowedFields": {
-          "configFileCount": { "type": "number" },
-          "phase": { "type": "enum", "values": ["read", "parse", "apply"] }
+  "telemetry": {
+    "performance": {
+      "supported": true,
+      "sampleRate": 1.0,
+      "thresholdMs": 100,
+      "details": {
+        "reload_config_duration": {
+          "allowedFields": {
+            "configFileCount": { "type": "number" },
+            "phase": { "type": "enum", "values": ["read", "parse", "apply"] }
+          }
         }
       }
     }

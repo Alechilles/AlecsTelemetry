@@ -9,7 +9,7 @@ draft: false
 
 Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
 
-Crash and error telemetry is the core Alec's Telemetry workflow. It sends structured failures to the hosted portal so mod authors can group recurring issues, inspect context, and route alerts.
+Crash and error telemetry is the core Alec's Telemetry workflow. It sends structured failures to the web portal so mod authors can group recurring issues, inspect context, and route alerts.
 
 ## What Gets Captured
 
@@ -22,30 +22,35 @@ Crash and error telemetry is the core Alec's Telemetry workflow. It sends struct
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Configure [Discord Routing](/mod/alecs-telemetry/discord-routing) or [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync) only if your project needs those hosted operations.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Configure [Discord Routing](/mod/alecs-telemetry/discord-routing) or [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync) only if your project needs those portal integrations.
 
 ## Descriptor Block
 
-The minimal shared descriptor is enough for normal crash setup. Add this block only when you want capture and related event defaults to be explicit:
+Add this block for hosted crash capture, non-fatal error events, and breadcrumbs:
 
 ```json
 {
-  "capture": {
-    "uncaughtExceptions": true,
-    "setupFailures": true,
-    "startFailures": true,
-    "exceptionalWorldRemovals": true
-  },
-  "events": {
-    "errors": {
-      "enabled": true
+  "telemetry": {
+    "crash": {
+      "supported": true,
+      "uncaughtExceptions": true,
+      "setupFailures": true,
+      "startFailures": true,
+      "exceptionalWorldRemovals": true
     },
-    "breadcrumbs": {
-      "enabled": true
+    "events": {
+      "errors": {
+        "supported": true
+      },
+      "breadcrumbs": {
+        "supported": true
+      }
     }
   }
 }
 ```
+
+Supported categories default on. Add `defaultEnabled: false` to any supported category that should be opt-in.
 
 ## Explicit Error Events
 
@@ -67,13 +72,15 @@ Declare custom detail fields in the descriptor before expecting them to upload:
 
 ```json
 {
-  "events": {
-    "errors": {
-      "enabled": true,
-      "details": {
-        "needs_seek_failed": {
-          "allowedFields": {
-            "reason": { "type": "enum", "values": ["missing_resource", "path_blocked"] }
+  "telemetry": {
+    "events": {
+      "errors": {
+        "supported": true,
+        "details": {
+          "needs_seek_failed": {
+            "allowedFields": {
+              "reason": { "type": "enum", "values": ["missing_resource", "path_blocked"] }
+            }
           }
         }
       }

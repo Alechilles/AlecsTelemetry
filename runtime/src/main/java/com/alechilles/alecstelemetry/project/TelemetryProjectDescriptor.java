@@ -59,13 +59,17 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             ownerPluginIdentifiers = List.of(fallbackOwnerPluginIdentifier.trim());
         }
 
-        CaptureOptions capture = safe.capture == null
-                ? new CaptureOptions(true, true, true, true)
+        CaptureDocument captureDocument = choose(safe.telemetry == null ? null : safe.telemetry.crash, safe.capture);
+        boolean captureSupported = categorySupported(captureDocument, captureDocument == null ? null : captureDocument.supported);
+        CaptureOptions capture = captureDocument == null
+                ? new CaptureOptions(false, false, false, false, false, false)
                 : new CaptureOptions(
-                boolOrDefault(safe.capture.uncaughtExceptions, true),
-                boolOrDefault(safe.capture.setupFailures, true),
-                boolOrDefault(safe.capture.startFailures, true),
-                boolOrDefault(safe.capture.exceptionalWorldRemovals, true)
+                captureSupported,
+                categoryDefaultEnabled(captureSupported, captureDocument.defaultEnabled, captureDocument.enabled),
+                boolOrDefault(captureDocument.uncaughtExceptions, false),
+                boolOrDefault(captureDocument.setupFailures, false),
+                boolOrDefault(captureDocument.startFailures, false),
+                boolOrDefault(captureDocument.exceptionalWorldRemovals, false)
         );
 
         String destinationMode = normalizeMode(
@@ -78,54 +82,53 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 destinationMode
         );
 
-        PerformanceOptions performance = safe.performance == null
-                ? new PerformanceOptions(false, 1.0d, 100, Map.of())
+        PerformanceDocument performanceDocument = choose(safe.telemetry == null ? null : safe.telemetry.performance, safe.performance);
+        boolean performanceSupported = categorySupported(performanceDocument, performanceDocument == null ? null : performanceDocument.supported);
+        PerformanceOptions performance = performanceDocument == null
+                ? new PerformanceOptions(false, false, 1.0d, 100, Map.of())
                 : new PerformanceOptions(
-                boolOrDefault(safe.performance.enabled, false),
-                doubleOrDefault(safe.performance.sampleRate, 1.0d, 0.0d, 1.0d),
-                intOrDefault(safe.performance.thresholdMs, 100, 1, 60000),
-                normalizeDetailRules(safe.performance.details)
+                performanceSupported,
+                categoryDefaultEnabled(performanceSupported, performanceDocument.defaultEnabled, performanceDocument.enabled),
+                doubleOrDefault(performanceDocument.sampleRate, 1.0d, 0.0d, 1.0d),
+                intOrDefault(performanceDocument.thresholdMs, 100, 1, 60000),
+                normalizeDetailRules(performanceDocument.details)
         );
 
-        UsageOptions usage = safe.usage == null
-                ? new UsageOptions(false, List.of(), Map.of())
+        UsageDocument usageDocument = choose(safe.telemetry == null ? null : safe.telemetry.usage, safe.usage);
+        boolean usageSupported = categorySupported(usageDocument, usageDocument == null ? null : usageDocument.supported);
+        UsageOptions usage = usageDocument == null
+                ? new UsageOptions(false, false, List.of(), Map.of())
                 : new UsageOptions(
-                boolOrDefault(safe.usage.enabled, false),
-                normalizeNonBlankList(safe.usage.allowedEvents, 120),
-                normalizeDetailRules(safe.usage.details)
+                usageSupported,
+                categoryDefaultEnabled(usageSupported, usageDocument.defaultEnabled, usageDocument.enabled),
+                normalizeNonBlankList(usageDocument.allowedEvents, 120),
+                normalizeDetailRules(usageDocument.details)
         );
 
-        StatsOptions stats = safe.stats == null
-                ? new StatsOptions(false, List.of(), Map.of())
+        StatsDocument statsDocument = choose(safe.telemetry == null ? null : safe.telemetry.stats, safe.stats);
+        boolean statsSupported = categorySupported(statsDocument, statsDocument == null ? null : statsDocument.supported);
+        StatsOptions stats = statsDocument == null
+                ? new StatsOptions(false, false, List.of(), Map.of())
                 : new StatsOptions(
-                boolOrDefault(safe.stats.enabled, false),
-                normalizeNonBlankList(safe.stats.allowedEvents, 120),
-                normalizeDetailRules(safe.stats.details)
+                statsSupported,
+                categoryDefaultEnabled(statsSupported, statsDocument.defaultEnabled, statsDocument.enabled),
+                normalizeNonBlankList(statsDocument.allowedEvents, 120),
+                normalizeDetailRules(statsDocument.details)
         );
 
         UiOptions ui = safe.ui == null
                 ? new UiOptions(null)
                 : new UiOptions(normalizeUiTexturePath(safe.ui.iconTexturePath));
 
-        ManualReportOptions reports = normalizeManualReports(safe.reports);
+        ManualReportOptions reports = normalizeManualReports(choose(safe.telemetry == null ? null : safe.telemetry.reports, safe.reports));
 
-        EventOptions events = safe.events == null
+        EventsDocument eventsDocument = choose(safe.telemetry == null ? null : safe.telemetry.events, safe.events);
+        EventOptions events = eventsDocument == null
                 ? EventOptions.defaults()
                 : new EventOptions(
-                new EventTypeOptions(
-                        safe.events.errors == null || boolOrDefault(safe.events.errors.enabled, true),
-                        normalizeDetailRules(safe.events.errors == null ? null : safe.events.errors.details)
-                ),
-                new EventTypeOptions(
-                        safe.events.lifecycle == null || boolOrDefault(safe.events.lifecycle.enabled, true),
-                        normalizeDetailRules(safe.events.lifecycle == null ? null : safe.events.lifecycle.details)
-                ),
-                safe.events.breadcrumbs == null
-                        ? new BreadcrumbOptions(true, true)
-                        : new BreadcrumbOptions(
-                        boolOrDefault(safe.events.breadcrumbs.enabled, true),
-                        boolOrDefault(safe.events.breadcrumbs.automatic, true)
-                )
+                normalizeEventType(eventsDocument.errors),
+                normalizeEventType(eventsDocument.lifecycle),
+                normalizeBreadcrumbs(eventsDocument.breadcrumbs)
         );
 
         HostedDestination hosted = new HostedDestination(
@@ -174,40 +177,41 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         document.put("runtimeMode", runtimeMode);
         document.put("ownerPluginIdentifiers", ownerPluginIdentifiers);
         document.put("packagePrefixes", packagePrefixes);
-        document.put("capture", Map.of(
-                "uncaughtExceptions", capture.uncaughtExceptions(),
-                "setupFailures", capture.setupFailures(),
-                "startFailures", capture.startFailures(),
-                "exceptionalWorldRemovals", capture.exceptionalWorldRemovals()
-        ));
-        document.put("events", Map.of(
+        document.put("telemetry", Map.of(
+                "crash", captureDocument(capture),
+                "events", Map.of(
                 "errors", eventTypeDocument(events.errors()),
                 "lifecycle", eventTypeDocument(events.lifecycle()),
                 "breadcrumbs", Map.of(
-                        "enabled", events.breadcrumbs().enabled(),
+                        "supported", events.breadcrumbs().supported(),
+                        "defaultEnabled", events.breadcrumbs().enabled(),
                         "automatic", events.breadcrumbs().automatic()
                 )
-        ));
-        document.put("performance", Map.of(
-                "enabled", performance.enabled(),
+        ),
+                "performance", Map.of(
+                "supported", performance.supported(),
+                "defaultEnabled", performance.enabled(),
                 "sampleRate", performance.sampleRate(),
                 "thresholdMs", performance.thresholdMs(),
                 "details", detailRulesDocument(performance.details())
-        ));
-        document.put("usage", Map.of(
-                "enabled", usage.enabled(),
+        ),
+                "usage", Map.of(
+                "supported", usage.supported(),
+                "defaultEnabled", usage.enabled(),
                 "allowedEvents", usage.allowedEvents(),
                 "details", detailRulesDocument(usage.details())
-        ));
-        document.put("stats", Map.of(
-                "enabled", stats.enabled(),
+        ),
+                "stats", Map.of(
+                "supported", stats.supported(),
+                "defaultEnabled", stats.enabled(),
                 "allowedEvents", stats.allowedEvents(),
                 "details", detailRulesDocument(stats.details())
+        ),
+                "reports", reportsDocument(reports)
         ));
         LinkedHashMap<String, Object> uiDocument = new LinkedHashMap<>();
         putDocumentValue(uiDocument, "iconTexturePath", ui.iconTexturePath());
         document.put("ui", uiDocument);
-        document.put("reports", reportsDocument(reports));
         document.put("defaults", Map.of(
                 "enabled", defaults.enabled(),
                 "destinationMode", defaults.destinationMode()
@@ -229,15 +233,29 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     @Nonnull
     private static Map<String, Object> eventTypeDocument(@Nonnull EventTypeOptions options) {
         return Map.of(
-                "enabled", options.enabled(),
+                "supported", options.supported(),
+                "defaultEnabled", options.enabled(),
                 "details", detailRulesDocument(options.details())
+        );
+    }
+
+    @Nonnull
+    private static Map<String, Object> captureDocument(@Nonnull CaptureOptions options) {
+        return Map.of(
+                "supported", options.supported(),
+                "defaultEnabled", options.enabled(),
+                "uncaughtExceptions", options.uncaughtExceptions(),
+                "setupFailures", options.setupFailures(),
+                "startFailures", options.startFailures(),
+                "exceptionalWorldRemovals", options.exceptionalWorldRemovals()
         );
     }
 
     @Nonnull
     private static Map<String, Object> reportsDocument(@Nonnull ManualReportOptions options) {
         return Map.of(
-                "enabled", options.enabled(),
+                "supported", options.supported(),
+                "defaultEnabled", options.enabled(),
                 "issue", manualReportFormDocument(options.issue()),
                 "suggestion", manualReportFormDocument(options.suggestion()),
                 "attachments", Map.of(
@@ -324,6 +342,27 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     private static boolean boolOrDefault(@Nullable Boolean value, boolean fallback) {
         return value == null ? fallback : value;
+    }
+
+    private static boolean categorySupported(@Nullable Object document, @Nullable Boolean supported) {
+        return document != null && boolOrDefault(supported, true);
+    }
+
+    private static boolean categoryDefaultEnabled(boolean supported,
+                                                  @Nullable Boolean defaultEnabled,
+                                                  @Nullable Boolean legacyEnabled) {
+        if (!supported) {
+            return false;
+        }
+        if (defaultEnabled != null) {
+            return defaultEnabled;
+        }
+        return boolOrDefault(legacyEnabled, true);
+    }
+
+    @Nullable
+    private static <T> T choose(@Nullable T preferred, @Nullable T fallback) {
+        return preferred == null ? fallback : preferred;
     }
 
     private static int intOrDefault(@Nullable Integer value, int fallback, int min, int max) {
@@ -476,14 +515,48 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     @Nonnull
     private static ManualReportOptions normalizeManualReports(@Nullable ReportsDocument document) {
-        boolean enabled = document != null && boolOrDefault(document.enabled, false);
+        boolean supported = categorySupported(document, document == null ? null : document.supported);
+        boolean enabled = categoryDefaultEnabled(
+                supported,
+                document == null ? null : document.defaultEnabled,
+                document == null ? null : document.enabled
+        );
         return new ManualReportOptions(
+                supported,
                 enabled,
                 normalizeManualReportForm(document == null ? null : document.issue, enabled),
                 normalizeManualReportForm(document == null ? null : document.suggestion, enabled),
                 normalizeManualReportAttachments(document == null ? null : document.attachments),
                 normalizeManualReportContact(document == null ? null : document.contact),
                 normalizeManualReportResolutionUpdates(document == null ? null : document.resolutionUpdates)
+        );
+    }
+
+    @Nonnull
+    private static EventTypeOptions normalizeEventType(@Nullable EventTypeDocument document) {
+        boolean supported = categorySupported(document, document == null ? null : document.supported);
+        return new EventTypeOptions(
+                supported,
+                categoryDefaultEnabled(
+                        supported,
+                        document == null ? null : document.defaultEnabled,
+                        document == null ? null : document.enabled
+                ),
+                normalizeDetailRules(document == null ? null : document.details)
+        );
+    }
+
+    @Nonnull
+    private static BreadcrumbOptions normalizeBreadcrumbs(@Nullable BreadcrumbsDocument document) {
+        boolean supported = categorySupported(document, document == null ? null : document.supported);
+        return new BreadcrumbOptions(
+                supported,
+                categoryDefaultEnabled(
+                        supported,
+                        document == null ? null : document.defaultEnabled,
+                        document == null ? null : document.enabled
+                ),
+                document != null && boolOrDefault(document.automatic, false)
         );
     }
 
@@ -718,18 +791,40 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     /**
      * Capture settings for one project.
      */
-    public record CaptureOptions(boolean uncaughtExceptions,
+    public record CaptureOptions(boolean supported,
+                                 boolean enabled,
+                                 boolean uncaughtExceptions,
                                  boolean setupFailures,
                                  boolean startFailures,
                                  boolean exceptionalWorldRemovals) {
+        public CaptureOptions(boolean uncaughtExceptions,
+                              boolean setupFailures,
+                              boolean startFailures,
+                              boolean exceptionalWorldRemovals) {
+            this(uncaughtExceptions || setupFailures || startFailures || exceptionalWorldRemovals,
+                    uncaughtExceptions || setupFailures || startFailures || exceptionalWorldRemovals,
+                    uncaughtExceptions,
+                    setupFailures,
+                    startFailures,
+                    exceptionalWorldRemovals);
+        }
+
         public boolean capturesSource(@Nonnull String source) {
-            return switch (source) {
+            return enabled() && supportsSource(source);
+        }
+
+        public boolean supportsSource(@Nonnull String source) {
+            return supported() && switch (source) {
                 case "uncaught_exception" -> uncaughtExceptions;
                 case "plugin_setup_failure" -> setupFailures;
                 case "plugin_start_failure" -> startFailures;
                 case "exceptional_world_removal" -> exceptionalWorldRemovals;
-                default -> true;
+                default -> false;
             };
+        }
+
+        public boolean supportsAnySource() {
+            return supported() && (uncaughtExceptions || setupFailures || startFailures || exceptionalWorldRemovals);
         }
     }
 
@@ -749,15 +844,19 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         @Nonnull
         public static EventOptions defaults() {
             return new EventOptions(
-                    new EventTypeOptions(true, Map.of()),
-                    new EventTypeOptions(true, Map.of()),
-                    new BreadcrumbOptions(true, true)
+                    new EventTypeOptions(false, false, Map.of()),
+                    new EventTypeOptions(false, false, Map.of()),
+                    new BreadcrumbOptions(false, false, false)
             );
         }
     }
 
-    public record EventTypeOptions(boolean enabled,
+    public record EventTypeOptions(boolean supported,
+                                   boolean enabled,
                                    @Nonnull Map<String, DetailRules> details) {
+        public EventTypeOptions(boolean enabled, @Nonnull Map<String, DetailRules> details) {
+            this(enabled, enabled, details);
+        }
 
         @Nonnull
         public Map<String, Object> sanitizeDetails(@Nonnull String eventName, @Nullable Map<String, Object> rawDetails) {
@@ -765,16 +864,26 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         }
     }
 
-    public record BreadcrumbOptions(boolean enabled, boolean automatic) {
+    public record BreadcrumbOptions(boolean supported, boolean enabled, boolean automatic) {
+        public BreadcrumbOptions(boolean enabled, boolean automatic) {
+            this(enabled, enabled, automatic);
+        }
     }
 
     /**
      * Performance telemetry defaults for one project.
      */
-    public record PerformanceOptions(boolean enabled,
+    public record PerformanceOptions(boolean supported,
+                                     boolean enabled,
                                      double sampleRate,
                                      int thresholdMs,
                                      @Nonnull Map<String, DetailRules> details) {
+        public PerformanceOptions(boolean enabled,
+                                  double sampleRate,
+                                  int thresholdMs,
+                                  @Nonnull Map<String, DetailRules> details) {
+            this(enabled, enabled, sampleRate, thresholdMs, details);
+        }
 
         @Nonnull
         public Map<String, Object> sanitizeDetails(@Nonnull String eventName, @Nullable Map<String, Object> rawDetails) {
@@ -785,9 +894,15 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     /**
      * Usage telemetry defaults and allowlist for one project.
      */
-    public record UsageOptions(boolean enabled,
+    public record UsageOptions(boolean supported,
+                               boolean enabled,
                                @Nonnull List<String> allowedEvents,
                                @Nonnull Map<String, DetailRules> details) {
+        public UsageOptions(boolean enabled,
+                            @Nonnull List<String> allowedEvents,
+                            @Nonnull Map<String, DetailRules> details) {
+            this(enabled, enabled, allowedEvents, details);
+        }
 
         public boolean allows(@Nonnull String eventName) {
             String normalized = normalizeNullable(eventName);
@@ -803,9 +918,15 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     /**
      * Anonymous aggregate statistics defaults and allowlist for one project.
      */
-    public record StatsOptions(boolean enabled,
+    public record StatsOptions(boolean supported,
+                               boolean enabled,
                                @Nonnull List<String> allowedEvents,
                                @Nonnull Map<String, DetailRules> details) {
+        public StatsOptions(boolean enabled,
+                            @Nonnull List<String> allowedEvents,
+                            @Nonnull Map<String, DetailRules> details) {
+            this(enabled, enabled, allowedEvents, details);
+        }
 
         private static final String EVENT_HEARTBEAT = "heartbeat";
 
@@ -848,12 +969,21 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     /**
      * Player-submitted issue and suggestion report configuration.
      */
-    public record ManualReportOptions(boolean enabled,
+    public record ManualReportOptions(boolean supported,
+                                      boolean enabled,
                                       @Nonnull ManualReportForm issue,
                                       @Nonnull ManualReportForm suggestion,
                                       @Nonnull ManualReportAttachmentOptions attachments,
                                       @Nonnull ManualReportContactOptions contact,
                                       @Nonnull ManualReportResolutionOptions resolutionUpdates) {
+        public ManualReportOptions(boolean enabled,
+                                   @Nonnull ManualReportForm issue,
+                                   @Nonnull ManualReportForm suggestion,
+                                   @Nonnull ManualReportAttachmentOptions attachments,
+                                   @Nonnull ManualReportContactOptions contact,
+                                   @Nonnull ManualReportResolutionOptions resolutionUpdates) {
+            this(enabled, enabled, issue, suggestion, attachments, contact, resolutionUpdates);
+        }
     }
 
     public record ManualReportForm(boolean enabled,
@@ -955,6 +1085,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private String runtimeMode;
         private List<String> ownerPluginIdentifiers;
         private List<String> packagePrefixes;
+        private TelemetryDocument telemetry;
         private CaptureDocument capture;
         private EventsDocument events;
         private PerformanceDocument performance;
@@ -967,7 +1098,19 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private CustomEndpointDocument customEndpoint;
     }
 
+    private static final class TelemetryDocument {
+        private CaptureDocument crash;
+        private EventsDocument events;
+        private PerformanceDocument performance;
+        private UsageDocument usage;
+        private StatsDocument stats;
+        private ReportsDocument reports;
+    }
+
     private static final class CaptureDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
+        private Boolean enabled;
         private Boolean uncaughtExceptions;
         private Boolean setupFailures;
         private Boolean startFailures;
@@ -986,16 +1129,22 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     private static final class EventTypeDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private Map<String, DetailRulesDocument> details;
     }
 
     private static final class BreadcrumbsDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private Boolean automatic;
     }
 
     private static final class PerformanceDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private Double sampleRate;
         private Integer thresholdMs;
@@ -1003,12 +1152,16 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     private static final class UsageDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private List<String> allowedEvents;
         private Map<String, DetailRulesDocument> details;
     }
 
     private static final class StatsDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private List<String> allowedEvents;
         private Map<String, DetailRulesDocument> details;
@@ -1019,6 +1172,8 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     private static final class ReportsDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
         private Boolean enabled;
         private ManualReportFormDocument issue;
         private ManualReportFormDocument suggestion;

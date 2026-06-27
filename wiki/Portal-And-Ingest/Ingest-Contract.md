@@ -1,26 +1,26 @@
 ---
-title: "Hosted Ingest Contract"
-order: 7
+title: "Ingest Contract"
+order: 8
 published: true
 draft: false
 ---
 
-# Hosted Ingest Contract
+# Ingest Contract
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
-This page describes the Alec-hosted telemetry ingest contract used by the standalone runtime, embedded bootstrap consumers, and the hosted service.
+This page describes the telemetry ingest contract used by the standalone runtime, embedded bootstrap consumers, and Alec's web portal backend.
 
 ## Trust Model
 
-- The client includes the hosted `projectKey`.
+- The client includes the portal `projectKey`.
 - The key is treated as public, not secret.
 - Protection comes from validation and backend limits, not from the client keeping the key hidden.
-- Key rotation is handled by updating hosted project config and the mod descriptor.
+- Key rotation is handled by updating portal project config and the mod descriptor.
 
 ## Canonical Backend
 
-The long-term hosted backend is Alec's Telemetry Platform. The `hosted/` package in this repo is a reference/dev implementation and should not be treated as the long-term production backend.
+The production backend is Alec's Telemetry Platform. The `hosted/` package in this repo is a reference/dev implementation and should not be treated as the long-term production backend.
 
 ## Endpoints
 
@@ -31,7 +31,7 @@ POST /ingest/report
 POST /reports/status
 ```
 
-`/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the canonical hosted endpoint for both crash envelopes and normal event envelopes.
+`/ingest/crash` remains the compatibility crash endpoint. `/ingest/event` is the canonical portal ingest endpoint for both crash envelopes and normal event envelopes.
 `/ingest/report` accepts manual player issue and suggestion reports. `/reports/status`
 checks a local player receipt using `reportId` plus the raw follow-up token.
 
@@ -151,16 +151,16 @@ The status response does not expose contact information or the full report paylo
 
 ## Validation Rules
 
-The hosted service should reject or throttle when:
+The portal backend should reject or throttle when:
 
 - the project key is missing
-- the project key does not map to a known hosted project
+- the project key does not map to a known portal project
 - the project is disabled
 - `projectId` does not match the project mapped by the key
 - the request body exceeds the global or per-project size limit
 - the body is not valid JSON
 - the body does not match either the crash envelope schema or event envelope schema
-- the event type or event name is not allowed for the hosted project
+- the event type or event name is not allowed for the portal project
 - the project exceeds its request-per-minute budget
 
 ## Response Codes
@@ -175,6 +175,6 @@ The hosted service should reject or throttle when:
 
 ## Discord Routing Behavior
 
-After accepting a report, the hosted service may dispatch a Discord alert or suppress the alert if the same `projectId + fingerprint` was recently alerted.
+After accepting a report, the portal backend may dispatch a Discord alert or suppress the alert if the same `projectId + fingerprint` was recently alerted.
 
 Suppression should not reject the ingest request. It only reduces notification spam.

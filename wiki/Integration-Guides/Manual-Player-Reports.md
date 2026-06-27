@@ -21,21 +21,23 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "reports": {
-    "enabled": true,
-    "issue": {
-      "enabled": true,
-      "fields": {
-        "severity": {
-          "type": "enum",
-          "label": "Severity",
-          "required": true,
-          "values": ["minor", "moderate", "major", "blocking"]
+  "telemetry": {
+    "reports": {
+      "supported": true,
+      "issue": {
+        "enabled": true,
+        "fields": {
+          "severity": {
+            "type": "enum",
+            "label": "Severity",
+            "required": true,
+            "values": ["minor", "moderate", "major", "blocking"]
+          }
         }
+      },
+      "suggestion": {
+        "enabled": true
       }
-    },
-    "suggestion": {
-      "enabled": true
     }
   }
 }
@@ -85,7 +87,7 @@ Approved reports move to the pending upload queue. Rejected reports stay local a
 
 ## Troubleshooting
 
-- No report-enabled projects: check `reports.enabled`.
+- No report-enabled projects: check `telemetry.reports.supported`.
 - Attachment option missing: server runtime settings may disable it.
 - Report not uploaded: it may still be waiting for local review.
-- Portal issue missing: check `/telemetry reports submitted` and the shared descriptor's hosted key.
+- Portal issue missing: check `/telemetry reports submitted` and the shared descriptor's portal project key.

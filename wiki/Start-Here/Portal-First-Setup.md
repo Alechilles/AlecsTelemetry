@@ -16,7 +16,6 @@ This is the ground-up route for a modder who has never used Alec's Telemetry bef
 - A Hytale plugin or asset pack that you can package and install on a test server.
 - Access to `https://telemetry.alecsmods.com/portal`.
 - A Discord or GitHub account for portal sign-in.
-- Permission to add files to your plugin or asset pack release package.
 - For standalone dependency mode, the Alec's Telemetry runtime installed alongside your package.
 - For embedded mode, a plugin that can call Java runtime bootstrap code.
 
@@ -30,13 +29,12 @@ Content-only asset packs should normally use standalone dependency mode. They ca
 4. Review and accept the Terms of Service when prompted.
 5. On the projects page, choose `Create project`.
 6. Enter a stable project ID.
-7. Enter a clear display name players will recognize, especially if you choose to display live stats.
-8. Create the project.
+7. Enter a clear display name players will recognize.
+    - This will appear in the consent UI.
+8. Save the project.
 9. Copy the new project key immediately. The key is shown so you can place it in your packaged descriptor.
 
 Use a short lowercase project ID such as `example-mod`, `alecs-cats`, or `my-asset-pack`. The display name can be friendlier, such as `Example Mod`.
-
-> [Screenshot Placeholder: Portal create-project form with Project ID, Display name, and the one-time project key result.]
 
 ## Choose Your Runtime Mode
 
@@ -73,22 +71,24 @@ Start with this descriptor:
 }
 ```
 
-Replace `replace_with_your_portal_project_key` with the key from the portal. Hosted project keys are publishable ingest keys. They are meant to ship in the descriptor.
+Replace `replace_with_your_portal_project_key` with the key from the portal. Project keys are publishable ingest keys. They are meant to ship in the descriptor.
 
-The project key is like an API key, so avoid posting it casually. It still cannot be kept truly secret once shipped in a Hytale package, so Alec's hosted portal treats it as a scoped ingest key rather than an admin secret. You can rotate it from the portal if needed.
+The project key is like an API key, so avoid posting it casually. It still cannot be kept truly secret once shipped in a Hytale package, so the Alec's Telemetry portal has some preventative measures in the case of abuse, and you can rotate it from the portal if needed.
 
-The portal project is the hosted source of truth. The project key resolves to one portal project, and hosted ingest rejects uploads when the descriptor's `projectId` does not match that portal project ID. If you omit `projectId`, Alec's Telemetry infers it from your manifest `Name`, so choose the portal project ID to match the inferred value or add an explicit override.
+The portal project is the source of truth. The project key resolves to one portal project, and portal ingest rejects uploads when the descriptor's `projectId` does not match that portal project ID. If you omit `projectId`, Alec's Telemetry infers it from your manifest `Name`, so choose the portal project ID to match the inferred value or add an explicit override.
+
+This starter descriptor only wires the project to the portal. Telemetry categories are unsupported unless another guide adds an explicit `telemetry` category block.
 
 If another guide says "add this to your descriptor," add that block to this same file instead of creating a second descriptor.
 
-## Add Explicit Identity When Needed
+## Add Explicit Identity If Needed
 
-Do not add identity fields by default. Plugins with a correct `Group`, `Name`, and `Main` can usually use only the hosted key. Asset packs with correct `Group` and `Name` can still infer `projectId` and `displayName` from `Name`, plus `ownerPluginIdentifiers` from `Group:Name`; they only lack an inferred Java package prefix when there is no `Main`.
+You don't need to add identity fields by default. Plugins with a correct `Group`, `Name`, and `Main` can usually use only the portal project key. Asset packs with correct `Group` and `Name` can still infer `projectId` and `displayName` from `Name`, plus `ownerPluginIdentifiers` from `Group:Name`; they only lack an inferred Java package prefix when there is no `Main`.
 
-Add explicit identity only when the inferred values are not enough:
+You can add explicit identity values when the inferred values are not enough:
 
 - `projectId`: use this when the inferred project ID would not match the portal project ID.
-- `displayName`: use this for local runtime, consent, and envelope metadata. The hosted portal project name is managed in the portal.
+- `displayName`: use this for local runtime, consent, and envelope metadata. The portal project name is managed in the portal.
 - `ownerPluginIdentifiers`: use this for renamed plugins, aliases, or unusual ownership matching.
 - `packagePrefixes`: use this when Java crash attribution needs packages outside the `Main` class package, or when there is no `Main` but Java stack-prefix attribution still matters.
 
@@ -103,7 +103,7 @@ Example override block:
 }
 ```
 
-## Add An Optional Consent Icon
+## Add An Optional Mod Icon For UIs
 
 If you want your project to show a custom icon in `/telemetry consent`, add `ui.iconTexturePath` to the same descriptor:
 
@@ -126,10 +126,8 @@ The descriptor path is relative to `Common/UI/Custom/`, so do not start it with 
 ## Package The File
 
 1. Build your plugin or asset pack.
-2. Confirm the built package contains `Server/Telemetry/project.json`.
-3. If you configured an icon, confirm the built package contains the PNG under `Common/UI/Custom/...`.
-4. Install the package on a local or private test server.
-5. Install Alec's Telemetry too if you chose standalone dependency mode.
+2. Install the package on a local or private test server.
+3. Install Alec's Telemetry too if you chose standalone dependency mode.
 
 ## Verify In Game
 
@@ -148,24 +146,17 @@ Check that:
 - the destination mode is `hosted`
 - the project has the expected source path
 - the project key preview is present or the endpoint is configured
-
-Then queue a safe test report:
-
-```text
-/telemetry test <project-id> first-setup-check
-/telemetry flush <project-id>
-```
+- no telemetry category is supported unless you already added a category-specific block
 
 ## Verify In The Portal
 
 1. Return to `https://telemetry.alecsmods.com/portal`.
 2. Open the project.
-3. Check that the project card or issue workspace shows recent ingest.
-4. Open the issue created by the test report.
-5. Confirm the project name, version, source, and details look correct.
-6. Configure Discord routing if you want alerts.
-7. Configure GitHub sync if you want portal issues linked to GitHub.
-8. If stats are enabled, open the stats page after the first heartbeat has had time to upload.
+3. Confirm the project exists and the project ID matches the descriptor's inferred or explicit `projectId`.
+4. Configure Discord routing if you want alerts.
+5. Configure GitHub sync if you want portal issues linked to GitHub.
+6. Continue to a category guide before expecting ingest, issues, or stats to appear.
+7. If stats are enabled, open the stats page after the first heartbeat has had time to upload.
 
 ## Next Pages
 

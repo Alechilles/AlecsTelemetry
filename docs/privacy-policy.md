@@ -343,7 +343,7 @@ Portal users can:
 Mod authors can:
 
 - keep descriptors small and avoid high-risk custom Event Context fields
-- disable categories by default when telemetry is not necessary
+- enable only the telemetry categories their project actually needs
 - avoid collecting player names, UUIDs, chat, exact coordinates, secrets, tokens,
   or other personally identifying values
 - document any project-specific fields they add through Alec's Telemetry
@@ -351,12 +351,15 @@ Mod authors can:
 ## Children
 
 Alec's Telemetry is not intended to collect personal information from children.
-Default telemetry is designed around technical diagnostics and aggregate server
-stats, not player identity. Manual report text and optional contact fields are
-player-controlled, so players and server owners should not submit children's
-personal information. If you believe a child has provided personal information
-through the hosted platform, contact Apex Web Solutions LLC through the support
-contact below so it can be reviewed and deleted where appropriate.
+Telemetry categories are unavailable unless a project descriptor explicitly
+supports them, and supported categories can be made opt-in with
+`defaultEnabled: false` or disabled by a server-owner setting. Enabled telemetry
+is designed around technical diagnostics and aggregate server stats, not player
+identity. Manual report text and optional contact fields are player-controlled,
+so players and server owners should not submit children's personal information.
+If you believe a child has provided personal information through the hosted
+platform, contact Apex Web Solutions LLC through the support contact below so it
+can be reviewed and deleted where appropriate.
 
 ## Security
 

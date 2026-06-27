@@ -17,10 +17,10 @@ Dependency mode means Alec's Telemetry runs as a standalone external dependency 
 
 - You want the smallest integration.
 - You are comfortable requiring Alec's Telemetry as a dependency.
-- Your mod can ship a descriptor file with a hosted `projectKey`.
+- Your mod can ship a descriptor file with a portal `projectKey`.
 - You do not need to own telemetry bootstrap in your own lifecycle code.
 
-## Minimal Hosted Descriptor
+## Minimal Portal Descriptor
 
 Use the shared descriptor from [Portal First Setup](/mod/alecs-telemetry/portal-first-setup). This legacy page does not repeat the project-key snippet so the setup instructions stay in one place.
 
@@ -32,7 +32,7 @@ New descriptors do not need `runtimeMode`. Alec's Telemetry chooses the active r
 - Keep your mod manifest `Group`, `Name`, and `Main` accurate so project metadata can be inferred.
 - Add explicit `projectId` only when the inferred ID would not match the portal project ID.
 - Add `displayName`, `ownerPluginIdentifiers`, or `packagePrefixes` only for local metadata or attribution overrides.
-- Keep hosted setup pointed at the publishable project key from the shared descriptor.
+- Keep portal setup pointed at the publishable project key from the shared descriptor.
 
 ## Advanced Alternatives
 

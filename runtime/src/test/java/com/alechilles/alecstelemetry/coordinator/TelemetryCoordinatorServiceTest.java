@@ -626,6 +626,16 @@ class TelemetryCoordinatorServiceTest {
                   "runtimeMode": "%s",
                   "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example.telemetry"],
+                  "capture": {
+                    "uncaughtExceptions": true,
+                    "setupFailures": true,
+                    "startFailures": true,
+                    "exceptionalWorldRemovals": true
+                  },
+                  "events": {
+                    "errors": { "enabled": true },
+                    "breadcrumbs": { "enabled": true }
+                  },
                   "usage": {
                     "enabled": true,
                     "allowedEvents": ["settings_opened"],

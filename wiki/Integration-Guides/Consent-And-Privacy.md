@@ -36,29 +36,19 @@ The first-run notice uses the same consent runtime. A project that has not been 
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Consent defaults live in the same shared descriptor as the hosted key and optional icon.
+Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Consent defaults live in the same shared descriptor as the portal project key and optional icon.
 
-## Consent Defaults Block
+## Descriptor Defaults
 
-```json
-{
-  "defaults": {
-    "enabled": true,
-    "destinationMode": "hosted"
-  },
-  "capture": {
-    "uncaughtExceptions": true,
-    "setupFailures": true,
-    "startFailures": true,
-    "exceptionalWorldRemovals": true
-  },
-  "stats": {
-    "enabled": true
-  }
-}
-```
+Telemetry opt-in/out options are automatically determined by the categories supported in the project descriptor.
 
-Server owner choices override descriptor defaults.
+Omitted telemetry categories are unsupported and hidden from consent. A supported category defaults on unless it sets `defaultEnabled: false`. Add only the categories your project actually uses:
+
+- use [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup) for crash capture defaults
+- use [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) for stats-only defaults
+- use the specific integration guide for error events, lifecycle events, performance telemetry, usage events, breadcrumbs, or manual reports
+
+For opt-in category behavior, keep the category supported and set `defaultEnabled: false`.
 
 ## Stored Settings
 
@@ -77,11 +67,11 @@ Runtime settings and consent state also live under the same canonical root.
 - Declare custom detail allowlists in the descriptor.
 - Keep manual report fields bounded and understandable.
 - Explain your telemetry behavior in your own mod documentation.
-- Link users to the canonical Privacy Policy when discussing hosted behavior.
+- Link users to the canonical Privacy Policy when discussing Alec's web portal behavior.
 
-## Hosted Versus Custom Endpoints
+## Portal Versus Custom Endpoints
 
-Alec's web portal behavior is covered by the Alec's Telemetry privacy policy. If a server owner redirects telemetry to a custom endpoint, that endpoint is controlled by whoever configured it, not by Alec's hosted service.
+Alec's web portal behavior is covered by the Alec's Telemetry privacy policy. If a server owner redirects telemetry to a custom endpoint, that endpoint is controlled by whoever configured it, not by Alec's portal backend.
 
 ## Verify
 

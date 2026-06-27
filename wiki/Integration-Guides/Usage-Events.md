@@ -21,14 +21,16 @@ Add this block to the shared descriptor:
 
 ```json
 {
-  "usage": {
-    "enabled": true,
-    "allowedEvents": ["settings_opened"],
-    "details": {
-      "settings_opened": {
-        "allowedFields": {
-          "source": { "type": "enum", "values": ["command", "settings_ui"] },
-          "configArea": { "type": "string", "maxLength": 60 }
+  "telemetry": {
+    "usage": {
+      "supported": true,
+      "allowedEvents": ["settings_opened"],
+      "details": {
+        "settings_opened": {
+          "allowedFields": {
+            "source": { "type": "enum", "values": ["command", "settings_ui"] },
+            "configArea": { "type": "string", "maxLength": 60 }
+          }
         }
       }
     }

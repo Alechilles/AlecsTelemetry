@@ -7,9 +7,9 @@ draft: false
 
 # Portal Project Management
 
-Parent: [Hosted Operations](/mod/alecs-telemetry/hosted-operations) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
 
-The official portal is the primary setup and operations surface for hosted Alec's Telemetry projects.
+The official portal is the primary setup and operations surface for Alec's Telemetry projects that use the web portal.
 
 ## Sign In
 
@@ -29,9 +29,7 @@ Discord is used for routing and guild lookup. GitHub is used for sign-in and Git
 5. Create the project.
 6. Copy the one-time project key.
 
-The project key belongs in `Server/Telemetry/project.json`.
-
-> [Screenshot Placeholder: Portal create project form with Project ID and Display name fields]
+The project key belongs in `Server/Telemetry/project.json`. Copy it while it is shown; if it is lost later, rotate the project key from project admin.
 
 ## After Project Creation
 

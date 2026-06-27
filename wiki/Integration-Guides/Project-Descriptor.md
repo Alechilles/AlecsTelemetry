@@ -9,26 +9,17 @@ draft: false
 
 Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
 
-Consumer mods opt into Alec's Telemetry by shipping a descriptor at:
+Consumer mods opt into Alec's Telemetry by shipping:
 
 ```text
 Server/Telemetry/project.json
 ```
 
-The same descriptor is used whether telemetry is provided by the standalone runtime or by an embedded runtime packaged inside a mod. Descriptors no longer need to choose dependency versus embedded mode; runtime ownership is decided by coordinator election at startup.
+The same descriptor works for standalone dependency mode and embedded mode.
 
-## Plug-And-Play Default
+## Minimal Portal Descriptor
 
-If your `manifest.json` has a correct `Group`, `Name`, and `Main`, then Alec's Telemetry can infer:
-
-- project id
-- display name
-- plugin identifier
-- package prefix from the `Main` class package
-
-If `Main` is absent, Alec's Telemetry can still infer project id and display name from `Name`, plus the plugin identifier from `Group:Name`. Only the Java package prefix fallback is empty.
-
-For most hosted projects, the descriptor can stay small:
+If your `manifest.json` has `Group`, `Name`, and `Main`, Alec's Telemetry can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
 
 ```json
 {
@@ -38,233 +29,147 @@ For most hosted projects, the descriptor can stay small:
 }
 ```
 
-Hosted `projectKey` values are designed to be publishable ingest keys. Bake them into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
+This only connects the packaged descriptor to the portal project. It does not make any telemetry category available.
 
-The official portal project remains the hosted source of truth. The `projectKey` resolves to one portal project, and hosted ingest rejects payloads whose `projectId` does not match that portal project ID. Descriptor `displayName` is local runtime and envelope metadata; the hosted portal project name is managed in the portal.
+## Category Defaults
 
-## Custom Endpoint Example
+Telemetry category descriptors separate capability from initial consent:
+
+- omitted category: unsupported and hidden from consent
+- `supported: true`: available and shown in consent
+- omitted `defaultEnabled`: defaults to `true` for supported categories
+- `defaultEnabled: false`: supported but initially off, so server owners can opt in
+- legacy descriptor `enabled` is accepted as a compatibility alias for `defaultEnabled`, but new descriptors should use `defaultEnabled`
+
+Runtime override files still use `enabled`; those files store saved consent choices.
+
+## Stats Only
 
 ```json
 {
-  "defaults": {
-    "destinationMode": "custom"
+  "hosted": {
+    "projectKey": "your_public_project_key"
   },
-  "customEndpoint": {
-    "url": "https://example.com/api/telemetry/crash"
-  }
-}
-```
-
-## Supported Top-Level Fields
-
-- `schemaVersion`
-- `projectId`
-- `displayName`
-- `runtimeMode` (legacy optional)
-- `ownerPluginIdentifiers`
-- `packagePrefixes`
-- `capture`
-- `events`
-- `performance`
-- `usage`
-- `stats`
-- `reports`
-- `ui`
-- `defaults`
-- `hosted`
-- `customEndpoint`
-
-## Identity Overrides
-
-Identity fields are optional overrides, not required setup fields.
-
-- `projectId`: override this only when the inferred ID would not match the portal project ID or a custom endpoint expects a different stable ID.
-- `displayName`: override this for local consent/runtime text or envelope metadata. It does not rename the hosted portal project.
-- `ownerPluginIdentifiers`: override this for aliases, renamed plugins, or unusual plugin ownership matching.
-- `packagePrefixes`: override this for crash attribution when Java code lives outside the package inferred from `Main`, or when there is no `Main` but Java stack-prefix attribution still matters.
-
-## Capture Fields
-
-- `uncaughtExceptions`
-- `setupFailures`
-- `startFailures`
-- `exceptionalWorldRemovals`
-
-## Event Fields
-
-- `errors.enabled`: controls explicit non-fatal error events recorded through the runtime API.
-- `errors.details`: optional per-error-event allowlist for custom mod-specific Event Context fields.
-- `lifecycle.enabled`: controls explicit lifecycle timing events recorded through the runtime API.
-- `lifecycle.details`: optional per-lifecycle-event allowlist for custom mod-specific Event Context fields.
-- `breadcrumbs.enabled`: controls breadcrumb storage and breadcrumb attachment to crashes/debug events.
-- `breadcrumbs.automatic`: reserved for low-noise automatic breadcrumbs.
-
-## Performance And Usage Fields
-
-`performance` supports:
-
-- `enabled`
-- `sampleRate`
-- `thresholdMs`
-- `details`
-
-`usage` supports:
-
-- `enabled`
-- `allowedEvents`
-- `details`
-
-`stats.enabled` controls anonymous public stats separately from feature usage telemetry. When enabled, the runtime can emit the standard `heartbeat` stats event.
-
-Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`, `stats.details`, and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
-
-Supported detail field types:
-
-- `string` with optional `maxLength`
-- `number`
-- `boolean`
-- `enum` with required `values`
-
-Unknown fields, wrong types, blank strings, and enum values outside the declared set are dropped before upload.
-
-## Manual Report Fields
-
-`reports` lets players submit issue and suggestion reports in-game.
-
-```json
-{
-  "reports": {
-    "enabled": true,
-    "issue": {
-      "enabled": true,
-      "fields": {
-        "severity": {
-          "type": "enum",
-          "label": "Severity",
-          "required": true,
-          "values": ["minor", "moderate", "major", "blocking"]
-        }
-      }
-    },
-    "suggestion": {
-      "enabled": true
-    },
-    "attachments": {
-      "currentServerLog": true,
-      "previousServerLog": true,
-      "maxBytes": 262144
-    },
-    "contact": {
-      "enabled": true,
-      "maxLength": 160
-    },
-    "resolutionUpdates": {
-      "enabled": true
+  "telemetry": {
+    "stats": {
+      "supported": true
     }
   }
 }
 ```
 
-Report fields support `string`, `text`, `boolean`, `enum`, and `number`. Server-owner
-`manualReports` settings can still disable reports, logs, installed mod lists,
-diagnostics, contact, resolution updates, or force manual review.
-
-## UI Fields
-
-`ui.iconTexturePath` optionally controls the project icon shown in the first-run consent UI.
-
-The value must be a relative custom UI texture path using forward slashes. The PNG must be packaged under the mod's `Common/UI/Custom/...` asset tree.
-
-Example descriptor value:
+## Crash Available But Opt-In
 
 ```json
 {
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "crash": {
+      "supported": true,
+      "defaultEnabled": false,
+      "uncaughtExceptions": true,
+      "setupFailures": true,
+      "startFailures": true,
+      "exceptionalWorldRemovals": true
+    }
+  }
+}
+```
+
+## Full Descriptor Shape
+
+```json
+{
+  "schemaVersion": 1,
+  "projectId": "example-mod",
+  "displayName": "Example Mod",
+  "ownerPluginIdentifiers": ["Example:Example Mod"],
+  "packagePrefixes": ["com.example.telemetry"],
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "crash": {
+      "supported": true,
+      "uncaughtExceptions": true,
+      "setupFailures": true,
+      "startFailures": true,
+      "exceptionalWorldRemovals": true
+    },
+    "events": {
+      "errors": { "supported": true },
+      "lifecycle": { "supported": true },
+      "breadcrumbs": { "supported": true, "automatic": true }
+    },
+    "performance": {
+      "supported": true,
+      "sampleRate": 1.0,
+      "thresholdMs": 100
+    },
+    "usage": {
+      "supported": true,
+      "allowedEvents": ["settings_opened"]
+    },
+    "stats": {
+      "supported": true
+    },
+    "reports": {
+      "supported": true,
+      "issue": { "enabled": true },
+      "suggestion": { "enabled": true }
+    }
+  },
   "ui": {
     "iconTexturePath": "ExampleMod/Telemetry/ExampleModConsentIcon.png"
   }
 }
 ```
 
-Package that texture at:
+## Identity Overrides
 
-```text
-Common/UI/Custom/ExampleMod/Telemetry/ExampleModConsentIcon.png
-```
+Identity fields are optional overrides:
 
-Root mod icons such as `icon-256.png` are not used automatically because Hytale custom UI documents cannot reliably resolve them.
+- `projectId`: use only when the inferred ID would not match the portal project ID or a custom endpoint expects a different stable ID
+- `displayName`: local consent/runtime text and envelope metadata; it does not rename the portal project
+- `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
+- `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
-## Runtime API Event Context
+## Category Fields
 
-Consumer mods can attach typed context to explicit non-crash events with:
+Crash supports `supported`, `defaultEnabled`, `uncaughtExceptions`, `setupFailures`, `startFailures`, and `exceptionalWorldRemovals`.
 
-- `recordErrorWithContext`
-- `recordLifecycleWithContext`
-- `recordPerformanceWithContext`
-- `recordUsageWithContext`
-- `recordStatsWithContext`
+Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, and `automatic`.
 
-`TelemetryEventContext` supports these standardized fields:
+Performance supports `supported`, `defaultEnabled`, `sampleRate`, `thresholdMs`, and `details`.
 
-- `detail`
-- `severity`
-- `fingerprint`
-- `subsystem`
-- `phase`
-- `operation`
-- `target`
-- `featureKey`
-- `entryPoint`
-- `runtimeSide`
-- `entityType`
-- `itemId`
-- `blockId`
-- `biomeId`
-- `commandName`
-- `worldName`
+Usage supports `supported`, `defaultEnabled`, `allowedEvents`, and `details`.
 
-`detail` is stored in the event `attributes` map. The other standardized fields are first-class event envelope fields. Custom `detail(key, value)` entries are uploaded only when the descriptor declares an allowlist for the matching event name.
+Stats supports `supported`, `defaultEnabled`, and `details`.
 
-## Runtime Mode
+Manual reports support `supported`, `defaultEnabled`, `issue`, `suggestion`, `attachments`, `contact`, and `resolutionUpdates`.
 
-`runtimeMode` is a legacy optional field. New descriptors should omit it.
+## Details Allowlists
 
-When present, `dependency` and `embedded` are still accepted for backwards compatibility and diagnostics, but the field no longer controls discovery, consent, queueing, upload ownership, or coordinator election. Embedded behavior is selected by packaging and calling `EmbeddedTelemetryBootstrap`, not by this descriptor field.
+Custom `events.errors.details`, `events.lifecycle.details`, `usage.details`, `stats.details`, and `performance.details` are descriptor-declared allowlists. Runtime code can send only fields listed for that event name.
+
+Supported field types are `string`, `number`, `boolean`, and `enum`. Unknown fields, wrong types, blank strings, and enum values outside the declared set are dropped before upload.
 
 ## Destination Fields
 
-`defaults` supports:
+`defaults.enabled` controls the initial project-level consent toggle. `defaults.destinationMode` can be `hosted` or `custom`.
 
-- `enabled` is the mod author's default project-level consent setting and initial project toggle state in the first-run consent UI.
-- `destinationMode`: `hosted` or `custom`
+`hosted.projectKey` is a publishable ingest key. Bake it into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
 
-## Consent Defaults
+`customEndpoint` supports `url`, `eventUrl`, and `headers`.
 
-Alec's Telemetry shows a first-run consent UI when an operator installs a telemetry-enabled mod that has not been reviewed before. The initial toggle state comes from the packaged descriptor:
+## UI Icon
 
-- `defaults.enabled` controls the project-level opt-in or opt-out default.
-- `capture.*` controls the default crash telemetry category.
-- `events.errors.enabled` controls the default error telemetry category.
-- `events.lifecycle.enabled` controls the default lifecycle telemetry category.
-- `performance.enabled` controls the default performance telemetry category.
-- `usage.enabled` controls the default usage telemetry category.
-- `stats.enabled` controls the default anonymous public stats category.
-- `events.breadcrumbs.enabled` controls breadcrumb collection and attachment.
+`ui.iconTexturePath` optionally controls the project icon shown in the first-run consent UI. The PNG must be packaged under the mod's `Common/UI/Custom/...` asset tree.
 
-Server owners can override each value in the consent UI or through `Settings/projects/<project-id>.json`. Descriptor defaults are used until an override exists.
+## Legacy Fields
 
-`hosted` supports:
+Top-level `capture`, `events`, `performance`, `usage`, `stats`, and `reports` are still accepted for compatibility. New descriptors should put categories under `telemetry`.
 
-- `endpoint`
-- `eventEndpoint`
-- `projectKey`
-- `headers`
-
-`customEndpoint` supports:
-
-- `url`
-- `eventUrl`
-- `headers`
-
-## Recommendation
-
-Keep the file small unless your mod needs a `projectId` override to match the portal project, extra attribution aliases, extra package prefixes, custom event allowlists, or a custom destination.
+`runtimeMode` is legacy optional metadata. New descriptors should omit it.

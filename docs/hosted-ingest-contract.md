@@ -7,8 +7,7 @@ standalone runtime, embedded bootstrap consumers, and the hosted service.
 
 - the client includes a `publicProjectKey`
 - the key is treated as public, not secret
-- protection comes from validation and backend limits, not from the client keeping
-  the key hidden
+- protection comes from validation and backend limits because an API key can't be truly hidden in a Hytale mod
 - key rotation is manual by updating hosted project config and the mod descriptor
 
 ## Canonical Backend
@@ -138,9 +137,6 @@ The public stats API exposes these standard chart ids:
 - `server_location`
 - `server_hosting_mode`
 - `loaded_mods`
-
-`server_hosting_mode` is the Hytale-specific replacement for bStats' Minecraft
-online-mode chart. Values are `local_client`, `dedicated`, or `unknown`.
 
 Custom stats events are intentionally not stored yet. Stats reporting is a
 project-level on/off toggle for the standard heartbeat fields.

@@ -966,12 +966,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 registeredForRuntime ? coordinator.isStatsEnabled(project.projectId()) : project.stats().enabled(),
                 registeredForRuntime ? coordinator.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled(),
                 supportsCrash(project),
-                project.descriptor().events().errors().enabled(),
-                project.descriptor().events().lifecycle().enabled(),
-                project.descriptor().performance().enabled(),
-                project.descriptor().usage().enabled(),
-                project.descriptor().stats().enabled(),
-                project.descriptor().events().breadcrumbs().enabled()
+                project.descriptor().events().errors().supported(),
+                project.descriptor().events().lifecycle().supported(),
+                project.descriptor().performance().supported(),
+                project.descriptor().usage().supported(),
+                project.descriptor().stats().supported(),
+                project.descriptor().events().breadcrumbs().supported()
         );
     }
 
@@ -1132,21 +1132,17 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return new TelemetryConsentSnapshot(
                 true,
                 supportsCrash(project),
-                project.descriptor().events().errors().enabled(),
-                project.descriptor().events().lifecycle().enabled(),
-                project.descriptor().performance().enabled(),
-                project.descriptor().usage().enabled(),
-                project.descriptor().stats().enabled(),
-                project.descriptor().events().breadcrumbs().enabled()
+                project.descriptor().events().errors().supported(),
+                project.descriptor().events().lifecycle().supported(),
+                project.descriptor().performance().supported(),
+                project.descriptor().usage().supported(),
+                project.descriptor().stats().supported(),
+                project.descriptor().events().breadcrumbs().supported()
         );
     }
 
     private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
-        TelemetryProjectDescriptor.CaptureOptions capture = project.descriptor().capture();
-        return capture.uncaughtExceptions()
-                || capture.setupFailures()
-                || capture.startFailures()
-                || capture.exceptionalWorldRemovals();
+        return project.descriptor().capture().supportsAnySource();
     }
 
     @Nonnull

@@ -15,7 +15,6 @@ These pages cover the files, runtime modes, consent behavior, and telemetry cate
 
 - [Project Descriptor](/mod/alecs-telemetry/project-descriptor)
 - [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode)
-- [Dependency Mode Setup](/mod/alecs-telemetry/dependency-mode-setup)
 - [Embedded Mode](/mod/alecs-telemetry/embedded-mode)
 - [Crash And Error Telemetry](/mod/alecs-telemetry/crash-and-error-telemetry)
 - [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats)

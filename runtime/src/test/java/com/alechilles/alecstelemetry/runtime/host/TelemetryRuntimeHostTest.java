@@ -1236,25 +1236,10 @@ class TelemetryRuntimeHostTest {
                   "displayName": "%s",
                   "ownerPluginIdentifiers": ["Example:%s"],
                   "packagePrefixes": ["com.example.telemetry"],
-                  "capture": {
-                    "uncaughtExceptions": false,
-                    "setupFailures": false,
-                    "startFailures": false,
-                    "exceptionalWorldRemovals": false
-                  },
-                  "events": {
-                    "errors": { "enabled": false },
-                    "lifecycle": { "enabled": false },
-                    "breadcrumbs": { "enabled": false }
-                  },
-                  "performance": {
-                    "enabled": false
-                  },
-                  "usage": {
-                    "enabled": false
-                  },
-                  "stats": {
-                    "enabled": true
+                  "telemetry": {
+                    "stats": {
+                      "supported": true
+                    }
                   },
                   "defaults": {
                     "destinationMode": "custom"
