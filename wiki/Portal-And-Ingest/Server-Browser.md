@@ -15,14 +15,15 @@ Public server pages are separate from mod project pages, but they connect to the
 
 ## Before This Page
 
-Set up at least one telemetry-enabled mod on the server first:
+You do not need to own a mod project or complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) to list a server. Server listings are owned by server operators, not by mod authors.
 
-1. Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) for your mod or asset pack.
-2. Enable stats with [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) or [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats).
-3. Install the project on the server.
-4. Start the server and wait for a stats heartbeat.
+Before creating the listing:
 
-The server browser verification command is provided by the Alec's Telemetry runtime, so standalone installations must have Alec's Telemetry installed and embedded installations must bootstrap the runtime correctly.
+1. Install Alec's Telemetry on the Hytale server.
+2. Start the server at least once.
+3. Make sure you can run server console commands or operator chat commands.
+
+The server browser verification command is provided by the Alec's Telemetry runtime. It can verify the server profile even if no installed mod has created its own portal project.
 
 ## Create A Server Profile
 
@@ -65,10 +66,10 @@ When the command succeeds, Alec's Telemetry saves the claim token with the serve
 
 The server profile can show two kinds of mod entries:
 
-- **Telemetry-observed mods**: mods detected from recent telemetry heartbeats.
+- **Telemetry-observed mods**: mods detected from installed projects that report public stats through Alec's Telemetry.
 - **Manual mods**: extra entries the server owner adds in the portal for mods that do not report through Alec's Telemetry.
 
-Use the profile editor to hide observed mods that should not be public, or add manual mods for important non-telemetry dependencies.
+Use the profile editor to hide observed mods that should not be public, or add manual mods for important mods that do not report through Alec's Telemetry.
 
 ## Verify Public Visibility
 
@@ -83,9 +84,9 @@ Use the profile editor to hide observed mods that should not be public, or add m
 ## Troubleshooting
 
 - No claim command appears: rotate the claim token from the server profile.
-- Command unknown: install Alec's Telemetry or confirm the embedded runtime is bootstrapped.
+- Command unknown: install Alec's Telemetry on the server and restart it.
 - Profile remains unverified: make sure the command ran on the intended server and wait for the verification heartbeat.
 - Server not public: confirm **Public listing** is enabled and the profile is not disabled by moderation.
 - Player counts hidden: enable **Public players**.
-- Mod list hidden: enable **Public mod list** and confirm stats heartbeats are uploading.
+- Mod list missing entries: add manual mods for projects that do not report public stats through Alec's Telemetry.
 - Join address hidden: enable **Public join info**.
