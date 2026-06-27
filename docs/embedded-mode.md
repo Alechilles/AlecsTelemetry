@@ -34,6 +34,20 @@ For Maven builds, add the public repository and depend on the runtime artifact:
 </dependency>
 ```
 
+For Gradle Kotlin DSL builds, use the same Maven-format repository:
+
+```kotlin
+repositories {
+    maven {
+        url = uri("https://telemetry.alecsmods.com/maven/releases")
+    }
+}
+
+dependencies {
+    implementation("com.alechilles:alecstelemetry-runtime:1.0.0")
+}
+```
+
 Package that runtime jar inside your mod. Do not ask server owners to install the
 runtime jar separately when you choose embedded mode.
 

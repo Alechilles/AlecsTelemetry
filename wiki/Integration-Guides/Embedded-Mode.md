@@ -53,6 +53,20 @@ Then add the embeddable runtime dependency:
 </dependency>
 ```
 
+For Gradle Kotlin DSL builds, use the same Maven-format repository:
+
+```kotlin
+repositories {
+    maven {
+        url = uri("https://telemetry.alecsmods.com/maven/releases")
+    }
+}
+
+dependencies {
+    implementation("com.alechilles:alecstelemetry-runtime:1.0.0")
+}
+```
+
 Package that runtime jar inside your plugin. Server owners should not need to download a separate runtime jar when your plugin uses embedded mode.
 
 ## Step 2: Bootstrap From Your Plugin

@@ -147,7 +147,7 @@ Embedded copies still participate in coordinator election, and the latest
 compatible runtime can serve all installed enabled projects.
 
 The embeddable runtime artifact is published through the Telemetry downloads
-page and Maven repository:
+page and Maven-format repository:
 
 ```text
 https://telemetry.alecsmods.com/downloads
@@ -165,6 +165,20 @@ https://telemetry.alecsmods.com/maven/releases
   <artifactId>alecstelemetry-runtime</artifactId>
   <version>1.0.0</version>
 </dependency>
+```
+
+Gradle Kotlin DSL:
+
+```kotlin
+repositories {
+    maven {
+        url = uri("https://telemetry.alecsmods.com/maven/releases")
+    }
+}
+
+dependencies {
+    implementation("com.alechilles:alecstelemetry-runtime:1.0.0")
+}
 ```
 
 ### Custom Endpoint
