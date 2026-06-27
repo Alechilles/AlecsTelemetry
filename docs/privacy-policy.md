@@ -88,7 +88,7 @@ When enabled, these events can include:
   runtime side, entity type, item ID, block ID, biome ID, or command name
 - environment and runtime metadata such as Java version, runtime version,
   operating system name/version/architecture, CPU core count, Hytale build,
-  server version, hosting mode, and loaded mod IDs/versions
+  server version, hosting mode, and loaded mod IDs/names/versions
 - for crashes, exception type, exception message, stack trace frames, causal
   chain, attribution information, thread name, breadcrumbs, and limited world
   failure metadata when available
@@ -110,7 +110,8 @@ aggregate stats such as:
 - record servers and record players
 - server/player history in activity buckets
 - plugin, Hytale, server, Java, runtime, operating system, architecture, CPU
-  core count, hosting mode, server-country, and loaded-mod breakdowns
+  core count, hosting mode, server-country, and loaded-mod name/version
+  breakdowns
 
 The hosted service may use raw server IDs, session IDs, loaded mod evidence, and
 private heartbeat payloads internally to compute aggregates, prevent duplicates,
