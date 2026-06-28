@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: June 25, 2026
+Effective date: June 28, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
