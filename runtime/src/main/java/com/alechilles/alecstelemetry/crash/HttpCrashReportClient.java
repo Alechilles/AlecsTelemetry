@@ -80,7 +80,9 @@ public final class HttpCrashReportClient implements CrashReportClient {
             );
         } catch (Exception ex) {
             if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log("Crash telemetry upload request failed.");
+                logger.at(Level.FINE).log("Crash telemetry upload request failed: "
+                        + ex.getClass().getSimpleName()
+                        + (ex.getMessage() == null || ex.getMessage().isBlank() ? "" : ": " + ex.getMessage()));
             }
             return UploadResult.failure(0, ex.getClass().getSimpleName() + ": " + ex.getMessage());
         } finally {

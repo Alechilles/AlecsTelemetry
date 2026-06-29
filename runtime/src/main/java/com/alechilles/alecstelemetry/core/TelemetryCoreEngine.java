@@ -61,6 +61,8 @@ public final class TelemetryCoreEngine {
     private static final int STATS_HEARTBEAT_JITTER_SECONDS = 300;
     private static final int STATS_HEARTBEAT_STARTUP_MIN_SECONDS = 120;
     private static final int STATS_HEARTBEAT_STARTUP_MAX_SECONDS = 300;
+    private static final long DEFAULT_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.SECONDS.toMillis(60);
+    private static final long MAX_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.MINUTES.toMillis(15);
 
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -86,6 +88,7 @@ public final class TelemetryCoreEngine {
     private final ConcurrentHashMap<String, AtomicBoolean> usageEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> statsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> breadcrumbsEnabledOverrides = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, UploadRetryState> uploadRetryStates = new ConcurrentHashMap<>();
     private final AtomicInteger statsHeartbeatIntervalSeconds = new AtomicInteger(DEFAULT_STATS_HEARTBEAT_INTERVAL_SECONDS);
     private final TelemetryBreadcrumbBuffer breadcrumbs;
     private final String sessionId = UUID.randomUUID().toString();
@@ -973,20 +976,28 @@ public final class TelemetryCoreEngine {
                 CrashReportClient.DeliveryTarget target = project.resolveDeliveryTarget(settings);
                 if (target != null && !target.endpoint().isBlank()) {
                     CrashReportStore store = storeFor(project);
-                    for (CrashReportStore.PendingReport pending : store.listPendingReports(settings.maxUploadsPerFlush())) {
-                        attempted++;
-                        CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
-                        applyUploadHints(uploadResult);
-                        if (uploadResult.success()) {
-                            if (store.delete(pending.path())) {
-                                uploaded++;
-                            } else {
-                                lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
-                            }
+                    List<CrashReportStore.PendingReport> pendingReports = store.listPendingReports(settings.maxUploadsPerFlush());
+                    if (!pendingReports.isEmpty()) {
+                        String cooldownFailure = uploadCooldownFailure(target, reason);
+                        if (cooldownFailure != null) {
+                            lastFailure = cooldownFailure;
                         } else {
-                            lastFailure = uploadResult.describeFailure();
-                            if (uploadResult.shouldBackOff()) {
-                                break;
+                            for (CrashReportStore.PendingReport pending : pendingReports) {
+                                attempted++;
+                                CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
+                                applyUploadHints(uploadResult);
+                                if (uploadResult.success()) {
+                                    clearUploadRetryCooldown(target);
+                                    if (store.delete(pending.path())) {
+                                        uploaded++;
+                                    } else {
+                                        lastFailure = "Uploaded but failed to remove local file " + pending.path().getFileName();
+                                    }
+                                } else {
+                                    lastFailure = uploadResult.describeFailure();
+                                    recordUploadFailure(target, uploadResult);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -995,20 +1006,28 @@ public final class TelemetryCoreEngine {
                 CrashReportClient.DeliveryTarget eventTarget = project.resolveEventDeliveryTarget(settings);
                 if (eventTarget != null && !eventTarget.endpoint().isBlank()) {
                     TelemetryEventStore eventStore = eventStoreFor(project);
-                    for (TelemetryEventStore.PendingEvent pending : eventStore.listPendingEvents(settings.maxUploadsPerFlush())) {
-                        attempted++;
-                        CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
-                        applyUploadHints(uploadResult);
-                        if (uploadResult.success()) {
-                            if (eventStore.delete(pending.path())) {
-                                uploaded++;
-                            } else {
-                                lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
-                            }
+                    List<TelemetryEventStore.PendingEvent> pendingEvents = eventStore.listPendingEvents(settings.maxUploadsPerFlush());
+                    if (!pendingEvents.isEmpty()) {
+                        String cooldownFailure = uploadCooldownFailure(eventTarget, reason);
+                        if (cooldownFailure != null) {
+                            lastFailure = cooldownFailure;
                         } else {
-                            lastFailure = uploadResult.describeFailure();
-                            if (uploadResult.shouldBackOff()) {
-                                break;
+                            for (TelemetryEventStore.PendingEvent pending : pendingEvents) {
+                                attempted++;
+                                CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
+                                applyUploadHints(uploadResult);
+                                if (uploadResult.success()) {
+                                    clearUploadRetryCooldown(eventTarget);
+                                    if (eventStore.delete(pending.path())) {
+                                        uploaded++;
+                                    } else {
+                                        lastFailure = "Uploaded but failed to remove local event file " + pending.path().getFileName();
+                                    }
+                                } else {
+                                    lastFailure = uploadResult.describeFailure();
+                                    recordUploadFailure(eventTarget, uploadResult);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1019,24 +1038,32 @@ public final class TelemetryCoreEngine {
                 CrashReportClient.DeliveryTarget reportTarget = project.resolveReportDeliveryTarget(settings);
                 if (reportTarget != null && !reportTarget.endpoint().isBlank()) {
                     ManualReportStore manualStore = manualReportStoreFor(project);
-                    for (ManualReportStore.PendingReport pending : manualStore.listPendingReports(project.projectId(), settings.maxUploadsPerFlush())) {
-                        attempted++;
-                        ManualReportEnvelope envelope = parseManualReport(pending.payload());
-                        CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
-                        applyUploadHints(uploadResult);
-                        if (uploadResult.success()) {
-                            if (manualStore.delete(pending.path())) {
-                                uploaded++;
-                                updateManualReportReceiptStatus(envelope, "uploaded");
-                                appendManualReportAudit(manualStore, pending.payload(), true);
-                            } else {
-                                lastFailure = "Uploaded but failed to remove local manual report file " + pending.path().getFileName();
-                            }
+                    List<ManualReportStore.PendingReport> pendingReports = manualStore.listPendingReports(project.projectId(), settings.maxUploadsPerFlush());
+                    if (!pendingReports.isEmpty()) {
+                        String cooldownFailure = uploadCooldownFailure(reportTarget, reason);
+                        if (cooldownFailure != null) {
+                            lastFailure = cooldownFailure;
                         } else {
-                            updateManualReportReceiptStatus(envelope, "upload_failed");
-                            lastFailure = uploadResult.describeFailure();
-                            if (uploadResult.shouldBackOff()) {
-                                break;
+                            for (ManualReportStore.PendingReport pending : pendingReports) {
+                                attempted++;
+                                ManualReportEnvelope envelope = parseManualReport(pending.payload());
+                                CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
+                                applyUploadHints(uploadResult);
+                                if (uploadResult.success()) {
+                                    clearUploadRetryCooldown(reportTarget);
+                                    if (manualStore.delete(pending.path())) {
+                                        uploaded++;
+                                        updateManualReportReceiptStatus(envelope, "uploaded");
+                                        appendManualReportAudit(manualStore, pending.payload(), true);
+                                    } else {
+                                        lastFailure = "Uploaded but failed to remove local manual report file " + pending.path().getFileName();
+                                    }
+                                } else {
+                                    updateManualReportReceiptStatus(envelope, "upload_failed");
+                                    lastFailure = uploadResult.describeFailure();
+                                    recordUploadFailure(reportTarget, uploadResult);
+                                    break;
+                                }
                             }
                         }
                     }
@@ -1061,6 +1088,70 @@ public final class TelemetryCoreEngine {
         String lane = uploadResult.intakeLane();
         if (lane == null || "stats".equalsIgnoreCase(lane)) {
             applyStatsHeartbeatIntervalHint(intervalSeconds);
+        }
+    }
+
+    @Nullable
+    private String uploadCooldownFailure(@Nonnull CrashReportClient.DeliveryTarget target,
+                                         @Nonnull String reason) {
+        if (bypassesUploadRetryCooldown(reason)) {
+            return null;
+        }
+        UploadRetryState state = uploadRetryStates.get(uploadRetryKey(target));
+        if (state == null) {
+            return null;
+        }
+        long remainingMillis = state.remainingCooldownMillis(System.currentTimeMillis());
+        if (remainingMillis <= 0) {
+            return null;
+        }
+        long remainingSeconds = Math.max(1, (remainingMillis + 999) / 1000);
+        return "Upload retry cooldown active for " + remainingSeconds + "s after previous failure.";
+    }
+
+    private void recordUploadFailure(@Nonnull CrashReportClient.DeliveryTarget target,
+                                     @Nonnull CrashReportClient.UploadResult uploadResult) {
+        uploadRetryStates
+                .computeIfAbsent(uploadRetryKey(target), ignored -> new UploadRetryState())
+                .recordFailure(uploadResult, System.currentTimeMillis());
+    }
+
+    private void clearUploadRetryCooldown(@Nonnull CrashReportClient.DeliveryTarget target) {
+        uploadRetryStates.remove(uploadRetryKey(target));
+    }
+
+    @Nonnull
+    private static String uploadRetryKey(@Nonnull CrashReportClient.DeliveryTarget target) {
+        return target.normalize().endpoint();
+    }
+
+    private static boolean bypassesUploadRetryCooldown(@Nonnull String reason) {
+        return "manual".equalsIgnoreCase(reason)
+                || "shutdown".equalsIgnoreCase(reason)
+                || "server-verification".equalsIgnoreCase(reason);
+    }
+
+    private static final class UploadRetryState {
+        private int consecutiveFailures;
+        private long retryAfterMillis;
+
+        private synchronized void recordFailure(@Nonnull CrashReportClient.UploadResult uploadResult, long nowMillis) {
+            consecutiveFailures++;
+            retryAfterMillis = nowMillis + retryDelayMillis(uploadResult, consecutiveFailures);
+        }
+
+        private synchronized long remainingCooldownMillis(long nowMillis) {
+            return retryAfterMillis - nowMillis;
+        }
+
+        private static long retryDelayMillis(@Nonnull CrashReportClient.UploadResult uploadResult,
+                                             int consecutiveFailures) {
+            if (uploadResult.retryAfterSec() > 0) {
+                return Math.min(MAX_UPLOAD_RETRY_COOLDOWN_MILLIS, TimeUnit.SECONDS.toMillis(uploadResult.retryAfterSec()));
+            }
+            int exponent = Math.min(4, Math.max(0, consecutiveFailures - 1));
+            long delay = DEFAULT_UPLOAD_RETRY_COOLDOWN_MILLIS << exponent;
+            return Math.min(MAX_UPLOAD_RETRY_COOLDOWN_MILLIS, delay);
         }
     }
 

@@ -241,6 +241,53 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void failedUploadStopsPassAndThrottlesAutomaticRetries() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                descriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(
+                CrashReportClient.UploadResult.failure(500, "server timeout"),
+                CrashReportClient.UploadResult.success(204)
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.2.3")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.recordUsage("embedded-mod", "settings_opened", Map.of("source", "one")));
+        assertTrue(service.recordUsage("embedded-mod", "settings_opened", Map.of("source", "two")));
+
+        TelemetryCoreEngine.FlushSummary failed = service.flushPendingReportsNow("event", "embedded-mod");
+        TelemetryCoreEngine.FlushSummary throttled = service.flushPendingReportsNow("periodic", "embedded-mod");
+        TelemetryCoreEngine.FlushSummary manual = service.flushPendingReportsNow("manual", "embedded-mod");
+
+        assertEquals(1, failed.attempted());
+        assertEquals(0, failed.uploaded());
+        assertEquals(2, failed.pendingAfter());
+        assertTrue(failed.lastFailure().contains("server timeout"));
+        assertEquals(0, throttled.attempted());
+        assertEquals(2, throttled.pendingAfter());
+        assertTrue(throttled.lastFailure().contains("Upload retry cooldown active"));
+        assertEquals(2, manual.attempted());
+        assertEquals(2, manual.uploaded());
+        assertEquals(3, client.calls);
+    }
+
+    @Test
     void coordinatorStatsHeartbeatSchedulesWithCurrentEngineInterval() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),

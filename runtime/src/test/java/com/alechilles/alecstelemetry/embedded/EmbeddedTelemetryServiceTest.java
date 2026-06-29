@@ -263,7 +263,8 @@ class EmbeddedTelemetryServiceTest {
         service.captureSetupFailure(throwable);
         assertEquals(1, service.pendingReports());
         assertEquals(1, service.flushPendingReportsNow("embedded-first").attempted());
-        assertEquals(1, service.flushPendingReportsNow("embedded-second").attempted());
+        assertEquals(0, service.flushPendingReportsNow("embedded-second").attempted());
+        assertEquals(1, service.flushPendingReportsNow("manual").attempted());
         assertEquals(0, service.flushPendingReportsNow("embedded-third").attempted());
         assertEquals(2, client.calls);
         JsonObject firstPayload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
