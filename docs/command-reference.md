@@ -8,7 +8,9 @@ The root command is:
 
 The root permission is `telemetry.command.telemetry`. Runtime inspection and
 operator actions are intended for `OP`, `Admin`, or `Operator` groups unless
-noted otherwise.
+noted otherwise. Text-based diagnostics and operator actions can be run by
+players with permission or directly from the server console. UI commands still
+require an in-game player sender.
 
 ## Runtime Diagnostics
 
@@ -45,6 +47,8 @@ This opens the shared consent UI. It can change:
 
 The first-run notice uses the same consent runtime. Descriptor defaults provide
 the initial state until a server owner reviews or changes a project.
+
+`/telemetry consent` opens an in-game UI and must be run by a player.
 
 Consent choices are persisted under the canonical Alec's Telemetry settings
 root. Project category choices are written to
@@ -86,7 +90,8 @@ Players can open the report UI with:
 ```
 
 `/telemetry report` is player-facing and is available to the `Player`, `OP`,
-`Admin`, and `Operator` groups.
+`Admin`, and `Operator` groups. It opens an in-game UI and must be run by a
+player.
 
 Operators can review locally held reports with:
 
@@ -98,4 +103,5 @@ Operators can review locally held reports with:
 ```
 
 These review commands matter when `manualReports.manualReviewRequired` is true
-in the canonical `Settings/runtime.json`.
+in the canonical `Settings/runtime.json`. They can be run from the server
+console.

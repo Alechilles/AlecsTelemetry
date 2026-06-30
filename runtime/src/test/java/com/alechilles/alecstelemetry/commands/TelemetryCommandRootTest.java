@@ -1,9 +1,12 @@
 package com.alechilles.alecstelemetry.commands;
 
 import com.hypixel.hytale.server.core.command.system.CommandOwner;
+import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class TelemetryCommandRootTest {
 
@@ -36,6 +39,30 @@ class TelemetryCommandRootTest {
         assertEquals(
                 "telemetry.command.telemetry.report",
                 root.getSubCommands().get("report").getPermission()
+        );
+    }
+
+    @Test
+    void textAdminCommandsDoNotRequirePlayerSender() {
+        TelemetryCommandRoot root = new TelemetryCommandRoot(null);
+
+        assertConsoleSafe(root, "status");
+        assertConsoleSafe(root, "projects");
+        assertConsoleSafe(root, "project");
+        assertConsoleSafe(root, "flush");
+        assertConsoleSafe(root, "test");
+        assertConsoleSafe(root, "reports");
+        assertConsoleSafe(root.getSubCommands().get("server"), "verify");
+
+        assertInstanceOf(AbstractPlayerCommand.class, root.getSubCommands().get("consent"));
+        assertInstanceOf(AbstractPlayerCommand.class, root.getSubCommands().get("report"));
+    }
+
+    private static void assertConsoleSafe(com.hypixel.hytale.server.core.command.system.AbstractCommand parent,
+                                          String name) {
+        assertFalse(
+                parent.getSubCommands().get(name) instanceof AbstractPlayerCommand,
+                name + " should accept console senders"
         );
     }
 

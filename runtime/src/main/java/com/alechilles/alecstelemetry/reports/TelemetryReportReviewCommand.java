@@ -3,13 +3,8 @@ package com.alechilles.alecstelemetry.reports;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandSupport;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
-import com.hypixel.hytale.component.Ref;
-import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
-import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
-import com.hypixel.hytale.server.core.universe.PlayerRef;
-import com.hypixel.hytale.server.core.universe.world.World;
-import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 
 import javax.annotation.Nonnull;
 import java.util.List;
@@ -17,7 +12,7 @@ import java.util.List;
 /**
  * Server-owner review commands for player-submitted manual reports.
  */
-public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
+public final class TelemetryReportReviewCommand extends CommandBase {
 
     private static final int MAX_LISTED_REPORTS = 20;
 
@@ -31,11 +26,7 @@ public final class TelemetryReportReviewCommand extends AbstractPlayerCommand {
     }
 
     @Override
-    protected void execute(@Nonnull CommandContext commandContext,
-                           @Nonnull Store<EntityStore> store,
-                           @Nonnull Ref<EntityStore> ref,
-                           @Nonnull PlayerRef playerRef,
-                           @Nonnull World world) {
+    protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
             return;
