@@ -308,6 +308,14 @@ Retention depends on the data type and operational need.
   then deleted or anonymized on verified deletion request unless legal, billing,
   or security reasons require retention.
 
+Project owners may delete a telemetry project or server profile from the portal.
+This removes the project or server profile from normal portal and public
+surfaces, disables the relevant hosted ingest or public listing behavior, and
+hides related public stats/profile exposure. This portal action is a
+soft-delete/archive for operational recovery; underlying telemetry, billing,
+audit, security, backup, or legal records may remain under the retention rules
+above unless a separate verified privacy deletion request is processed.
+
 Backups and logs may retain copies for a limited period after deletion from the
 primary database.
 
