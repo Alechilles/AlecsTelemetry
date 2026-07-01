@@ -255,6 +255,12 @@ Access depends on the surface:
   create or sync GitHub issues.
 - Apex Web Solutions LLC and trusted service operators may access data to
   operate, secure, debug, and support the platform.
+- Site administrators may access and update portal account records,
+  billing/account status, project ownership and guardrails, server profile
+  moderation state, and related audit records when needed to provide support,
+  enforce service limits, prevent abuse, investigate reliability issues, or
+  protect the hosted service. Administrative changes are logged with the acting
+  portal account where available.
 - Hosting, analytics, OAuth, payment, and infrastructure providers may process
   data as needed to provide their services.
 - Data may be disclosed if required to comply with law, protect rights, prevent
