@@ -49,7 +49,7 @@ Then add the embeddable runtime dependency:
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
 </dependency>
 ```
 
@@ -63,7 +63,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.0.1")
+    implementation("com.alechilles:alecstelemetry-runtime:1.0.2")
 }
 ```
 
