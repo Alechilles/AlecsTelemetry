@@ -819,6 +819,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 case "plugin_setup_failure" -> setupFailures;
                 case "plugin_start_failure" -> startFailures;
                 case "exceptional_world_removal" -> exceptionalWorldRemovals;
+                case "manual_test" -> true;
                 default -> false;
             };
         }

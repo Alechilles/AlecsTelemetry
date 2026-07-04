@@ -194,6 +194,41 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void crashEnabledEmbeddedServiceQueuesManualTestReport() {
+        Path telemetryRoot = tempDir.resolve("Telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.captureTestReport("embedded-check"));
+        assertEquals(1, service.pendingReports());
+        assertEquals(1, service.flushPendingReportsNow("manual-test").attempted());
+    }
+
+    @Test
     void embeddedServiceCapturesAndFlushesForOneOwningProject() {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
