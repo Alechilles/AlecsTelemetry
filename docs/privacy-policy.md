@@ -176,6 +176,8 @@ When you sign in or are invited to a project, the portal may store:
   URL, bio, website URL, Discord URL, GitHub URL, CurseForge profile URL,
   Modtale profile URL, Modifold profile URL, featured link, theme tokens, and
   public visibility settings
+- public project author/contributor links and display titles selected by project
+  owners
 - billing account, account-project links, Stripe Checkout, Billing Portal,
   webhook, customer, subscription, plan, entitlement, billing email, downgrade
   grace, public plan recognition opt-out setting, and quota/guardrail metadata
@@ -238,13 +240,14 @@ Access depends on the surface:
 
 - Public ModStats.io pages show aggregate stats, public project/server profile
   information, optional public author profile information, sanitized public
-  profile theme fields, and optional Supporter, Pro, or Partner plan badges when
-  public badges are enabled. Public author profiles can include a display name,
-  slug, avatar URL, bio, website URL, Discord URL, GitHub URL, CurseForge
-  profile URL, Modtale profile URL, Modifold profile URL, cover image URL,
-  featured link URL/label, and bounded theme tokens. Public pages do not show
-  Stripe customer IDs, subscription IDs, billing email, invoices, payment
-  methods, or private billing account details.
+  profile theme fields, project author/contributor links and display titles,
+  and optional Supporter, Pro, or Partner plan badges when public badges are
+  enabled. Public author profiles can include a display name, slug, avatar URL,
+  bio, website URL, Discord URL, GitHub URL, CurseForge profile URL, Modtale
+  profile URL, Modifold profile URL, cover image URL, featured link URL/label,
+  and bounded theme tokens. Public pages do not show Stripe customer IDs,
+  subscription IDs, billing email, invoices, payment methods, or private billing
+  account details.
   Paid recognition does not change public ranking, active counts, or verified
   telemetry evidence.
 - Project owners, admins, maintainers, and viewers can see the portal data their
