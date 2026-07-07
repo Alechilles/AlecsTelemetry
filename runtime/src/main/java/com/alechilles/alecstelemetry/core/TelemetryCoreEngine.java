@@ -30,8 +30,8 @@ import javax.annotation.Nullable;
 import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -76,10 +76,10 @@ public final class TelemetryCoreEngine {
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final AtomicBoolean uncaughtHandlerInstalled = new AtomicBoolean(false);
     private final AtomicBoolean flushInProgress = new AtomicBoolean(false);
-    private final LinkedHashMap<String, CrashReportStore> storesByProjectId = new LinkedHashMap<>();
-    private final LinkedHashMap<String, TelemetryEventStore> eventStoresByProjectId = new LinkedHashMap<>();
-    private final LinkedHashMap<String, ManualReportStore> manualReportStoresByProjectId = new LinkedHashMap<>();
-    private final LinkedHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new LinkedHashMap<>();
+    private final ConcurrentHashMap<String, CrashReportStore> storesByProjectId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, TelemetryEventStore> eventStoresByProjectId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ManualReportStore> manualReportStoresByProjectId = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, CrashReportEnvelope.EnvironmentSnapshot> environmentsByProjectId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> projectEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> crashEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> errorEventsEnabledOverrides = new ConcurrentHashMap<>();
@@ -1302,19 +1302,16 @@ public final class TelemetryCoreEngine {
     private CrashReportEnvelope.EnvironmentSnapshot environmentFor(@Nonnull TelemetryProjectRegistration project,
                                                                    @Nonnull CrashReportEnvelope.RuntimeMetadata runtimeMetadata) {
         String key = project.projectId().toLowerCase(Locale.ROOT);
-        CrashReportEnvelope.EnvironmentSnapshot existing = environmentsByProjectId.get(key);
-        if (existing != null) {
-            return existing;
-        }
-        CrashReportEnvelope.EnvironmentSnapshot snapshot = CrashReportEnvelope.EnvironmentSnapshot.capture(
-                project.projectId(),
-                project.pluginIdentifier(),
-                project.pluginVersion(),
-                project.runtimeMode(),
-                runtimeMetadata
+        return environmentsByProjectId.computeIfAbsent(
+                key,
+                ignored -> CrashReportEnvelope.EnvironmentSnapshot.capture(
+                        project.projectId(),
+                        project.pluginIdentifier(),
+                        project.pluginVersion(),
+                        project.runtimeMode(),
+                        runtimeMetadata
+                )
         );
-        environmentsByProjectId.put(key, snapshot);
-        return snapshot;
     }
 
     private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {

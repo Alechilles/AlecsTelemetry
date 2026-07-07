@@ -17,17 +17,23 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCoordinatorServiceTest {
@@ -359,6 +365,63 @@ class TelemetryCoordinatorServiceTest {
         assertEquals(1, details.get("playersOnline").getAsInt());
         assertEquals(5, details.get("maxPlayersSinceLastReport").getAsInt());
         assertEquals(2.75, details.get("avgPlayersSinceLastReport").getAsDouble(), 0.01);
+    }
+
+    @Test
+    void concurrentManualReportReviewAccessInitializesStoresSafely() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        ArrayList<TelemetryProjectRegistration> reportProjects = new ArrayList<>();
+        for (int i = 0; i < 128; i++) {
+            reportProjects.add(new TelemetryProjectRegistration(
+                    reportDescriptor("report-mod-" + i, "Report Mod " + i, "standalone"),
+                    "Example:Report Mod " + i,
+                    "1.0.0",
+                    tempDir.resolve("Report-" + i + ".jar")
+            ));
+        }
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(),
+                reportProjects,
+                List.of(),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null
+        );
+        int threads = 16;
+        CountDownLatch ready = new CountDownLatch(threads);
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        ExecutorService executor = Executors.newFixedThreadPool(threads);
+        try {
+            for (int i = 0; i < threads; i++) {
+                executor.execute(() -> {
+                    ready.countDown();
+                    try {
+                        start.await();
+                        for (int pass = 0; pass < 25; pass++) {
+                            engine.manualReportsForReview(1);
+                        }
+                    } catch (Throwable ex) {
+                        failure.compareAndSet(null, ex);
+                    }
+                });
+            }
+
+            assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            executor.shutdown();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertNull(failure.get());
     }
 
     @Test
