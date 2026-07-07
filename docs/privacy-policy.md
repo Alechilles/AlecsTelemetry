@@ -168,7 +168,8 @@ When you sign in or are invited to a project, the portal may store:
 - Discord or GitHub provider ID, username/login, display name, avatar URL, and
   linked-provider status
 - project memberships, roles, audit log entries, route verification records,
-  saved views, assignees, and workflow activity
+  project membership invitations, portal notifications, saved views,
+  assignees, and workflow activity
 - Discord guild/channel/role routing configuration selected by authorized project
   members
 - GitHub repository integration settings and GitHub issue-link metadata
