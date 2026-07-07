@@ -165,8 +165,8 @@ triage, manual reports, stats, Discord routing, GitHub issue sync, and billing.
 When you sign in or are invited to a project, the portal may store:
 
 - portal user ID
-- Discord or GitHub provider ID, username/login, display name, avatar URL, and
-  linked-provider status
+- Discord, GitHub, or Hytale provider ID, username/login, display name,
+  avatar URL, and linked-provider status
 - project memberships, roles, audit log entries, route verification records,
   project membership invitations, portal notifications, saved views,
   assignees, and workflow activity
@@ -184,8 +184,13 @@ When you sign in or are invited to a project, the portal may store:
   grace, public plan recognition opt-out setting, and quota/guardrail metadata
   when billing features are used
 
-Discord, GitHub, and Stripe process information under their own privacy policies
-when you use those integrations.
+For Hytale sign-in, we store the stable per-application Hytale subject
+identifier returned to Alec's Telemetry and, when you grant the profile scope,
+the selected Hytale profile username and UUID. Hytale does not provide us your
+email address through this sign-in flow.
+
+Discord, GitHub, Hytale, and Stripe process information under their own privacy
+policies when you use those integrations.
 
 ## Website Analytics
 
@@ -416,9 +421,10 @@ extra sensitive information.
 Privacy requests are handled through the support contact below. There is no
 public self-service request portal in v1. Internal tooling supports dry-run
 exports and apply-only deletion or anonymization using portal user IDs,
-Discord/GitHub identities, report IDs, follow-up tokens, project IDs, server
-profile IDs, server IDs, and session IDs. Some records may be retained for legal,
-billing, tax, accounting, dispute, abuse-prevention, or security reasons.
+Discord/GitHub identities, Hytale subject or profile identifiers, report IDs,
+follow-up tokens, project IDs, server profile IDs, server IDs, and session IDs.
+Some records may be retained for legal, billing, tax, accounting, dispute,
+abuse-prevention, or security reasons.
 
 ## Incidents
 
