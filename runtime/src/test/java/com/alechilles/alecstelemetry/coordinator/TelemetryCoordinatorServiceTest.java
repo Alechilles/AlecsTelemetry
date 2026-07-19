@@ -173,6 +173,58 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void structuredBreadcrumbIsAttachedToExplicitErrorEvent() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration embedded = new TelemetryProjectRegistration(
+                descriptor("embedded-mod", "Embedded Mod", "embedded"),
+                "Example:Embedded Mod",
+                "1.2.3",
+                tempDir.resolve("Embedded.jar")
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(embedded),
+                List.of(embedded),
+                List.of(),
+                client,
+                null,
+                null
+        );
+
+        assertTrue(service.recordBreadcrumb(
+                "embedded-mod",
+                "persistence",
+                "incident opened",
+                Map.of(
+                        "correlationId", "trace-1",
+                        "incidentId", "incident-1",
+                        "phase", "CANONICAL_OUTCOME_UNKNOWN",
+                        "operation", "coop_release",
+                        "attributes", Map.of("attempt", 1)
+                )
+        ));
+        assertTrue(service.recordError("embedded-mod", "persistence_incident", null, Map.of()));
+        assertEquals(1, service.flushPendingReportsNow("test", "embedded-mod").attempted());
+
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        JsonObject breadcrumb = payload.getAsJsonObject("details")
+                .getAsJsonArray("breadcrumbs")
+                .get(0)
+                .getAsJsonObject();
+        assertEquals("trace-1", breadcrumb.get("correlationId").getAsString());
+        assertEquals("incident-1", breadcrumb.get("incidentId").getAsString());
+        assertEquals("CANONICAL_OUTCOME_UNKNOWN", breadcrumb.get("phase").getAsString());
+        assertEquals("coop_release", breadcrumb.get("operation").getAsString());
+        assertEquals(1, breadcrumb.getAsJsonObject("attributes").get("attempt").getAsInt());
+    }
+
+    @Test
     void rateLimitedEventUploadStopsCurrentFlushPassAndLeavesQueueIntact() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),
