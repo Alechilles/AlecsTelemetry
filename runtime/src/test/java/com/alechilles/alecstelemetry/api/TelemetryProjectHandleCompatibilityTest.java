@@ -49,6 +49,31 @@ class TelemetryProjectHandleCompatibilityTest {
     }
 
     @Test
+    void legacyHandleImplementationsReceiveStructuredBreadcrumbFallback() {
+        TrackingTelemetryProjectHandle handle = new TrackingTelemetryProjectHandle();
+
+        handle.recordBreadcrumb(TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+                .incidentId("incident-1")
+                .build());
+
+        assertEquals("persistence", handle.category);
+        assertEquals("incident opened", handle.detail);
+    }
+
+    @Test
+    void runtimeBackedHandleDelegatesStructuredBreadcrumbWithoutFlattening() {
+        FakeRuntimeOperations runtime = new FakeRuntimeOperations(true, true);
+        TelemetryProjectHandle handle = new TelemetryProjectHandleImpl(runtime, "example-mod");
+        TelemetryBreadcrumbContext context = TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+                .incidentId("incident-1")
+                .build();
+
+        handle.recordBreadcrumb(context);
+
+        assertSame(context, runtime.breadcrumbContext);
+    }
+
+    @Test
     void reportPageOpenRequestNormalizesKind() {
         assertEquals("issue", new TelemetryReportOpenRequest("bug", " title ", " desc ").normalizedKind());
         assertEquals("suggestion", new TelemetryReportOpenRequest("Suggestion", null, null).normalizedKind());
@@ -87,7 +112,7 @@ class TelemetryProjectHandleCompatibilityTest {
         assertTrue(enabledApi.isEnabled());
     }
 
-    private static final class NoopTelemetryProjectHandle implements TelemetryProjectHandle {
+    private static class NoopTelemetryProjectHandle implements TelemetryProjectHandle {
         @Nonnull
         @Override
         public String projectId() {
@@ -143,6 +168,17 @@ class TelemetryProjectHandleCompatibilityTest {
         }
     }
 
+    private static final class TrackingTelemetryProjectHandle extends NoopTelemetryProjectHandle {
+        private String category;
+        private String detail;
+
+        @Override
+        public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
+            this.category = category;
+            this.detail = detail;
+        }
+    }
+
     private static final class FakeRuntimeOperations implements TelemetryRuntimeOperations {
         private final boolean enabled;
         private final boolean projectEnabled;
@@ -150,6 +186,7 @@ class TelemetryProjectHandleCompatibilityTest {
         private boolean openReportPageResult;
         private String openedProjectId;
         private TelemetryReportOpenRequest openedRequest;
+        private TelemetryBreadcrumbContext breadcrumbContext;
 
         private FakeRuntimeOperations(boolean enabled, boolean projectEnabled) {
             this.enabled = enabled;
@@ -202,6 +239,12 @@ class TelemetryProjectHandleCompatibilityTest {
 
         @Override
         public void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail) {
+        }
+
+        @Override
+        public void recordBreadcrumb(@Nonnull String projectId,
+                                     @Nonnull TelemetryBreadcrumbContext context) {
+            breadcrumbContext = context;
         }
 
         @Override

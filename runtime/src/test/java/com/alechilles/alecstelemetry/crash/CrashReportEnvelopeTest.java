@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.crash;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
@@ -84,6 +85,33 @@ class CrashReportEnvelopeTest {
         } finally {
             restoreProperty("alecs.telemetry.serverHostingMode", originalHostingMode);
         }
+    }
+
+    @Test
+    void serializesStructuredBreadcrumbFieldsAdditively() {
+        CrashReportEnvelope.BreadcrumbEntry entry = CrashReportEnvelope.BreadcrumbEntry.from(
+                "2026-07-19T00:00:00Z",
+                TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+                        .correlationId("trace-1")
+                        .incidentId("incident-1")
+                        .phase("APPLYING")
+                        .operation("coop_release")
+                        .scopeType("COOP_SLOT")
+                        .failureClass("OUTCOME_UNKNOWN")
+                        .disposition("SCOPED_QUARANTINE")
+                        .attribute("recoveryAttempt", 2)
+                        .build()
+        );
+
+        JsonObject json = JsonParser.parseString(new com.google.gson.Gson().toJson(entry)).getAsJsonObject();
+
+        assertEquals("persistence", json.get("category").getAsString());
+        assertEquals("trace-1", json.get("correlationId").getAsString());
+        assertEquals("incident-1", json.get("incidentId").getAsString());
+        assertEquals("APPLYING", json.get("phase").getAsString());
+        assertEquals("coop_release", json.get("operation").getAsString());
+        assertEquals("COOP_SLOT", json.get("scopeType").getAsString());
+        assertEquals(2, json.getAsJsonObject("attributes").get("recoveryAttempt").getAsInt());
     }
 
     @Test

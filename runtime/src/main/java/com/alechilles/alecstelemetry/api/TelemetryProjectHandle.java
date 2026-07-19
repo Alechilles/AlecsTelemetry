@@ -24,6 +24,15 @@ public interface TelemetryProjectHandle {
 
     void recordBreadcrumb(@Nonnull String category, @Nonnull String detail);
 
+    /**
+     * Records a bounded structured breadcrumb when the active runtime supports it.
+     * Older handle implementations inherit the legacy category/detail fallback.
+     */
+    default void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
+        TelemetryBreadcrumbContext normalized = context.normalize();
+        recordBreadcrumb(normalized.category(), normalized.detail());
+    }
+
     void captureSetupFailure(@Nullable Throwable throwable);
 
     void captureStartFailure(@Nullable Throwable throwable);

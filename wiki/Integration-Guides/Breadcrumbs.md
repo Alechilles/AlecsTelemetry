@@ -41,12 +41,35 @@ project.recordBreadcrumb("config", "Reload requested.");
 
 Embedded plugins can call the same helper on `EmbeddedTelemetryService`.
 
+For operations that need a support correlation trail, use the additive
+structured context:
+
+```java
+project.recordBreadcrumb(
+    TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+        .correlationId(traceId)
+        .incidentId(incidentId)
+        .phase("CANONICAL_OUTCOME_UNKNOWN")
+        .operation("coop_release")
+        .scopeType("COOP_SLOT")
+        .failureClass("OUTCOME_UNKNOWN")
+        .disposition("SCOPED_QUARANTINE")
+        .attribute("recoveryAttempt", 1)
+        .build()
+);
+```
+
+The runtime bounds every field and accepts only scalar custom attributes.
+Legacy category/detail calls remain supported. Correlation values should be
+randomized or hashed; do not send raw player, NPC, world, or save identifiers.
+
 ## Good Breadcrumbs
 
 - name the subsystem
 - describe a stable action
 - stay short
 - avoid player names, secrets, exact coordinates, tokens, and free-form chat
+- use randomized or one-way-hashed correlation values instead of raw stable IDs
 
 ## Verify
 

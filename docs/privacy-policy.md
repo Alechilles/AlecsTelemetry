@@ -92,10 +92,17 @@ When enabled, these events can include:
 - for crashes, exception type, exception message, stack trace frames, causal
   chain, attribution information, thread name, breadcrumbs, and limited world
   failure metadata when available
+- breadcrumbs may include bounded structured diagnostic fields supplied by the
+  reporting mod, including randomized or hashed correlation/incident IDs,
+  operation phase, operation type, scope category, failure classification,
+  disposition, and a small set of scalar attributes
 
 Crash messages and stack traces come from the running software. Mod authors should
 avoid putting secrets, player names, coordinates, tokens, or other identifying
 values into exception messages, breadcrumbs, or custom event context.
+Structured breadcrumb fields are not intended for raw player, NPC, world, save,
+or account identifiers; integrations should send randomized correlation values
+or one-way hashes when cross-event correlation is necessary.
 
 ### Public Usage Stats
 

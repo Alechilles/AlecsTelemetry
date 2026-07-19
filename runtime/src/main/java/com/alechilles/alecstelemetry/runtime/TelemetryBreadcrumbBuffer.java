@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 
 import javax.annotation.Nonnull;
@@ -25,9 +26,15 @@ public final class TelemetryBreadcrumbBuffer {
     public synchronized void record(@Nonnull String projectId,
                                     @Nonnull String category,
                                     @Nonnull String detail) {
+        record(projectId, TelemetryBreadcrumbContext.of(category, detail));
+    }
+
+    public synchronized void record(@Nonnull String projectId,
+                                    @Nonnull TelemetryBreadcrumbContext context) {
         String safeProjectId = normalize(projectId, 120);
-        String safeCategory = normalize(category, 80);
-        String safeDetail = normalize(detail, 400);
+        TelemetryBreadcrumbContext normalized = context.normalize();
+        String safeCategory = normalized.category();
+        String safeDetail = normalized.detail();
         if (safeProjectId.isBlank() || safeCategory.isBlank() || safeDetail.isBlank()) {
             return;
         }
@@ -38,7 +45,7 @@ public final class TelemetryBreadcrumbBuffer {
         while (deque.size() >= maxEntriesPerProject) {
             deque.removeFirst();
         }
-        deque.addLast(new CrashReportEnvelope.BreadcrumbEntry(Instant.now().toString(), safeCategory, safeDetail));
+        deque.addLast(CrashReportEnvelope.BreadcrumbEntry.from(Instant.now().toString(), normalized));
     }
 
     @Nonnull
