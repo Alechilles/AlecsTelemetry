@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.coordinator;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -10,6 +11,7 @@ import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
@@ -261,10 +263,25 @@ public final class TelemetryCoordinatorService {
     public boolean recordBreadcrumb(@Nonnull String projectId,
                                     @Nonnull String category,
                                     @Nonnull String detail) {
+        return recordBreadcrumb(projectId, TelemetryBreadcrumbContext.of(category, detail));
+    }
+
+    public boolean recordBreadcrumb(@Nonnull String projectId,
+                                    @Nonnull String category,
+                                    @Nonnull String detail,
+                                    @Nonnull Map<String, Object> context) {
+        return recordBreadcrumb(
+                projectId,
+                TelemetryBreadcrumbBridgePayload.fromSummary(category, detail, context)
+        );
+    }
+
+    public boolean recordBreadcrumb(@Nonnull String projectId,
+                                    @Nonnull TelemetryBreadcrumbContext context) {
         if (engine.findProject(projectId) == null) {
             return false;
         }
-        engine.recordBreadcrumb(projectId, category, detail);
+        engine.recordBreadcrumb(projectId, context);
         return true;
     }
 

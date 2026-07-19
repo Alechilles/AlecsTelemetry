@@ -149,6 +149,13 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    default boolean recordBreadcrumb(@Nonnull String projectId,
+                                     @Nonnull String category,
+                                     @Nonnull String detail,
+                                     @Nonnull Map<String, Object> context) {
+        return recordBreadcrumb(projectId, category, detail);
+    }
+
     default boolean recordError(@Nonnull String projectId,
                                 @Nonnull String eventName,
                                 @Nullable Throwable throwable,

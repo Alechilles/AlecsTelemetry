@@ -498,6 +498,22 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean recordBreadcrumb(@Nonnull String projectId,
+                                        @Nonnull String category,
+                                        @Nonnull String detail,
+                                        @Nonnull Map<String, Object> context) {
+            boolean handled = invokeBoolean(
+                    "recordBreadcrumb",
+                    new Class<?>[]{String.class, String.class, String.class, Map.class},
+                    projectId,
+                    category,
+                    detail,
+                    context
+            );
+            return handled || recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
         public boolean recordError(@Nonnull String projectId,
                                    @Nonnull String eventName,
                                    @Nullable Throwable throwable,
