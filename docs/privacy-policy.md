@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: June 28, 2026
+Effective date: July 24, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -8,7 +8,8 @@ ModStats.io collect and use information. It covers:
 - the Alec's Telemetry runtime that can run on Hytale servers or local worlds
 - telemetry sent to Alec's hosted platform at `telemetry.alecsmods.com` or
   related development hosts
-- the hosted portal used by mod authors and project members
+- the hosted portal used by mod authors and project members, including its
+  optional Model Context Protocol (MCP) agent access feature
 - public ModStats.io stats and server listing pages
 
 This policy is written for players, server owners, and mod authors. It is not a
@@ -183,6 +184,20 @@ When you sign in or are invited to a project, the portal may store:
   webhook, customer, subscription, plan, entitlement, billing email, downgrade
   grace, public plan recognition opt-out setting, and quota/guardrail metadata
   when billing features are used
+- optional MCP access settings, selected projects, scopes, credential labels,
+  expiration/revocation and last-used information, OAuth client metadata,
+  authorization/approval records, and security/audit events when a project
+  enables agent access
+
+MCP agent access is optional and is controlled by authorized project members.
+An agent receives only the project and scope access approved for its credential.
+Telemetry, report text, and diagnostic fields returned to an agent are treated
+as untrusted evidence; the service applies bounds and redaction controls and
+does not return attachment bytes through MCP. MCP credentials and telemetry
+ingest keys are separate. We display newly-created credential values once and
+store only protected verification values thereafter. Project policies can require
+portal approval before an agent changes an issue, creates a linked GitHub issue,
+or provisions an ingest credential.
 
 For Hytale sign-in, we store the stable per-application Hytale subject
 identifier returned to Alec's Telemetry and, when you grant the profile scope,
