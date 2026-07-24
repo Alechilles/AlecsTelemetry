@@ -325,12 +325,15 @@ Retention depends on the data type and operational need.
 - Portal audit logs and security records are retained for 1095 days by default.
 - Aggregate public stats headline rollups, issue workflow/activity, project
   configuration, and public server listing history are retained while the project
-  or server profile exists. Per-server stats bucket snapshots are retained only
-  for recent active/evidence windows and near-term breakdowns, and are deleted
-  after matching aggregate rollups exist. Per-server loaded-mod bucket snapshots
-  are retained only for recent active/evidence windows and near-term breakdowns,
-  and are deleted after matching compact loaded-mod breakdown rollups exist.
-  Compact loaded-mod breakdown rollups are retained while the project exists.
+  or server profile exists. Per-server stats bucket snapshots are retained for a
+  recent active/evidence window of 30 days by default, and per-server loaded-mod
+  bucket snapshots are retained for 7 days by default; both are deleted after
+  matching aggregate rollups exist.
+  Loaded-mod breakdowns retain 30-minute detail for 7 days by default, daily
+  aggregates for 90 days by default, and weekly aggregates for 730 days by
+  default. Weekly loaded-mod aggregates keep the 100 most common loaded mods
+  for a project/week plus a combined "Other loaded mods" total rather than an
+  unbounded long-term list of individual mods.
 - Billing customer and subscription metadata may be retained for 2555 days or as
   otherwise needed for tax, accounting, dispute, chargeback, legal, or security
   reasons.
