@@ -16,3 +16,8 @@ This is the default operating contract for human and AI contributors working in 
 - Do not promise that third-party mods cannot send sensitive data unless the code enforces it.
 - Separate Alec's hosted platform behavior from custom endpoint behavior.
 - Preserve unrelated dirty worktree changes and stage only the requested scope.
+
+## Build and Local Runtime
+
+- Build from the shared workspace with `bash ../gradlew :alecstelemetry:standalone:build`; the runtime module remains an embeddable library and the standalone module produces the shaded plugin JAR.
+- Do not place the standalone Telemetry plugin in the default `runAllMods` workspace alongside Tamework, which already embeds the runtime. Use `C:\Users\22ale\AppData\Roaming\Hytale\Modding\run\mods` for local workspace staging and treat `UserData\Mods` as legacy comparison-only state.
