@@ -1,0 +1,33 @@
+plugins {
+    id 'java-library'
+}
+
+def localProperties = new Properties()
+rootProject.file('AlecsTelemetry/gradle.properties').withInputStream { localProperties.load(it) }
+def localProperty = { String name -> providers.gradleProperty(name).getOrElse(localProperties.getProperty(name)) }
+
+group = 'com.alechilles'
+version = localProperty('mod_version')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencies {
+    compileOnly files(localProperty('hytale_server_jar_path'))
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+}
+
+configurations.named('testImplementation') {
+    extendsFrom(configurations.compileOnly)
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    workingDir projectDir
+    systemProperty 'java.util.logging.manager', 'com.hypixel.hytale.logger.backend.HytaleLogManager'
+}

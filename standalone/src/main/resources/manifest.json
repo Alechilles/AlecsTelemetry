@@ -1,23 +1,26 @@
 {
-  "Group": "Alechilles",
-  "Name": "Alec's Telemetry!",
-  "Version": "${project.version}",
-  "Description": "Standalone telemetry runtime mod for Hytale mods. Reports crash, error, performance, usage, statistics, and more to help modders find and fix issues and understand how users interact with their mods. Public stats can be found on ModStats.io",
-  "Authors": [
-    {
-      "Name": "Alec (Alechilles)",
-      "Email": "",
-      "Url": "https://www.curseforge.com/members/alechilles/projects",
-      "Discord": "alechilles"
+    "Group": "Alechilles",
+    "Name": "Alec's Telemetry!",
+    "Version": "1.0.3",
+    "Description": "Standalone telemetry runtime mod for Hytale mods.",
+    "Authors": [
+        {
+            "Name": "Alec (Alechilles)",
+            "Url": "https://www.curseforge.com/members/alechilles/projects"
+        }
+    ],
+    "Website": "https://telemetry.alecsmods.com",
+    "Main": "com.alechilles.alecstelemetry.AlecsTelemetry",
+    "ServerVersion": "0.5.x",
+    "Dependencies": {
+        "Hytale:AssetModule": "*"
+    },
+    "OptionalDependencies": {
+        
+    },
+    "DisabledByDefault": false,
+    "IncludesAssetPack": true,
+    "UpdateChecker": {
+        "CurseForge": ""
     }
-  ],
-  "Website": "https://telemetry.alecsmods.com",
-  "Main": "com.alechilles.alecstelemetry.AlecsTelemetry",
-  "ServerVersion": "0.5.x",
-  "Dependencies": {},
-  "OptionalDependencies": {},
-  "LoadBefore": {},
-  "DisabledByDefault": false,
-  "IncludesAssetPack": true,
-  "SubPlugins": []
 }

@@ -1,0 +1,6 @@
+def localProperties = new Properties()
+file('gradle.properties').withInputStream { localProperties.load(it) }
+def localProperty = { String name -> providers.gradleProperty(name).getOrElse(localProperties.getProperty(name)) }
+
+group = 'com.alechilles'
+version = localProperty('mod_version')
