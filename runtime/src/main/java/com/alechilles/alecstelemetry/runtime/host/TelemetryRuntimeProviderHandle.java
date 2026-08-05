@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
@@ -26,6 +27,7 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
+import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataMigrator;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryManualReportBridgePayload;
@@ -712,11 +714,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Override
     public void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail) {
+        recordBreadcrumb(projectId, TelemetryBreadcrumbContext.of(category, detail));
+    }
+
+    @Override
+    public void recordBreadcrumb(@Nonnull String projectId,
+                                 @Nonnull TelemetryBreadcrumbContext context) {
+        TelemetryBreadcrumbContext normalized = context.normalize();
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active == null) {
-            coordinator.recordBreadcrumb(projectId, category, detail);
+            coordinator.recordBreadcrumb(projectId, normalized);
         } else {
-            active.recordBreadcrumb(projectId, category, detail);
+            active.recordBreadcrumb(
+                    projectId,
+                    normalized.category(),
+                    normalized.detail(),
+                    TelemetryBreadcrumbBridgePayload.summary(normalized)
+            );
         }
     }
 
@@ -1631,6 +1645,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                         @Nonnull String category,
                                         @Nonnull String detail) {
             return service.recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
+        public boolean recordBreadcrumb(@Nonnull String projectId,
+                                        @Nonnull String category,
+                                        @Nonnull String detail,
+                                        @Nonnull Map<String, Object> context) {
+            return service.recordBreadcrumb(projectId, category, detail, context);
         }
 
         @Override

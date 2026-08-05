@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.core;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.crash.CrashAttribution;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -326,6 +327,11 @@ public final class TelemetryCoreEngine {
     public void recordBreadcrumb(@Nonnull String projectId,
                                  @Nonnull String category,
                                  @Nonnull String detail) {
+        recordBreadcrumb(projectId, TelemetryBreadcrumbContext.of(category, detail));
+    }
+
+    public void recordBreadcrumb(@Nonnull String projectId,
+                                 @Nonnull TelemetryBreadcrumbContext context) {
         if (!enabled.get()) {
             return;
         }
@@ -336,7 +342,7 @@ public final class TelemetryCoreEngine {
         if (!areBreadcrumbsRuntimeEnabled(project)) {
             return;
         }
-        breadcrumbs.record(project.projectId(), category, detail);
+        breadcrumbs.record(project.projectId(), context);
     }
 
     public void clearBreadcrumbs(@Nonnull String projectId) {

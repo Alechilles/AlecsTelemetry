@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
@@ -32,6 +33,11 @@ public interface EmbeddedTelemetryHandle {
     void shutdown();
 
     void recordBreadcrumb(@Nonnull String category, @Nonnull String detail);
+
+    default void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
+        TelemetryBreadcrumbContext normalized = context.normalize();
+        recordBreadcrumb(normalized.category(), normalized.detail());
+    }
 
     void captureSetupFailure(@Nullable Throwable throwable);
 

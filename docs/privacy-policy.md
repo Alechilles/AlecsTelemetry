@@ -93,10 +93,22 @@ When enabled, these events can include:
 - for crashes, exception type, exception message, stack trace frames, causal
   chain, attribution information, thread name, breadcrumbs, and limited world
   failure metadata when available
+- breadcrumbs may include bounded structured diagnostic fields supplied by the
+  reporting mod, including randomized or hashed correlation/incident IDs,
+  operation phase, operation type, scope category, failure classification,
+  disposition, and a small set of scalar attributes
 
 Crash messages and stack traces come from the running software. Mod authors should
 avoid putting secrets, player names, coordinates, tokens, or other identifying
 values into exception messages, breadcrumbs, or custom event context.
+Structured breadcrumb fields are not intended for raw player, NPC, world, save,
+or account identifiers; integrations should send randomized correlation values
+or one-way hashes when cross-event correlation is necessary.
+The hosted platform may extract randomized incident, trace, and operation IDs
+from accepted diagnostic occurrences into project-scoped indexed fields. These
+indexes support exact correlation lookup by authorized project members without
+searching unrelated raw payloads. Correlation IDs and scope hashes are not
+included in public telemetry or public stats views.
 
 ### Public Usage Stats
 
@@ -316,6 +328,8 @@ Retention depends on the data type and operational need.
   days on Free. Aggregate daily event and issue-context rollups are retained
   while the project exists. Repeated diagnostics may be summarized after a
   raw-sample cap while aggregate counts remain available.
+- Indexed incident, trace, and operation IDs follow the retention of the raw
+  diagnostic occurrence that supplied them and are deleted with that occurrence.
 - Crash report metadata and raw JSON, manual report metadata, and manual report
   raw JSON are retained for 730 days by default.
 - Manual report attachments and log attachments are retained for 180 days by

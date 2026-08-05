@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.crash;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.hypixel.hytale.common.util.java.ManifestUtil;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -294,14 +296,68 @@ public record CrashReportEnvelope(int schemaVersion,
      */
     public record BreadcrumbEntry(@Nonnull String atUtc,
                                   @Nonnull String category,
-                                  @Nonnull String detail) {
+                                  @Nonnull String detail,
+                                  @Nullable String correlationId,
+                                  @Nullable String incidentId,
+                                  @Nullable String phase,
+                                  @Nullable String operation,
+                                  @Nullable String scopeType,
+                                  @Nullable String failureClass,
+                                  @Nullable String disposition,
+                                  @Nonnull Map<String, Object> attributes) {
+
+        /** Preserves the original public constructor for source and binary compatibility. */
+        public BreadcrumbEntry(@Nonnull String atUtc,
+                               @Nonnull String category,
+                               @Nonnull String detail) {
+            this(atUtc, category, detail, null, null, null, null, null, null, null, Map.of());
+        }
+
+        @Nonnull
+        public static BreadcrumbEntry from(@Nonnull String atUtc,
+                                           @Nonnull TelemetryBreadcrumbContext context) {
+            TelemetryBreadcrumbContext normalized = context.normalize();
+            return new BreadcrumbEntry(
+                    atUtc,
+                    normalized.category(),
+                    normalized.detail(),
+                    normalized.correlationId(),
+                    normalized.incidentId(),
+                    normalized.phase(),
+                    normalized.operation(),
+                    normalized.scopeType(),
+                    normalized.failureClass(),
+                    normalized.disposition(),
+                    normalized.attributes()
+            ).normalize();
+        }
 
         @Nonnull
         BreadcrumbEntry normalize() {
+            TelemetryBreadcrumbContext normalized = new TelemetryBreadcrumbContext(
+                    category(),
+                    detail(),
+                    correlationId(),
+                    incidentId(),
+                    phase(),
+                    operation(),
+                    scopeType(),
+                    failureClass(),
+                    disposition(),
+                    attributes()
+            ).normalize();
             return new BreadcrumbEntry(
                     normalizeTimestamp(atUtc(), Instant.now().toString()),
-                    truncate(normalizeNonBlank(category(), "general"), 80),
-                    truncate(normalizeNonBlank(detail(), "<empty>"), 400)
+                    normalized.category(),
+                    normalized.detail(),
+                    normalized.correlationId(),
+                    normalized.incidentId(),
+                    normalized.phase(),
+                    normalized.operation(),
+                    normalized.scopeType(),
+                    normalized.failureClass(),
+                    normalized.disposition(),
+                    normalized.attributes()
             );
         }
     }

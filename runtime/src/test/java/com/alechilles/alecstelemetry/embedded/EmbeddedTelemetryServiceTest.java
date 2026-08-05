@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.embedded;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
@@ -147,8 +148,12 @@ class EmbeddedTelemetryServiceTest {
 
         assertTrue(service.isEnabled());
         service.recordBreadcrumb("lifecycle", "setup started");
+        service.recordBreadcrumb(TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+                .incidentId("incident-1")
+                .build());
         service.captureSetupFailure(new RuntimeException("setup failed"));
-        assertEquals(1, host.project.breadcrumbs);
+        assertEquals(2, host.project.breadcrumbs);
+        assertEquals("incident-1", host.project.lastBreadcrumbContext.incidentId());
         assertEquals(1, host.project.setupFailures);
 
         assertTrue(service.setProjectEnabled(false));
@@ -1560,6 +1565,7 @@ class EmbeddedTelemetryServiceTest {
         private boolean enabled;
         private boolean breadcrumbsEnabled;
         private int breadcrumbs;
+        private TelemetryBreadcrumbContext lastBreadcrumbContext;
         private int setupFailures;
         private int flushRequests;
 
@@ -1587,6 +1593,12 @@ class EmbeddedTelemetryServiceTest {
         @Override
         public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
             breadcrumbs++;
+        }
+
+        @Override
+        public void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
+            breadcrumbs++;
+            lastBreadcrumbContext = context;
         }
 
         @Override

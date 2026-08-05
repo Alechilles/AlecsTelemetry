@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.hypixel.hytale.component.Ref;
@@ -47,6 +48,11 @@ public final class TelemetryProjectHandleImpl implements TelemetryProjectHandle 
     @Override
     public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
         runtime.recordBreadcrumb(projectId, category, detail);
+    }
+
+    @Override
+    public void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
+        runtime.recordBreadcrumb(projectId, context);
     }
 
     @Override

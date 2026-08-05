@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
@@ -45,6 +46,12 @@ public interface TelemetryRuntimeOperations {
                            @Nonnull TelemetryReportOpenRequest request);
 
     void recordBreadcrumb(@Nonnull String projectId, @Nonnull String category, @Nonnull String detail);
+
+    default void recordBreadcrumb(@Nonnull String projectId,
+                                  @Nonnull TelemetryBreadcrumbContext context) {
+        TelemetryBreadcrumbContext normalized = context.normalize();
+        recordBreadcrumb(projectId, normalized.category(), normalized.detail());
+    }
 
     void captureSetupFailure(@Nonnull String projectId, @Nullable Throwable throwable);
 

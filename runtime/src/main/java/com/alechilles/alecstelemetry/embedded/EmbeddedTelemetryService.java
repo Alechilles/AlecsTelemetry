@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.embedded;
 
+import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
@@ -23,6 +24,7 @@ import com.alechilles.alecstelemetry.reports.TelemetryReportCoordinator;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentRuntime;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
+import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryManualReportBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
@@ -927,16 +929,27 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordBreadcrumb(@Nonnull String category, @Nonnull String detail) {
+        recordBreadcrumb(TelemetryBreadcrumbContext.of(category, detail));
+    }
+
+    @Override
+    public void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
+        TelemetryBreadcrumbContext normalized = context.normalize();
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
-            active.recordBreadcrumb(project.projectId(), category, detail);
+            active.recordBreadcrumb(
+                    project.projectId(),
+                    normalized.category(),
+                    normalized.detail(),
+                    TelemetryBreadcrumbBridgePayload.summary(normalized)
+            );
             return;
         }
         TelemetryProjectHandle hostProject = hostProjectHandle();
         if (hostProject != null) {
-            hostProject.recordBreadcrumb(category, detail);
+            hostProject.recordBreadcrumb(normalized);
         } else if (engine != null) {
-            engine.recordBreadcrumb(project.projectId(), category, detail);
+            engine.recordBreadcrumb(project.projectId(), normalized);
         }
     }
 
@@ -1960,6 +1973,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                                         @Nonnull String category,
                                         @Nonnull String detail) {
             return service.recordBreadcrumb(projectId, category, detail);
+        }
+
+        @Override
+        public boolean recordBreadcrumb(@Nonnull String projectId,
+                                        @Nonnull String category,
+                                        @Nonnull String detail,
+                                        @Nonnull Map<String, Object> context) {
+            return service.recordBreadcrumb(projectId, category, detail, context);
         }
 
         @Override

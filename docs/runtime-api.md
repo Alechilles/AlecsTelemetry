@@ -35,6 +35,7 @@ methods directly.
 - `displayName()`
 - `isEnabled()`
 - `recordBreadcrumb(category, detail)`
+- `recordBreadcrumb(TelemetryBreadcrumbContext)`
 - `captureSetupFailure(throwable)`
 - `captureStartFailure(throwable)`
 - `recordError(...)` and `recordErrorWithContext(...)`
@@ -72,6 +73,33 @@ Standard context fields become first-class event envelope fields. Custom
 declares the matching detail allowlist for that event name.
 
 Supported context fields are documented in `docs/project-descriptor.md`.
+
+## Structured Breadcrumb Context
+
+Use `TelemetryBreadcrumbContext` when a diagnostic operation needs correlation
+without placing identifiers into free-form text:
+
+```java
+project.recordBreadcrumb(
+        TelemetryBreadcrumbContext.builder("persistence", "incident opened")
+                .correlationId(traceId)
+                .incidentId(incidentId)
+                .phase("CANONICAL_OUTCOME_UNKNOWN")
+                .operation("coop_release")
+                .scopeType("COOP_SLOT")
+                .failureClass("OUTCOME_UNKNOWN")
+                .disposition("SCOPED_QUARANTINE")
+                .attribute("recoveryAttempt", 1)
+                .build()
+);
+```
+
+Structured breadcrumbs retain the legacy category/detail fields and add bounded
+optional correlation, phase, operation, scope, failure, disposition, and scalar
+attribute fields. Older handle implementations safely fall back to the legacy
+category/detail call. Consumer mods must use randomized or hashed correlation
+values and must not put player names, raw UUIDs, coordinates, tokens, chat, or
+inventory contents into these fields.
 
 ## Manual Report UI
 

@@ -1,11 +1,29 @@
 # Changelog
 
-## 1.0.4 - Server Mod Discovery Hotfix - 2026-08-05
+## 1.0.5 - Server Mod Discovery Hotfix - 2026-08-05
 
 ### Fixed
 - Telemetry project discovery now scans only the active server's mod directory,
   preventing globally installed client or release copies from being registered
   by a local server.
+
+## 1.0.4 - Structured Breadcrumb Correlation - 2026-07-19
+
+### Added
+- Added bounded structured breadcrumb context for phase, operation, correlation, incident,
+  failure-class, disposition, scope type, and allowlisted primitive attributes.
+- Added structured breadcrumb propagation through embedded, hosted, standalone-coordinator,
+  and reflective provider paths.
+
+### Changed
+- Existing category/detail breadcrumb calls remain source and binary compatible and are
+  represented as legacy-equivalent structured breadcrumbs.
+- Updated privacy and integration documentation for correlation identifiers and structured
+  diagnostic context.
+
+### Fixed
+- Structured breadcrumbs now survive every supported runtime bridge and retain deterministic
+  bounds, ordering, consent behavior, and failed-event attachment semantics.
 
 ## 1.0.3 - Manual Test Report Hotfix - 2026-07-04
 
