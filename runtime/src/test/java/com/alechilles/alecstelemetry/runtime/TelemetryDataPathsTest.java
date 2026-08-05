@@ -17,7 +17,7 @@ class TelemetryDataPathsTest {
     Path tempDir;
 
     @Test
-    void descriptorDirectoriesIncludeSaveLocalAndGlobalUserModsDirectories() throws Exception {
+    void descriptorDirectoriesIncludeOnlyTheActiveServerModsDirectory() throws Exception {
         Path runtimeRoot = tempDir.resolve("data").resolve("pre-release").resolve("Saves")
                 .resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry!");
         Files.createDirectories(runtimeRoot);
@@ -36,9 +36,7 @@ class TelemetryDataPathsTest {
 
         List<Path> descriptorDirectories = paths.descriptorDirectories();
 
-        assertEquals(2, descriptorDirectories.size());
-        assertEquals(saveModsDirectory.toAbsolutePath().normalize(), descriptorDirectories.get(0));
-        assertEquals(globalModsDirectory.toAbsolutePath().normalize(), descriptorDirectories.get(1));
+        assertEquals(List.of(saveModsDirectory.toAbsolutePath().normalize()), descriptorDirectories);
     }
 
     @Test

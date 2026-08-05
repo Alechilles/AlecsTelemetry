@@ -172,7 +172,6 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     public List<Path> descriptorDirectories() {
         ArrayList<Path> directories = new ArrayList<>();
         addDirectory(directories, modsDirectory);
-        addDirectory(directories, resolveGlobalUserModsDirectory(runtimeRoot));
         return List.copyOf(directories);
     }
 
@@ -188,19 +187,6 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
         }
         Path parent = dataDirectory.getParent();
         return parent == null ? null : parent.toAbsolutePath().normalize();
-    }
-
-    @Nullable
-    private static Path resolveGlobalUserModsDirectory(@Nonnull Path dataDirectory) {
-        Path current = dataDirectory.toAbsolutePath().normalize();
-        while (current != null) {
-            Path candidate = current.resolve("UserData").resolve("Mods").toAbsolutePath().normalize();
-            if (Files.isDirectory(candidate)) {
-                return candidate;
-            }
-            current = current.getParent();
-        }
-        return null;
     }
 
     private static void addDirectory(@Nonnull ArrayList<Path> directories, @Nullable Path directory) {
