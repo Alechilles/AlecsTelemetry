@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5 - Server Mod Discovery Hotfix - 2026-08-05
+
+### Fixed
+- Telemetry project discovery now scans only the active server's mod directory,
+  preventing globally installed client or release copies from being registered
+  by a local server.
+
 ## 1.0.4 - Structured Breadcrumb Correlation - 2026-07-19
 
 ### Added
