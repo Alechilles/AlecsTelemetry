@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -42,6 +44,7 @@ public final class TelemetryCoordinatorService {
     private final TelemetryCoordinatorStatsHeartbeat statsHeartbeat;
     private List<TelemetryProjectRegistration> baseProjects;
     private List<TelemetryProjectRegistration> baseManualReportProjects;
+    private Set<String> rejectedContributionTokens = Set.of();
     private volatile long contributionRevision = -1L;
 
     public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
@@ -216,16 +219,27 @@ public final class TelemetryCoordinatorService {
         for (TelemetryProjectRegistration baseProject : baseProjects) {
             byProjectId.put(baseProject.projectId().toLowerCase(Locale.ROOT), baseProject);
         }
+        HashSet<String> rejectedTokens = new HashSet<>();
         for (Map<String, Object> contribution : contributions == null ? List.<Map<String, Object>>of() : contributions) {
+            String token = stringValue(contribution == null ? null : contribution.get("token"));
             TelemetryProjectRegistration registration = registrationFromContribution(contribution);
             if (registration == null) {
                 return false;
             }
-            byProjectId.put(registration.projectId().toLowerCase(Locale.ROOT), registration);
+            String normalizedProjectId = registration.projectId().toLowerCase(Locale.ROOT);
+            if (byProjectId.containsKey(normalizedProjectId)
+                    || "custom".equalsIgnoreCase(registration.destinationMode())) {
+                if (!token.isBlank()) {
+                    rejectedTokens.add(token);
+                }
+                continue;
+            }
+            byProjectId.put(normalizedProjectId, registration);
         }
         ArrayList<TelemetryProjectRegistration> runtimeProjects = new ArrayList<>(byProjectId.values());
         boolean reconciled = engine.reconcileProjects(runtimeProjects, mergeManualProjects(runtimeProjects));
         if (reconciled) {
+            rejectedContributionTokens = Set.copyOf(rejectedTokens);
             contributionRevision = revision;
         }
         return reconciled;
@@ -817,6 +831,9 @@ public final class TelemetryCoordinatorService {
 
     @Nullable
     private TelemetryProjectRegistration contributionProjectForToken(@Nonnull String token) {
+        if (rejectedContributionTokens.contains(token)) {
+            return null;
+        }
         for (Map<String, Object> contribution : TelemetryProjectContributionRegistry.activeContributions()) {
             if (token.equals(stringValue(contribution.get("token")))) {
                 return engine.findProject(stringValue(contribution.get("projectId")));

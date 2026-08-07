@@ -57,6 +57,12 @@ heartbeat snapshots without deleting its local crash, event, or report queue.
 The coordinator retains the project registration needed to replay queued data;
 normal retry, destination, and retention rules still apply.
 
+Heartbeats are grouped by their resolved event destination, so projects routed
+to different endpoints are never combined into one upload. Anchored contributions
+use hosted destination mode in the 1.1.0 MVP. A same-ID contribution winner is
+not automatically replaced after retirement; restart or explicit
+re-registration is required before another candidate can emit.
+
 ## Consent
 
 Stats are a separate consent category from usage events. A server owner can allow

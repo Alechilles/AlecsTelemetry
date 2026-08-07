@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.coordinator;
 
 import com.hypixel.hytale.common.semver.Semver;
 
+import javax.annotation.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -46,6 +47,7 @@ public final class TelemetryProjectContributionRegistry {
     private static final String STATE_IN_FLIGHT_KEY = "__state.inFlight";
     private static final String STATE_FENCED_KEY = "__state.fenced";
     private static final String STATE_PENDING_PROJECTS_KEY = "__state.pendingProjects";
+    private static final String STATE_BLOCKED_PROJECTS_KEY = "__state.blockedProjects";
     private static final String STATE_NEXT_SEQUENCE_KEY = "__state.nextSequence";
     private static final String ENTRY_SEQUENCE_KEY = "__sequence";
     private static final String PENDING_OLD_TOKEN_KEY = "oldToken";
@@ -98,6 +100,14 @@ public final class TelemetryProjectContributionRegistry {
             Map<String, Object> entry = entryForTokenLocked(registry, token);
             if (entry == null) {
                 return;
+            }
+            String projectId = candidateFromEntry(entry).normalizedProjectId();
+            if (!projectId.isBlank()
+                    && token.equals(winnersLocked(registry).getOrDefault(projectId, ""))) {
+                // Fence every candidate that was already registered, regardless of sequence
+                // ordering. A future explicit registration receives a higher sequence and is
+                // the only candidate eligible to establish a new writable token.
+                markProjectBlockedLocked(registry, projectId, numberValue(registry.get(STATE_NEXT_SEQUENCE_KEY)));
             }
             registry.remove(token);
             reconcileLocked(registry);
@@ -390,6 +400,7 @@ public final class TelemetryProjectContributionRegistry {
     private static DesiredState electDesiredState(List<Map<String, Object>> entries,
                                                   ConcurrentHashMap<String, Object> registry) {
         LinkedHashMap<String, String> lineages = new LinkedHashMap<>(stringMap(registry.get(STATE_LINEAGES_KEY)));
+        Map<String, Long> blockedProjects = longMap(registry.get(STATE_BLOCKED_PROJECTS_KEY));
         LinkedHashMap<String, String> winners = new LinkedHashMap<>();
         ArrayList<Map<String, Object>> diagnostics = new ArrayList<>();
         LinkedHashMap<String, List<Map<String, Object>>> grouped = new LinkedHashMap<>();
@@ -412,8 +423,9 @@ public final class TelemetryProjectContributionRegistry {
         for (Map.Entry<String, List<Map<String, Object>>> group : grouped.entrySet()) {
             String projectId = group.getKey();
             ArrayList<Map<String, Object>> valid = new ArrayList<>();
+            long blockedSequence = blockedProjects.getOrDefault(projectId, 0L);
             for (Map<String, Object> entry : group.getValue()) {
-                if (candidateFromEntry(entry).valid()) {
+                if (candidateFromEntry(entry).valid() && entrySequence(entry) > blockedSequence) {
                     valid.add(entry);
                 }
             }
@@ -447,13 +459,40 @@ public final class TelemetryProjectContributionRegistry {
             if (ownerCandidates.isEmpty()) {
                 continue;
             }
-            Map<String, Object> winner = selectElectionWinner(ownerCandidates);
+            Map<String, Object> established = establishedWinnerLocked(registry, projectId, ownerCandidates);
+            Map<String, Object> winner = established == null
+                    ? selectElectionWinner(ownerCandidates)
+                    : established;
             if (winner != null) {
                 winners.put(projectId, stringValue(winner.get("token")));
                 addDescriptorDriftDiagnostics(diagnostics, ownerCandidates, projectId);
             }
         }
         return new DesiredState(winners, lineages, diagnostics);
+    }
+
+    @Nullable
+    private static Map<String, Object> establishedWinnerLocked(
+            ConcurrentHashMap<String, Object> registry,
+            String projectId,
+            List<Map<String, Object>> ownerCandidates) {
+        String token = winnersLocked(registry).getOrDefault(projectId, "");
+        if (token.isBlank() || isFencedLocked(registry, token)) {
+            return null;
+        }
+        Map<String, Object> established = entryForTokenLocked(registry, token);
+        if (established == null) {
+            return null;
+        }
+        for (Map<String, Object> candidate : ownerCandidates) {
+            if (token.equals(stringValue(candidate.get("token")))) {
+                // The first published winner remains stable for the lifetime of this registry.
+                // A replacement must be an explicit new registration after retirement/restart;
+                // otherwise queued envelopes could be routed to a different destination.
+                return established;
+            }
+        }
+        return null;
     }
 
     private static Map<String, Object> selectElectionWinner(List<Map<String, Object>> candidates) {
@@ -567,6 +606,17 @@ public final class TelemetryProjectContributionRegistry {
             }
             registry.put(STATE_IN_FLIGHT_KEY, Collections.unmodifiableMap(counts));
             reconcileLocked(registry);
+        }
+    }
+
+    private static void markProjectBlockedLocked(ConcurrentHashMap<String, Object> registry,
+                                                  String projectId,
+                                                  long retiredSequence) {
+        LinkedHashMap<String, Long> blocked = new LinkedHashMap<>(longMap(registry.get(STATE_BLOCKED_PROJECTS_KEY)));
+        long existing = blocked.getOrDefault(projectId, 0L);
+        if (retiredSequence > existing) {
+            blocked.put(projectId, retiredSequence);
+            registry.put(STATE_BLOCKED_PROJECTS_KEY, Collections.unmodifiableMap(blocked));
         }
     }
 
@@ -930,6 +980,28 @@ public final class TelemetryProjectContributionRegistry {
             } else {
                 try {
                     copy.put(entry.getKey().toString(), Integer.parseInt(entry.getValue().toString()));
+                } catch (RuntimeException ignored) {
+                    // Ignore malformed process-shared state and use the safe default.
+                }
+            }
+        }
+        return copy;
+    }
+
+    private static Map<String, Long> longMap(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        LinkedHashMap<String, Long> copy = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
+                continue;
+            }
+            if (entry.getValue() instanceof Number number) {
+                copy.put(entry.getKey().toString(), number.longValue());
+            } else {
+                try {
+                    copy.put(entry.getKey().toString(), Long.parseLong(entry.getValue().toString()));
                 } catch (RuntimeException ignored) {
                     // Ignore malformed process-shared state and use the safe default.
                 }

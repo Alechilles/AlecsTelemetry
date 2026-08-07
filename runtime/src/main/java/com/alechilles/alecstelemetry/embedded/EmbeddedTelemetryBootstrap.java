@@ -258,6 +258,14 @@ public final class EmbeddedTelemetryBootstrap {
                 logicalVersion,
                 sourcePath
         ).withOverride(override);
+        if (validateContribution && "custom".equalsIgnoreCase(registration.destinationMode())) {
+            return disabledContribution(
+                    descriptor.projectId(),
+                    descriptor.displayName(),
+                    logger,
+                    "Contributed telemetry projects must use hosted destination mode in the 1.1.0 MVP; custom destination mode is disabled."
+            );
+        }
         TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.acquireEmbedded(
                 plugin,
                 validateContribution ? null : descriptor
@@ -270,7 +278,7 @@ public final class EmbeddedTelemetryBootstrap {
                     host,
                     resolvePluginIdentifier(plugin),
                     resolvePluginVersion(plugin),
-                    sha256(descriptorBytes),
+                    sha256(descriptor.toJson()),
                     logger
             );
         }
@@ -394,10 +402,10 @@ public final class EmbeddedTelemetryBootstrap {
     }
 
     @Nonnull
-    private static String sha256(@Nonnull byte[] content) {
+    private static String sha256(@Nonnull String content) {
         try {
             java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(content);
+            byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
             StringBuilder result = new StringBuilder(hash.length * 2);
             for (byte value : hash) {
                 result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
@@ -405,7 +413,7 @@ public final class EmbeddedTelemetryBootstrap {
             }
             return result.toString();
         } catch (java.security.NoSuchAlgorithmException impossible) {
-            return Integer.toHexString(java.util.Arrays.hashCode(content));
+            return Integer.toHexString(content.hashCode());
         }
     }
 

@@ -47,6 +47,26 @@ retired candidates do not drain those calls.
 - `logicalPluginVersion`: a valid Hytale semantic version used for election and
   envelope attribution
 
+### 1.1.0 MVP boundaries
+
+Anchored contributions are hosted-only in the 1.1.0 MVP. Set
+`defaults.destinationMode` to `hosted` and provide the descriptor's hosted
+endpoint/project key. The conventional `bootstrap(plugin)` path continues to
+support custom destinations; a custom destination in an anchored contribution
+is rejected as a disabled contribution before it can register.
+
+An established logical project winner is not hot-replaced or automatically
+failed over. Unregistering the winner fences its token and leaves any already
+registered fallback passive, so a second copy cannot begin writing while the
+active catalog is changing. Restart the coordinator or explicitly register a
+new candidate after retirement when a replacement is required. This boundary
+also keeps queued envelopes on the destination that created them.
+
+Before `start()`, only setup breadcrumbs, lifecycle events, and setup-failure
+captures are accepted for bounded replay. Manual reports, flushes, and other
+operations return a bounded `not_started` rejection and are never drained after
+startup.
+
 The builder accepts either `.descriptorResource(anchor, path)` or separate
 `.resourceAnchor(anchor)` and `.descriptorResource(path)` calls. One leading `/`
 is removed from the resource path before lookup.
@@ -111,8 +131,9 @@ token. Candidates for the same project ID are compared case-insensitively:
 3. equal origin/version candidates use deterministic host identifier, source
    path, and descriptor-hash tie-breakers.
 
-Only the elected token can write. A retiring token is fenced before a fallback
-candidate becomes writable, so a stale or passive copy cannot produce duplicate
+Only the elected token can write. A retiring token is fenced before it can write
+again, and registered fallbacks remain passive until an explicit new
+registration. This prevents a stale or passive copy from producing duplicate
 events. Registration alone emits nothing; every operation still passes the
 active-token, descriptor support, project/category consent, detail allowlist,
 sampling, and destination gates.
@@ -137,7 +158,8 @@ One host-local provider may serve a conventional host project and several
 contributed projects, but project boundaries remain independent:
 
 - each logical project has its own consent and category overrides;
-- each project resolves its own hosted or custom destination and headers;
+- each project resolves its own hosted or custom destination and headers (with
+  anchored contributions limited to hosted mode in this MVP);
 - each project is attributed with its own `projectId`, logical plugin identifier,
   and logical plugin version;
 - queues, manual-report eligibility, allowlists, and stats settings are scoped
@@ -160,13 +182,14 @@ retired, disabled, or destination-less candidates do not emit heartbeats.
 Registration itself never emits a heartbeat. See [Usage Stats](usage-stats.md)
 for cadence and public aggregation behavior.
 
-Contribution reconciliation is live; adding a valid candidate makes its project
-available to consent and runtime operations without restarting the server.
-Retiring a candidate removes it from new consent and heartbeat snapshots, but it
-does not delete that project's local crash, event, or manual-report queue. The
-coordinator retains the project registration needed to replay queued envelopes;
-queued data remains subject to the normal consent, destination, retry, and
-retention rules.
+Contribution reconciliation is live for first registration; adding a valid
+candidate makes its project available to consent and runtime operations without
+restarting the server. Retiring a candidate removes it from new consent and
+heartbeat snapshots, but it does not delete that project's local crash, event,
+or manual-report queue. The coordinator retains the project registration needed
+to replay queued envelopes; queued data remains subject to the normal consent,
+destination, retry, and retention rules. A same-ID replacement is intentionally
+deferred until restart or explicit re-registration.
 
 ## Hosted and custom destinations
 
@@ -175,12 +198,13 @@ With `defaults.destinationMode` set to `hosted`, the descriptor's publishable
 platform's validation, retention, portal, and public-stats rules apply there.
 
 With `defaults.destinationMode` set to `custom`, use `customEndpoint.url` (and,
-when needed, `eventUrl` and `headers`). A custom endpoint operator controls the
-data received at that endpoint, including any descriptor-approved fields,
-attachments, or sensitive values supplied by a mod or player. Alec's hosted
-platform policy and retention commitments do not cover a custom endpoint; the
-mod author and server owner must document, secure, and retain that data under
-their own rules.
+when needed, `eventUrl` and `headers`) for a conventional project. A custom
+endpoint operator controls the data received at that endpoint, including any
+descriptor-approved fields, attachments, or sensitive values supplied by a mod
+or player. Alec's hosted platform policy and retention commitments do not cover
+a custom endpoint; the mod author and server owner must document, secure, and
+retain that data under their own rules. Anchored contributions using custom mode
+are disabled by the 1.1.0 MVP gate above.
 
 ## Failure behavior
 

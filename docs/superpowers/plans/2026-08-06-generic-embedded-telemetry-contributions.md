@@ -22,6 +22,27 @@
 - Use Git Bash for every command. Stage and commit only the current repository's intended files.
 - Update `docs/privacy-policy.md` in the same Telemetry implementation commit because this changes project identity, consent, queue, and destination behavior.
 
+## 1.1.0 MVP amendment
+
+The implementation plan's broader live-replacement design is deferred for this
+release. The shipped MVP must enforce the following acceptance boundaries:
+
+- anchored contributions are hosted-only; conventional descriptors retain
+  custom-endpoint behavior;
+- an established same-ID winner is fenced on retirement, with registered
+  fallbacks passive until restart or explicit re-registration (no hot failover);
+- only setup breadcrumbs, lifecycle events, and setup-failure captures may be
+  buffered before `start()`; other operations return `not_started` and are not
+  replayed;
+- heartbeat aggregates are split by resolved event destination;
+- provider-pool start/close lifecycle calls remain serialized through the pool
+  lock, with a latch-backed behavior test for last-lease shutdown versus a new
+  acquire.
+
+The unchecked full-replacement and custom-contributed-destination items below
+remain future work until immutable queued routing and consent semantics are
+specified and tested.
+
 ## Public and Protocol Contracts
 
 The public contributor API is fixed as:

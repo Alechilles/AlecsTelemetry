@@ -68,6 +68,12 @@ Each contribution has its own descriptor, logical plugin identity, consent state
 destination, and queue even when all of its services share one host-local
 provider.
 
+In the 1.1.0 MVP, anchored contributions must use hosted destination mode;
+custom destinations remain available to conventional `bootstrap(plugin)` projects.
+An established same-ID contribution winner is not automatically hot-replaced or
+failed over. Restart or explicitly re-register a candidate after retirement when
+replacement is needed.
+
 ## Runtime Precedence
 
 Runtime ownership is selected per server process:

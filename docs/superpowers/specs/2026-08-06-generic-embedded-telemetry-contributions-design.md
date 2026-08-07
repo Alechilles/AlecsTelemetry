@@ -18,6 +18,29 @@ The selected design uses two independent process-wide protocols:
 
 Every contributed project owns its descriptor, project key, destination, consent, event schema, logical version, and project-scoped data. The physical host plugin is provenance for local diagnostics and deterministic election; it does not replace the logical project identity or inherit the host project's consent.
 
+## 1.1.0 MVP amendment
+
+The initial release deliberately narrows a few parts of this design while the
+full protocol remains the long-term direction:
+
+- Anchored contributions must resolve to the hosted destination. Conventional
+  projects keep their existing custom-endpoint support; custom mode in an
+  anchored contribution is rejected before registration.
+- Once a logical project winner is established, the MVP does not hot-replace or
+  automatically fail over that winner. Retirement fences its token and keeps
+  already registered fallbacks passive. Restart or explicit re-registration is
+  required to establish a new writable candidate, preserving queued destination
+  context during the transition.
+- Before a contributed service starts, only setup breadcrumbs, lifecycle events,
+  and setup-failure captures may be buffered. Manual reports, flushes, and other
+  operations return a bounded `not_started` result and are not drained later.
+- Aggregate stats heartbeats are partitioned by resolved event destination so a
+  payload is never uploaded to a different project's endpoint.
+
+These are release-safety constraints, not changes to the generic API shape. A
+future version may add coordinated replacement and custom contributed endpoints
+only with explicit queue-routing and consent semantics.
+
 ## Motivation
 
 The current embedded bootstrap assumes one telemetry project per owning Hytale plugin. It loads one conventional descriptor from `Server/Telemetry/project.json` or `telemetry/project.json`, derives identity from the owning `JavaPlugin`, and builds a runtime snapshot around that registration. Installed-mod discovery likewise reads at most one conventional descriptor from each mod archive.

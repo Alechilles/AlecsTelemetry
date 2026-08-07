@@ -9,7 +9,6 @@ import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +23,19 @@ import java.util.Map;
 public final class TelemetryEmbeddedProviderPool {
     private static final Object LOCK = new Object();
     private static final Map<HostKey, Entry> ENTRIES = new HashMap<>();
+    private static final ProviderFactory DEFAULT_PROVIDER_FACTORY = TelemetryRuntimeHost::bootstrapDirectEmbedded;
+    private static volatile ProviderFactory providerFactory = DEFAULT_PROVIDER_FACTORY;
 
     private TelemetryEmbeddedProviderPool() {
+    }
+
+    @FunctionalInterface
+    interface ProviderFactory {
+        TelemetryRuntimeHostHandle create(JavaPlugin plugin, TelemetryProjectDescriptor descriptor);
+    }
+
+    static void setProviderFactoryForTests(@Nullable ProviderFactory factory) {
+        providerFactory = factory == null ? DEFAULT_PROVIDER_FACTORY : factory;
     }
 
     @Nonnull
@@ -35,7 +45,7 @@ public final class TelemetryEmbeddedProviderPool {
         synchronized (LOCK) {
             Entry entry = ENTRIES.get(key);
             if (entry == null) {
-                entry = new Entry(key, TelemetryRuntimeHost.bootstrapDirectEmbedded(plugin, descriptor));
+                entry = new Entry(key, providerFactory.create(plugin, descriptor));
                 entry.descriptorRegistered = descriptor != null;
                 ENTRIES.put(key, entry);
             }
@@ -52,13 +62,12 @@ public final class TelemetryEmbeddedProviderPool {
 
     /** Test hook that also leaves the coordinator and locator in the same state as shutdown. */
     public static void clearForTests() {
-        List<Entry> entries;
         synchronized (LOCK) {
-            entries = new ArrayList<>(ENTRIES.values());
+            for (Entry entry : List.copyOf(ENTRIES.values())) {
+                entry.delegate.shutdown();
+            }
             ENTRIES.clear();
-        }
-        for (Entry entry : entries) {
-            entry.delegate.shutdown();
+            providerFactory = DEFAULT_PROVIDER_FACTORY;
         }
     }
 
@@ -69,9 +78,8 @@ public final class TelemetryEmbeddedProviderPool {
     }
 
     private static void release(@Nonnull Lease lease) {
-        Entry entry = lease.entry;
-        TelemetryRuntimeHostHandle shutdownHandle = null;
         synchronized (LOCK) {
+            Entry entry = lease.entry;
             if (lease.closed) {
                 return;
             }
@@ -82,22 +90,18 @@ public final class TelemetryEmbeddedProviderPool {
                 entry.startedLeaseCount = Math.max(0, entry.startedLeaseCount - 1);
                 if (entry.startedLeaseCount == 0) {
                     entry.started = false;
-                    shutdownHandle = entry.delegate;
+                    entry.delegate.shutdown();
                 }
             }
             if (entry.leaseCount == 0) {
                 ENTRIES.remove(entry.key, entry);
             }
         }
-        if (shutdownHandle != null) {
-            shutdownHandle.shutdown();
-        }
     }
 
     private static void start(@Nonnull Lease lease) {
-        Entry entry = lease.entry;
-        TelemetryRuntimeHostHandle startHandle = null;
         synchronized (LOCK) {
+            Entry entry = lease.entry;
             if (lease.closed || lease.started) {
                 return;
             }
@@ -105,11 +109,8 @@ public final class TelemetryEmbeddedProviderPool {
             entry.startedLeaseCount++;
             if (!entry.started) {
                 entry.started = true;
-                startHandle = entry.delegate;
+                entry.delegate.start();
             }
-        }
-        if (startHandle != null) {
-            startHandle.start();
         }
     }
 

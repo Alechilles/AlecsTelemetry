@@ -1763,6 +1763,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nonnull
     private static ManualReportEnvelope.CreateResult manualReportResultFromMap(@Nonnull Map<String, Object> values) {
         List<String> errors = stringList(values.get("validationErrors"));
+        if (!Boolean.TRUE.equals(values.get("accepted")) && errors.isEmpty()) {
+            String reason = stringValue(values.get("reason"));
+            if (reason != null) {
+                errors = List.of(reason);
+            }
+        }
         ManualReportEnvelope envelope = envelopeFrom(values.get("envelopeJson"));
         String followUpToken = stringValue(values.get("followUpToken"));
         if (Boolean.TRUE.equals(values.get("accepted")) && envelope == null && errors.isEmpty()) {
@@ -1850,6 +1856,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         }
         Map<String, Object> normalized = Map.copyOf(payload);
         if (!started.get()) {
+            if (!isBufferableBeforeStart(operation)) {
+                return Map.of("accepted", false, "reason", "not_started");
+            }
             synchronized (bufferedOperations) {
                 if (bufferedOperations.size() >= MAX_BUFFERED_CONTRIBUTION_OPERATIONS) {
                     bufferedOperations.removeFirst();
@@ -1859,6 +1868,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return Map.of("accepted", true, "buffered", true);
         }
         return TelemetryProjectContributionRegistry.dispatch(token, operation, normalized, throwable);
+    }
+
+    private static boolean isBufferableBeforeStart(@Nonnull String operation) {
+        return switch (operation.trim().toLowerCase(Locale.ROOT)) {
+            case "breadcrumb", "lifecycle", "capture_setup" -> true;
+            default -> false;
+        };
     }
 
     private void drainContributionBuffer() {
@@ -1932,7 +1948,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             values.put("projectId", project.projectId());
             values.put("logicalPluginIdentifier", project.pluginIdentifier());
             values.put("logicalPluginVersion", project.pluginVersion());
-            values.put("origin", TelemetryProjectContributionRegistry.EMBEDDED_ORIGIN);
+            values.put("origin", hostPluginIdentifier.trim().equals(project.pluginIdentifier().trim())
+                    ? TelemetryProjectContributionRegistry.STANDALONE_ORIGIN
+                    : TelemetryProjectContributionRegistry.EMBEDDED_ORIGIN);
             values.put("hostPluginIdentifier", hostPluginIdentifier);
             values.put("hostPluginVersion", hostPluginVersion);
             values.put("sourcePath", project.sourcePath() == null

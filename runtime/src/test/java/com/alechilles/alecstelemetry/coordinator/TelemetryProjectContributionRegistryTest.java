@@ -30,29 +30,29 @@ class TelemetryProjectContributionRegistryTest {
     }
 
     @Test
-    void higherLogicalSemanticVersionWins() {
+    void establishedWinnerStaysStableWhenHigherVersionRegisters() {
         RecordingBridge old = bridge("library", "1.9.0", "host-a", "old.jar", "hash-a");
         RecordingBridge current = bridge("library", "2.0.0", "host-b", "new.jar", "hash-b");
 
         String oldToken = TelemetryProjectContributionRegistry.register(old);
         String currentToken = TelemetryProjectContributionRegistry.register(current);
 
-        assertFalse(TelemetryProjectContributionRegistry.isActive(oldToken));
-        assertTrue(TelemetryProjectContributionRegistry.isActive(currentToken));
-        assertEquals(currentToken, activeToken("library"));
+        assertTrue(TelemetryProjectContributionRegistry.isActive(oldToken));
+        assertFalse(TelemetryProjectContributionRegistry.isActive(currentToken));
+        assertEquals(oldToken, activeToken("library"));
     }
 
     @Test
-    void standaloneWinsEqualVersionTieOverEmbedded() {
+    void establishedEmbeddedWinnerIsNotHotReplacedByStandaloneCopy() {
         RecordingBridge embedded = bridge("library", "2.0.0", "host-a", "embedded.jar", "hash-a", "EMBEDDED");
         RecordingBridge standalone = bridge("library", "2.0.0", "host-z", "standalone.jar", "hash-z", "STANDALONE");
 
         String embeddedToken = TelemetryProjectContributionRegistry.register(embedded);
         String standaloneToken = TelemetryProjectContributionRegistry.register(standalone);
 
-        assertFalse(TelemetryProjectContributionRegistry.isActive(embeddedToken));
-        assertTrue(TelemetryProjectContributionRegistry.isActive(standaloneToken));
-        assertEquals(standaloneToken, activeToken("library"));
+        assertTrue(TelemetryProjectContributionRegistry.isActive(embeddedToken));
+        assertFalse(TelemetryProjectContributionRegistry.isActive(standaloneToken));
+        assertEquals(embeddedToken, activeToken("library"));
     }
 
     @Test
@@ -65,27 +65,27 @@ class TelemetryProjectContributionRegistryTest {
         TelemetryProjectContributionRegistry.register(hostB);
         TelemetryProjectContributionRegistry.register(hostA);
         TelemetryProjectContributionRegistry.register(sourceA);
-        String hashAToken = TelemetryProjectContributionRegistry.register(hashA);
+        TelemetryProjectContributionRegistry.register(hashA);
 
-        assertEquals(hashAToken, activeToken("LIBRARY"));
+        assertEquals("Host-B", TelemetryProjectContributionRegistry.activeContributions().getFirst().get("hostPluginIdentifier"));
     }
 
     @Test
-    void retiringWinnerFencesItsTokenBeforeFallbackBecomesWritable() {
+    void retiringWinnerFencesItsTokenWithoutAutoPromotingFallback() {
         RecordingBridge fallback = bridge("library", "1.0.0", "host-a", "fallback.jar", "hash-a");
         RecordingBridge winner = bridge("library", "2.0.0", "host-a", "winner.jar", "hash-b");
 
-        String fallbackToken = TelemetryProjectContributionRegistry.register(fallback);
         String winnerToken = TelemetryProjectContributionRegistry.register(winner);
+        String fallbackToken = TelemetryProjectContributionRegistry.register(fallback);
         TelemetryProjectContributionRegistry.unregister(winnerToken);
 
         assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(winnerToken, "usage", Map.of("eventName", "reload"), null)
                 .get("accepted"));
-        assertTrue((boolean) TelemetryProjectContributionRegistry
+        assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(fallbackToken, "usage", Map.of("eventName", "reload"), null)
                 .get("accepted"));
-        assertEquals(List.of(fallbackToken), fallback.acceptedTokens());
+        assertEquals(List.of(), fallback.acceptedTokens());
         assertEquals(List.of(), winner.acceptedTokens());
     }
 
@@ -200,7 +200,7 @@ class TelemetryProjectContributionRegistryTest {
                 bridge("path-case", "1.0.0", "host", "A.jar", "hash")
         );
         Map<String, Object> pathWinner = TelemetryProjectContributionRegistry.activeContributions().get(0);
-        assertEquals("A.jar", pathWinner.get("sourcePath"));
+        assertEquals("a.jar", pathWinner.get("sourcePath"));
 
         TelemetryProjectContributionRegistry.clearForTests();
         TelemetryProjectContributionRegistry.register(
@@ -210,7 +210,7 @@ class TelemetryProjectContributionRegistryTest {
                 bridge("hash-case", "1.0.0", "host", "same.jar", "A-hash")
         );
         Map<String, Object> hashWinner = TelemetryProjectContributionRegistry.activeContributions().get(0);
-        assertEquals("A-hash", hashWinner.get("descriptorHash"));
+        assertEquals("a-hash", hashWinner.get("descriptorHash"));
     }
 
     @Test
@@ -227,13 +227,43 @@ class TelemetryProjectContributionRegistryTest {
 
         TelemetryProjectContributionRegistry.unregister(firstToken);
 
-        assertTrue(TelemetryProjectContributionRegistry.isActive(duplicateToken));
-        assertTrue((boolean) TelemetryProjectContributionRegistry
+        assertFalse(TelemetryProjectContributionRegistry.isActive(duplicateToken));
+        assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(duplicateToken, "usage", Map.of("eventName", "duplicate"), null)
                 .get("accepted"));
 
         TelemetryProjectContributionRegistry.unregister(duplicateToken);
         assertFalse(TelemetryProjectContributionRegistry.isActive(duplicateToken));
+    }
+
+    @Test
+    void retiringWinnerLeavesRegisteredFallbackPassiveUntilExplicitReregistration() {
+        RecordingBridge fallback = bridge("mvp-retire", "1.0.0", "host", "fallback.jar", "fallback-hash");
+        RecordingBridge winner = bridge("mvp-retire", "2.0.0", "host", "winner.jar", "winner-hash");
+
+        String winnerToken = TelemetryProjectContributionRegistry.register(winner);
+        String fallbackToken = TelemetryProjectContributionRegistry.register(fallback);
+
+        TelemetryProjectContributionRegistry.unregister(winnerToken);
+
+        assertTrue(TelemetryProjectContributionRegistry.activeContributions().isEmpty());
+        assertFalse(TelemetryProjectContributionRegistry.isActive(fallbackToken));
+        assertFalse((Boolean) TelemetryProjectContributionRegistry.dispatch(
+                fallbackToken,
+                "usage",
+                Map.of("eventName", "retired"),
+                null
+        ).get("accepted"));
+
+        RecordingBridge reregistered = bridge("mvp-retire", "1.0.0", "host", "fallback.jar", "fallback-hash");
+        String reregisteredToken = TelemetryProjectContributionRegistry.register(reregistered);
+        assertTrue(TelemetryProjectContributionRegistry.isActive(reregisteredToken));
+        assertTrue((Boolean) TelemetryProjectContributionRegistry.dispatch(
+                reregisteredToken,
+                "usage",
+                Map.of("eventName", "reregistered"),
+                null
+        ).get("accepted"));
     }
 
     @Test
@@ -306,7 +336,7 @@ class TelemetryProjectContributionRegistryTest {
         assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(oldToken, "usage", Map.of("eventName", "after"), null)
                 .get("accepted"));
-        assertTrue((boolean) TelemetryProjectContributionRegistry
+        assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(fallbackToken, "usage", Map.of("eventName", "after"), null)
                 .get("accepted"));
     }
@@ -359,8 +389,8 @@ class TelemetryProjectContributionRegistryTest {
         handoffB.join(1_000);
 
         assertFalse(staleBPublished);
-        assertEquals(fallbackAToken, activeToken("stale-a"));
-        assertEquals(fallbackBToken, activeToken("stale-b"));
+        assertNull(activeTokenOrNull("stale-a"));
+        assertNull(activeTokenOrNull("stale-b"));
     }
 
     @Test
@@ -393,7 +423,7 @@ class TelemetryProjectContributionRegistryTest {
             assertNull(old.nestedFailure);
             assertTrue(old.nestedReturnedBeforeDispatchRelease,
                     "isolated handoff should not wait on a lease owned by another registry copy");
-            assertEquals(fallbackToken, activeToken("isolated-handoff"));
+            assertNull(activeTokenOrNull("isolated-handoff"));
         }
     }
 
@@ -451,11 +481,11 @@ class TelemetryProjectContributionRegistryTest {
         assertTrue(registerBReturned);
         assertTrue(projectBDispatchAccepted);
         assertTrue(retireReturnedAfterInterrupt);
-        assertEquals(fallbackAToken, activeToken("stalled-a"));
+        assertNull(activeTokenOrNull("stalled-a"));
     }
 
     @Test
-    void comparatorEquivalentRegistrationsUseIndependentTokensAndFailOverTheirBridges() {
+    void comparatorEquivalentRegistrationsKeepFallbackPassiveAfterWinnerRetirement() {
         Map<String, Object> candidate = candidate(
                 "equivalent", "1.0.0", "owner", "same.jar", "same-hash"
         );
@@ -476,12 +506,12 @@ class TelemetryProjectContributionRegistryTest {
 
         TelemetryProjectContributionRegistry.unregister(firstToken);
 
-        assertEquals(secondToken, activeToken("equivalent"));
-        assertTrue((boolean) TelemetryProjectContributionRegistry
+        assertNull(activeTokenOrNull("equivalent"));
+        assertFalse((boolean) TelemetryProjectContributionRegistry
                 .dispatch(secondToken, "usage", Map.of("eventName", "second"), null)
                 .get("accepted"));
         assertEquals(List.of(firstToken), first.acceptedTokens());
-        assertEquals(List.of(secondToken), second.acceptedTokens());
+        assertEquals(List.of(), second.acceptedTokens());
     }
 
     private static String activeToken(String projectId) {

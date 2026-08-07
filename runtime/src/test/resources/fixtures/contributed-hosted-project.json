@@ -1,0 +1,39 @@
+{
+  "projectId": "example-library",
+  "displayName": "Example Library",
+  "runtimeMode": "embedded",
+  "ownerPluginIdentifiers": ["Example:Library"],
+  "packagePrefixes": ["com.example.library"],
+  "capture": {
+    "supported": true,
+    "defaultEnabled": true,
+    "setupFailures": true,
+    "startFailures": true
+  },
+  "events": {
+    "errors": { "supported": true, "defaultEnabled": true },
+    "lifecycle": { "supported": true, "defaultEnabled": true },
+    "breadcrumbs": { "supported": true, "defaultEnabled": true }
+  },
+  "reports": {
+    "enabled": true,
+    "issue": {
+      "enabled": true,
+      "fields": {
+        "severity": {
+          "type": "enum",
+          "label": "Severity",
+          "required": true,
+          "values": ["minor", "major", "blocking"]
+        }
+      }
+    }
+  },
+  "defaults": {
+    "destinationMode": "hosted"
+  },
+  "hosted": {
+    "endpoint": "https://hosted.example/ingest/crash",
+    "eventEndpoint": "https://hosted.example/ingest/event"
+  }
+}

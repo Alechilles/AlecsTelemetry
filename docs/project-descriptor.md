@@ -258,6 +258,12 @@ Destination and consent are project-scoped. A conventional host project and any
 anchored contributions can share one runtime provider without sharing category
 choices, endpoint configuration, queues, or project keys.
 
+Anchored contributions are hosted-only in the 1.1.0 MVP. A descriptor that
+selects `custom` is valid for a conventional project but is rejected when loaded
+through the anchored contribution API. Same-ID contribution winners are not
+hot-replaced or automatically failed over; restart or explicit re-registration
+is required for a replacement.
+
 `hosted.projectKey` is a publishable ingest key. Bake it into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
 
 `customEndpoint` supports:
@@ -297,3 +303,5 @@ consent and command diagnostics. An invalid or protocol-ineligible candidate
 stays passive and contributes no telemetry. Retiring a contribution removes it
 from new consent and heartbeat snapshots but keeps its existing local queue
 available for replay under the normal project retention and destination rules.
+Only first registration is live in the MVP; an established winner remains the
+stable writable candidate until restart or explicit re-registration.

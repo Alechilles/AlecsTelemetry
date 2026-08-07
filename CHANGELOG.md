@@ -22,6 +22,13 @@
   routed to a configured destination. Retiring a contribution removes it from
   new consent and heartbeat snapshots while retaining queued envelopes for
   replay.
+- 1.1.0 MVP contributions are hosted-only; conventional projects retain custom
+  endpoint support. Established same-ID contribution winners are not
+  automatically hot-replaced or failed over, so restart or explicit
+  re-registration is required for a replacement.
+- Aggregate heartbeats are separated by resolved destination, and stopped
+  contribution services reject non-setup operations instead of buffering them
+  for a later start.
 - Physical host identifiers, host versions, source paths, and descriptor hashes
   are used for local election diagnostics; normal envelopes attribute the
   logical project and logical plugin version. Existing loaded-mod metadata keeps

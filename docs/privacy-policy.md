@@ -52,6 +52,16 @@ Alec's Telemetry is designed to avoid player identity data by default.
   are not added to uploaded telemetry fields. Existing loaded-mod metadata keeps
   its prior behavior and may still be included where the normal runtime payload
   includes it.
+- Anchored contributions in the 1.1.0 MVP can upload only to Alec's hosted
+  destination. Conventional projects may still opt into a custom endpoint; that
+  endpoint operator, not Alec, controls its data and retention.
+- A same-ID contribution winner is not automatically hot-replaced or failed
+  over. Retirement fences the old token and leaves already registered fallbacks
+  passive until restart or explicit re-registration, preserving the destination
+  context for queued envelopes.
+- Before an anchored service starts, only setup breadcrumbs, lifecycle events,
+  and setup-failure captures are buffered. Manual reports and other operations
+  are rejected while stopped and are not replayed after startup.
 - Consent metrics are collected separately and are limited to project/version,
   category choice, and first-review funnel events.
 - The hosted platform may use IP addresses and request metadata for rate
@@ -161,7 +171,8 @@ allowlisting, and destination resolution. Passive, protocol-ineligible, or
 retired candidates are omitted from new heartbeat snapshots. Retirement does not
 delete queued crash, event, or report envelopes; the local coordinator retains
 the project registration needed to replay them under the normal retry and
-retention rules.
+retention rules. Heartbeat payloads are grouped by resolved destination so
+projects routed to different endpoints are not combined in one upload.
 
 ### Manual Player Reports
 

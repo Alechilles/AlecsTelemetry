@@ -76,11 +76,15 @@ public final class TelemetryCoordinatorRegistry {
         }
         ReflectiveBridge active = new ReflectiveBridge(bridge, winner);
         if (reconcileBeforeActivation(active)) {
+            activateWinner(winner, active);
             return active;
         }
         for (Object value : registry().values()) {
             TelemetryRuntimeCandidate candidate = candidateFrom(value);
             if (candidate == null) {
+                continue;
+            }
+            if (candidate.providerId().equals(winner.providerId())) {
                 continue;
             }
             ReflectiveBridge previous = new ReflectiveBridge(value, candidate);
@@ -148,6 +152,8 @@ public final class TelemetryCoordinatorRegistry {
                 // Failed replay leaves the previous active provider and catalog intact.
                 return;
             }
+            activateWinner(winner, replayTarget);
+            return;
         }
         for (Object value : bridges) {
             TelemetryRuntimeCandidate candidate = candidateFrom(value);
@@ -155,23 +161,29 @@ public final class TelemetryCoordinatorRegistry {
                 continue;
             }
             ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
-            boolean shouldBeActive = winner != null && candidate.providerId().equals(winner.providerId());
-            if (!shouldBeActive && bridge.isActive()) {
+            if (bridge.isActive()) {
                 bridge.shutdown();
                 bridge.deactivate();
             }
         }
-        if (winner == null) {
-            return;
+    }
+
+    private static void activateWinner(@Nonnull TelemetryRuntimeCandidate winner,
+                                       @Nonnull ReflectiveBridge winningBridge) {
+        for (Object value : List.copyOf(registry().values())) {
+            TelemetryRuntimeCandidate candidate = candidateFrom(value);
+            if (candidate == null || candidate.providerId().equals(winner.providerId())) {
+                continue;
+            }
+            ReflectiveBridge fallback = new ReflectiveBridge(value, candidate);
+            if (fallback.isActive()) {
+                fallback.shutdown();
+                fallback.deactivate();
+            }
         }
-        Object winningBridge = registry().get(winner.providerId());
-        if (winningBridge == null) {
-            return;
-        }
-        ReflectiveBridge bridge = new ReflectiveBridge(winningBridge, winner);
-        if (!bridge.isActive()) {
-            bridge.activate();
-            bridge.start();
+        if (!winningBridge.isActive()) {
+            winningBridge.activate();
+            winningBridge.start();
         }
     }
 

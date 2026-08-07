@@ -647,62 +647,68 @@ public final class TelemetryCoreEngine {
         if (!enabled.get() || projects.isEmpty()) {
             return;
         }
-        ArrayList<TelemetryProjectRegistration> eligibleProjects = new ArrayList<>();
+        LinkedHashMap<CrashReportClient.DeliveryTarget, ArrayList<TelemetryProjectRegistration>> projectsByTarget = new LinkedHashMap<>();
         for (TelemetryProjectRegistration project : projects) {
+            CrashReportClient.DeliveryTarget eventTarget = project == null
+                    ? null
+                    : project.resolveEventDeliveryTarget(settings);
             if (project == null
                     || findProject(project.projectId()) == null
                     || !isProjectRuntimeEnabled(project)
-                    || project.resolveEventDeliveryTarget(settings) == null
+                    || eventTarget == null
                     || !isStatsRuntimeEnabled(project)
                     || !project.stats().allows("heartbeat")) {
                 continue;
             }
-            eligibleProjects.add(project);
+            projectsByTarget
+                    .computeIfAbsent(eventTarget.normalize(), ignored -> new ArrayList<>())
+                    .add(project);
         }
-        if (eligibleProjects.isEmpty()) {
+        if (projectsByTarget.isEmpty()) {
             return;
         }
-
-        TelemetryProjectRegistration carrier = eligibleProjects.getFirst();
-        CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
-        TelemetryEventContext context = TelemetryEventContext.stats()
-                .featureKey("stats")
-                .entryPoint("heartbeat")
-                .runtimeSide("server")
-                .detail("playersOnline", Math.max(0, players.currentPlayers()))
-                .detail("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()))
-                .detail("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()))
-                .build();
-        TelemetryEventContext normalizedContext = normalizeContext(context);
-        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
-        putDetail(attributes, normalizedContext);
-        LinkedHashMap<String, Object> details = new LinkedHashMap<>();
-        details.put("playersOnline", Math.max(0, players.currentPlayers()));
-        details.put("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()));
-        details.put("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()));
-        details.put("projects", aggregateProjectDetails(eligibleProjects));
-        putIfPresent(details, "serverClaimToken", serverClaimToken);
-        TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
-                carrier.projectId(),
-                carrier.displayName(),
-                "runtime_stats",
-                sessionId,
-                serverId,
-                "heartbeat",
-                carrier.pluginIdentifier(),
-                carrier.pluginVersion(),
-                normalizedContext.worldName(),
-                environmentFor(carrier, runtimeMetadata),
-                attributes,
-                details,
-                normalizedContext,
-                runtimeMetadata
-        );
-        if (!eventStoreFor(carrier).persist(event)) {
-            logWarning("Failed to store aggregate telemetry stats heartbeat for project " + carrier.projectId() + ".", null);
-            return;
+        for (List<TelemetryProjectRegistration> targetProjects : projectsByTarget.values()) {
+            TelemetryProjectRegistration carrier = targetProjects.getFirst();
+            CrashReportEnvelope.RuntimeMetadata runtimeMetadata = CrashReportEnvelope.RuntimeMetadata.capture(loadedMods);
+            TelemetryEventContext context = TelemetryEventContext.stats()
+                    .featureKey("stats")
+                    .entryPoint("heartbeat")
+                    .runtimeSide("server")
+                    .detail("playersOnline", Math.max(0, players.currentPlayers()))
+                    .detail("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()))
+                    .detail("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()))
+                    .build();
+            TelemetryEventContext normalizedContext = normalizeContext(context);
+            LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+            putDetail(attributes, normalizedContext);
+            LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+            details.put("playersOnline", Math.max(0, players.currentPlayers()));
+            details.put("maxPlayersSinceLastReport", Math.max(0, players.maxPlayersSinceLastReport()));
+            details.put("avgPlayersSinceLastReport", Math.max(0.0, players.avgPlayersSinceLastReport()));
+            details.put("projects", aggregateProjectDetails(targetProjects));
+            putIfPresent(details, "serverClaimToken", serverClaimToken);
+            TelemetryEventEnvelope event = TelemetryEventEnvelope.stats(
+                    carrier.projectId(),
+                    carrier.displayName(),
+                    "runtime_stats",
+                    sessionId,
+                    serverId,
+                    "heartbeat",
+                    carrier.pluginIdentifier(),
+                    carrier.pluginVersion(),
+                    normalizedContext.worldName(),
+                    environmentFor(carrier, runtimeMetadata),
+                    attributes,
+                    details,
+                    normalizedContext,
+                    runtimeMetadata
+            );
+            if (!eventStoreFor(carrier).persist(event)) {
+                logWarning("Failed to store aggregate telemetry stats heartbeat for project " + carrier.projectId() + ".", null);
+                continue;
+            }
+            requestFlushAsync("event", carrier.projectId());
         }
-        requestFlushAsync("event", carrier.projectId());
     }
 
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
@@ -898,7 +904,7 @@ public final class TelemetryCoreEngine {
     @Nonnull
     public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
         ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
-        for (TelemetryProjectRegistration project : manualReportProjects()) {
+        for (TelemetryProjectRegistration project : retainedManualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             for (ManualReportStore.PendingReport pending : store.listReviewReports(project.projectId(), maxReportsPerProject)) {
                 ManualReportEnvelope envelope = parseManualReport(pending.payload());
@@ -911,7 +917,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean approveManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : manualReportProjects()) {
+        for (TelemetryProjectRegistration project : retainedManualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             if (store.approveReviewed(project.projectId(), reportId).isPresent()) {
                 requestFlushAsync("manual_report_approved", project.projectId());
@@ -922,7 +928,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean rejectManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : manualReportProjects()) {
+        for (TelemetryProjectRegistration project : retainedManualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             ManualReportEnvelope envelope = findReviewEnvelope(store, project.projectId(), reportId);
             if (store.rejectReviewed(project.projectId(), reportId).isPresent()) {
@@ -1436,11 +1442,28 @@ public final class TelemetryCoreEngine {
 
     @Nonnull
     private List<TelemetryProjectRegistration> matchingManualReportProjects(@Nullable String projectIdFilter) {
+        List<TelemetryProjectRegistration> retained = retainedManualReportProjects();
         if (projectIdFilter == null || projectIdFilter.isBlank()) {
-            return manualReportProjects();
+            return retained;
         }
-        TelemetryProjectRegistration project = findManualReportProject(projectIdFilter);
-        return project == null ? List.of() : List.of(project);
+        String normalized = projectIdFilter.trim();
+        return retained.stream()
+                .filter(project -> project.projectId().equalsIgnoreCase(normalized))
+                .findFirst()
+                .map(List::of)
+                .orElseGet(List::of);
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> retainedManualReportProjects() {
+        LinkedHashMap<String, TelemetryProjectRegistration> retained = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : manualReportProjects()) {
+            retained.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : projectCatalog.snapshot().retiredProjects()) {
+            retained.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(retained.values());
     }
 
     private CrashReportStore storeFor(@Nonnull TelemetryProjectRegistration project) {

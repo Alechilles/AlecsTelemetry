@@ -18,6 +18,8 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
+import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
@@ -46,6 +48,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +82,7 @@ class EmbeddedTelemetryServiceTest {
         TestPlugin plugin = testPlugin(tempDir.resolve("host"));
         Class<?> anchor = isolatedAnchor(
                 "isolated/contributed-project.json",
-                fixtureBytes("fixtures/contributed-project.json")
+                fixtureBytes("fixtures/contributed-hosted-project.json")
         );
         TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
                 .descriptorResource(anchor, "/isolated/contributed-project.json")
@@ -93,6 +96,86 @@ class EmbeddedTelemetryServiceTest {
         assertNull(service.disabledReason());
         assertEquals("Example:Library", service.projects().getFirst().pluginIdentifier());
         assertEquals("2.4.0", service.projects().getFirst().pluginVersion());
+        Map<String, Object> candidate = TelemetryProjectContributionRegistry.activeContributions().getFirst();
+        assertEquals("EMBEDDED", candidate.get("origin"));
+        String canonicalHash = hex(MessageDigest.getInstance("SHA-256")
+                .digest(service.projects().getFirst().descriptor().toJson().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assertEquals(canonicalHash, candidate.get("descriptorHash"));
+    }
+
+    @Test
+    void anchoredContributionWithCustomDestinationIsDisabledForMvp() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("custom-contribution"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/custom-contribution.json",
+                fixtureBytes("fixtures/contributed-project.json")
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "/isolated/custom-contribution.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertNotNull(service.disabledReason());
+        assertTrue(service.disabledReason().contains("hosted"));
+        assertTrue(service.disabledReason().contains("custom"));
+        assertTrue(TelemetryProjectContributionRegistry.activeContributions().isEmpty());
+    }
+
+    @Test
+    void preStartManualReportsAreRejectedAndNeverDrainAfterStart() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("pre-start-manual"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/pre-start-manual.json",
+                fixtureBytes("fixtures/contributed-hosted-project.json")
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "/isolated/pre-start-manual.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        ManualReportEnvelope.CreateResult first = service.submitManualReport(
+                service.projectId(),
+                new com.alechilles.alecstelemetry.report.ManualReportSubmission(
+                        com.alechilles.alecstelemetry.report.ManualReportKind.ISSUE,
+                        "pre-start",
+                        "not queued",
+                        null,
+                        Map.of("severity", "major"),
+                        false,
+                        false,
+                        false,
+                        false,
+                        false
+                ),
+                PlayerReportRuntimeContext.UNKNOWN
+        );
+        ManualReportEnvelope.CreateResult second = service.submitManualReport(
+                service.projectId(),
+                new com.alechilles.alecstelemetry.report.ManualReportSubmission(
+                        com.alechilles.alecstelemetry.report.ManualReportKind.ISSUE,
+                        "pre-start-duplicate",
+                        "not queued",
+                        null,
+                        Map.of("severity", "major"),
+                        false,
+                        false,
+                        false,
+                        false,
+                        false
+                ),
+                PlayerReportRuntimeContext.UNKNOWN
+        );
+
+        assertFalse(first.accepted());
+        assertFalse(second.accepted());
+        assertTrue(first.validationErrors().stream().anyMatch(error -> error.contains("start")));
+        service.start();
+        assertEquals(0, service.pendingReports());
     }
 
     @Test
@@ -1865,6 +1948,15 @@ class EmbeddedTelemetryServiceTest {
             }
             return stream.readAllBytes();
         }
+    }
+
+    private static String hex(byte[] bytes) {
+        StringBuilder result = new StringBuilder(bytes.length * 2);
+        for (byte value : bytes) {
+            result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
+            result.append(Character.forDigit(value & 0x0f, 16));
+        }
+        return result.toString();
     }
 
     private static void setField(Class<?> type, Object target, String fieldName, Object value)
