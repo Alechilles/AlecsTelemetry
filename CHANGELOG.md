@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.1.0 - Generic Embedded Contributions - 2026-08-06
+
+### Added
+- Added the generic anchored embedded-contribution API and contributor guide in
+  `docs/embedded-contributions.md`. A contribution can register a logical
+  telemetry project from a descriptor resource in its own classloader without
+  colliding with the host mod's conventional descriptor.
+- Added contribution ABI 1 with independent project consent, destinations,
+  queueing, logical project attribution, and live catalog reconciliation.
+
+### Changed
+- Advanced the coordinator bridge to protocol 3. Protocol-2 providers are
+  ineligible to own generic contribution projects; existing bootstrap callers
+  remain source and binary compatible.
+- Existing `EmbeddedTelemetryBootstrap.bootstrap(JavaPlugin)` source and binary
+  behavior remains supported. New contributors should use the anchored API and
+  a namespaced descriptor resource.
+- Active contribution candidates now emit stats heartbeats only when their
+  logical project is elected, enabled, stats-consented, heartbeat-eligible, and
+  routed to a configured destination. Retiring a contribution removes it from
+  new consent and heartbeat snapshots while retaining queued envelopes for
+  replay.
+- Physical host identifiers, host versions, source paths, and descriptor hashes
+  are used for local election diagnostics; normal envelopes attribute the
+  logical project and logical plugin version. Existing loaded-mod metadata keeps
+  its prior behavior.
+
 ## 1.0.5 - Server Mod Discovery Hotfix - 2026-08-05
 
 ### Fixed

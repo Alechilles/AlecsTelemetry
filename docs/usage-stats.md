@@ -8,9 +8,12 @@ HStats and bStats.
 The active telemetry runtime emits the first standard `stats` `heartbeat` event
 2-5 minutes after startup, then emits roughly every 30 minutes with stable
 jitter so servers do not all report at the same instant. Heartbeats are emitted
-for each installed, enabled project that has opted into stats, regardless of
-whether the winning runtime came from the standalone jar or an embedded copy. The
-hosted stats surface derives:
+for each project in the active coordinator's live catalog that is enabled and
+has opted into stats, regardless of whether the winning runtime came from the
+standalone jar or an embedded copy. Anchored embedded contributions use their
+elected logical project identity and logical plugin version. A passive, invalid,
+protocol-ineligible, or retired contribution is not in the active heartbeat
+snapshot. The hosted stats surface derives:
 
 - active servers
 - active players
@@ -39,6 +42,20 @@ The heartbeat interval is intentionally not exposed in runtime settings so
 servers cannot accidentally or deliberately report at an unsafe cadence. Hosted
 interval hints may temporarily keep older 5-minute clients working during
 rollout, but new runtime clients target the 30-minute cadence.
+
+## Heartbeat Eligibility And Retirement
+
+Registration alone emits no stats. For a contributed project to emit a heartbeat,
+its candidate must be the current per-project winner, the project and stats
+category must be enabled by consent, the descriptor must allow `heartbeat`, and
+the project's hosted or custom destination must resolve. The coordinator checks
+these gates at emission time, so changing consent or destination immediately
+removes the project from later heartbeat snapshots.
+
+When a contribution retires, the project disappears from new consent and
+heartbeat snapshots without deleting its local crash, event, or report queue.
+The coordinator retains the project registration needed to replay queued data;
+normal retry, destination, and retention rules still apply.
 
 ## Consent
 
@@ -72,3 +89,8 @@ Stats are intentionally not customizable. Enabling stats reports the standard
 heartbeat/environment fields only. Heartbeats include the current player count
 plus optional interval peak and average player counts so lower cadence reporting
 does not lose short-lived player peaks.
+
+The existing runtime metadata contract still applies to contributed projects:
+loaded mod identifiers and versions may be included in heartbeat/environment
+payloads. Physical host identifiers, source paths, and descriptor hashes used for
+local contribution election are not added as new public stats fields.

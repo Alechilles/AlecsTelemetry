@@ -28,6 +28,13 @@ require an in-game player sender.
 - `project` shows one project's endpoint, plugin identity, package prefixes,
   source path, and pending queue count.
 
+For anchored embedded contributions, the project list and consent diagnostics
+reflect the live elected catalog. A protocol-ineligible, invalid, passive, or
+retired candidate is not a writable active project. Candidate election and
+validation warnings are bounded local diagnostics available to integrations via
+`TelemetryProjectContributionRegistry.diagnostics()`; the physical source path
+shown by local diagnostics is not added to uploaded envelopes.
+
 ## Consent
 
 ```text

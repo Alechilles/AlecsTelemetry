@@ -9,6 +9,17 @@ Server/Telemetry/project.json
 The same descriptor works for standalone dependency mode and embedded mode.
 Runtime ownership is decided by coordinator election at startup.
 
+An embedded component that owns a separate logical project can use
+`EmbeddedTelemetryBootstrap.contribute(...)` instead of the conventional
+descriptor lookup. That API reads a namespaced descriptor resource from the
+contributor's anchored classloader (for example,
+`META-INF/alecs-telemetry/projects/component.json`), so it does not collide with
+the host mod's `Server/Telemetry/project.json`. The contribution descriptor must
+declare an explicit `projectId` and `displayName`, and its
+`ownerPluginIdentifiers` must include the contribution's logical plugin
+identifier. See [Embedded Contributions](embedded-contributions.md) for the
+builder and election contract.
+
 ## Minimal Hosted Example
 
 If your `manifest.json` has `Group`, `Name`, and `Main`, Alec's Telemetry can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
@@ -165,6 +176,13 @@ Identity fields are optional overrides.
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
+For an anchored contribution, the logical plugin identifier and logical semantic
+version come from the contribution builder. They are the project attribution in
+telemetry envelopes; the physical host plugin remains local provider/election
+metadata. The descriptor's `projectId`, display name, and owner list still have
+to validate against that logical identity before the contribution can become
+active.
+
 ## Category Fields
 
 Crash:
@@ -236,6 +254,10 @@ Unknown fields, wrong types, blank strings, and enum values outside the declared
 
 `defaults.enabled` controls the initial project-level consent toggle. `defaults.destinationMode` can be `hosted` or `custom`.
 
+Destination and consent are project-scoped. A conventional host project and any
+anchored contributions can share one runtime provider without sharing category
+choices, endpoint configuration, queues, or project keys.
+
 `hosted.projectKey` is a publishable ingest key. Bake it into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
 
 `customEndpoint` supports:
@@ -243,6 +265,11 @@ Unknown fields, wrong types, blank strings, and enum values outside the declared
 - `url`
 - `eventUrl`
 - `headers`
+
+When `destinationMode` is `custom`, the configured endpoint operator—not Alec's
+hosted platform—controls the received data, security, retention, and response
+handling. The mod author and server owner are responsible for documenting that
+endpoint and its data practices.
 
 ## UI Icon
 
@@ -261,3 +288,12 @@ Unknown fields, wrong types, blank strings, and enum values outside the declared
 Top-level `capture`, `events`, `performance`, `usage`, `stats`, and `reports` are still accepted for compatibility. New descriptors should put categories under `telemetry`.
 
 `runtimeMode` is legacy optional metadata. New descriptors should omit it.
+
+## Live Contribution Catalog
+
+The active coordinator reconciles anchored contributions while the server is
+running. A valid elected contribution appears as an independent project in
+consent and command diagnostics. An invalid or protocol-ineligible candidate
+stays passive and contributes no telemetry. Retiring a contribution removes it
+from new consent and heartbeat snapshots but keeps its existing local queue
+available for replay under the normal project retention and destination rules.
