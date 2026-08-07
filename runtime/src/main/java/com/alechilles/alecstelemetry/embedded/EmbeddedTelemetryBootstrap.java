@@ -10,6 +10,9 @@ import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHost;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.common.semver.Semver;
@@ -102,6 +105,14 @@ public final class EmbeddedTelemetryBootstrap {
                     logger,
                     "Failed to initialize embedded telemetry contribution '"
                             + logicalIdentifier + "': " + safeMessage(ex)
+            );
+        } catch (LinkageError error) {
+            return disabledContribution(
+                    fallbackProjectId,
+                    fallbackDisplayName,
+                    logger,
+                    "Failed to initialize embedded telemetry contribution '"
+                            + logicalIdentifier + "': " + safeMessage(error)
             );
         }
     }
@@ -204,6 +215,15 @@ public final class EmbeddedTelemetryBootstrap {
         }
 
         if (validateContribution) {
+            if (!hasExplicitDescriptorIdentity(descriptorBytes)) {
+                return disabledContribution(
+                        descriptor.projectId(),
+                        descriptor.displayName(),
+                        logger,
+                        "Embedded telemetry descriptor " + descriptorResource
+                                + " must declare nonblank projectId and displayName."
+                );
+            }
             if (descriptor.ownerPluginIdentifiers().stream()
                     .noneMatch(owner -> owner.equalsIgnoreCase(logicalIdentifier.trim()))) {
                 return disabledContribution(
@@ -266,6 +286,34 @@ public final class EmbeddedTelemetryBootstrap {
     private static String safeMessage(@Nonnull RuntimeException exception) {
         String message = exception.getMessage();
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    }
+
+    @Nonnull
+    private static String safeMessage(@Nonnull LinkageError error) {
+        String message = error.getMessage();
+        return error.getClass().getSimpleName()
+                + (message == null || message.isBlank() ? "" : ": " + message);
+    }
+
+    private static boolean hasExplicitDescriptorIdentity(@Nonnull byte[] descriptorBytes) {
+        try {
+            JsonElement parsed = JsonParser.parseString(new String(descriptorBytes, StandardCharsets.UTF_8));
+            if (!parsed.isJsonObject()) {
+                return false;
+            }
+            JsonObject document = parsed.getAsJsonObject();
+            return hasNonBlankString(document, "projectId")
+                    && hasNonBlankString(document, "displayName");
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean hasNonBlankString(@Nonnull JsonObject document, @Nonnull String key) {
+        JsonElement value = document.get(key);
+        return value != null
+                && value.isJsonPrimitive()
+                && !value.getAsString().isBlank();
     }
 
     private record DescriptorBytes(@Nonnull String resource, @Nonnull byte[] content) {

@@ -39,6 +39,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.annotation.Nonnull;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -52,6 +56,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -68,10 +73,14 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
-    void anchoredContributionUsesLogicalIdentityInsteadOfPhysicalHost() {
+    void anchoredContributionUsesLogicalIdentityInsteadOfPhysicalHost() throws Exception {
         TestPlugin plugin = testPlugin(tempDir.resolve("host"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/contributed-project.json",
+                fixtureBytes("fixtures/contributed-project.json")
+        );
         TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
-                .descriptorResource(TestAnchor.class, "fixtures/contributed-project.json")
+                .descriptorResource(anchor, "/isolated/contributed-project.json")
                 .logicalPluginIdentifier("Example:Library")
                 .logicalPluginVersion("2.4.0")
                 .build();
@@ -85,10 +94,81 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void anchoredContributionWithoutExplicitProjectIdentityReturnsDisabledService() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("missing-identity"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/missing-identity.json",
+                fixtureBytes("fixtures/contributed-missing-identity.json")
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "isolated/missing-identity.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertNotNull(service.disabledReason());
+        assertTrue(service.disabledReason().contains("projectId"));
+    }
+
+    @Test
+    void anchoredContributionLinkageFailureReturnsDisabledService() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("linkage-failure"));
+        Class<?> anchor = throwingAnchor();
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "isolated/linkage-failure.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = assertDoesNotThrow(
+                () -> EmbeddedTelemetryBootstrap.contribute(plugin, contribution)
+        );
+
+        assertNotNull(service.disabledReason());
+        assertTrue(service.disabledReason().contains("linkage failure"));
+    }
+
+    @Test
+    void conventionalBootstrapLoadsDescriptorFromHostClassLoader() throws Exception {
+        JavaPlugin plugin = conventionalPlugin(
+                tempDir.resolve("conventional-success"),
+                "Server/Telemetry/project.json",
+                fixtureBytes("fixtures/conventional-project.json")
+        );
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
+
+        assertEquals("conventional-project", service.projectId());
+        assertNull(service.disabledReason());
+        assertEquals("Example:Host", service.projects().getFirst().pluginIdentifier());
+        assertEquals("9.9.9", service.projects().getFirst().pluginVersion());
+    }
+
+    @Test
+    void conventionalBootstrapMissingDescriptorKeepsDisabledFallback() throws Exception {
+        JavaPlugin plugin = conventionalPlugin(
+                tempDir.resolve("conventional-missing"),
+                null,
+                null
+        );
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
+
+        assertEquals("host", service.projectId());
+        assertEquals(
+                "No Server/Telemetry/project.json descriptor was found in the owning mod."
+                        + " Legacy telemetry/project.json was also absent.",
+                service.disabledReason()
+        );
+    }
+
+    @Test
     void anchoredContributionMissingResourceReturnsDisabledServiceWithReason() {
         TestPlugin plugin = testPlugin(tempDir.resolve("missing"));
         TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
-                .descriptorResource(TestAnchor.class, "fixtures/missing-project.json")
+                .descriptorResource(AnchorFixture.class, "fixtures/missing-project.json")
                 .logicalPluginIdentifier("Example:Library")
                 .logicalPluginVersion("2.4.0")
                 .build();
@@ -1717,6 +1797,62 @@ class EmbeddedTelemetryServiceTest {
         }
     }
 
+    private static JavaPlugin conventionalPlugin(Path dataDirectory,
+                                                  String descriptorResource,
+                                                  byte[] descriptorBytes) throws Exception {
+        Options.parse(new String[0]);
+        PluginFixtureClassLoader loader = new PluginFixtureClassLoader(
+                descriptorResource,
+                descriptorBytes,
+                classBytes(ConventionalPlugin.class)
+        );
+        Class<?> pluginType = loader.definePlugin();
+        Object plugin = unsafe().allocateInstance(pluginType);
+        setField(pluginType, plugin, "dataDirectory", dataDirectory);
+        setField(pluginType, plugin, "file", dataDirectory.resolve("Host.jar"));
+        PluginManifest manifest = testManifest();
+        setField(pluginType, plugin, "manifest", manifest);
+        setField(pluginType, plugin, "identifier", new PluginIdentifier(manifest));
+        return (JavaPlugin) plugin;
+    }
+
+    private static Class<?> isolatedAnchor(String resourceName, byte[] descriptorBytes) throws IOException {
+        DescriptorClassLoader loader = new DescriptorClassLoader(resourceName, descriptorBytes, false);
+        return loader.defineAnchor(classBytes(AnchorFixture.class));
+    }
+
+    private static Class<?> throwingAnchor() throws IOException {
+        DescriptorClassLoader loader = new DescriptorClassLoader("isolated/linkage-failure.json", null, true);
+        return loader.defineAnchor(classBytes(AnchorFixture.class));
+    }
+
+    private static byte[] fixtureBytes(String resourceName) throws IOException {
+        try (InputStream stream = EmbeddedTelemetryServiceTest.class.getClassLoader()
+                .getResourceAsStream(resourceName)) {
+            if (stream == null) {
+                throw new IOException("Missing test fixture " + resourceName);
+            }
+            return stream.readAllBytes();
+        }
+    }
+
+    private static byte[] classBytes(Class<?> type) throws IOException {
+        String resourceName = type.getName().replace('.', '/') + ".class";
+        try (InputStream stream = type.getClassLoader().getResourceAsStream(resourceName)) {
+            if (stream == null) {
+                throw new IOException("Missing class bytes " + resourceName);
+            }
+            return stream.readAllBytes();
+        }
+    }
+
+    private static void setField(Class<?> type, Object target, String fieldName, Object value)
+            throws ReflectiveOperationException {
+        Field field = type.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     private static sun.misc.Unsafe unsafe() {
         try {
             java.lang.reflect.Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -1727,7 +1863,94 @@ class EmbeddedTelemetryServiceTest {
         }
     }
 
-    private static final class TestAnchor {
+    private static final class AnchorFixture {
+    }
+
+    private static final class DescriptorClassLoader extends ClassLoader {
+        private final String resourceName;
+        private final byte[] descriptorBytes;
+        private final boolean throwLinkageError;
+
+        private DescriptorClassLoader(String resourceName, byte[] descriptorBytes, boolean throwLinkageError) {
+            super(null);
+            this.resourceName = resourceName;
+            this.descriptorBytes = descriptorBytes;
+            this.throwLinkageError = throwLinkageError;
+        }
+
+        @Override
+        public InputStream getResourceAsStream(String name) {
+            if (throwLinkageError) {
+                throw new NoClassDefFoundError("simulated anchor linkage failure");
+            }
+            return resourceName.equals(name)
+                    ? new ByteArrayInputStream(descriptorBytes)
+                    : null;
+        }
+
+        private Class<?> defineAnchor(byte[] bytes) {
+            return defineClass(AnchorFixture.class.getName(), bytes, 0, bytes.length);
+        }
+    }
+
+    private static final class PluginFixtureClassLoader extends ClassLoader {
+        private final String resourceName;
+        private final byte[] descriptorBytes;
+        private final byte[] pluginBytes;
+
+        private PluginFixtureClassLoader(String resourceName, byte[] descriptorBytes, byte[] pluginBytes) {
+            super(EmbeddedTelemetryServiceTest.class.getClassLoader());
+            this.resourceName = resourceName;
+            this.descriptorBytes = descriptorBytes;
+            this.pluginBytes = pluginBytes;
+        }
+
+        @Override
+        public InputStream getResourceAsStream(String name) {
+            return resourceName != null && resourceName.equals(name) && descriptorBytes != null
+                    ? new ByteArrayInputStream(descriptorBytes)
+                    : null;
+        }
+
+        private Class<?> definePlugin() {
+            return defineClass(ConventionalPlugin.class.getName(), pluginBytes, 0, pluginBytes.length);
+        }
+    }
+
+    private static class ConventionalPlugin extends JavaPlugin {
+        private Path dataDirectory;
+        private Path file;
+        private PluginManifest manifest;
+        private PluginIdentifier identifier;
+
+        private ConventionalPlugin() {
+            super(null);
+        }
+
+        @Override
+        public HytaleLogger getLogger() {
+            return null;
+        }
+
+        @Override
+        public Path getDataDirectory() {
+            return dataDirectory;
+        }
+
+        @Override
+        public Path getFile() {
+            return file;
+        }
+
+        @Override
+        public PluginManifest getManifest() {
+            return manifest;
+        }
+
+        @Override
+        public PluginIdentifier getIdentifier() {
+            return identifier;
+        }
     }
 
     private static final class TestPlugin extends JavaPlugin {
