@@ -158,11 +158,11 @@ public record TelemetryProjectContributionCandidate(
     }
 
     public String normalizedSourcePath() {
-        return sourcePath.toLowerCase(Locale.ROOT);
+        return sourcePath;
     }
 
     public String normalizedDescriptorHash() {
-        return descriptorHash.toLowerCase(Locale.ROOT);
+        return descriptorHash;
     }
 
     public boolean compatible() {
@@ -181,7 +181,7 @@ public record TelemetryProjectContributionCandidate(
         try {
             Semver.fromString(logicalPluginVersion);
             return !logicalPluginVersion.isBlank();
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException | LinkageError ignored) {
             return false;
         }
     }
@@ -192,6 +192,9 @@ public record TelemetryProjectContributionCandidate(
 
     /** Returns a bounded reason suitable for a cross-classloader diagnostic map. */
     public String invalidReason() {
+        if (abiVersion == -1) {
+            return "abi_mismatch";
+        }
         if (!compatible()) {
             return "incompatible_abi";
         }
@@ -261,20 +264,31 @@ public record TelemetryProjectContributionCandidate(
 
     private static int intValue(Object value, int fallback) {
         if (value instanceof Number number) {
-            return number.intValue();
+            try {
+                return number.intValue();
+            } catch (RuntimeException | LinkageError ignored) {
+                return fallback;
+            }
         }
         if (value == null) {
             return fallback;
         }
         try {
             return Integer.parseInt(value.toString().trim());
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException | LinkageError ignored) {
             return fallback;
         }
     }
 
     private static String stringValue(Object value) {
-        return value == null ? "" : value.toString().trim();
+        if (value == null) {
+            return "";
+        }
+        try {
+            return value.toString().trim();
+        } catch (RuntimeException | LinkageError ignored) {
+            return "";
+        }
     }
 
     private static String text(String value) {
