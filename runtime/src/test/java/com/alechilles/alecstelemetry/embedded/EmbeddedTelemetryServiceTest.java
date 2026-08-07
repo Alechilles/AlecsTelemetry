@@ -113,6 +113,25 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void anchoredContributionWithNonStringIdentityReturnsDisabledService() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("non-string-identity"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/non-string-identity.json",
+                fixtureBytes("fixtures/contributed-non-string-identity.json")
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "isolated/non-string-identity.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertNotNull(service.disabledReason());
+        assertTrue(service.disabledReason().contains("projectId"));
+    }
+
+    @Test
     void anchoredContributionLinkageFailureReturnsDisabledService() throws Exception {
         TestPlugin plugin = testPlugin(tempDir.resolve("linkage-failure"));
         Class<?> anchor = throwingAnchor();

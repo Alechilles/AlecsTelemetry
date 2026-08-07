@@ -1,0 +1,5 @@
+{
+  "projectId": 123,
+  "displayName": true,
+  "ownerPluginIdentifiers": ["Example:Library"]
+}

@@ -313,6 +313,7 @@ public final class EmbeddedTelemetryBootstrap {
         JsonElement value = document.get(key);
         return value != null
                 && value.isJsonPrimitive()
+                && value.getAsJsonPrimitive().isString()
                 && !value.getAsString().isBlank();
     }
 
