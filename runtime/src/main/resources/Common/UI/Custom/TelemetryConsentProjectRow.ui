@@ -1,0 +1,56 @@
+$C = "Common.ui";
+
+@TelemetryConsentUnsupportedCellLabel = LabelStyle(
+  FontSize: 16,
+  TextColor: #667991,
+  HorizontalAlignment: Center,
+  VerticalAlignment: Center,
+  Wrap: false
+);
+
+@TelemetryConsentInvisibleButtonStyle = TextButtonStyle(
+  Default: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000)),
+  Hovered: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000)),
+  Pressed: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000)),
+  Disabled: (Background: (Color: #00000000), LabelStyle: (FontSize: 1, TextColor: #00000000))
+);
+
+Group {
+  Anchor: (Width: 728, Height: 56);
+  Background: #0f1e30;
+  Group { Anchor: (Left: 288, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 343, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 398, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 453, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 508, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 563, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 618, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 673, Width: 1, Top: 0, Bottom: 0); Background: #28415f; }
+  Group { Anchor: (Left: 0, Right: 0, Top: 55, Height: 1); Background: #28415f; }
+  Group #TelemetryConsentProjectIconFrame { Anchor: (Left: 0, Top: 0, Width: 56, Height: 56); Background: (TexturePath: "Common/OptionBackgroundPatch.png", Border: 16); Padding: (Full: 0); Group #TelemetryConsentProjectIconImage { Anchor: (Width: 56, Height: 56); Background: #203a5a; Label #TelemetryConsentProjectIconPlaceholder { Anchor: (Width: 56, Height: 56); Text: "?"; Style: (FontSize: 22, TextColor: #7288a2, HorizontalAlignment: Center, VerticalAlignment: Center); } } }
+  Label #TelemetryConsentProjectName { Anchor: (Left: 64, Top: 7, Width: 216, Height: 22); Text: ""; Style: (FontSize: 14, RenderBold: true, TextColor: #f1f6ff, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+  Label #TelemetryConsentProjectMeta { Anchor: (Left: 64, Top: 30, Width: 216, Height: 18); Text: ""; Style: (FontSize: 11, TextColor: #9fb5ce, HorizontalAlignment: Start, VerticalAlignment: Center, Wrap: false); }
+  CheckBox #TelemetryConsentProjectEnabled { Anchor: (Top: 17, Left: 304, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentProjectToggleButton { Anchor: (Left: 288, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  CheckBox #TelemetryConsentCaptureEnabled { Anchor: (Top: 17, Left: 359, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentCaptureToggleButton { Anchor: (Left: 343, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentCaptureUnsupported { Anchor: (Top: 17, Left: 359, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentErrorEnabled { Anchor: (Top: 17, Left: 414, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentErrorToggleButton { Anchor: (Left: 398, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentErrorUnsupported { Anchor: (Top: 17, Left: 414, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentLifecycleEnabled { Anchor: (Top: 17, Left: 469, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentLifecycleToggleButton { Anchor: (Left: 453, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentLifecycleUnsupported { Anchor: (Top: 17, Left: 469, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentPerformanceEnabled { Anchor: (Top: 17, Left: 524, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentPerformanceToggleButton { Anchor: (Left: 508, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentPerformanceUnsupported { Anchor: (Top: 17, Left: 524, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentUsageEnabled { Anchor: (Top: 17, Left: 579, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentUsageToggleButton { Anchor: (Left: 563, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentUsageUnsupported { Anchor: (Top: 17, Left: 579, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentStatsEnabled { Anchor: (Top: 17, Left: 634, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentStatsToggleButton { Anchor: (Left: 618, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentStatsUnsupported { Anchor: (Top: 17, Left: 634, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+  CheckBox #TelemetryConsentBreadcrumbsEnabled { Anchor: (Top: 17, Left: 689, Width: 22, Height: 22); Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Padding: (Full: 4); Style: $C.@DefaultCheckBoxStyle; }
+  TextButton #TelemetryConsentBreadcrumbsToggleButton { Anchor: (Left: 673, Width: 55, Top: 0, Height: 56); Text: ""; Style: @TelemetryConsentInvisibleButtonStyle; }
+  Group #TelemetryConsentBreadcrumbsUnsupported { Anchor: (Top: 17, Left: 689, Width: 22, Height: 22); Visible: false; Background: (TexturePath: "Common/CheckBoxFrame.png", Border: 7); Label { Anchor: (Width: 22, Height: 22); Text: "-"; Style: @TelemetryConsentUnsupportedCellLabel; } }
+}

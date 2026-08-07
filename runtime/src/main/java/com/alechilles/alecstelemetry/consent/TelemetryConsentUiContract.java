@@ -50,7 +50,7 @@ final class TelemetryConsentUiContract {
 
     @Nonnull
     private static String rowSelector(int index) {
-        return "#TelemetryConsentProjectRow" + index;
+        return "#TelemetryConsentRows[" + index + "]";
     }
 
     @Nonnull
