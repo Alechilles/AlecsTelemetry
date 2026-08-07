@@ -128,8 +128,8 @@ class TelemetryProjectContributionRegistryTest {
     @Test
     void incompatibleAbiAndInvalidSemanticVersionRemainPassive() {
         RecordingBridge compatible = bridge("library", "1.0.0", "owner", "good.jar", "hash-a");
-        RecordingBridge incompatible = bridge("future", "99.0.0", "owner", "future.jar", "hash-b", "EMBEDDED", 2);
-        RecordingBridge invalidVersion = bridge("invalid", "not-semver", "owner", "invalid.jar", "hash-c");
+        RecordingBridge incompatible = bridge("library", "99.0.0", "owner", "future.jar", "hash-b", "EMBEDDED", 2);
+        RecordingBridge invalidVersion = bridge("library", "not-semver", "owner", "invalid.jar", "hash-c");
 
         String compatibleToken = TelemetryProjectContributionRegistry.register(compatible);
         String incompatibleToken = TelemetryProjectContributionRegistry.register(incompatible);
@@ -138,6 +138,12 @@ class TelemetryProjectContributionRegistryTest {
         assertTrue(TelemetryProjectContributionRegistry.isActive(compatibleToken));
         assertFalse(TelemetryProjectContributionRegistry.isActive(incompatibleToken));
         assertFalse(TelemetryProjectContributionRegistry.isActive(invalidToken));
+        assertFalse((boolean) TelemetryProjectContributionRegistry
+                .dispatch(incompatibleToken, "usage", Map.of("eventName", "incompatible"), null)
+                .get("accepted"));
+        assertFalse((boolean) TelemetryProjectContributionRegistry
+                .dispatch(invalidToken, "usage", Map.of("eventName", "invalid"), null)
+                .get("accepted"));
         assertEquals(List.of("library"), TelemetryProjectContributionRegistry.activeContributions().stream()
                 .map(candidate -> candidate.get("projectId").toString())
                 .toList());

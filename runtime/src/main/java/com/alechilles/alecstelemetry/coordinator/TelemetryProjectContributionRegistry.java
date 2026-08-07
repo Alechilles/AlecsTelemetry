@@ -210,6 +210,9 @@ public final class TelemetryProjectContributionRegistry {
                 return rejection("inactive_token");
             }
             TelemetryProjectContributionCandidate callerCandidate = candidateFromEntry(caller);
+            if (!callerCandidate.valid()) {
+                return rejection("inactive_token");
+            }
             dispatchToken = winners.getOrDefault(callerCandidate.normalizedProjectId(), "");
             Map<String, Object> entry = entryForTokenLocked(registry, dispatchToken);
             if (entry == null) {
