@@ -48,6 +48,21 @@ public interface TelemetryCoordinatorBridge {
     default void shutdown() {
     }
 
+    /** Replays the complete immutable contribution snapshot before provider activation. */
+    default boolean reconcileProjectContributions(long revision,
+                                                  @Nonnull List<Map<String, Object>> contributions) {
+        return contributions == null || contributions.isEmpty();
+    }
+
+    /** Routes a token-authorized contributor operation through the active provider. */
+    @Nonnull
+    default Map<String, Object> dispatchProjectContribution(@Nonnull String token,
+                                                             @Nonnull String operation,
+                                                             @Nonnull Map<String, Object> payload,
+                                                             @Nullable Throwable throwable) {
+        return Map.of("accepted", false, "reason", "contribution_dispatch_unavailable");
+    }
+
     default boolean isEnabled() {
         return isActive();
     }

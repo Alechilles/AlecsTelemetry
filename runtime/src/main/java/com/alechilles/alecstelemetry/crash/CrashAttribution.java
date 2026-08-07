@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Attribution helper for deciding whether a crash belongs to a registered project.
@@ -22,6 +23,20 @@ public final class CrashAttribution {
                                              @Nonnull List<String> ownerPluginIdentifiers,
                                              @Nonnull List<String> packagePrefixes,
                                              @Nullable String identifiedPluginHint) {
+        return classify(throwable, ownerPluginIdentifiers, packagePrefixes, identifiedPluginHint, Set.of());
+    }
+
+    /**
+     * Classifies an automatic crash while suppressing stack-prefix ownership when the matching
+     * prefix is shared by multiple live projects. Plugin-identifier matches remain usable because
+     * they carry an independent ownership signal.
+     */
+    @Nonnull
+    public static AttributionResult classify(@Nullable Throwable throwable,
+                                             @Nonnull List<String> ownerPluginIdentifiers,
+                                             @Nonnull List<String> packagePrefixes,
+                                             @Nullable String identifiedPluginHint,
+                                             @Nonnull Set<String> ambiguousPackagePrefixes) {
         if (throwable == null) {
             return new AttributionResult(false, null, false, false, "unknown");
         }
@@ -33,6 +48,9 @@ public final class CrashAttribution {
 
         boolean matchedPluginIdentifier = matchesPluginIdentifier(identifiedPlugin, ownerPluginIdentifiers);
         boolean matchedStackPrefix = containsRegisteredPrefix(throwable, packagePrefixes);
+        if (matchedStackPrefix && matchesAmbiguousPrefix(throwable, packagePrefixes, ambiguousPackagePrefixes)) {
+            matchedStackPrefix = false;
+        }
         boolean attributed = matchedPluginIdentifier || matchedStackPrefix;
         return new AttributionResult(
                 attributed,
@@ -41,6 +59,36 @@ public final class CrashAttribution {
                 matchedStackPrefix,
                 buildFingerprint(throwable)
         );
+    }
+
+    private static boolean matchesAmbiguousPrefix(@Nonnull Throwable throwable,
+                                                  @Nonnull List<String> packagePrefixes,
+                                                  @Nonnull Set<String> ambiguousPackagePrefixes) {
+        if (ambiguousPackagePrefixes.isEmpty()) {
+            return false;
+        }
+        Throwable cursor = throwable;
+        int depth = 0;
+        while (cursor != null && depth < 8) {
+            for (StackTraceElement frame : cursor.getStackTrace()) {
+                if (frame == null || frame.getClassName() == null) {
+                    continue;
+                }
+                String className = frame.getClassName();
+                for (String prefix : packagePrefixes) {
+                    String normalized = prefix == null ? "" : prefix.trim().toLowerCase(Locale.ROOT);
+                    if (!normalized.isBlank()
+                            && className.toLowerCase(Locale.ROOT).startsWith(normalized)
+                            && ambiguousPackagePrefixes.stream().anyMatch(ambiguous ->
+                            className.toLowerCase(Locale.ROOT).startsWith(ambiguous))) {
+                        return true;
+                    }
+                }
+            }
+            cursor = cursor.getCause();
+            depth++;
+        }
+        return false;
     }
 
     @Nonnull

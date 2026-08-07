@@ -6,6 +6,7 @@ import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
@@ -25,6 +26,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -38,6 +42,10 @@ public final class TelemetryCoordinatorService {
     private final TelemetryDataPaths dataPaths;
     private final TelemetryCoreEngine engine;
     private final TelemetryCoordinatorStatsHeartbeat statsHeartbeat;
+    private List<TelemetryProjectRegistration> baseProjects;
+    private List<TelemetryProjectRegistration> baseManualReportProjects;
+    private Set<String> rejectedContributionTokens = Set.of();
+    private volatile long contributionRevision = -1L;
 
     public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
                                        @Nonnull TelemetryDataPaths dataPaths,
@@ -71,6 +79,8 @@ public final class TelemetryCoordinatorService {
                 logger,
                 executor
         );
+        this.baseProjects = List.copyOf(projects);
+        this.baseManualReportProjects = List.copyOf(manualReportProjects);
         this.statsHeartbeat = onlinePlayers == null
                 ? null
                 : new TelemetryCoordinatorStatsHeartbeat(engine, onlinePlayers, executor, logger);
@@ -97,6 +107,8 @@ public final class TelemetryCoordinatorService {
                 logger,
                 executor
         );
+        this.baseProjects = List.copyOf(projects);
+        this.baseManualReportProjects = List.copyOf(manualReportProjects);
         this.statsHeartbeat = playerIntervalSnapshot == null
                 ? null
                 : new TelemetryCoordinatorStatsHeartbeat(engine, playerIntervalSnapshot, executor, logger);
@@ -192,6 +204,101 @@ public final class TelemetryCoordinatorService {
 
     public boolean isEnabled() {
         return engine.isEnabled();
+    }
+
+    /**
+     * Reconciles a complete immutable contribution snapshot before exposing it through the
+     * provider bridge. Invalid descriptor proposals leave the prior engine catalog untouched.
+     */
+    public synchronized boolean reconcileProjectContributions(long revision,
+                                                               @Nonnull List<Map<String, Object>> contributions) {
+        if (revision < contributionRevision) {
+            return true;
+        }
+        LinkedHashMap<String, TelemetryProjectRegistration> byProjectId = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration baseProject : baseProjects) {
+            byProjectId.put(baseProject.projectId().toLowerCase(Locale.ROOT), baseProject);
+        }
+        HashSet<String> rejectedTokens = new HashSet<>();
+        for (Map<String, Object> contribution : contributions == null ? List.<Map<String, Object>>of() : contributions) {
+            String token = stringValue(contribution == null ? null : contribution.get("token"));
+            TelemetryProjectRegistration registration = registrationFromContribution(contribution);
+            if (registration == null) {
+                return false;
+            }
+            String normalizedProjectId = registration.projectId().toLowerCase(Locale.ROOT);
+            if (byProjectId.containsKey(normalizedProjectId)
+                    || "custom".equalsIgnoreCase(registration.destinationMode())) {
+                if (!token.isBlank()) {
+                    rejectedTokens.add(token);
+                }
+                continue;
+            }
+            byProjectId.put(normalizedProjectId, registration);
+        }
+        ArrayList<TelemetryProjectRegistration> runtimeProjects = new ArrayList<>(byProjectId.values());
+        boolean reconciled = engine.reconcileProjects(runtimeProjects, mergeManualProjects(runtimeProjects));
+        if (reconciled) {
+            rejectedContributionTokens = Set.copyOf(rejectedTokens);
+            contributionRevision = revision;
+        }
+        return reconciled;
+    }
+
+    /** Adds a conventional host descriptor discovered after a contribution-only lease started. */
+    public synchronized boolean ensureBaseProject(@Nonnull TelemetryProjectRegistration registration) {
+        String normalizedProjectId = registration.projectId().toLowerCase(Locale.ROOT);
+        TelemetryProjectRegistration current = engine.projects().stream()
+                .filter(project -> project.projectId().equalsIgnoreCase(registration.projectId()))
+                .findFirst()
+                .orElse(null);
+        if (current != null) {
+            TelemetryProjectRegistration establishedBase = baseProjects.stream()
+                    .filter(project -> project.projectId().equalsIgnoreCase(registration.projectId()))
+                    .findFirst()
+                    .orElse(null);
+            return establishedBase != null && establishedBase.equals(registration);
+        }
+        List<TelemetryProjectRegistration> previousBaseProjects = baseProjects;
+        List<TelemetryProjectRegistration> previousBaseManualProjects = baseManualReportProjects;
+        LinkedHashMap<String, TelemetryProjectRegistration> updatedBase = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : baseProjects) {
+            updatedBase.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        updatedBase.put(normalizedProjectId, registration);
+        baseProjects = List.copyOf(updatedBase.values());
+
+        LinkedHashMap<String, TelemetryProjectRegistration> updatedManual = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : baseManualReportProjects) {
+            updatedManual.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        updatedManual.putIfAbsent(normalizedProjectId, registration);
+        baseManualReportProjects = List.copyOf(updatedManual.values());
+        boolean reconciled = reconcileProjectContributions(
+                TelemetryProjectContributionRegistry.revision(),
+                TelemetryProjectContributionRegistry.activeContributions()
+        );
+        if (!reconciled) {
+            baseProjects = previousBaseProjects;
+            baseManualReportProjects = previousBaseManualProjects;
+        }
+        return reconciled;
+    }
+
+    @Nonnull
+    public Map<String, Object> dispatchProjectContribution(@Nonnull String token,
+                                                           @Nonnull String operation,
+                                                           @Nonnull Map<String, Object> payload,
+                                                           @Nullable Throwable throwable) {
+        TelemetryProjectRegistration project = contributionProjectForToken(token);
+        if (project == null) {
+            return Map.of("accepted", false, "reason", "contribution_not_found");
+        }
+        try {
+            return dispatchContribution(project, operation, payload, throwable);
+        } catch (Throwable failure) {
+            return Map.of("accepted", false, "reason", "contribution_dispatch_failed");
+        }
     }
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
@@ -370,6 +477,20 @@ public final class TelemetryCoordinatorService {
                                                   @Nullable String removalReason,
                                                   @Nullable String possibleFailureCause) {
         return engine.captureExceptionalWorldRemoval(throwable, worldName, removalReason, possibleFailureCause);
+    }
+
+    public boolean captureExceptionalWorldRemovalForProject(@Nonnull String projectId,
+                                                            @Nullable Throwable throwable,
+                                                            @Nullable String worldName,
+                                                            @Nullable String removalReason,
+                                                            @Nullable String possibleFailureCause) {
+        return engine.captureExceptionalWorldRemovalForProject(
+                projectId,
+                throwable,
+                worldName,
+                removalReason,
+                possibleFailureCause
+        );
     }
 
     public boolean recordError(@Nonnull String projectId,
@@ -718,5 +839,166 @@ public final class TelemetryCoordinatorService {
             }
         }
         return List.copyOf(reportProjects.values());
+    }
+
+    @Nullable
+    private TelemetryProjectRegistration contributionProjectForToken(@Nonnull String token) {
+        if (rejectedContributionTokens.contains(token)) {
+            return null;
+        }
+        for (Map<String, Object> contribution : TelemetryProjectContributionRegistry.activeContributions()) {
+            if (token.equals(stringValue(contribution.get("token")))) {
+                return engine.findProject(stringValue(contribution.get("projectId")));
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static TelemetryProjectRegistration registrationFromContribution(@Nullable Map<String, Object> contribution) {
+        if (contribution == null) {
+            return null;
+        }
+        String projectId = stringValue(contribution.get("projectId"));
+        String logicalIdentifier = stringValue(contribution.get("logicalPluginIdentifier"));
+        String logicalVersion = stringValue(contribution.get("logicalPluginVersion"));
+        String descriptorJson = stringValue(contribution.get("descriptorJson"));
+        if (projectId == null || logicalIdentifier == null || logicalVersion == null || descriptorJson == null) {
+            return null;
+        }
+        try {
+            TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(descriptorJson, null);
+            if (!descriptor.projectId().equalsIgnoreCase(projectId)
+                    || descriptor.ownerPluginIdentifiers().stream().noneMatch(owner -> owner.equalsIgnoreCase(logicalIdentifier))) {
+                return null;
+            }
+            String sourcePath = stringValue(contribution.get("sourcePath"));
+            return new TelemetryProjectRegistration(
+                    descriptor,
+                    logicalIdentifier,
+                    logicalVersion,
+                    sourcePath == null ? null : Path.of(sourcePath)
+            );
+        } catch (RuntimeException | LinkageError ignored) {
+            return null;
+        }
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> mergeManualProjects(
+            @Nonnull List<TelemetryProjectRegistration> runtimeProjects) {
+        LinkedHashMap<String, TelemetryProjectRegistration> merged = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : runtimeProjects) {
+            merged.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : baseManualReportProjects) {
+            merged.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(merged.values());
+    }
+
+    @Nonnull
+    private Map<String, Object> dispatchContribution(@Nonnull TelemetryProjectRegistration project,
+                                                     @Nonnull String operation,
+                                                     @Nonnull Map<String, Object> payload,
+                                                     @Nullable Throwable throwable) {
+        String normalized = operation.trim().toLowerCase(Locale.ROOT);
+        boolean accepted;
+        switch (normalized) {
+            case "breadcrumb" -> accepted = recordBreadcrumb(
+                    project.projectId(),
+                    stringValue(payload.get("category"), "telemetry"),
+                    stringValue(payload.get("detail"), ""),
+                    mapValue(payload.get("context"))
+            );
+            case "error" -> accepted = recordError(
+                    project.projectId(),
+                    stringValue(payload.get("eventName"), "error"),
+                    throwable,
+                    mapValue(payload.get("details"))
+            );
+            case "lifecycle" -> accepted = recordLifecycle(
+                    project.projectId(),
+                    stringValue(payload.get("eventName"), "lifecycle"),
+                    intValue(payload.get("durationMs")),
+                    booleanValue(payload.get("success")),
+                    mapValue(payload.get("details"))
+            );
+            case "performance" -> accepted = recordPerformance(
+                    project.projectId(),
+                    stringValue(payload.get("eventName"), "performance"),
+                    intValue(payload.get("durationMs")),
+                    nullableDoubleValue(payload.get("metricValue")),
+                    mapValue(payload.get("details"))
+            );
+            case "usage" -> accepted = recordUsage(
+                    project.projectId(),
+                    stringValue(payload.get("eventName"), "usage"),
+                    mapValue(payload.get("details"))
+            );
+            case "stats" -> accepted = recordStats(
+                    project.projectId(),
+                    stringValue(payload.get("eventName"), "stats"),
+                    mapValue(payload.get("details"))
+            );
+            case "capture_setup" -> accepted = captureSetupFailure(project.projectId(), throwable);
+            case "capture_start" -> accepted = captureStartFailure(project.projectId(), throwable);
+            case "capture_world_removal" -> accepted = captureExceptionalWorldRemovalForProject(
+                    project.projectId(),
+                    throwable,
+                    nullableStringValue(payload.get("worldName")),
+                    nullableStringValue(payload.get("removalReason")),
+                    nullableStringValue(payload.get("possibleFailureCause"))
+            );
+            case "test_report" -> accepted = captureTestReport(
+                    project.projectId(),
+                    nullableStringValue(payload.get("detail"))
+            );
+            case "flush" -> {
+                TelemetryCoreEngine.FlushSummary summary = flushPendingReportsNow(
+                        stringValue(payload.get("reason"), "manual"),
+                        project.projectId()
+                );
+                LinkedHashMap<String, Object> result = new LinkedHashMap<>();
+                result.put("accepted", true);
+                result.put("attempted", summary.attempted());
+                result.put("uploaded", summary.uploaded());
+                result.put("pending", summary.pendingAfter());
+                if (summary.lastFailure() != null) {
+                    result.put("lastFailure", summary.lastFailure());
+                }
+                return Map.copyOf(result);
+            }
+            case "manual_report" -> {
+                ManualReportEnvelope.CreateResult result = engine.submitManualReport(
+                        project.projectId(),
+                        submissionFrom(mapValue(payload.get("submission"))),
+                        playerContextFrom(mapValue(payload.get("playerContext")))
+                );
+                return manualReportResultToMap(result);
+            }
+            default -> {
+                return Map.of("accepted", false, "reason", "unknown_contribution_operation");
+            }
+        }
+        return Map.of("accepted", accepted);
+    }
+
+    @Nonnull
+    private static String stringValue(@Nullable Object value, @Nonnull String fallback) {
+        String normalized = stringValue(value);
+        return normalized == null ? fallback : normalized;
+    }
+
+    @Nullable
+    private static Double nullableDoubleValue(@Nullable Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        try {
+            return value == null ? null : Double.parseDouble(value.toString());
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 }

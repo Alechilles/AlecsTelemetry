@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.IntSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,6 +41,141 @@ class TelemetryCoordinatorServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void contributedProjectIdCollisionKeepsBaseRegistrationAndRejectsToken() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration base = new TelemetryProjectRegistration(
+                descriptor("base-project", "Base", "standalone"),
+                "Example:Base",
+                "9.0.0",
+                tempDir.resolve("Base.jar")
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(base),
+                List.of(base),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+
+        Map<String, Object> contribution = Map.of(
+                "token", "contributed-collision-token",
+                "projectId", "base-project",
+                "logicalPluginIdentifier", "Example:Base",
+                "logicalPluginVersion", "10.0.0",
+                "sourcePath", tempDir.resolve("Contribution.jar").toString(),
+                "descriptorJson", base.descriptor().toJson()
+        );
+
+        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
+        assertEquals("Example:Base", service.projects().getFirst().pluginIdentifier());
+        assertEquals("9.0.0", service.projects().getFirst().pluginVersion());
+        Map<String, Object> result = service.dispatchProjectContribution(
+                "contributed-collision-token",
+                "usage",
+                Map.of("eventName", "collision"),
+                null
+        );
+        assertFalse((Boolean) result.get("accepted"));
+        assertEquals("contribution_not_found", result.get("reason"));
+    }
+
+    @Test
+    void lateBaseCollisionCannotReplaceAnEstablishedContributionDestination() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectDescriptor contributedDescriptor = hostedStatsDescriptor(
+                "late-collision", "Contributed", "embedded"
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(),
+                List.of(),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+        Map<String, Object> contribution = Map.of(
+                "token", "established-contribution-token",
+                "projectId", "late-collision",
+                "logicalPluginIdentifier", "Example:Contributed",
+                "logicalPluginVersion", "1.0.0",
+                "sourcePath", tempDir.resolve("Contribution.jar").toString(),
+                "descriptorJson", contributedDescriptor.toJson()
+        );
+
+        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
+        TelemetryProjectRegistration lateBase = new TelemetryProjectRegistration(
+                descriptor("late-collision", "Late Base", "standalone"),
+                "Example:Late Base",
+                "9.0.0",
+                tempDir.resolve("LateBase.jar")
+        );
+
+        assertFalse(service.ensureBaseProject(lateBase));
+        assertEquals(1, service.projects().size());
+        assertEquals("Example:Contributed", service.projects().getFirst().pluginIdentifier());
+        assertEquals("hosted", service.projects().getFirst().destinationMode());
+    }
+
+    @Test
+    void aggregateStatsHeartbeatUsesOnePayloadPerResolvedEventTarget() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectRegistration custom = new TelemetryProjectRegistration(
+                statsDescriptor("custom-stats", "Custom Stats", "standalone"),
+                "Example:Custom Stats",
+                "1.0.0",
+                tempDir.resolve("Custom.jar")
+        );
+        TelemetryProjectRegistration hosted = new TelemetryProjectRegistration(
+                hostedStatsDescriptor("hosted-stats", "Hosted Stats", "standalone"),
+                "Example:Hosted Stats",
+                "1.0.0",
+                tempDir.resolve("Hosted.jar")
+        );
+        SequencedClient client = new SequencedClient();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths,
+                List.of(custom, hosted),
+                List.of(custom, hosted),
+                List.of(),
+                client,
+                null,
+                null
+        );
+
+        engine.recordAggregateStatsHeartbeat(List.of(custom, hosted), 4);
+        TelemetryCoreEngine.FlushSummary summary = engine.flushPendingReportsNow("heartbeat-targets");
+
+        assertEquals(2, summary.attempted());
+        assertEquals(2, client.payloads.size());
+        assertEquals(2, client.targets.size());
+        JsonObject first = JsonParser.parseString(client.payloads.get(0)).getAsJsonObject();
+        JsonObject second = JsonParser.parseString(client.payloads.get(1)).getAsJsonObject();
+        assertEquals(1, first.getAsJsonObject("details").getAsJsonArray("projects").size());
+        assertEquals(1, second.getAsJsonObject("details").getAsJsonArray("projects").size());
+        assertTrue(client.targets.stream().map(CrashReportClient.DeliveryTarget::endpoint)
+                .anyMatch(endpoint -> endpoint.contains("example.invalid")));
+        assertTrue(client.targets.stream().map(CrashReportClient.DeliveryTarget::endpoint)
+                .anyMatch(endpoint -> endpoint.contains("hosted.example")));
+    }
 
     @Test
     void coordinatorIncludesEmbeddedProjectsInRuntimeRegistrations() {
@@ -848,6 +984,32 @@ class TelemetryCoordinatorServiceTest {
         );
     }
 
+    private static TelemetryProjectDescriptor hostedStatsDescriptor(String projectId, String displayName, String runtimeMode) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "runtimeMode": "%s",
+                  "ownerPluginIdentifiers": ["Example:%s"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "stats": {
+                    "enabled": true,
+                    "allowedEvents": ["heartbeat"]
+                  },
+                  "defaults": {
+                    "destinationMode": "hosted"
+                  },
+                  "hosted": {
+                    "endpoint": "https://hosted.example/ingest/crash",
+                    "eventEndpoint": "https://hosted.example/ingest/event"
+                  }
+                }
+                """.formatted(projectId, displayName, runtimeMode, displayName),
+                null
+        );
+    }
+
     private static TelemetryProjectDescriptor reportDescriptor(String projectId, String displayName, String runtimeMode) {
         return TelemetryProjectDescriptor.fromJson(
                 """
@@ -877,6 +1039,7 @@ class TelemetryCoordinatorServiceTest {
     private static final class SequencedClient implements CrashReportClient {
         private final Queue<UploadResult> responses = new ArrayDeque<>();
         private final java.util.ArrayList<String> payloads = new java.util.ArrayList<>();
+        private final java.util.ArrayList<DeliveryTarget> targets = new java.util.ArrayList<>();
         private int calls;
 
         private SequencedClient(UploadResult... uploadResults) {
@@ -888,6 +1051,7 @@ class TelemetryCoordinatorServiceTest {
         @Override
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
             calls++;
+            targets.add(target.normalize());
             payloads.add(payloadJson);
             UploadResult next = responses.poll();
             return next == null ? UploadResult.success(200) : next;

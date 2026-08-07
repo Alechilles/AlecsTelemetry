@@ -8,6 +8,7 @@ import java.util.List;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -164,6 +165,30 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals(List.of("standalone:shutdown", "standalone:start"), lifecycle);
     }
 
+    @Test
+    void failedReplayRecoveryActivatesFixedWinnerAndDeactivatesFallback() {
+        ArrayList<String> lifecycle = new ArrayList<>();
+        OrderedBridge fallback = orderedBridge("fallback", TelemetryRuntimeOrigin.EMBEDDED, "1.0.0", lifecycle);
+        ReplayBridge winner = new ReplayBridge(
+                candidate("winner", TelemetryRuntimeOrigin.STANDALONE, "2.0.0", TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION),
+                lifecycle
+        );
+        TelemetryCoordinatorRegistry.register(fallback);
+        lifecycle.clear();
+        TelemetryCoordinatorRegistry.register(winner);
+
+        assertEquals("fallback", TelemetryCoordinatorRegistry.activeBridge().providerId());
+        assertFalse(winner.isActive());
+
+        lifecycle.clear();
+        winner.reconcileResult.set(true);
+
+        assertEquals("winner", TelemetryCoordinatorRegistry.activeBridge().providerId());
+        assertTrue(winner.isActive());
+        assertFalse(fallback.isActive());
+        assertEquals(List.of("fallback:shutdown", "winner:start"), lifecycle);
+    }
+
     private static RecordingBridge bridge(String providerId, TelemetryRuntimeOrigin origin, String runtimeVersion) {
         return new RecordingBridge(candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION));
     }
@@ -316,7 +341,7 @@ class TelemetryCoordinatorRegistryTest {
         }
     }
 
-    private static final class OrderedBridge extends RecordingBridge {
+    private static class OrderedBridge extends RecordingBridge {
         private final ArrayList<String> lifecycle;
 
         private OrderedBridge(TelemetryRuntimeCandidate candidate, ArrayList<String> lifecycle) {
@@ -332,6 +357,30 @@ class TelemetryCoordinatorRegistryTest {
         @Override
         public void shutdown() {
             lifecycle.add(providerId() + ":shutdown");
+        }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
+        }
+    }
+
+    private static final class ReplayBridge extends OrderedBridge {
+        private final AtomicBoolean reconcileResult = new AtomicBoolean(false);
+
+        private ReplayBridge(TelemetryRuntimeCandidate candidate, ArrayList<String> lifecycle) {
+            super(candidate, lifecycle);
+        }
+
+        @Override
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return reconcileResult.get();
         }
     }
 
@@ -395,6 +444,17 @@ class TelemetryCoordinatorRegistryTest {
 
         public boolean isActive() {
             return active;
+        }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
         }
 
         public boolean isProjectEnabled(String projectId) {

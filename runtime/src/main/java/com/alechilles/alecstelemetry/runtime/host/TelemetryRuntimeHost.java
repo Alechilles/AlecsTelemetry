@@ -2,6 +2,8 @@ package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.common.plugin.PluginManifest;
 import com.hypixel.hytale.common.semver.Semver;
@@ -38,6 +40,18 @@ public final class TelemetryRuntimeHost {
     @Nonnull
     public static TelemetryRuntimeHostHandle bootstrapEmbedded(@Nonnull JavaPlugin plugin,
                                                               @Nonnull TelemetryProjectDescriptor descriptor) {
+        return TelemetryEmbeddedProviderPool.acquire(plugin, descriptor);
+    }
+
+    @Nonnull
+    public static TelemetryRuntimeHostHandle acquireEmbedded(@Nonnull JavaPlugin plugin,
+                                                             @Nullable TelemetryProjectDescriptor descriptor) {
+        return TelemetryEmbeddedProviderPool.acquire(plugin, descriptor);
+    }
+
+    @Nonnull
+    static TelemetryRuntimeHostHandle bootstrapDirectEmbedded(@Nonnull JavaPlugin plugin,
+                                                              @Nullable TelemetryProjectDescriptor descriptor) {
         return bootstrap(new TelemetryRuntimeBootstrapRequest(
                 plugin,
                 TelemetryRuntimeOrigin.EMBEDDED,
@@ -47,6 +61,30 @@ public final class TelemetryRuntimeHost {
                 resolvePluginSourcePath(plugin),
                 descriptor
         ));
+    }
+
+    @Nullable
+    static TelemetryProjectRegistration embeddedRegistration(@Nonnull JavaPlugin plugin,
+                                                              @Nonnull TelemetryProjectDescriptor descriptor) {
+        TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
+                plugin,
+                TelemetryRuntimeOrigin.EMBEDDED,
+                resolvePluginIdentifier(plugin, "unknown:unknown"),
+                resolvePluginVersion(plugin),
+                resolveRuntimeVersion(),
+                resolvePluginSourcePath(plugin),
+                descriptor
+        );
+        return TelemetryRuntimeProviderHandle.providerRegistration(
+                request,
+                TelemetryDataPaths.forSharedCoordinator(plugin),
+                plugin.getLogger()
+        );
+    }
+
+    @Nonnull
+    static String runtimeVersionForPool() {
+        return resolveRuntimeVersion();
     }
 
     @Nonnull

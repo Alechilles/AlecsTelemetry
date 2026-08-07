@@ -9,6 +9,8 @@ import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
@@ -43,6 +45,9 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,6 +74,14 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     private final String disabledReason;
     private final TelemetryConsentStateStore consentStateStore;
     private List<TelemetryProjectRegistration> consentProjects;
+    private boolean contributed;
+    private String contributionToken;
+    private ContributionBridge contributionBridge;
+    private final ArrayDeque<BufferedOperation> bufferedOperations = new ArrayDeque<>();
+    private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicBoolean shutdown = new AtomicBoolean(false);
+
+    private static final int MAX_BUFFERED_CONTRIBUTION_OPERATIONS = 64;
 
     EmbeddedTelemetryService(@Nonnull TelemetryRuntimeSettings settings,
                              @Nonnull TelemetryDataPaths dataPaths,
@@ -178,6 +191,39 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         return new EmbeddedTelemetryService(settings, dataPaths, project, hostHandle, logger);
     }
 
+    @Nonnull
+    static EmbeddedTelemetryService fromContribution(@Nonnull TelemetryRuntimeSettings settings,
+                                                     @Nonnull TelemetryDataPaths dataPaths,
+                                                     @Nonnull TelemetryProjectRegistration project,
+                                                     @Nonnull TelemetryRuntimeHostHandle hostHandle,
+                                                     @Nonnull String hostPluginIdentifier,
+                                                     @Nonnull String hostPluginVersion,
+                                                     @Nonnull String descriptorHash,
+                                                     @Nullable HytaleLogger logger) {
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                project,
+                hostHandle,
+                logger
+        );
+        service.configureContribution(hostPluginIdentifier, hostPluginVersion, descriptorHash);
+        return service;
+    }
+
+    private void configureContribution(@Nonnull String hostPluginIdentifier,
+                                       @Nonnull String hostPluginVersion,
+                                       @Nonnull String descriptorHash) {
+        contributed = true;
+        contributionBridge = new ContributionBridge(
+                hostPluginIdentifier,
+                hostPluginVersion,
+                descriptorHash
+        );
+        contributionToken = TelemetryProjectContributionRegistry.register(contributionBridge);
+        reconcileActiveCoordinator();
+    }
+
     @Nullable
     private TelemetryProjectHandle hostProjectHandle() {
         return hostProjectHandle(project.projectId());
@@ -202,6 +248,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public boolean isEnabled() {
+        if (contributed && !started.get()) {
+            return project.isEnabled();
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             Map<String, Object> activeDiagnostics = active.consentProjectDiagnostics(project.projectId());
@@ -440,6 +489,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public boolean commandFlush(@Nullable String projectId) {
+        if (contributed) {
+            if (projectId != null && !project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return false;
+            }
+            return Boolean.TRUE.equals(dispatchContribution("flush", Map.of("reason", "command"), null).get("accepted"));
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.requestFlush(projectId);
@@ -464,6 +519,11 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public boolean commandCaptureTestReport(@Nonnull String projectId, @Nullable String detail) {
+        if (contributed) {
+            return project.projectId().equalsIgnoreCase(projectId.trim())
+                    && dispatchContribution("test_report", detail == null ? Map.of() : Map.of("detail", detail), null)
+                    .getOrDefault("accepted", false) == Boolean.TRUE;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.captureTestReport(projectId, detail);
@@ -554,6 +614,19 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     public ManualReportEnvelope.CreateResult submitManualReport(@Nonnull String projectId,
                                                                 @Nonnull ManualReportSubmission submission,
                                                                 @Nullable PlayerReportRuntimeContext playerContext) {
+        if (contributed) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return new ManualReportEnvelope.CreateResult(null, List.of("contribution_project_mismatch"));
+            }
+            return manualReportResultFromMap(dispatchContribution(
+                    "manual_report",
+                    Map.of(
+                            "submission", submissionToMap(submission),
+                            "playerContext", playerContextToMap(playerContext)
+                    ),
+                    null
+            ));
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {
             return manualReportResultFromMap(active.submitManualReport(
@@ -897,6 +970,19 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void start() {
+        if (shutdown.get()) {
+            return;
+        }
+        if (contributed) {
+            if (!started.compareAndSet(false, true)) {
+                return;
+            }
+            if (hostHandle != null) {
+                hostHandle.start();
+            }
+            drainContributionBuffer();
+            return;
+        }
         if (hostHandle != null) {
             hostHandle.start();
             return;
@@ -913,6 +999,22 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void shutdown() {
+        if (!shutdown.compareAndSet(false, true)) {
+            return;
+        }
+        if (contributed) {
+            String token = contributionToken;
+            contributionToken = null;
+            bufferedOperations.clear();
+            if (token != null) {
+                TelemetryProjectContributionRegistry.unregister(token);
+                reconcileActiveCoordinator();
+            }
+            if (hostHandle != null) {
+                hostHandle.shutdown();
+            }
+            return;
+        }
         if (hostHandle != null) {
             hostHandle.shutdown();
             return;
@@ -935,6 +1037,18 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Override
     public void recordBreadcrumb(@Nonnull TelemetryBreadcrumbContext context) {
         TelemetryBreadcrumbContext normalized = context.normalize();
+        if (contributed) {
+            dispatchContribution(
+                    "breadcrumb",
+                    Map.of(
+                            "category", normalized.category(),
+                            "detail", normalized.detail(),
+                            "context", TelemetryBreadcrumbBridgePayload.summary(normalized)
+                    ),
+                    null
+            );
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordBreadcrumb(
@@ -961,6 +1075,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void captureSetupFailure(@Nullable Throwable throwable) {
+        if (contributed) {
+            dispatchContribution("capture_setup", Map.of(), throwable);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.captureSetupFailure(project.projectId(), throwable);
@@ -976,6 +1094,10 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void captureStartFailure(@Nullable Throwable throwable) {
+        if (contributed) {
+            dispatchContribution("capture_start", Map.of(), throwable);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.captureStartFailure(project.projectId(), throwable);
@@ -991,6 +1113,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordError(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable String detail) {
+        if (contributed) {
+            dispatchContribution("error", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(detail)
+            ), throwable);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordError(project.projectId(), eventName, throwable, detailsFrom(detail));
@@ -1006,6 +1135,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordErrorWithContext(@Nonnull String eventName, @Nullable Throwable throwable, @Nullable TelemetryEventContext context) {
+        if (contributed) {
+            dispatchContribution("error", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(context)
+            ), throwable);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordError(project.projectId(), eventName, throwable, detailsFrom(context));
@@ -1021,6 +1157,15 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordLifecycle(@Nonnull String eventName, int durationMs, boolean success, @Nullable String detail) {
+        if (contributed) {
+            dispatchContribution("lifecycle", Map.of(
+                    "eventName", eventName,
+                    "durationMs", durationMs,
+                    "success", success,
+                    "details", detailsFrom(detail)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordLifecycle(project.projectId(), eventName, durationMs, success, detailsFrom(detail));
@@ -1036,6 +1181,15 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordLifecycleWithContext(@Nonnull String eventName, int durationMs, boolean success, @Nullable TelemetryEventContext context) {
+        if (contributed) {
+            dispatchContribution("lifecycle", Map.of(
+                    "eventName", eventName,
+                    "durationMs", durationMs,
+                    "success", success,
+                    "details", detailsFrom(context)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordLifecycle(project.projectId(), eventName, durationMs, success, detailsFrom(context));
@@ -1051,6 +1205,17 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordPerformance(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable String detail) {
+        if (contributed) {
+            LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+            payload.put("eventName", eventName);
+            payload.put("durationMs", durationMs);
+            if (metricValue != null) {
+                payload.put("metricValue", metricValue);
+            }
+            payload.put("details", detailsFrom(detail));
+            dispatchContribution("performance", payload, null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordPerformance(project.projectId(), eventName, durationMs, metricValue, detailsFrom(detail));
@@ -1066,6 +1231,17 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordPerformanceWithContext(@Nonnull String eventName, int durationMs, @Nullable Double metricValue, @Nullable TelemetryEventContext context) {
+        if (contributed) {
+            LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+            payload.put("eventName", eventName);
+            payload.put("durationMs", durationMs);
+            if (metricValue != null) {
+                payload.put("metricValue", metricValue);
+            }
+            payload.put("details", detailsFrom(context));
+            dispatchContribution("performance", payload, null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordPerformance(project.projectId(), eventName, durationMs, metricValue, detailsFrom(context));
@@ -1081,6 +1257,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordUsage(@Nonnull String eventName, @Nullable String detail) {
+        if (contributed) {
+            dispatchContribution("usage", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(detail)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordUsage(project.projectId(), eventName, detailsFrom(detail));
@@ -1096,6 +1279,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordUsageWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        if (contributed) {
+            dispatchContribution("usage", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(context)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordUsage(project.projectId(), eventName, detailsFrom(context));
@@ -1111,6 +1301,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordStats(@Nonnull String eventName, @Nullable String detail) {
+        if (contributed) {
+            dispatchContribution("stats", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(detail)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordStats(project.projectId(), eventName, detailsFrom(detail));
@@ -1126,6 +1323,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Override
     public void recordStatsWithContext(@Nonnull String eventName, @Nullable TelemetryEventContext context) {
+        if (contributed) {
+            dispatchContribution("stats", Map.of(
+                    "eventName", eventName,
+                    "details", detailsFrom(context)
+            ), null);
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.recordStats(project.projectId(), eventName, detailsFrom(context));
@@ -1151,6 +1355,16 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (world == null || removalReason != RemoveWorldEvent.RemovalReason.EXCEPTIONAL || world.getFailureException() == null) {
             return;
         }
+        if (contributed) {
+            dispatchContribution("capture_world_removal", Map.of(
+                    "worldName", world.getName(),
+                    "removalReason", removalReason.name(),
+                    "possibleFailureCause", world.getPossibleFailureCause() == null
+                            ? ""
+                            : world.getPossibleFailureCause().toString()
+            ), world.getFailureException());
+            return;
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             active.captureExceptionalWorldRemoval(
@@ -1165,6 +1379,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public boolean requestFlush() {
+        if (contributed) {
+            return Boolean.TRUE.equals(dispatchContribution("flush", Map.of("reason", "manual"), null).get("accepted"));
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.requestFlush(project.projectId());
@@ -1177,6 +1394,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     }
 
     public boolean captureTestReport(@Nullable String detail) {
+        if (contributed) {
+            return Boolean.TRUE.equals(dispatchContribution(
+                    "test_report",
+                    detail == null ? Map.of() : Map.of("detail", detail),
+                    null
+            ).get("accepted"));
+        }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
             return active.captureTestReport(project.projectId(), detail);
@@ -1539,6 +1763,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nonnull
     private static ManualReportEnvelope.CreateResult manualReportResultFromMap(@Nonnull Map<String, Object> values) {
         List<String> errors = stringList(values.get("validationErrors"));
+        if (!Boolean.TRUE.equals(values.get("accepted")) && errors.isEmpty()) {
+            String reason = stringValue(values.get("reason"));
+            if (reason != null) {
+                errors = List.of(reason);
+            }
+        }
         ManualReportEnvelope envelope = envelopeFrom(values.get("envelopeJson"));
         String followUpToken = stringValue(values.get("followUpToken"));
         if (Boolean.TRUE.equals(values.get("accepted")) && envelope == null && errors.isEmpty()) {
@@ -1610,6 +1840,142 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                                      @Nullable String value) {
         if (value != null && !value.isBlank()) {
             details.put(key, value);
+        }
+    }
+
+    @Nonnull
+    private Map<String, Object> dispatchContribution(@Nonnull String operation,
+                                                     @Nonnull Map<String, Object> payload,
+                                                     @Nullable Throwable throwable) {
+        String token = contributionToken;
+        if (!contributed || token == null || shutdown.get()) {
+            return Map.of("accepted", false, "reason", "contribution_unavailable");
+        }
+        Map<String, Object> normalized = Map.copyOf(payload);
+        if (!started.get()) {
+            if (!isBufferableBeforeStart(operation)) {
+                return Map.of("accepted", false, "reason", "not_started");
+            }
+            synchronized (bufferedOperations) {
+                if (bufferedOperations.size() >= MAX_BUFFERED_CONTRIBUTION_OPERATIONS) {
+                    bufferedOperations.removeFirst();
+                }
+                bufferedOperations.addLast(new BufferedOperation(operation, normalized, throwable));
+            }
+            return Map.of("accepted", true, "buffered", true);
+        }
+        return TelemetryProjectContributionRegistry.dispatch(token, operation, normalized, throwable);
+    }
+
+    private static boolean isBufferableBeforeStart(@Nonnull String operation) {
+        return switch (operation.trim().toLowerCase(Locale.ROOT)) {
+            case "breadcrumb", "lifecycle", "capture_setup" -> true;
+            default -> false;
+        };
+    }
+
+    private void drainContributionBuffer() {
+        String token = contributionToken;
+        if (!contributed || token == null) {
+            return;
+        }
+        while (true) {
+            BufferedOperation operation;
+            synchronized (bufferedOperations) {
+                operation = bufferedOperations.pollFirst();
+            }
+            if (operation == null) {
+                return;
+            }
+            TelemetryProjectContributionRegistry.dispatch(
+                    token,
+                    operation.operation(),
+                    operation.payload(),
+                    operation.throwable()
+            );
+        }
+    }
+
+    private void reconcileActiveCoordinator() {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (active == null || active.coordinatorProtocolVersion() < TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION) {
+            return;
+        }
+        active.reconcileProjectContributions(
+                TelemetryProjectContributionRegistry.revision(),
+                TelemetryProjectContributionRegistry.activeContributions()
+        );
+    }
+
+    @Nonnull
+    private static String sha256(@Nonnull String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte part : digest) {
+                hex.append(Character.forDigit((part >>> 4) & 0x0f, 16));
+                hex.append(Character.forDigit(part & 0x0f, 16));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException impossible) {
+            return Integer.toHexString(value.hashCode());
+        }
+    }
+
+    private record BufferedOperation(@Nonnull String operation,
+                                     @Nonnull Map<String, Object> payload,
+                                     @Nullable Throwable throwable) {
+    }
+
+    private final class ContributionBridge implements TelemetryProjectContributionBridge {
+        private final Map<String, Object> candidate;
+
+        private ContributionBridge(@Nonnull String hostPluginIdentifier,
+                                    @Nonnull String hostPluginVersion,
+                                    @Nonnull String descriptorHash) {
+            LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+            values.put("abiVersion", TelemetryProjectContributionRegistry.CONTRIBUTION_ABI_VERSION);
+            values.put("projectId", project.projectId());
+            values.put("logicalPluginIdentifier", project.pluginIdentifier());
+            values.put("logicalPluginVersion", project.pluginVersion());
+            values.put("origin", hostPluginIdentifier.trim().equals(project.pluginIdentifier().trim())
+                    ? TelemetryProjectContributionRegistry.STANDALONE_ORIGIN
+                    : TelemetryProjectContributionRegistry.EMBEDDED_ORIGIN);
+            values.put("hostPluginIdentifier", hostPluginIdentifier);
+            values.put("hostPluginVersion", hostPluginVersion);
+            values.put("sourcePath", project.sourcePath() == null
+                    ? dataPaths.runtimeRoot().toString()
+                    : project.sourcePath().toString());
+            values.put("descriptorJson", project.descriptor().toJson());
+            values.put("descriptorHash", descriptorHash == null || descriptorHash.isBlank()
+                    ? sha256(project.descriptor().toJson())
+                    : descriptorHash);
+            candidate = Map.copyOf(values);
+        }
+
+        @Override
+        public int contributionAbiVersion() {
+            return TelemetryProjectContributionRegistry.CONTRIBUTION_ABI_VERSION;
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> candidate() {
+            return candidate;
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> dispatch(@Nonnull String token,
+                                             @Nonnull String operation,
+                                             @Nonnull Map<String, Object> payload,
+                                             @Nullable Throwable throwable) {
+            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+            if (active == null) {
+                return Map.of("accepted", false, "reason", "coordinator_unavailable");
+            }
+            return active.dispatchProjectContribution(token, operation, payload, throwable);
         }
     }
 

@@ -26,6 +26,7 @@ import java.util.List;
 public final class TelemetryConsentPage extends InteractiveCustomUIPage<TelemetryConsentPage.ConsentEventData> {
 
     public static final String UI_PATH = "TelemetryConsentPage.ui";
+    static final String PROJECT_ROW_UI_PATH = "TelemetryConsentProjectRow.ui";
 
     static final String ACTION_TOGGLE_ALL = TelemetryConsentUiContract.ACTION_TOGGLE_ALL;
     static final String ACTION_TOGGLE_GLOBAL_CATEGORY = TelemetryConsentUiContract.ACTION_TOGGLE_GLOBAL_CATEGORY;
@@ -36,7 +37,6 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     static final String ACTION_SAVE = TelemetryConsentUiContract.ACTION_SAVE;
     static final String ACTION_CLOSE = TelemetryConsentUiContract.ACTION_CLOSE;
 
-    private static final int MAX_PROJECT_ROWS = 8;
     private static final String PRIVACY_DISCLAIMER_TEXT = String.join("\n\n",
             "Alec's Telemetry is designed to report anonymous usage data. Under its default configuration, and in officially sanctioned mods such as other mods in the Alec's mod line, it does not report personally identifiable information.",
             "However, Alec's Telemetry includes highly customizable reporting systems. Because third-party mod authors can configure those systems themselves, Alec cannot guarantee that every mod using Alec's Telemetry follows the intended privacy standards.",
@@ -74,7 +74,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                       @Nonnull UIEventBuilder events,
                       @Nonnull Store<EntityStore> store) {
         commands.append(UI_PATH);
-        render(commands);
+        render(commands, events);
         bindEvents(events);
     }
 
@@ -107,15 +107,15 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     private void refreshUi() {
         UICommandBuilder commands = new UICommandBuilder();
         UIEventBuilder events = new UIEventBuilder();
-        render(commands);
+        render(commands, events);
         bindEvents(events);
         sendUpdate(commands, events, false);
     }
 
-    private void render(@Nonnull UICommandBuilder commands) {
+    private void render(@Nonnull UICommandBuilder commands,
+                        @Nonnull UIEventBuilder events) {
         TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.consentDiagnostics());
         List<TelemetryConsentViewModel.ProjectRow> projects = viewModel.projects();
-        int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
 
         commands.set("#TelemetryConsentSummary.Text", String.join("\n", viewModel.explanationLines()));
         commands.set("#TelemetryConsentAllEnabled.Value", allTelemetryEnabled(projects));
@@ -131,25 +131,24 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         commands.set("#TelemetryConsentPrivacyDisclaimerPopup.Visible", privacyDisclaimerVisible);
         commands.set("#TelemetryConsentPrivacyDisclaimerBody.Text", PRIVACY_DISCLAIMER_TEXT);
         commands.set("#TelemetryConsentEmpty.Visible", projects.isEmpty());
-        commands.set("#TelemetryConsentOverflow.Visible", projects.size() > MAX_PROJECT_ROWS);
-        commands.set("#TelemetryConsentOverflow.Text", projects.size() > MAX_PROJECT_ROWS
-                ? "Showing " + MAX_PROJECT_ROWS + " of " + projects.size() + " telemetry projects."
-                : "");
+        renderProjectRows(commands, events, projects);
+    }
 
-        for (int index = 0; index < MAX_PROJECT_ROWS; index++) {
-            boolean visible = index < visibleRows;
-            String row = rowSelector(index);
-            commands.set(row + ".Visible", visible);
-            if (!visible) {
-                continue;
-            }
-            renderProject(commands, index, projects.get(index));
+    static void renderProjectRows(@Nonnull UICommandBuilder commands,
+                                  @Nonnull UIEventBuilder events,
+                                  @Nonnull List<TelemetryConsentViewModel.ProjectRow> projects) {
+        commands.clear("#TelemetryConsentRows");
+        for (int index = 0; index < projects.size(); index++) {
+            TelemetryConsentViewModel.ProjectRow project = projects.get(index);
+            commands.append("#TelemetryConsentRows", PROJECT_ROW_UI_PATH);
+            renderProject(commands, index, project);
+            bindProjectEvents(events, index, project);
         }
     }
 
-    private void renderProject(@Nonnull UICommandBuilder commands,
-                               int index,
-                               @Nonnull TelemetryConsentViewModel.ProjectRow project) {
+    private static void renderProject(@Nonnull UICommandBuilder commands,
+                                      int index,
+                                      @Nonnull TelemetryConsentViewModel.ProjectRow project) {
         TelemetryConsentSnapshot consent = project.consent();
         commands.set(rowSelector(index) + " #TelemetryConsentProjectName.Text", project.displayName());
         commands.set(rowSelector(index) + " #TelemetryConsentProjectMeta.Text", project.pluginVersion());
@@ -244,50 +243,51 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 false
         );
 
-        int visibleRows = Math.min(projects.size(), MAX_PROJECT_ROWS);
-        for (int index = 0; index < visibleRows; index++) {
-            TelemetryConsentViewModel.ProjectRow project = projects.get(index);
-            String projectCheck = projectCheckSelector(index);
+    }
+
+    private static void bindProjectEvents(@Nonnull UIEventBuilder events,
+                                          int index,
+                                          @Nonnull TelemetryConsentViewModel.ProjectRow project) {
+        String projectCheck = projectCheckSelector(index);
+        events.addEventBinding(
+                CustomUIEventBindingType.ValueChanged,
+                projectCheck,
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
+                        .append(KEY_PROJECT_ID, project.projectId())
+                        .append(KEY_ENABLED, projectCheck + ".Value"),
+                false
+        );
+        events.addEventBinding(
+                CustomUIEventBindingType.Activating,
+                projectToggleSelector(index),
+                EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
+                        .append(KEY_PROJECT_ID, project.projectId())
+                        .append(KEY_ENABLED_LITERAL, Boolean.toString(!project.consent().projectEnabled())),
+                false
+        );
+        for (String category : CATEGORIES) {
+            if (!project.supported().categoryEnabled(category)) {
+                continue;
+            }
+            String categoryCheck = categoryCheckSelector(index, category);
             events.addEventBinding(
                     CustomUIEventBindingType.ValueChanged,
-                    projectCheck,
-                    EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
+                    categoryCheck,
+                    EventData.of(KEY_ACTION, ACTION_TOGGLE_CATEGORY)
                             .append(KEY_PROJECT_ID, project.projectId())
-                            .append(KEY_ENABLED, projectCheck + ".Value"),
+                            .append(KEY_CATEGORY, category)
+                            .append(KEY_ENABLED, categoryCheck + ".Value"),
                     false
             );
             events.addEventBinding(
                     CustomUIEventBindingType.Activating,
-                    projectToggleSelector(index),
-                    EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
+                    categoryToggleSelector(index, category),
+                    EventData.of(KEY_ACTION, ACTION_TOGGLE_CATEGORY)
                             .append(KEY_PROJECT_ID, project.projectId())
-                            .append(KEY_ENABLED_LITERAL, Boolean.toString(!project.consent().projectEnabled())),
+                            .append(KEY_CATEGORY, category)
+                            .append(KEY_ENABLED_LITERAL, Boolean.toString(!project.consent().categoryEnabled(category))),
                     false
             );
-            for (String category : CATEGORIES) {
-                if (!project.supported().categoryEnabled(category)) {
-                    continue;
-                }
-                String categoryCheck = categoryCheckSelector(index, category);
-                events.addEventBinding(
-                        CustomUIEventBindingType.ValueChanged,
-                        categoryCheck,
-                        EventData.of(KEY_ACTION, ACTION_TOGGLE_CATEGORY)
-                                .append(KEY_PROJECT_ID, project.projectId())
-                                .append(KEY_CATEGORY, category)
-                                .append(KEY_ENABLED, categoryCheck + ".Value"),
-                        false
-                );
-                events.addEventBinding(
-                        CustomUIEventBindingType.Activating,
-                        categoryToggleSelector(index, category),
-                        EventData.of(KEY_ACTION, ACTION_TOGGLE_CATEGORY)
-                                .append(KEY_PROJECT_ID, project.projectId())
-                                .append(KEY_CATEGORY, category)
-                                .append(KEY_ENABLED_LITERAL, Boolean.toString(!project.consent().categoryEnabled(category))),
-                        false
-                );
-            }
         }
     }
 
@@ -415,7 +415,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
 
     @Nonnull
     private static String rowSelector(int index) {
-        return "#TelemetryConsentProjectRow" + index;
+        return "#TelemetryConsentRows[" + index + "]";
     }
 
     @Nonnull

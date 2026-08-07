@@ -30,7 +30,7 @@ For Maven builds, add the public repository and depend on the runtime artifact:
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.0.5</version>
+  <version>1.1.0</version>
 </dependency>
 ```
 
@@ -44,7 +44,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.0.5")
+    implementation("com.alechilles:alecstelemetry-runtime:1.1.0")
 }
 ```
 
@@ -62,11 +62,25 @@ the active coordinator. If standalone is installed but an embedded copy is
 newer, standalone can still provide commands and UI while the newer embedded
 runtime owns capture, queueing, and upload.
 
+For a mod that owns more than one logical telemetry project, use the anchored
+contribution API described in [Embedded Contributions](embedded-contributions.md).
+Each contribution has its own descriptor, logical plugin identity, consent state,
+destination, and queue even when all of its services share one host-local
+provider.
+
+In the 1.1.0 MVP, anchored contributions must use hosted destination mode;
+custom destinations remain available to conventional `bootstrap(plugin)` projects.
+An established same-ID contribution winner is not automatically hot-replaced or
+failed over. Restart the server after retirement when replacement is needed.
+
 ## Runtime Precedence
 
 Runtime ownership is selected per server process:
 
-1. Only coordinator candidates with the current coordinator protocol are eligible.
+1. Only coordinator candidates with coordinator protocol 3 are eligible to own
+   generic contributions. Protocol-2 providers are ineligible for contribution
+   ownership; existing conventional bootstrap callers remain source and binary
+   compatible.
 2. The highest telemetry runtime version wins.
 3. If versions match, standalone wins over embedded.
 4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
@@ -75,6 +89,14 @@ The active coordinator handles descriptors from all installed enabled mods,
 including descriptors with or without the legacy `runtimeMode` field. Passive embedded copies
 do not install their own uncaught exception handlers, stats heartbeats, queues,
 or upload loops.
+
+Contribution candidates are elected separately per logical project. The highest
+valid logical semantic version wins; equal versions prefer a standalone origin,
+then use deterministic host/source/descriptor tie-breakers. Registration alone
+does not emit telemetry. An active candidate must still pass project consent,
+descriptor allowlists, sampling, and destination checks for every operation.
+Invalid candidates stay passive and produce bounded diagnostics; they do not stop
+the owning mod from loading.
 
 ## Minimal Hosted Example
 

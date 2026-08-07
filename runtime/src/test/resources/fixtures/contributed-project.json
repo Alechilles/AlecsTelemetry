@@ -1,0 +1,24 @@
+{
+  "projectId": "example-library",
+  "displayName": "Example Library",
+  "runtimeMode": "embedded",
+  "ownerPluginIdentifiers": ["Example:Library"],
+  "packagePrefixes": ["com.example.library"],
+  "capture": {
+    "supported": true,
+    "defaultEnabled": true,
+    "setupFailures": true,
+    "startFailures": true
+  },
+  "events": {
+    "errors": { "supported": true, "defaultEnabled": true },
+    "lifecycle": { "supported": true, "defaultEnabled": true },
+    "breadcrumbs": { "supported": true, "defaultEnabled": true }
+  },
+  "defaults": {
+    "destinationMode": "custom"
+  },
+  "customEndpoint": {
+    "url": "https://example.invalid/telemetry"
+  }
+}

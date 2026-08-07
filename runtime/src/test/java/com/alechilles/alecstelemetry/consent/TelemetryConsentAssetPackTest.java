@@ -15,7 +15,8 @@ class TelemetryConsentAssetPackTest {
 
     @Test
     void consentUiIsPackagedAsRuntimeAssetPackContent() throws IOException {
-        String consentPage = resourceText("Common/UI/Custom/TelemetryConsentPage.ui");
+        String consentPage = resourceText("Common/UI/Custom/TelemetryConsentPage.ui")
+                + resourceText("Common/UI/Custom/TelemetryConsentProjectRow.ui");
 
         assertNotNull(
                 getClass().getClassLoader().getResource("Common/UI/Custom/TelemetryConsentPage.ui"),
@@ -109,9 +110,9 @@ class TelemetryConsentAssetPackTest {
         assertEquals("Capture", TelemetryConsentUiContract.selectorToken("crash"));
         assertEquals("#TelemetryConsentCaptureAllToggleButton", TelemetryConsentUiContract.globalCategoryToggleSelector("crash"));
         assertEquals("#TelemetryConsentCaptureAllEnabled", TelemetryConsentUiContract.globalCategoryCheckSelector("crash"));
-        assertEquals("#TelemetryConsentProjectRow0 #TelemetryConsentCaptureToggleButton",
+        assertEquals("#TelemetryConsentRows[0] #TelemetryConsentCaptureToggleButton",
                 TelemetryConsentUiContract.categoryToggleSelector(0, "crash"));
-        assertEquals("#TelemetryConsentProjectRow0 #TelemetryConsentCaptureEnabled",
+        assertEquals("#TelemetryConsentRows[0] #TelemetryConsentCaptureEnabled",
                 TelemetryConsentUiContract.categoryCheckSelector(0, "crash"));
     }
 
