@@ -431,7 +431,7 @@ public final class TelemetryProjectContributionRegistry {
                     }
                 }
                 if (hasInFlightLocked(registry, plan.oldTokens())
-                        && !currentThreadOwnsAllInFlight(registry, plan.oldTokens())) {
+                        && !currentThreadOwnsAnyInFlight(registry, plan.oldTokens())) {
                     try {
                         registry.wait(50L);
                     } catch (InterruptedException ignored) {
@@ -537,16 +537,16 @@ public final class TelemetryProjectContributionRegistry {
         }
     }
 
-    private static boolean currentThreadOwnsAllInFlight(ConcurrentHashMap<String, Object> registry,
+    private static boolean currentThreadOwnsAnyInFlight(ConcurrentHashMap<String, Object> registry,
                                                         List<String> tokens) {
         Map<String, Integer> inFlight = integerMap(registry.get(STATE_IN_FLIGHT_KEY));
         Map<String, Integer> current = ACTIVE_LEASES.get();
         for (String token : tokens) {
-            if (inFlight.getOrDefault(token, 0) > current.getOrDefault(token, 0)) {
-                return false;
+            if (inFlight.getOrDefault(token, 0) > 0 && current.getOrDefault(token, 0) > 0) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private static void finalizeReadyHandoffLocked(ConcurrentHashMap<String, Object> registry) {
