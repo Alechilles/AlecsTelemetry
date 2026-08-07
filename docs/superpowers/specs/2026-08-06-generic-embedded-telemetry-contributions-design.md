@@ -28,9 +28,9 @@ full protocol remains the long-term direction:
   anchored contribution is rejected before registration.
 - Once a logical project winner is established, the MVP does not hot-replace or
   automatically fail over that winner. Retirement fences its token and keeps
-  already registered fallbacks passive. Restart or explicit re-registration is
-  required to establish a new writable candidate, preserving queued destination
-  context during the transition.
+  already registered fallbacks passive. A server restart is required to
+  establish a new writable candidate, preserving queued destination context
+  during the transition.
 - Before a contributed service starts, only setup breadcrumbs, lifecycle events,
   and setup-failure captures may be buffered. Manual reports, flushes, and other
   operations return a bounded `not_started` result and are not drained later.

@@ -89,6 +89,48 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void lateBaseCollisionCannotReplaceAnEstablishedContributionDestination() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectDescriptor contributedDescriptor = hostedStatsDescriptor(
+                "late-collision", "Contributed", "embedded"
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(),
+                List.of(),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+        Map<String, Object> contribution = Map.of(
+                "token", "established-contribution-token",
+                "projectId", "late-collision",
+                "logicalPluginIdentifier", "Example:Contributed",
+                "logicalPluginVersion", "1.0.0",
+                "sourcePath", tempDir.resolve("Contribution.jar").toString(),
+                "descriptorJson", contributedDescriptor.toJson()
+        );
+
+        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
+        TelemetryProjectRegistration lateBase = new TelemetryProjectRegistration(
+                descriptor("late-collision", "Late Base", "standalone"),
+                "Example:Late Base",
+                "9.0.0",
+                tempDir.resolve("LateBase.jar")
+        );
+
+        assertFalse(service.ensureBaseProject(lateBase));
+        assertEquals(1, service.projects().size());
+        assertEquals("Example:Contributed", service.projects().getFirst().pluginIdentifier());
+        assertEquals("hosted", service.projects().getFirst().destinationMode());
+    }
+
+    @Test
     void aggregateStatsHeartbeatUsesOnePayloadPerResolvedEventTarget() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),

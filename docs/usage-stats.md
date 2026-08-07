@@ -60,8 +60,8 @@ normal retry, destination, and retention rules still apply.
 Heartbeats are grouped by their resolved event destination, so projects routed
 to different endpoints are never combined into one upload. Anchored contributions
 use hosted destination mode in the 1.1.0 MVP. A same-ID contribution winner is
-not automatically replaced after retirement; restart or explicit
-re-registration is required before another candidate can emit.
+not automatically replaced after retirement; restart is required before
+another candidate can emit.
 
 ## Consent
 

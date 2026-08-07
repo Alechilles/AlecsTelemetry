@@ -107,7 +107,10 @@ public final class TelemetryProjectContributionRegistry {
                 // Fence every candidate that was already registered, regardless of sequence
                 // ordering. A future explicit registration receives a higher sequence and is
                 // the only candidate eligible to establish a new writable token.
-                markProjectBlockedLocked(registry, projectId, numberValue(registry.get(STATE_NEXT_SEQUENCE_KEY)));
+                // The MVP binds a logical project ID to its first elected destination for the
+                // lifetime of the process. Reusing the ID after retirement could otherwise send
+                // already queued envelopes with the replacement candidate's credentials.
+                markProjectBlockedLocked(registry, projectId, Long.MAX_VALUE);
             }
             registry.remove(token);
             reconcileLocked(registry);

@@ -247,20 +247,32 @@ public final class TelemetryCoordinatorService {
 
     /** Adds a conventional host descriptor discovered after a contribution-only lease started. */
     public synchronized boolean ensureBaseProject(@Nonnull TelemetryProjectRegistration registration) {
+        String normalizedProjectId = registration.projectId().toLowerCase(Locale.ROOT);
+        TelemetryProjectRegistration current = engine.projects().stream()
+                .filter(project -> project.projectId().equalsIgnoreCase(registration.projectId()))
+                .findFirst()
+                .orElse(null);
+        if (current != null) {
+            TelemetryProjectRegistration establishedBase = baseProjects.stream()
+                    .filter(project -> project.projectId().equalsIgnoreCase(registration.projectId()))
+                    .findFirst()
+                    .orElse(null);
+            return establishedBase != null && establishedBase.equals(registration);
+        }
         List<TelemetryProjectRegistration> previousBaseProjects = baseProjects;
         List<TelemetryProjectRegistration> previousBaseManualProjects = baseManualReportProjects;
         LinkedHashMap<String, TelemetryProjectRegistration> updatedBase = new LinkedHashMap<>();
         for (TelemetryProjectRegistration project : baseProjects) {
             updatedBase.put(project.projectId().toLowerCase(Locale.ROOT), project);
         }
-        updatedBase.put(registration.projectId().toLowerCase(Locale.ROOT), registration);
+        updatedBase.put(normalizedProjectId, registration);
         baseProjects = List.copyOf(updatedBase.values());
 
         LinkedHashMap<String, TelemetryProjectRegistration> updatedManual = new LinkedHashMap<>();
         for (TelemetryProjectRegistration project : baseManualReportProjects) {
             updatedManual.put(project.projectId().toLowerCase(Locale.ROOT), project);
         }
-        updatedManual.putIfAbsent(registration.projectId().toLowerCase(Locale.ROOT), registration);
+        updatedManual.putIfAbsent(normalizedProjectId, registration);
         baseManualReportProjects = List.copyOf(updatedManual.values());
         boolean reconciled = reconcileProjectContributions(
                 TelemetryProjectContributionRegistry.revision(),

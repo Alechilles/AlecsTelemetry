@@ -29,8 +29,8 @@ release. The shipped MVP must enforce the following acceptance boundaries:
 
 - anchored contributions are hosted-only; conventional descriptors retain
   custom-endpoint behavior;
-- an established same-ID winner is fenced on retirement, with registered
-  fallbacks passive until restart or explicit re-registration (no hot failover);
+- an established same-ID winner is fenced on retirement, with that project ID
+  unavailable until server restart (no hot failover or same-process replacement);
 - only setup breadcrumbs, lifecycle events, and setup-failure captures may be
   buffered before `start()`; other operations return `not_started` and are not
   replayed;

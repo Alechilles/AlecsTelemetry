@@ -58,8 +58,9 @@ is rejected as a disabled contribution before it can register.
 An established logical project winner is not hot-replaced or automatically
 failed over. Unregistering the winner fences its token and leaves any already
 registered fallback passive, so a second copy cannot begin writing while the
-active catalog is changing. Restart the coordinator or explicitly register a
-new candidate after retirement when a replacement is required. This boundary
+active catalog is changing. Restart the server after retirement when a
+replacement is required. Re-registering that project ID in the same process
+keeps it passive. This boundary
 also keeps queued envelopes on the destination that created them.
 
 Before `start()`, only setup breadcrumbs, lifecycle events, and setup-failure
@@ -189,7 +190,7 @@ heartbeat snapshots, but it does not delete that project's local crash, event,
 or manual-report queue. The coordinator retains the project registration needed
 to replay queued envelopes; queued data remains subject to the normal consent,
 destination, retry, and retention rules. A same-ID replacement is intentionally
-deferred until restart or explicit re-registration.
+deferred until restart.
 
 ## Hosted and custom destinations
 

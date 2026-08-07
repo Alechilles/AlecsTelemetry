@@ -24,8 +24,8 @@
   replay.
 - 1.1.0 MVP contributions are hosted-only; conventional projects retain custom
   endpoint support. Established same-ID contribution winners are not
-  automatically hot-replaced or failed over, so restart or explicit
-  re-registration is required for a replacement.
+  automatically hot-replaced or failed over, so a server restart is required
+  before that project ID can elect a replacement.
 - Aggregate heartbeats are separated by resolved destination, and stopped
   contribution services reject non-setup operations instead of buffering them
   for a later start.

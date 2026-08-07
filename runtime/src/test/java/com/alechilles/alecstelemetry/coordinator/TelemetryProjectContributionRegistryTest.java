@@ -237,7 +237,7 @@ class TelemetryProjectContributionRegistryTest {
     }
 
     @Test
-    void retiringWinnerLeavesRegisteredFallbackPassiveUntilExplicitReregistration() {
+    void retiringWinnerLeavesProjectIdUnavailableUntilProcessRestart() {
         RecordingBridge fallback = bridge("mvp-retire", "1.0.0", "host", "fallback.jar", "fallback-hash");
         RecordingBridge winner = bridge("mvp-retire", "2.0.0", "host", "winner.jar", "winner-hash");
 
@@ -257,8 +257,8 @@ class TelemetryProjectContributionRegistryTest {
 
         RecordingBridge reregistered = bridge("mvp-retire", "1.0.0", "host", "fallback.jar", "fallback-hash");
         String reregisteredToken = TelemetryProjectContributionRegistry.register(reregistered);
-        assertTrue(TelemetryProjectContributionRegistry.isActive(reregisteredToken));
-        assertTrue((Boolean) TelemetryProjectContributionRegistry.dispatch(
+        assertFalse(TelemetryProjectContributionRegistry.isActive(reregisteredToken));
+        assertFalse((Boolean) TelemetryProjectContributionRegistry.dispatch(
                 reregisteredToken,
                 "usage",
                 Map.of("eventName", "reregistered"),

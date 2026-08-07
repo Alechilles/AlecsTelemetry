@@ -57,8 +57,9 @@ Alec's Telemetry is designed to avoid player identity data by default.
   endpoint operator, not Alec, controls its data and retention.
 - A same-ID contribution winner is not automatically hot-replaced or failed
   over. Retirement fences the old token and leaves already registered fallbacks
-  passive until restart or explicit re-registration, preserving the destination
-  context for queued envelopes.
+  passive until server restart. Re-registering the same project ID in the same
+  process does not make it writable, preserving the destination context for
+  queued envelopes.
 - Before an anchored service starts, only setup breadcrumbs, lifecycle events,
   and setup-failure captures are buffered. Manual reports and other operations
   are rejected while stopped and are not replayed after startup.

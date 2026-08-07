@@ -71,8 +71,7 @@ provider.
 In the 1.1.0 MVP, anchored contributions must use hosted destination mode;
 custom destinations remain available to conventional `bootstrap(plugin)` projects.
 An established same-ID contribution winner is not automatically hot-replaced or
-failed over. Restart or explicitly re-register a candidate after retirement when
-replacement is needed.
+failed over. Restart the server after retirement when replacement is needed.
 
 ## Runtime Precedence
 
