@@ -24,8 +24,14 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryRuntimeHostHandle;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.hypixel.hytale.common.plugin.PluginManifest;
+import com.hypixel.hytale.common.plugin.PluginIdentifier;
+import com.hypixel.hytale.common.semver.Semver;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
+import com.hypixel.hytale.server.core.plugin.JavaPlugin;
+import com.hypixel.hytale.server.core.Options;
+import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.junit.jupiter.api.AfterEach;
@@ -59,6 +65,38 @@ class EmbeddedTelemetryServiceTest {
     @AfterEach
     void clearCoordinatorRegistry() {
         TelemetryCoordinatorRegistry.clearForTests();
+    }
+
+    @Test
+    void anchoredContributionUsesLogicalIdentityInsteadOfPhysicalHost() {
+        TestPlugin plugin = testPlugin(tempDir.resolve("host"));
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(TestAnchor.class, "fixtures/contributed-project.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertEquals("example-library", service.projectId());
+        assertNull(service.disabledReason());
+        assertEquals("Example:Library", service.projects().getFirst().pluginIdentifier());
+        assertEquals("2.4.0", service.projects().getFirst().pluginVersion());
+    }
+
+    @Test
+    void anchoredContributionMissingResourceReturnsDisabledServiceWithReason() {
+        TestPlugin plugin = testPlugin(tempDir.resolve("missing"));
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(TestAnchor.class, "fixtures/missing-project.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertNotNull(service.disabledReason());
+        assertTrue(service.disabledReason().contains("descriptor"));
     }
 
     @Test
@@ -1663,5 +1701,76 @@ class EmbeddedTelemetryServiceTest {
             flushRequests++;
             return true;
         }
+    }
+
+    private static TestPlugin testPlugin(Path dataDirectory) {
+        try {
+            Options.parse(new String[0]);
+            TestPlugin plugin = (TestPlugin) unsafe().allocateInstance(TestPlugin.class);
+            plugin.dataDirectory = dataDirectory;
+            plugin.file = dataDirectory.resolve("Host.jar");
+            plugin.manifest = testManifest();
+            plugin.identifier = new PluginIdentifier(plugin.manifest);
+            return plugin;
+        } catch (java.io.IOException | InstantiationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private static sun.misc.Unsafe unsafe() {
+        try {
+            java.lang.reflect.Field field = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            return (sun.misc.Unsafe) field.get(null);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private static final class TestAnchor {
+    }
+
+    private static final class TestPlugin extends JavaPlugin {
+        private Path dataDirectory;
+        private Path file;
+        private PluginManifest manifest;
+        private PluginIdentifier identifier;
+
+        private TestPlugin() {
+            super(null);
+        }
+
+        @Override
+        public HytaleLogger getLogger() {
+            return null;
+        }
+
+        @Override
+        public Path getDataDirectory() {
+            return dataDirectory;
+        }
+
+        @Override
+        public Path getFile() {
+            return file;
+        }
+
+        @Override
+        public PluginManifest getManifest() {
+            return manifest;
+        }
+
+        @Override
+        public PluginIdentifier getIdentifier() {
+            return identifier;
+        }
+    }
+
+    private static PluginManifest testManifest() {
+        PluginManifest manifest = new PluginManifest();
+        manifest.setGroup("Example");
+        manifest.setName("Host");
+        manifest.setVersion(Semver.fromString("9.9.9"));
+        return manifest;
     }
 }

@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.logging.Level;
 
 /**
@@ -35,38 +36,74 @@ public final class EmbeddedTelemetryBootstrap {
     @Nonnull
     public static EmbeddedTelemetryService bootstrap(@Nonnull JavaPlugin plugin) {
         HytaleLogger logger = plugin.getLogger();
-        TelemetryProjectDescriptor descriptor = loadDescriptor(plugin, logger);
+        DescriptorBytes descriptorBytes = loadConventionalDescriptor(plugin, logger);
         String pluginIdentifier = resolvePluginIdentifier(plugin);
-        String displayName = descriptor == null
-                ? fallbackDisplayName(plugin, pluginIdentifier)
-                : descriptor.displayName();
-        String projectId = descriptor == null
-                ? slugify(displayName)
-                : descriptor.projectId();
-
-        if (descriptor == null) {
+        if (descriptorBytes == null) {
+            String displayName = fallbackDisplayName(plugin, pluginIdentifier);
             return EmbeddedTelemetryService.disabled(
-                    projectId,
+                    slugify(displayName),
                     displayName,
                     logger,
                     "No Server/Telemetry/project.json descriptor was found in the owning mod."
                             + " Legacy telemetry/project.json was also absent."
             );
         }
-        TelemetryDataPaths ownerDataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
-        TelemetryDataPaths sharedDataPaths = TelemetryDataPaths.forSharedCoordinator(plugin);
-        TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
-        TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, ownerDataPaths, logger, descriptor.projectId());
-        String pluginVersion = resolvePluginVersion(plugin);
-        Path sourcePath = resolvePluginSourcePath(plugin);
-        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
-                descriptor,
+        return bootstrapFromDescriptorBytes(
+                plugin,
+                descriptorBytes.content(),
+                descriptorBytes.resource(),
                 pluginIdentifier,
-                pluginVersion,
-                sourcePath
-        ).withOverride(override);
-        TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.bootstrapEmbedded(plugin, descriptor);
-        return EmbeddedTelemetryService.fromHost(sharedSettings, sharedDataPaths, registration, host, logger);
+                resolvePluginVersion(plugin),
+                buildFallbacks(plugin),
+                false,
+                logger,
+                "No Server/Telemetry/project.json descriptor was found in the owning mod."
+                        + " Legacy telemetry/project.json was also absent."
+        );
+    }
+
+    /**
+     * Loads and prepares one logical project descriptor from the contributor's classloader.
+     */
+    @Nonnull
+    public static EmbeddedTelemetryService contribute(@Nonnull JavaPlugin plugin,
+                                                      @Nonnull TelemetryProjectContribution contribution) {
+        Objects.requireNonNull(plugin, "plugin");
+        Objects.requireNonNull(contribution, "contribution");
+        HytaleLogger logger = plugin.getLogger();
+        String logicalIdentifier = contribution.logicalPluginIdentifier();
+        String fallbackDisplayName = fallbackDisplayName(logicalIdentifier);
+        String fallbackProjectId = slugify(fallbackDisplayName);
+        try {
+            DescriptorBytes descriptorBytes = loadAnchoredDescriptor(contribution);
+            if (descriptorBytes == null) {
+                return disabledContribution(
+                        fallbackProjectId,
+                        fallbackDisplayName,
+                        logger,
+                        "No embedded telemetry descriptor was found at " + contribution.descriptorResource() + "."
+                );
+            }
+            return bootstrapFromDescriptorBytes(
+                    plugin,
+                    descriptorBytes.content(),
+                    descriptorBytes.resource(),
+                    logicalIdentifier,
+                    contribution.logicalPluginVersion(),
+                    null,
+                    true,
+                    logger,
+                    "Failed to load embedded telemetry descriptor from " + descriptorBytes.resource() + "."
+            );
+        } catch (RuntimeException ex) {
+            return disabledContribution(
+                    fallbackProjectId,
+                    fallbackDisplayName,
+                    logger,
+                    "Failed to initialize embedded telemetry contribution '"
+                            + logicalIdentifier + "': " + safeMessage(ex)
+            );
+        }
     }
 
     @Nullable
@@ -92,7 +129,8 @@ public final class EmbeddedTelemetryBootstrap {
 
 
     @Nullable
-    private static TelemetryProjectDescriptor loadDescriptor(@Nonnull JavaPlugin plugin, @Nullable HytaleLogger logger) {
+    private static DescriptorBytes loadConventionalDescriptor(@Nonnull JavaPlugin plugin,
+                                                              @Nullable HytaleLogger logger) {
         String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
         InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
         if (rawStream == null) {
@@ -103,14 +141,134 @@ public final class EmbeddedTelemetryBootstrap {
             if (stream == null) {
                 return null;
             }
-            String rawJson = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-            return TelemetryProjectDescriptor.fromJson(rawJson, buildFallbacks(plugin));
+            return new DescriptorBytes(descriptorResource, stream.readAllBytes());
         } catch (Exception ex) {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log("Failed to load embedded telemetry descriptor from " + descriptorResource + ".");
             }
             return null;
         }
+    }
+
+    @Nullable
+    private static DescriptorBytes loadAnchoredDescriptor(@Nonnull TelemetryProjectContribution contribution) {
+        Class<?> anchor = contribution.resourceAnchor();
+        ClassLoader loader = anchor.getClassLoader();
+        InputStream stream = loader == null
+                ? anchor.getResourceAsStream("/" + contribution.descriptorResource())
+                : loader.getResourceAsStream(contribution.descriptorResource());
+        if (stream == null) {
+            return null;
+        }
+        try (InputStream closeable = stream) {
+            return new DescriptorBytes(contribution.descriptorResource(), closeable.readAllBytes());
+        } catch (Exception ex) {
+            throw new IllegalStateException(
+                    "Unable to read embedded telemetry descriptor " + contribution.descriptorResource(),
+                    ex
+            );
+        }
+    }
+
+    @Nonnull
+    private static EmbeddedTelemetryService bootstrapFromDescriptorBytes(@Nonnull JavaPlugin plugin,
+                                                                          @Nonnull byte[] descriptorBytes,
+                                                                          @Nonnull String descriptorResource,
+                                                                          @Nonnull String logicalIdentifier,
+                                                                          @Nonnull String logicalVersion,
+                                                                          @Nullable TelemetryProjectDescriptor.Fallbacks fallbacks,
+                                                                          boolean validateContribution,
+                                                                          @Nullable HytaleLogger logger,
+                                                                          @Nonnull String parseFailureReason) {
+        TelemetryProjectDescriptor descriptor;
+        try {
+            descriptor = TelemetryProjectDescriptor.fromJson(
+                    new String(descriptorBytes, StandardCharsets.UTF_8),
+                    fallbacks
+            );
+        } catch (RuntimeException ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log(
+                        "Failed to load embedded telemetry descriptor from " + descriptorResource + "."
+                );
+            }
+            String fallbackDisplay = fallbacks == null
+                    ? fallbackDisplayName(logicalIdentifier)
+                    : fallbacks.displayName();
+            return EmbeddedTelemetryService.disabled(
+                    slugify(fallbackDisplay),
+                    fallbackDisplay,
+                    logger,
+                    parseFailureReason
+            );
+        }
+
+        if (validateContribution) {
+            if (descriptor.ownerPluginIdentifiers().stream()
+                    .noneMatch(owner -> owner.equalsIgnoreCase(logicalIdentifier.trim()))) {
+                return disabledContribution(
+                        descriptor.projectId(),
+                        descriptor.displayName(),
+                        logger,
+                        "Embedded telemetry descriptor " + descriptorResource
+                                + " does not declare logical owner " + logicalIdentifier + "."
+                );
+            }
+            try {
+                Semver.fromString(logicalVersion);
+            } catch (RuntimeException ex) {
+                return disabledContribution(
+                        descriptor.projectId(),
+                        descriptor.displayName(),
+                        logger,
+                        "Embedded telemetry contribution " + logicalIdentifier
+                                + " has invalid logical version '" + logicalVersion + "'."
+                );
+            }
+        }
+
+        TelemetryDataPaths ownerDataPaths = TelemetryDataPaths.forEmbeddedOwner(plugin);
+        TelemetryDataPaths sharedDataPaths = TelemetryDataPaths.forSharedCoordinator(plugin);
+        TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
+        TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, ownerDataPaths, logger, descriptor.projectId());
+        Path sourcePath = resolvePluginSourcePath(plugin);
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                logicalIdentifier,
+                logicalVersion,
+                sourcePath
+        ).withOverride(override);
+        TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.bootstrapEmbedded(plugin, descriptor);
+        return EmbeddedTelemetryService.fromHost(sharedSettings, sharedDataPaths, registration, host, logger);
+    }
+
+    @Nonnull
+    private static EmbeddedTelemetryService disabledContribution(@Nonnull String projectId,
+                                                                 @Nonnull String displayName,
+                                                                 @Nullable HytaleLogger logger,
+                                                                 @Nonnull String reason) {
+        if (logger != null) {
+            logger.at(Level.WARNING).log(reason);
+        }
+        return EmbeddedTelemetryService.disabled(projectId, displayName, logger, reason);
+    }
+
+    @Nonnull
+    private static String fallbackDisplayName(@Nonnull String logicalIdentifier) {
+        int separatorIndex = logicalIdentifier.indexOf(':');
+        if (separatorIndex >= 0 && separatorIndex < logicalIdentifier.length() - 1) {
+            return logicalIdentifier.substring(separatorIndex + 1).trim();
+        }
+        return logicalIdentifier;
+    }
+
+    @Nonnull
+    private static String safeMessage(@Nonnull RuntimeException exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
+    }
+
+    private record DescriptorBytes(@Nonnull String resource, @Nonnull byte[] content) {
     }
 
     @Nonnull
