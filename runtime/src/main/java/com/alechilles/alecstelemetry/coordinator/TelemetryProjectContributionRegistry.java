@@ -201,28 +201,37 @@ public final class TelemetryProjectContributionRegistry {
 
         ConcurrentHashMap<String, Object> registry = registry();
         Object bridge;
+        String dispatchToken;
         synchronized (registry) {
             reconcileLocked(registry);
             Map<String, String> winners = winnersLocked(registry);
-            if (!winners.containsValue(token) || isFencedLocked(registry, token)) {
+            Map<String, Object> caller = entryForTokenLocked(registry, token);
+            if (caller == null || isFencedLocked(registry, token)) {
                 return rejection("inactive_token");
             }
-            Map<String, Object> entry = entryForTokenLocked(registry, token);
+            TelemetryProjectContributionCandidate callerCandidate = candidateFromEntry(caller);
+            dispatchToken = winners.getOrDefault(callerCandidate.normalizedProjectId(), "");
+            Map<String, Object> entry = entryForTokenLocked(registry, dispatchToken);
             if (entry == null) {
+                return rejection("inactive_token");
+            }
+            TelemetryProjectContributionCandidate winnerCandidate = candidateFromEntry(entry);
+            if (!callerCandidate.normalizedOwner().equals(winnerCandidate.normalizedOwner())
+                    || isFencedLocked(registry, dispatchToken)) {
                 return rejection("inactive_token");
             }
             bridge = entry.get("bridge");
             if (bridge == null) {
                 return rejection("bridge_unavailable");
             }
-            incrementInFlightLocked(registry, token);
+            incrementInFlightLocked(registry, dispatchToken);
         }
         try {
             Object result = invoke(
                     bridge,
                     "dispatch",
                     new Class<?>[]{String.class, String.class, Map.class, Throwable.class},
-                    token,
+                    dispatchToken,
                     operation,
                     copyJdkMap(payload),
                     throwable
@@ -233,7 +242,7 @@ public final class TelemetryProjectContributionRegistry {
         } catch (LinkageError error) {
             return rejection("bridge_dispatch_failed");
         } finally {
-            releaseInFlight(registry, token);
+            releaseInFlight(registry, dispatchToken);
         }
     }
 

@@ -1851,9 +1851,6 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (!contributed || token == null || shutdown.get()) {
             return Map.of("accepted", false, "reason", "contribution_unavailable");
         }
-        if (!TelemetryProjectContributionRegistry.isActive(token)) {
-            return Map.of("accepted", false, "reason", "passive_contribution");
-        }
         Map<String, Object> normalized = Map.copyOf(payload);
         if (!started.get()) {
             if (!isBufferableBeforeStart(operation)) {
@@ -1880,12 +1877,6 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     private void drainContributionBuffer() {
         String token = contributionToken;
         if (!contributed || token == null) {
-            return;
-        }
-        if (!TelemetryProjectContributionRegistry.isActive(token)) {
-            synchronized (bufferedOperations) {
-                bufferedOperations.clear();
-            }
             return;
         }
         while (true) {

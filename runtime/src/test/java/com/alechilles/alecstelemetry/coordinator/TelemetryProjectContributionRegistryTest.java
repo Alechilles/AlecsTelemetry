@@ -99,6 +99,9 @@ class TelemetryProjectContributionRegistryTest {
 
         assertTrue(TelemetryProjectContributionRegistry.isActive(firstToken));
         assertFalse(TelemetryProjectContributionRegistry.isActive(quarantinedToken));
+        assertFalse((boolean) TelemetryProjectContributionRegistry
+                .dispatch(quarantinedToken, "usage", Map.of("eventName", "quarantined"), null)
+                .get("accepted"));
         assertEquals(firstToken, activeToken("shared-project"));
         assertTrue(TelemetryProjectContributionRegistry.diagnostics().stream()
                 .anyMatch(diagnostic -> "owner_conflict".equals(diagnostic.get("kind"))));
@@ -224,6 +227,11 @@ class TelemetryProjectContributionRegistryTest {
         assertNotEquals(firstToken, duplicateToken);
         assertEquals(1, TelemetryProjectContributionRegistry.activeContributions().size());
         assertEquals(firstToken, activeToken("duplicate"));
+        assertTrue((boolean) TelemetryProjectContributionRegistry
+                .dispatch(duplicateToken, "usage", Map.of("eventName", "duplicate"), null)
+                .get("accepted"));
+        assertEquals(List.of(firstToken), first.acceptedTokens());
+        assertEquals(List.of(), duplicate.acceptedTokens());
 
         TelemetryProjectContributionRegistry.unregister(firstToken);
 

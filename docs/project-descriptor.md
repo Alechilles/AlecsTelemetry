@@ -300,7 +300,9 @@ Top-level `capture`, `events`, `performance`, `usage`, `stats`, and `reports` ar
 The active coordinator reconciles anchored contributions while the server is
 running. A valid elected contribution appears as an independent project in
 consent and command diagnostics. An invalid or protocol-ineligible candidate
-stays passive and contributes no telemetry. Retiring a contribution removes it
+stays passive and contributes no telemetry. A valid same-owner passive copy can
+submit operations only through the established winner's descriptor and
+destination; it does not become a second writer. Retiring a contribution removes it
 from new consent and heartbeat snapshots but keeps its existing local queue
 available for replay under the normal project retention and destination rules.
 Only first registration is live in the MVP; an established winner remains the

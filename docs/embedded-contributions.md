@@ -132,12 +132,14 @@ token. Candidates for the same project ID are compared case-insensitively:
 3. equal origin/version candidates use deterministic host identifier, source
    path, and descriptor-hash tie-breakers.
 
-Only the elected token can write. A retiring token is fenced before it can write
-again, and registered fallbacks remain passive until an explicit new
-registration. This prevents a stale or passive copy from producing duplicate
-events. Registration alone emits nothing; every operation still passes the
-active-token, descriptor support, project/category consent, detail allowlist,
-sampling, and destination gates.
+Only the elected bridge can write. A same-owner passive copy may submit an
+operation through that elected bridge, which lets an elected host component use
+the stable project even when a different physical copy registered it first.
+Different-owner, invalid, fenced, and retired candidates cannot submit. A
+retiring winner is fenced before it can write again, and registered fallbacks
+remain passive until restart. Registration alone emits nothing; every operation
+still passes the elected descriptor's support, project/category consent, detail
+allowlist, sampling, and destination gates.
 
 The active runtime coordinator must implement coordinator protocol 3, including
 contribution snapshot reconciliation and token-bound dispatch. Protocol-2

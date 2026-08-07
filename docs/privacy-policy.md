@@ -60,6 +60,10 @@ Alec's Telemetry is designed to avoid player identity data by default.
   passive until server restart. Re-registering the same project ID in the same
   process does not make it writable, preserving the destination context for
   queued envelopes.
+- A valid same-owner passive copy can submit an operation through the established
+  winner. The winner's descriptor, consent, allowlist, sampling, and hosted
+  destination remain authoritative; different-owner, invalid, fenced, and
+  retired candidates are rejected.
 - Before an anchored service starts, only setup breadcrumbs, lifecycle events,
   and setup-failure captures are buffered. Manual reports and other operations
   are rejected while stopped and are not replayed after startup.
@@ -140,8 +144,9 @@ contribution still uses the existing runtime metadata contract, including loaded
 mod identifiers and versions where that metadata is enabled.
 
 Contribution ABI 1 and coordinator protocol 3 make this routing explicit. A
-protocol-2 provider cannot own a generic contribution, and a passive, invalid, or
-retired candidate does not write telemetry. Registration alone emits nothing;
+protocol-2 provider cannot own a generic contribution. A valid same-owner
+passive copy can submit only through the elected bridge; invalid,
+different-owner, fenced, and retired candidates cannot write. Registration alone emits nothing;
 every operation remains subject to the project's descriptor, independent
 consent, allowlist, sampling, and destination gates.
 
