@@ -20,6 +20,10 @@ public interface TelemetryRuntimeHostHandle {
 
     int registeredProjectCount();
 
+    default boolean ensureEmbeddedProject(@Nonnull TelemetryProjectRegistration project) {
+        return false;
+    }
+
     @Nonnull
     TelemetryRuntimeApi api();
 

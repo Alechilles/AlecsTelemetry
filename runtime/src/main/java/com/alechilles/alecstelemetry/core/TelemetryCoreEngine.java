@@ -9,6 +9,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportStore;
 import com.alechilles.alecstelemetry.event.TelemetryEventEnvelope;
 import com.alechilles.alecstelemetry.event.TelemetryEventStore;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.project.TelemetryProjectCatalog;
 import com.alechilles.alecstelemetry.report.ManualReportAttachment;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportLogCollector;
@@ -67,8 +68,7 @@ public final class TelemetryCoreEngine {
 
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
-    private final List<TelemetryProjectRegistration> projects;
-    private final List<TelemetryProjectRegistration> manualReportProjects;
+    private final TelemetryProjectCatalog projectCatalog;
     private final List<CrashReportEnvelope.LoadedModMetadata> loadedMods;
     private final CrashReportClient client;
     private final HytaleLogger logger;
@@ -123,8 +123,7 @@ public final class TelemetryCoreEngine {
                                @Nullable ScheduledExecutorService executor) {
         this.settings = settings;
         this.dataPaths = dataPaths;
-        this.projects = List.copyOf(projects);
-        this.manualReportProjects = List.copyOf(manualReportProjects);
+        this.projectCatalog = new TelemetryProjectCatalog(projects, manualReportProjects);
         this.loadedMods = List.copyOf(loadedMods);
         this.client = client;
         this.logger = logger;
@@ -137,8 +136,8 @@ public final class TelemetryCoreEngine {
     }
 
     public void start() {
-        if (!enabled.get() || projects.isEmpty()) {
-            lastFlushResult = projects.isEmpty() ? "No registered telemetry projects discovered." : "Runtime disabled by settings.";
+        if (!enabled.get() || projects().isEmpty()) {
+            lastFlushResult = projects().isEmpty() ? "No registered telemetry projects discovered." : "Runtime disabled by settings.";
             return;
         }
         if (!started.compareAndSet(false, true)) {
@@ -197,12 +196,27 @@ public final class TelemetryCoreEngine {
 
     @Nonnull
     public List<TelemetryProjectRegistration> projects() {
-        return projects;
+        return projectCatalog.snapshot().projects();
     }
 
     @Nonnull
     public List<TelemetryProjectRegistration> manualReportProjects() {
-        return manualReportProjects;
+        return projectCatalog.snapshot().manualReportProjects();
+    }
+
+    @Nonnull
+    public TelemetryProjectCatalog projectCatalog() {
+        return projectCatalog;
+    }
+
+    /** Reconciles the complete runtime project set while retaining the last valid snapshot on failure. */
+    public boolean reconcileProjects(@Nonnull List<TelemetryProjectRegistration> registrations) {
+        return projectCatalog.reconcile(registrations);
+    }
+
+    public boolean reconcileProjects(@Nonnull List<TelemetryProjectRegistration> registrations,
+                                     @Nonnull List<TelemetryProjectRegistration> manualCandidates) {
+        return projectCatalog.reconcile(registrations, manualCandidates);
     }
 
     @Nonnull
@@ -756,6 +770,48 @@ public final class TelemetryCoreEngine {
         return true;
     }
 
+    /** Captures an exceptional world removal for one explicit project scope. */
+    public boolean captureExceptionalWorldRemovalForProject(@Nonnull String projectId,
+                                                            @Nullable Throwable throwable,
+                                                            @Nullable String worldName,
+                                                            @Nullable String removalReason,
+                                                            @Nullable String possibleFailureCause) {
+        if (!enabled.get()
+                || throwable == null
+                || !RemoveWorldEvent.RemovalReason.EXCEPTIONAL.name().equals(removalReason)) {
+            return false;
+        }
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null
+                || !isProjectRuntimeEnabled(project)
+                || !isCrashRuntimeEnabled(project)
+                || !project.capturesSource(SOURCE_EXCEPTIONAL_WORLD_REMOVAL)) {
+            return false;
+        }
+        try {
+            CrashAttribution.AttributionResult attribution = CrashAttribution.explicit(
+                    throwable,
+                    project.pluginIdentifier(),
+                    project.packagePrefixes()
+            );
+            persist(
+                    project,
+                    SOURCE_EXCEPTIONAL_WORLD_REMOVAL,
+                    attribution,
+                    throwable,
+                    Thread.currentThread().getName(),
+                    worldName,
+                    removalReason,
+                    possibleFailureCause
+            );
+            requestFlushAsync("capture", project.projectId());
+            return true;
+        } catch (Throwable captureFailure) {
+            logWarning("Explicit exceptional world removal capture failed for project " + projectId + ".", captureFailure);
+            return false;
+        }
+    }
+
     @Nullable
     private static PluginIdentifier pluginIdentifierFrom(@Nullable String value) {
         if (value == null || value.isBlank()) {
@@ -842,7 +898,7 @@ public final class TelemetryCoreEngine {
     @Nonnull
     public List<ManualReportEnvelope> manualReportsForReview(int maxReportsPerProject) {
         ArrayList<ManualReportEnvelope> reports = new ArrayList<>();
-        for (TelemetryProjectRegistration project : manualReportProjects) {
+        for (TelemetryProjectRegistration project : manualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             for (ManualReportStore.PendingReport pending : store.listReviewReports(project.projectId(), maxReportsPerProject)) {
                 ManualReportEnvelope envelope = parseManualReport(pending.payload());
@@ -855,7 +911,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean approveManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : manualReportProjects) {
+        for (TelemetryProjectRegistration project : manualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             if (store.approveReviewed(project.projectId(), reportId).isPresent()) {
                 requestFlushAsync("manual_report_approved", project.projectId());
@@ -866,7 +922,7 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean rejectManualReport(@Nonnull String reportId) {
-        for (TelemetryProjectRegistration project : manualReportProjects) {
+        for (TelemetryProjectRegistration project : manualReportProjects()) {
             ManualReportStore store = manualReportStoreFor(project);
             ManualReportEnvelope envelope = findReviewEnvelope(store, project.projectId(), reportId);
             if (store.rejectReviewed(project.projectId(), reportId).isPresent()) {
@@ -895,17 +951,12 @@ public final class TelemetryCoreEngine {
 
     @Nullable
     public TelemetryProjectRegistration findProject(@Nonnull String projectId) {
-        for (TelemetryProjectRegistration project : projects) {
-            if (project.projectId().equalsIgnoreCase(projectId)) {
-                return project;
-            }
-        }
-        return null;
+        return projectCatalog.find(projectId);
     }
 
     @Nullable
     public TelemetryProjectRegistration findManualReportProject(@Nonnull String projectId) {
-        for (TelemetryProjectRegistration project : manualReportProjects) {
+        for (TelemetryProjectRegistration project : manualReportProjects()) {
             if (project.projectId().equalsIgnoreCase(projectId)) {
                 return project;
             }
@@ -1198,7 +1249,7 @@ public final class TelemetryCoreEngine {
         boolean capturedAny = false;
         String identifiedPluginHint = worldFailurePluginIdentifier == null ? null : worldFailurePluginIdentifier.toString();
         String threadName = thread == null ? Thread.currentThread().getName() : thread.getName();
-        for (TelemetryProjectRegistration project : projects) {
+        for (TelemetryProjectRegistration project : projects()) {
             if (!isProjectRuntimeEnabled(project) || !isCrashRuntimeEnabled(project) || !project.capturesSource(source)) {
                 continue;
             }
@@ -1207,7 +1258,8 @@ public final class TelemetryCoreEngine {
                         throwable,
                         project.ownerPluginIdentifiers(),
                         project.packagePrefixes(),
-                        identifiedPluginHint
+                        identifiedPluginHint,
+                        projectCatalog.snapshot().ambiguousPackagePrefixes()
                 );
                 if (!attribution.attributed()) {
                     continue;
@@ -1347,7 +1399,7 @@ public final class TelemetryCoreEngine {
 
     private void flushPendingOnShutdown() {
         if (!enabled.get()
-                || (projects.isEmpty() && manualReportProjects.isEmpty())) {
+                || (projects().isEmpty() && manualReportProjects().isEmpty())) {
             return;
         }
         flushInProgress.set(true);
@@ -1361,16 +1413,31 @@ public final class TelemetryCoreEngine {
     @Nonnull
     private List<TelemetryProjectRegistration> matchingProjects(@Nullable String projectIdFilter) {
         if (projectIdFilter == null || projectIdFilter.isBlank()) {
-            return projects;
+            LinkedHashMap<String, TelemetryProjectRegistration> all = new LinkedHashMap<>();
+            for (TelemetryProjectRegistration project : projects()) {
+                all.put(project.projectId().toLowerCase(Locale.ROOT), project);
+            }
+            for (TelemetryProjectRegistration project : projectCatalog.snapshot().retiredProjects()) {
+                all.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+            }
+            return List.copyOf(all.values());
         }
         TelemetryProjectRegistration project = findProject(projectIdFilter);
-        return project == null ? List.of() : List.of(project);
+        if (project != null) {
+            return List.of(project);
+        }
+        for (TelemetryProjectRegistration retired : projectCatalog.snapshot().retiredProjects()) {
+            if (retired.projectId().equalsIgnoreCase(projectIdFilter.trim())) {
+                return List.of(retired);
+            }
+        }
+        return List.of();
     }
 
     @Nonnull
     private List<TelemetryProjectRegistration> matchingManualReportProjects(@Nullable String projectIdFilter) {
         if (projectIdFilter == null || projectIdFilter.isBlank()) {
-            return manualReportProjects;
+            return manualReportProjects();
         }
         TelemetryProjectRegistration project = findManualReportProject(projectIdFilter);
         return project == null ? List.of() : List.of(project);

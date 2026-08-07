@@ -15,9 +15,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TelemetryCoordinatorRegistry {
 
-    public static final int COORDINATOR_PROTOCOL_VERSION = 2;
-    static final String REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.protocol.v2";
-    static final String LEGACY_PROTOCOL_ONE_REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.v1";
+    public static final int COORDINATOR_PROTOCOL_VERSION = 3;
+    public static final String REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.protocol.v3";
+    public static final String LEGACY_PROTOCOL_TWO_REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.protocol.v2";
+    public static final String LEGACY_PROTOCOL_ONE_REGISTRY_KEY = "com.alechilles.alecstelemetry.coordinator.registry.v1";
+
+    private static final ConcurrentHashMap<String, Long> RECONCILED_REVISIONS = new ConcurrentHashMap<>();
 
     private TelemetryCoordinatorRegistry() {
     }
@@ -28,9 +31,16 @@ public final class TelemetryCoordinatorRegistry {
             return;
         }
         Object previous = registry().put(candidate.providerId(), bridge);
+        RECONCILED_REVISIONS.remove(candidate.providerId());
         if (previous != null && previous != bridge) {
             ReflectiveBridge previousBridge = new ReflectiveBridge(previous, candidateFrom(previous));
             if (previousBridge.isActive()) {
+                ReflectiveBridge replacementBridge = new ReflectiveBridge(bridge, candidate);
+                if (!reconcileBeforeActivation(replacementBridge)) {
+                    registry().put(candidate.providerId(), previous);
+                    RECONCILED_REVISIONS.remove(candidate.providerId());
+                    return;
+                }
                 previousBridge.shutdown();
                 previousBridge.deactivate();
             }
@@ -40,6 +50,7 @@ public final class TelemetryCoordinatorRegistry {
 
     public static void unregister(@Nonnull String providerId) {
         Object removed = registry().remove(providerId);
+        RECONCILED_REVISIONS.remove(providerId);
         if (removed != null) {
             ReflectiveBridge bridge = new ReflectiveBridge(removed, candidateFrom(removed));
             if (bridge.isActive()) {
@@ -60,7 +71,24 @@ public final class TelemetryCoordinatorRegistry {
             return null;
         }
         Object bridge = registry().get(winner.providerId());
-        return bridge == null ? null : new ReflectiveBridge(bridge, winner);
+        if (bridge == null) {
+            return null;
+        }
+        ReflectiveBridge active = new ReflectiveBridge(bridge, winner);
+        if (reconcileBeforeActivation(active)) {
+            return active;
+        }
+        for (Object value : registry().values()) {
+            TelemetryRuntimeCandidate candidate = candidateFrom(value);
+            if (candidate == null) {
+                continue;
+            }
+            ReflectiveBridge previous = new ReflectiveBridge(value, candidate);
+            if (previous.isActive()) {
+                return previous;
+            }
+        }
+        return null;
     }
 
     public static void clearForTests() {
@@ -75,7 +103,9 @@ public final class TelemetryCoordinatorRegistry {
         }
         existing.clear();
         System.getProperties().remove(REGISTRY_KEY);
+        System.getProperties().remove(LEGACY_PROTOCOL_TWO_REGISTRY_KEY);
         System.getProperties().remove(LEGACY_PROTOCOL_ONE_REGISTRY_KEY);
+        RECONCILED_REVISIONS.clear();
     }
 
     @SuppressWarnings("unchecked")
@@ -104,6 +134,27 @@ public final class TelemetryCoordinatorRegistry {
                 continue;
             }
             ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
+            if (bridge.isActive()) {
+                break;
+            }
+        }
+        if (winner != null) {
+            Object winningBridge = registry().get(winner.providerId());
+            if (winningBridge == null) {
+                return;
+            }
+            ReflectiveBridge replayTarget = new ReflectiveBridge(winningBridge, winner);
+            if (!reconcileBeforeActivation(replayTarget)) {
+                // Failed replay leaves the previous active provider and catalog intact.
+                return;
+            }
+        }
+        for (Object value : bridges) {
+            TelemetryRuntimeCandidate candidate = candidateFrom(value);
+            if (candidate == null) {
+                continue;
+            }
+            ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
             boolean shouldBeActive = winner != null && candidate.providerId().equals(winner.providerId());
             if (!shouldBeActive && bridge.isActive()) {
                 bridge.shutdown();
@@ -124,6 +175,22 @@ public final class TelemetryCoordinatorRegistry {
         }
     }
 
+    private static boolean reconcileBeforeActivation(@Nonnull ReflectiveBridge bridge) {
+        long revision = TelemetryProjectContributionRegistry.revision();
+        Long previous = RECONCILED_REVISIONS.get(bridge.providerId());
+        if (previous != null && previous == revision) {
+            return true;
+        }
+        boolean reconciled = bridge.reconcileProjectContributions(
+                revision,
+                TelemetryProjectContributionRegistry.activeContributions()
+        );
+        if (reconciled) {
+            RECONCILED_REVISIONS.put(bridge.providerId(), revision);
+        }
+        return reconciled;
+    }
+
     @Nonnull
     private static List<TelemetryRuntimeCandidate> candidates() {
         ArrayList<TelemetryRuntimeCandidate> candidates = new ArrayList<>();
@@ -142,7 +209,7 @@ public final class TelemetryCoordinatorRegistry {
             return null;
         }
         try {
-            return new TelemetryRuntimeCandidate(
+            TelemetryRuntimeCandidate candidate = new TelemetryRuntimeCandidate(
                     invokeString(bridge, "providerId"),
                     TelemetryRuntimeOrigin.valueOf(invokeString(bridge, "origin")),
                     invokeString(bridge, "runtimeVersion"),
@@ -152,8 +219,23 @@ public final class TelemetryCoordinatorRegistry {
                     Path.of(invokeString(bridge, "sourcePath")),
                     Path.of(invokeString(bridge, "sharedDataRoot"))
             );
-        } catch (Exception ignored) {
+            if (candidate.coordinatorProtocolVersion() >= COORDINATOR_PROTOCOL_VERSION
+                    && !supportsProtocolThree(bridge)) {
+                return null;
+            }
+            return candidate;
+        } catch (Exception | LinkageError ignored) {
             return null;
+        }
+    }
+
+    private static boolean supportsProtocolThree(@Nonnull Object bridge) {
+        try {
+            findMethod(bridge.getClass(), "reconcileProjectContributions", new Class<?>[]{long.class, List.class});
+            findMethod(bridge.getClass(), "dispatchProjectContribution", new Class<?>[]{String.class, String.class, Map.class, Throwable.class});
+            return true;
+        } catch (NoSuchMethodException ignored) {
+            return false;
         }
     }
 
@@ -273,6 +355,47 @@ public final class TelemetryCoordinatorRegistry {
         @Override
         public void shutdown() {
             invokeQuiet("shutdown", new Class<?>[0]);
+        }
+
+        @Override
+        public boolean reconcileProjectContributions(long revision,
+                                                     @Nonnull List<Map<String, Object>> contributions) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "reconcileProjectContributions",
+                        new Class<?>[]{long.class, List.class},
+                        revision,
+                        contributions
+                );
+                return value instanceof Boolean result && result;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
+                return false;
+            }
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> dispatchProjectContribution(@Nonnull String token,
+                                                               @Nonnull String operation,
+                                                               @Nonnull Map<String, Object> payload,
+                                                               @Nullable Throwable throwable) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "dispatchProjectContribution",
+                        new Class<?>[]{String.class, String.class, Map.class, Throwable.class},
+                        token,
+                        operation,
+                        payload,
+                        throwable
+                );
+                if (value instanceof Map<?, ?> map) {
+                    return stringObjectMap(map);
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            }
+            return TelemetryCoordinatorBridge.super.dispatchProjectContribution(token, operation, payload, throwable);
         }
 
         @Override

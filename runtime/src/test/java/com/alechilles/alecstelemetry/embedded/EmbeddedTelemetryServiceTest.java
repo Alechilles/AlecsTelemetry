@@ -10,6 +10,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
+import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.commands.TelemetryCommandRoot;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -70,6 +71,7 @@ class EmbeddedTelemetryServiceTest {
     @AfterEach
     void clearCoordinatorRegistry() {
         TelemetryCoordinatorRegistry.clearForTests();
+        TelemetryProjectContributionRegistry.clearForTests();
     }
 
     @Test

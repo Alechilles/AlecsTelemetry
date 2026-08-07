@@ -258,7 +258,22 @@ public final class EmbeddedTelemetryBootstrap {
                 logicalVersion,
                 sourcePath
         ).withOverride(override);
-        TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.bootstrapEmbedded(plugin, descriptor);
+        TelemetryRuntimeHostHandle host = TelemetryRuntimeHost.acquireEmbedded(
+                plugin,
+                validateContribution ? null : descriptor
+        );
+        if (validateContribution) {
+            return EmbeddedTelemetryService.fromContribution(
+                    sharedSettings,
+                    sharedDataPaths,
+                    registration,
+                    host,
+                    resolvePluginIdentifier(plugin),
+                    resolvePluginVersion(plugin),
+                    sha256(descriptorBytes),
+                    logger
+            );
+        }
         return EmbeddedTelemetryService.fromHost(sharedSettings, sharedDataPaths, registration, host, logger);
     }
 
@@ -375,6 +390,22 @@ public final class EmbeddedTelemetryBootstrap {
             return plugin.getFile().toAbsolutePath().normalize();
         } catch (Exception ignored) {
             return null;
+        }
+    }
+
+    @Nonnull
+    private static String sha256(@Nonnull byte[] content) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(content);
+            StringBuilder result = new StringBuilder(hash.length * 2);
+            for (byte value : hash) {
+                result.append(Character.forDigit((value >>> 4) & 0x0f, 16));
+                result.append(Character.forDigit(value & 0x0f, 16));
+            }
+            return result.toString();
+        } catch (java.security.NoSuchAlgorithmException impossible) {
+            return Integer.toHexString(java.util.Arrays.hashCode(content));
         }
     }
 

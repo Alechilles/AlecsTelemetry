@@ -287,6 +287,15 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return projects().size();
     }
 
+    @Override
+    public boolean ensureEmbeddedProject(@Nonnull TelemetryProjectRegistration project) {
+        boolean reconciled = coordinator.ensureBaseProject(project);
+        if (reconciled) {
+            consentProjects = mergedProjects(coordinator.projects(), coordinator.manualReportProjects());
+        }
+        return reconciled;
+    }
+
     @Nonnull
     @Override
     public TelemetryRuntimeApi api() {
@@ -1537,6 +1546,25 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             commandRegistrar.unregister();
             service.shutdown();
             TelemetryRuntimeLocator.clearIfCurrent(api);
+        }
+
+        @Override
+        public boolean reconcileProjectContributions(long revision,
+                                                     @Nonnull List<Map<String, Object>> contributions) {
+            boolean reconciled = service.reconcileProjectContributions(revision, contributions);
+            if (reconciled) {
+                consentProjects = mergedProjects(service.projects(), service.manualReportProjects());
+            }
+            return reconciled;
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> dispatchProjectContribution(@Nonnull String token,
+                                                               @Nonnull String operation,
+                                                               @Nonnull Map<String, Object> payload,
+                                                               @Nullable Throwable throwable) {
+            return service.dispatchProjectContribution(token, operation, payload, throwable);
         }
 
         @Override

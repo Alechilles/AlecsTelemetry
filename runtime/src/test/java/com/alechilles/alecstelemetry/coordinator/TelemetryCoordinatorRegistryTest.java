@@ -333,6 +333,17 @@ class TelemetryCoordinatorRegistryTest {
         public void shutdown() {
             lifecycle.add(providerId() + ":shutdown");
         }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
+        }
     }
 
     @SuppressWarnings("unused")
@@ -395,6 +406,17 @@ class TelemetryCoordinatorRegistryTest {
 
         public boolean isActive() {
             return active;
+        }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
         }
 
         public boolean isProjectEnabled(String projectId) {

@@ -3,8 +3,10 @@ package com.alechilles.alecstelemetry.project;
 import javax.annotation.Nonnull;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Detects registration overlaps that can make crash attribution ambiguous.
@@ -26,6 +28,34 @@ public final class TelemetryProjectCollisionDetector {
             }
         }
         return List.copyOf(new ArrayList<>(collisions.values()));
+    }
+
+    /**
+     * Returns package prefixes that overlap another project's prefix. These prefixes are unsafe
+     * for automatic stack ownership, while explicit project-scoped writes remain valid.
+     */
+    @Nonnull
+    public static Set<String> ambiguousPackagePrefixes(@Nonnull List<TelemetryProjectRegistration> projects) {
+        LinkedHashSet<String> ambiguous = new LinkedHashSet<>();
+        for (int i = 0; i < projects.size(); i++) {
+            TelemetryProjectRegistration left = projects.get(i);
+            for (int j = i + 1; j < projects.size(); j++) {
+                TelemetryProjectRegistration right = projects.get(j);
+                for (String leftPrefix : left.packagePrefixes()) {
+                    for (String rightPrefix : right.packagePrefixes()) {
+                        if (overlaps(leftPrefix, rightPrefix)) {
+                            if (leftPrefix != null && !leftPrefix.isBlank()) {
+                                ambiguous.add(leftPrefix.trim().toLowerCase(Locale.ROOT));
+                            }
+                            if (rightPrefix != null && !rightPrefix.isBlank()) {
+                                ambiguous.add(rightPrefix.trim().toLowerCase(Locale.ROOT));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return Set.copyOf(ambiguous);
     }
 
     private static void addPluginIdentifierCollisions(@Nonnull LinkedHashMap<String, Collision> collisions,
