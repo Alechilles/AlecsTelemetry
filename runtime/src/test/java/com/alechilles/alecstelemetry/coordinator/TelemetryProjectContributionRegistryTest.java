@@ -3,15 +3,22 @@ package com.alechilles.alecstelemetry.coordinator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -207,15 +214,16 @@ class TelemetryProjectContributionRegistryTest {
     }
 
     @Test
-    void exactDuplicateRegistrationSharesTokenAndUnregisterKeepsItActiveUntilLastReference() {
+    void exactDuplicateRegistrationKeepsIndependentBridgesAndFailsOverSafely() {
         RecordingBridge first = bridge("duplicate", "1.0.0", "host", "same.jar", "same-hash");
         RecordingBridge duplicate = bridge("duplicate", "1.0.0", "host", "same.jar", "same-hash");
 
         String firstToken = TelemetryProjectContributionRegistry.register(first);
         String duplicateToken = TelemetryProjectContributionRegistry.register(duplicate);
 
-        assertEquals(firstToken, duplicateToken);
+        assertNotEquals(firstToken, duplicateToken);
         assertEquals(1, TelemetryProjectContributionRegistry.activeContributions().size());
+        assertEquals(firstToken, activeToken("duplicate"));
 
         TelemetryProjectContributionRegistry.unregister(firstToken);
 
@@ -286,7 +294,8 @@ class TelemetryProjectContributionRegistryTest {
 
         assertTrue(fallbackAttemptComplete.await(1, TimeUnit.SECONDS));
         assertFalse((boolean) fallbackBeforeRelease.get(0).get("accepted"));
-        assertFalse(handoffComplete.await(150, TimeUnit.MILLISECONDS));
+        assertEquals(List.of(), fallback.acceptedTokens());
+        assertTrue(handoffComplete.await(1, TimeUnit.SECONDS));
 
         old.release.countDown();
         assertTrue(handoffComplete.await(2, TimeUnit.SECONDS));
@@ -300,7 +309,179 @@ class TelemetryProjectContributionRegistryTest {
         assertTrue((boolean) TelemetryProjectContributionRegistry
                 .dispatch(fallbackToken, "usage", Map.of("eventName", "after"), null)
                 .get("accepted"));
-        assertFalse(old.overlapped);
+    }
+
+    @Test
+    void staleHandoffCannotPublishLaterProjectBeforeItsDispatchDrains() throws Exception {
+        BlockingBridge oldA = new BlockingBridge(
+                candidate("stale-a", "2.0.0", "owner", "old-a.jar", "hash-old-a")
+        );
+        RecordingBridge fallbackA = bridge("stale-a", "1.0.0", "owner", "fallback-a.jar", "hash-fallback-a");
+        BlockingBridge oldB = new BlockingBridge(
+                candidate("stale-b", "2.0.0", "owner", "old-b.jar", "hash-old-b")
+        );
+        RecordingBridge fallbackB = bridge("stale-b", "1.0.0", "owner", "fallback-b.jar", "hash-fallback-b");
+
+        String oldAToken = TelemetryProjectContributionRegistry.register(oldA);
+        String fallbackAToken = TelemetryProjectContributionRegistry.register(fallbackA);
+        String oldBToken = TelemetryProjectContributionRegistry.register(oldB);
+        String fallbackBToken = TelemetryProjectContributionRegistry.register(fallbackB);
+        Thread oldDispatchA = dispatchInThread(oldAToken, "stale-a");
+        Thread oldDispatchB = dispatchInThread(oldBToken, "stale-b");
+        assertTrue(oldA.entered.await(1, TimeUnit.SECONDS));
+        assertTrue(oldB.entered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch handoffAComplete = new CountDownLatch(1);
+        CountDownLatch handoffBComplete = new CountDownLatch(1);
+        Thread handoffA = new Thread(() -> {
+            TelemetryProjectContributionRegistry.unregister(oldAToken);
+            handoffAComplete.countDown();
+        });
+        Thread handoffB = new Thread(() -> {
+            TelemetryProjectContributionRegistry.unregister(oldBToken);
+            handoffBComplete.countDown();
+        });
+        handoffA.start();
+        handoffB.start();
+        assertTrue(handoffAComplete.await(1, TimeUnit.SECONDS));
+        assertTrue(handoffBComplete.await(1, TimeUnit.SECONDS));
+
+        oldA.release.countDown();
+        assertTrue(handoffAComplete.await(1, TimeUnit.SECONDS));
+
+        boolean staleBPublished = waitFor(() -> activeTokenOrNull("stale-b") != null, 500);
+
+        oldB.release.countDown();
+        assertTrue(handoffBComplete.await(2, TimeUnit.SECONDS));
+        oldDispatchA.join(1_000);
+        oldDispatchB.join(1_000);
+        handoffA.join(1_000);
+        handoffB.join(1_000);
+
+        assertFalse(staleBPublished);
+        assertEquals(fallbackAToken, activeToken("stale-a"));
+        assertEquals(fallbackBToken, activeToken("stale-b"));
+    }
+
+    @Test
+    void nestedHandoffThroughIsolatedRegistryCopyReturnsBeforeDispatchRelease() throws Exception {
+        URL classes = TelemetryProjectContributionRegistry.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation();
+        try (RegistryOnlyClassLoader isolated = new RegistryOnlyClassLoader(
+                classes, TelemetryProjectContributionRegistry.class.getClassLoader())) {
+            Class<?> isolatedRegistry = isolated.loadClass(TelemetryProjectContributionRegistry.class.getName());
+            Method isolatedUnregister = isolatedRegistry.getMethod("unregister", String.class);
+            NestedHandoffBridge old = new NestedHandoffBridge(
+                    candidate("isolated-handoff", "2.0.0", "owner", "old.jar", "hash-old"),
+                    isolatedUnregister
+            );
+            RecordingBridge fallback = bridge(
+                    "isolated-handoff", "1.0.0", "owner", "fallback.jar", "hash-fallback"
+            );
+            String oldToken = TelemetryProjectContributionRegistry.register(old);
+            String fallbackToken = TelemetryProjectContributionRegistry.register(fallback);
+            old.token = oldToken;
+
+            Thread dispatch = dispatchInThread(oldToken, "isolated-handoff");
+            assertTrue(old.entered.await(1, TimeUnit.SECONDS));
+            dispatch.join(1_000);
+            assertFalse(dispatch.isAlive());
+            assertTrue(old.nestedComplete.await(2, TimeUnit.SECONDS));
+
+            assertNull(old.nestedFailure);
+            assertTrue(old.nestedReturnedBeforeDispatchRelease,
+                    "isolated handoff should not wait on a lease owned by another registry copy");
+            assertEquals(fallbackToken, activeToken("isolated-handoff"));
+        }
+    }
+
+    @Test
+    void stalledProjectDoesNotBlockUnrelatedMutationSnapshotDispatchOrInterruptibleRetirement() throws Exception {
+        BlockingBridge oldA = new BlockingBridge(
+                candidate("stalled-a", "2.0.0", "owner", "old-a.jar", "hash-old-a")
+        );
+        RecordingBridge fallbackA = bridge("stalled-a", "1.0.0", "owner", "fallback-a.jar", "hash-fallback-a");
+        String oldAToken = TelemetryProjectContributionRegistry.register(oldA);
+        String fallbackAToken = TelemetryProjectContributionRegistry.register(fallbackA);
+        Thread oldDispatch = dispatchInThread(oldAToken, "stalled-a");
+        assertTrue(oldA.entered.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch retireComplete = new CountDownLatch(1);
+        Thread retire = new Thread(() -> {
+            TelemetryProjectContributionRegistry.unregister(oldAToken);
+            retireComplete.countDown();
+        });
+        retire.start();
+        assertTrue(retireComplete.await(1, TimeUnit.SECONDS));
+
+        CountDownLatch snapshotComplete = new CountDownLatch(1);
+        Thread snapshot = new Thread(() -> {
+            TelemetryProjectContributionRegistry.activeContributions();
+            snapshotComplete.countDown();
+        });
+        snapshot.start();
+        boolean snapshotReturned = snapshotComplete.await(500, TimeUnit.MILLISECONDS);
+
+        RecordingBridge projectB = bridge("stalled-b", "1.0.0", "owner", "b.jar", "hash-b");
+        CountDownLatch registerBComplete = new CountDownLatch(1);
+        List<String> projectBToken = new ArrayList<>();
+        Thread registerB = new Thread(() -> {
+            projectBToken.add(TelemetryProjectContributionRegistry.register(projectB));
+            registerBComplete.countDown();
+        });
+        registerB.start();
+        boolean registerBReturned = registerBComplete.await(500, TimeUnit.MILLISECONDS);
+        boolean projectBDispatchAccepted = registerBReturned
+                && (boolean) TelemetryProjectContributionRegistry
+                .dispatch(projectBToken.get(0), "usage", Map.of("eventName", "unrelated"), null)
+                .get("accepted");
+
+        retire.interrupt();
+        boolean retireReturnedAfterInterrupt = retireComplete.await(300, TimeUnit.MILLISECONDS);
+
+        oldA.release.countDown();
+        oldDispatch.join(1_000);
+        retire.join(1_000);
+        registerB.join(1_000);
+        snapshot.join(1_000);
+
+        assertTrue(snapshotReturned);
+        assertTrue(registerBReturned);
+        assertTrue(projectBDispatchAccepted);
+        assertTrue(retireReturnedAfterInterrupt);
+        assertEquals(fallbackAToken, activeToken("stalled-a"));
+    }
+
+    @Test
+    void comparatorEquivalentRegistrationsUseIndependentTokensAndFailOverTheirBridges() {
+        Map<String, Object> candidate = candidate(
+                "equivalent", "1.0.0", "owner", "same.jar", "same-hash"
+        );
+        Map<String, Object> equivalentCandidate = new LinkedHashMap<>(candidate);
+        equivalentCandidate.put("descriptorJson", "{\"equivalent\":true}");
+        RecordingBridge first = new RecordingBridge(candidate);
+        RecordingBridge second = new RecordingBridge(equivalentCandidate);
+
+        String firstToken = TelemetryProjectContributionRegistry.register(first);
+        String secondToken = TelemetryProjectContributionRegistry.register(second);
+
+        assertNotEquals(firstToken, secondToken);
+        assertEquals(1, TelemetryProjectContributionRegistry.activeContributions().size());
+        assertEquals(firstToken, activeToken("equivalent"));
+        assertTrue((boolean) TelemetryProjectContributionRegistry
+                .dispatch(firstToken, "usage", Map.of("eventName", "first"), null)
+                .get("accepted"));
+
+        TelemetryProjectContributionRegistry.unregister(firstToken);
+
+        assertEquals(secondToken, activeToken("equivalent"));
+        assertTrue((boolean) TelemetryProjectContributionRegistry
+                .dispatch(secondToken, "usage", Map.of("eventName", "second"), null)
+                .get("accepted"));
+        assertEquals(List.of(firstToken), first.acceptedTokens());
+        assertEquals(List.of(secondToken), second.acceptedTokens());
     }
 
     private static String activeToken(String projectId) {
@@ -309,6 +490,33 @@ class TelemetryProjectContributionRegistryTest {
                 .findFirst()
                 .map(candidate -> candidate.get("token").toString())
                 .orElseThrow();
+    }
+
+    private static String activeTokenOrNull(String projectId) {
+        return TelemetryProjectContributionRegistry.activeContributions().stream()
+                .filter(candidate -> projectId.equalsIgnoreCase(candidate.get("projectId").toString()))
+                .map(candidate -> candidate.get("token").toString())
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static Thread dispatchInThread(String token, String eventName) {
+        Thread dispatch = new Thread(() -> TelemetryProjectContributionRegistry.dispatch(
+                token, "usage", Map.of("eventName", eventName), null
+        ));
+        dispatch.start();
+        return dispatch;
+    }
+
+    private static boolean waitFor(BooleanSupplier condition, long timeoutMillis) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return condition.getAsBoolean();
     }
 
     private static RecordingBridge bridge(String projectId,
@@ -417,6 +625,71 @@ class TelemetryProjectContributionRegistryTest {
         }
     }
 
+    private static final class NestedHandoffBridge extends RecordingBridge {
+        private final Method isolatedUnregister;
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch nestedComplete = new CountDownLatch(1);
+        private volatile String token;
+        private volatile boolean nestedReturnedBeforeDispatchRelease;
+        private volatile Throwable nestedFailure;
+
+        private NestedHandoffBridge(Map<String, Object> candidate, Method isolatedUnregister) {
+            super(candidate);
+            this.isolatedUnregister = isolatedUnregister;
+        }
+
+        @Override
+        public Map<String, Object> dispatch(String token,
+                                             String operation,
+                                             Map<String, Object> payload,
+                                             Throwable throwable) {
+            entered.countDown();
+            Thread nested = new Thread(() -> {
+                try {
+                    isolatedUnregister.invoke(null, this.token);
+                } catch (InvocationTargetException failure) {
+                    nestedFailure = failure.getCause();
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError failure) {
+                    nestedFailure = failure;
+                } finally {
+                    nestedComplete.countDown();
+                }
+            });
+            nested.start();
+            try {
+                nestedReturnedBeforeDispatchRelease = nestedComplete.await(150, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            return Map.of("accepted", true);
+        }
+    }
+
+    private static final class RegistryOnlyClassLoader extends URLClassLoader {
+        private static final String REGISTRY_CLASS = TelemetryProjectContributionRegistry.class.getName();
+
+        private RegistryOnlyClassLoader(URL classes, ClassLoader parent) {
+            super(new URL[]{classes}, parent);
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            if (!REGISTRY_CLASS.equals(name) && !name.startsWith(REGISTRY_CLASS + "$")) {
+                return super.loadClass(name, resolve);
+            }
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> loaded = findLoadedClass(name);
+                if (loaded == null) {
+                    loaded = findClass(name);
+                }
+                if (resolve) {
+                    resolveClass(loaded);
+                }
+                return loaded;
+            }
+        }
+    }
+
     private static final class LinkageBridge extends RecordingBridge {
         private final boolean abiLinkageError;
         private final boolean candidateLinkageError;
@@ -511,8 +784,6 @@ class TelemetryProjectContributionRegistryTest {
     private static final class BlockingBridge extends RecordingBridge {
         private final CountDownLatch entered = new CountDownLatch(1);
         private final CountDownLatch release = new CountDownLatch(1);
-        private volatile boolean inDispatch;
-        private volatile boolean overlapped;
 
         private BlockingBridge(Map<String, Object> candidate) {
             super(candidate);
@@ -523,7 +794,6 @@ class TelemetryProjectContributionRegistryTest {
                                              String operation,
                                              Map<String, Object> payload,
                                              Throwable throwable) {
-            inDispatch = true;
             entered.countDown();
             try {
                 release.await(2, TimeUnit.SECONDS);
@@ -531,8 +801,6 @@ class TelemetryProjectContributionRegistryTest {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return Map.of("accepted", false, "reason", "interrupted");
-            } finally {
-                inDispatch = false;
             }
         }
     }

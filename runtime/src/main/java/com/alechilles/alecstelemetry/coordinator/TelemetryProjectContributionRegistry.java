@@ -9,7 +9,6 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,7 +27,8 @@ import java.util.logging.Logger;
  * <p>The only shared state is a JDK {@link ConcurrentHashMap} held by a system property. Raw
  * bridge objects stay in that map, while every public snapshot is made up solely of defensive
  * JDK collections and scalar values. Election and token validation share the map monitor so a
- * retiring token is fenced before a replacement token can dispatch.</p>
+ * retiring token is fenced before a replacement token can dispatch; a stalled project handoff
+ * remains pending only for that normalized project.</p>
  */
 public final class TelemetryProjectContributionRegistry {
 
@@ -45,16 +45,14 @@ public final class TelemetryProjectContributionRegistry {
     private static final String STATE_FINGERPRINT_KEY = "__state.fingerprint";
     private static final String STATE_IN_FLIGHT_KEY = "__state.inFlight";
     private static final String STATE_FENCED_KEY = "__state.fenced";
-    private static final String STATE_PENDING_WINNERS_KEY = "__state.pendingWinners";
-    private static final String STATE_PENDING_LINEAGES_KEY = "__state.pendingLineages";
-    private static final String STATE_PENDING_DIAGNOSTICS_KEY = "__state.pendingDiagnostics";
-    private static final String STATE_PENDING_FINGERPRINT_KEY = "__state.pendingFingerprint";
-    private static final String STATE_PENDING_REVISION_KEY = "__state.pendingRevision";
-    private static final String STATE_REFERENCE_COUNTS_KEY = "__state.referenceCounts";
+    private static final String STATE_PENDING_PROJECTS_KEY = "__state.pendingProjects";
+    private static final String STATE_NEXT_SEQUENCE_KEY = "__state.nextSequence";
+    private static final String ENTRY_SEQUENCE_KEY = "__sequence";
+    private static final String PENDING_OLD_TOKEN_KEY = "oldToken";
+    private static final String PENDING_WINNER_TOKEN_KEY = "winnerToken";
+    private static final String PENDING_LINEAGE_KEY = "lineage";
     private static final int MAX_DIAGNOSTICS = 64;
     private static final Logger LOGGER = Logger.getLogger(TelemetryProjectContributionRegistry.class.getName());
-    private static final ThreadLocal<Map<String, Integer>> ACTIVE_LEASES =
-            ThreadLocal.withInitial(HashMap::new);
 
     private static final List<String> CANDIDATE_KEYS = List.of(
             "abiVersion",
@@ -77,49 +75,33 @@ public final class TelemetryProjectContributionRegistry {
         Objects.requireNonNull(bridge, "bridge");
         Map<String, Object> candidate = candidateFromBridge(bridge);
         ConcurrentHashMap<String, Object> registry = registry();
-        HandoffPlan handoff;
         String token;
         synchronized (registry) {
-            Map<String, Object> duplicate = findDuplicateLocked(registry, candidate);
-            if (duplicate != null) {
-                token = stringValue(duplicate.get("token"));
-                incrementReferenceLocked(registry, token);
-                return token;
-            }
             token = UUID.randomUUID().toString();
             LinkedHashMap<String, Object> entry = new LinkedHashMap<>(candidate);
             entry.put("token", token);
             entry.put("bridge", bridge);
+            entry.put(ENTRY_SEQUENCE_KEY, nextSequenceLocked(registry));
             registry.put(token, Collections.unmodifiableMap(entry));
-            setReferenceCountLocked(registry, token, 1);
-            handoff = reconcileLocked(registry);
+            reconcileLocked(registry);
         }
-        awaitHandoff(registry, handoff);
         return token;
     }
 
-    /** Removes a token and publishes the next complete election snapshot atomically. */
+    /** Removes a token and publishes or records the next project election without waiting. */
     public static void unregister(String token) {
         if (token == null || token.isBlank()) {
             return;
         }
         ConcurrentHashMap<String, Object> registry = registry();
-        HandoffPlan handoff;
         synchronized (registry) {
             Map<String, Object> entry = entryForTokenLocked(registry, token);
             if (entry == null) {
                 return;
             }
-            int references = referenceCountLocked(registry, token);
-            if (references > 1) {
-                setReferenceCountLocked(registry, token, references - 1);
-                return;
-            }
             registry.remove(token);
-            removeReferenceLocked(registry, token);
-            handoff = reconcileLocked(registry);
+            reconcileLocked(registry);
         }
-        awaitHandoff(registry, handoff);
     }
 
     /** Returns whether this token is the current winner for its project. */
@@ -221,7 +203,6 @@ public final class TelemetryProjectContributionRegistry {
                 return rejection("bridge_unavailable");
             }
             incrementInFlightLocked(registry, token);
-            incrementCurrentLease(token);
         }
         try {
             Object result = invoke(
@@ -239,7 +220,6 @@ public final class TelemetryProjectContributionRegistry {
         } catch (LinkageError error) {
             return rejection("bridge_dispatch_failed");
         } finally {
-            decrementCurrentLease(token);
             releaseInFlight(registry, token);
         }
     }
@@ -269,20 +249,146 @@ public final class TelemetryProjectContributionRegistry {
                 : created;
     }
 
-    private static HandoffPlan reconcileLocked(ConcurrentHashMap<String, Object> registry) {
-        if (registry.get(STATE_PENDING_WINNERS_KEY) instanceof Map<?, ?>) {
-            return null;
-        }
+    private static void reconcileLocked(ConcurrentHashMap<String, Object> registry) {
+        ensureRegistrationSequencesLocked(registry);
         List<Map<String, Object>> entries = entriesLocked(registry);
         String fingerprint = fingerprint(entries);
         String previousFingerprint = stringValue(registry.get(STATE_FINGERPRINT_KEY));
+        Map<String, Map<String, Object>> existingPending = pendingProjects(registry.get(STATE_PENDING_PROJECTS_KEY));
+        Map<String, Integer> currentInFlight = integerMap(registry.get(STATE_IN_FLIGHT_KEY));
+        boolean pendingReady = existingPending.values().stream()
+                .anyMatch(value -> currentInFlight.getOrDefault(
+                        stringValue(value.get(PENDING_OLD_TOKEN_KEY)), 0
+                ) == 0);
         if (fingerprint.equals(previousFingerprint)
+                && !pendingReady
                 && registry.get(STATE_WINNERS_KEY) instanceof Map<?, ?>
                 && registry.get(STATE_LINEAGES_KEY) instanceof Map<?, ?>
                 && registry.get(STATE_DIAGNOSTICS_KEY) instanceof List<?>) {
-            return null;
+            return;
         }
 
+        DesiredState desired = electDesiredState(entries, registry);
+        LinkedHashMap<String, String> winners = new LinkedHashMap<>(winnersLocked(registry));
+        LinkedHashMap<String, String> lineages = new LinkedHashMap<>(stringMap(registry.get(STATE_LINEAGES_KEY)));
+        ArrayList<Map<String, Object>> diagnostics = new ArrayList<>(desired.diagnostics());
+        LinkedHashMap<String, String> fenced = new LinkedHashMap<>(stringMap(registry.get(STATE_FENCED_KEY)));
+        LinkedHashMap<String, Map<String, Object>> pending = new LinkedHashMap<>(existingPending);
+        Map<String, Integer> inFlight = integerMap(registry.get(STATE_IN_FLIGHT_KEY));
+        LinkedHashSet<String> projects = new LinkedHashSet<>();
+        projects.addAll(winners.keySet());
+        projects.addAll(desired.winners().keySet());
+        projects.addAll(pending.keySet());
+
+        boolean stateChanged = false;
+        for (String projectId : projects) {
+            String currentToken = winners.getOrDefault(projectId, "");
+            String desiredToken = desired.winners().getOrDefault(projectId, "");
+            Map<String, Object> previousPending = pending.get(projectId);
+            String oldToken = previousPending == null
+                    ? currentToken
+                    : stringValue(previousPending.get(PENDING_OLD_TOKEN_KEY));
+            boolean oldInFlight = !oldToken.isBlank() && inFlight.getOrDefault(oldToken, 0) > 0;
+
+            if (previousPending != null) {
+                Map<String, Object> nextPending = pendingSnapshot(
+                        oldToken,
+                        desiredToken,
+                        desired.lineages().getOrDefault(projectId, lineages.getOrDefault(projectId, ""))
+                );
+                if (oldInFlight) {
+                    fenced.put(oldToken, projectId);
+                    if (!nextPending.equals(previousPending)) {
+                        pending.put(projectId, nextPending);
+                        stateChanged = true;
+                    }
+                    continue;
+                }
+                pending.remove(projectId);
+                if (!oldToken.isBlank()) {
+                    fenced.remove(oldToken);
+                }
+                if (replaceWinner(winners, projectId, desiredToken)) {
+                    stateChanged = true;
+                }
+                if (putLineage(lineages, projectId, desired.lineages().get(projectId))) {
+                    stateChanged = true;
+                }
+                stateChanged = true;
+                continue;
+            }
+
+            if (!Objects.equals(currentToken, desiredToken)) {
+                if (!currentToken.isBlank()) {
+                    fenced.put(currentToken, projectId);
+                    if (inFlight.getOrDefault(currentToken, 0) > 0) {
+                        pending.put(projectId, pendingSnapshot(
+                                currentToken,
+                                desiredToken,
+                                desired.lineages().getOrDefault(projectId, lineages.getOrDefault(projectId, ""))
+                        ));
+                        stateChanged = true;
+                        continue;
+                    }
+                    fenced.remove(currentToken);
+                }
+                if (replaceWinner(winners, projectId, desiredToken)) {
+                    stateChanged = true;
+                }
+                if (putLineage(lineages, projectId, desired.lineages().get(projectId))) {
+                    stateChanged = true;
+                }
+            } else if (!currentToken.isBlank()
+                    && fenced.containsKey(currentToken)
+                    && inFlight.getOrDefault(currentToken, 0) == 0) {
+                fenced.remove(currentToken);
+                stateChanged = true;
+            }
+        }
+
+        pending.entrySet().removeIf(entry -> {
+            String oldToken = stringValue(entry.getValue().get(PENDING_OLD_TOKEN_KEY));
+            return oldToken.isBlank();
+        });
+        fenced.entrySet().removeIf(entry -> pending.values().stream()
+                .noneMatch(value -> entry.getKey().equals(stringValue(value.get(PENDING_OLD_TOKEN_KEY)))));
+
+        List<Map<String, Object>> previousDiagnostics = registry.get(STATE_DIAGNOSTICS_KEY) instanceof List<?>
+                ? copyStringObjectMapList(registry.get(STATE_DIAGNOSTICS_KEY))
+                : List.of();
+        boolean publicationChanged = stateChanged
+                || !fingerprint.equals(previousFingerprint)
+                || !lineages.equals(stringMap(registry.get(STATE_LINEAGES_KEY)))
+                || !diagnostics.equals(previousDiagnostics)
+                || !(registry.get(STATE_WINNERS_KEY) instanceof Map<?, ?>)
+                || !(registry.get(STATE_LINEAGES_KEY) instanceof Map<?, ?>)
+                || !(registry.get(STATE_DIAGNOSTICS_KEY) instanceof List<?>);
+        if (publicationChanged) {
+            registry.put(STATE_WINNERS_KEY, immutableStringMap(winners));
+            registry.put(STATE_LINEAGES_KEY, immutableStringMap(lineages));
+            registry.put(STATE_DIAGNOSTICS_KEY, immutableDiagnosticList(diagnostics));
+            registry.put(STATE_FINGERPRINT_KEY, fingerprint);
+            long previousRevision = numberValue(registry.get(STATE_REVISION_KEY));
+            long nextRevision = fingerprint.isEmpty()
+                    && registry.get(STATE_REVISION_KEY) == null
+                    ? previousRevision
+                    : previousRevision + 1L;
+            registry.put(STATE_REVISION_KEY, nextRevision);
+        }
+        if (pending.isEmpty()) {
+            registry.remove(STATE_PENDING_PROJECTS_KEY);
+        } else {
+            registry.put(STATE_PENDING_PROJECTS_KEY, immutablePendingProjects(pending));
+        }
+        if (fenced.isEmpty()) {
+            registry.remove(STATE_FENCED_KEY);
+        } else {
+            registry.put(STATE_FENCED_KEY, immutableStringMap(fenced));
+        }
+    }
+
+    private static DesiredState electDesiredState(List<Map<String, Object>> entries,
+                                                  ConcurrentHashMap<String, Object> registry) {
         LinkedHashMap<String, String> lineages = new LinkedHashMap<>(stringMap(registry.get(STATE_LINEAGES_KEY)));
         LinkedHashMap<String, String> winners = new LinkedHashMap<>();
         ArrayList<Map<String, Object>> diagnostics = new ArrayList<>();
@@ -303,30 +409,26 @@ public final class TelemetryProjectContributionRegistry {
                 ));
             }
         }
-
         for (Map.Entry<String, List<Map<String, Object>>> group : grouped.entrySet()) {
             String projectId = group.getKey();
             ArrayList<Map<String, Object>> valid = new ArrayList<>();
             for (Map<String, Object> entry : group.getValue()) {
-                TelemetryProjectContributionCandidate candidate = candidateFromEntry(entry);
-                if (candidate.valid()) {
+                if (candidateFromEntry(entry).valid()) {
                     valid.add(entry);
                 }
             }
             if (valid.isEmpty()) {
                 continue;
             }
-
             String lineage = lineages.get(projectId);
             if (lineage == null || lineage.isBlank()) {
-                Map<String, Object> initialWinner = valid.stream().max(ELECTION_ORDER).orElse(null);
+                Map<String, Object> initialWinner = selectElectionWinner(valid);
                 if (initialWinner == null) {
                     continue;
                 }
                 lineage = candidateFromEntry(initialWinner).normalizedOwner();
                 lineages.put(projectId, lineage);
             }
-
             String establishedLineage = lineage;
             ArrayList<Map<String, Object>> ownerCandidates = new ArrayList<>();
             for (Map<String, Object> entry : valid) {
@@ -345,150 +447,100 @@ public final class TelemetryProjectContributionRegistry {
             if (ownerCandidates.isEmpty()) {
                 continue;
             }
+            Map<String, Object> winner = selectElectionWinner(ownerCandidates);
+            if (winner != null) {
+                winners.put(projectId, stringValue(winner.get("token")));
+                addDescriptorDriftDiagnostics(diagnostics, ownerCandidates, projectId);
+            }
+        }
+        return new DesiredState(winners, lineages, diagnostics);
+    }
 
-            Map<String, Object> winner = ownerCandidates.stream().max(ELECTION_ORDER).orElse(null);
+    private static Map<String, Object> selectElectionWinner(List<Map<String, Object>> candidates) {
+        Map<String, Object> winner = null;
+        for (Map<String, Object> candidate : candidates) {
             if (winner == null) {
+                winner = candidate;
                 continue;
             }
-            winners.put(projectId, stringValue(winner.get("token")));
-
-            addDescriptorDriftDiagnostics(diagnostics, ownerCandidates, projectId);
-        }
-
-        Map<String, String> currentWinners = winnersLocked(registry);
-        List<String> oldTokens = changedWinnerTokens(currentWinners, winners);
-        if (!oldTokens.isEmpty()) {
-            LinkedHashMap<String, String> fenced = new LinkedHashMap<>(stringMap(registry.get(STATE_FENCED_KEY)));
-            for (String token : oldTokens) {
-                fenced.put(token, "true");
+            int comparison;
+            try {
+                comparison = ELECTION_ORDER.compare(candidate, winner);
+            } catch (RuntimeException | LinkageError ignored) {
+                comparison = 0;
             }
-            long previousRevision = numberValue(registry.get(STATE_REVISION_KEY));
-            long nextRevision = entries.isEmpty()
-                    && registry.get(STATE_REVISION_KEY) == null
-                    ? previousRevision
-                    : previousRevision + 1L;
-            registry.put(STATE_FENCED_KEY, immutableStringMap(fenced));
-            registry.put(STATE_PENDING_WINNERS_KEY, immutableStringMap(winners));
-            registry.put(STATE_PENDING_LINEAGES_KEY, immutableStringMap(lineages));
-            registry.put(STATE_PENDING_DIAGNOSTICS_KEY, immutableDiagnosticList(diagnostics));
-            registry.put(STATE_PENDING_FINGERPRINT_KEY, fingerprint);
-            registry.put(STATE_PENDING_REVISION_KEY, nextRevision);
-            return new HandoffPlan(List.copyOf(oldTokens));
-        }
-        publishStateLocked(registry, winners, lineages, diagnostics, fingerprint);
-        return null;
-    }
-
-    private static List<String> changedWinnerTokens(Map<String, String> current,
-                                                    Map<String, String> desired) {
-        LinkedHashSet<String> changed = new LinkedHashSet<>();
-        for (Map.Entry<String, String> entry : current.entrySet()) {
-            if (!Objects.equals(entry.getValue(), desired.get(entry.getKey()))) {
-                changed.add(entry.getValue());
+            if (comparison > 0 || (comparison == 0 && entrySequence(candidate) < entrySequence(winner))) {
+                winner = candidate;
             }
         }
-        return List.copyOf(changed);
+        return winner;
     }
 
-    private static void publishStateLocked(ConcurrentHashMap<String, Object> registry,
-                                           Map<String, String> winners,
-                                           Map<String, String> lineages,
-                                           List<Map<String, Object>> diagnostics,
-                                           String fingerprint) {
-        long previousRevision = numberValue(registry.get(STATE_REVISION_KEY));
-        long nextRevision = fingerprint.isEmpty()
-                && registry.get(STATE_REVISION_KEY) == null
-                ? previousRevision
-                : previousRevision + 1L;
-        registry.put(STATE_WINNERS_KEY, immutableStringMap(winners));
-        registry.put(STATE_LINEAGES_KEY, immutableStringMap(lineages));
-        registry.put(STATE_DIAGNOSTICS_KEY, immutableDiagnosticList(diagnostics));
-        registry.put(STATE_FINGERPRINT_KEY, fingerprint);
-        registry.put(STATE_REVISION_KEY, nextRevision);
+    private static long entrySequence(Map<String, Object> entry) {
+        return numberValue(entry.get(ENTRY_SEQUENCE_KEY));
     }
 
-    private static void awaitHandoff(ConcurrentHashMap<String, Object> registry,
-                                     HandoffPlan initialPlan) {
-        HandoffPlan plan = initialPlan;
-        boolean interrupted = false;
-        for (;;) {
-            synchronized (registry) {
-                if (plan == null) {
-                    if (registry.get(STATE_PENDING_WINNERS_KEY) instanceof Map<?, ?>) {
-                        try {
-                            registry.wait(50L);
-                        } catch (InterruptedException ignored) {
-                            interrupted = true;
-                        }
-                        continue;
-                    }
-                    plan = reconcileLocked(registry);
-                    if (plan == null) {
-                        if (interrupted) {
-                            Thread.currentThread().interrupt();
-                        }
-                        return;
-                    }
-                }
-                if (hasInFlightLocked(registry, plan.oldTokens())
-                        && !currentThreadOwnsAnyInFlight(registry, plan.oldTokens())) {
-                    try {
-                        registry.wait(50L);
-                    } catch (InterruptedException ignored) {
-                        interrupted = true;
-                    }
-                    continue;
-                }
-                if (hasInFlightLocked(registry, plan.oldTokens())) {
-                    if (interrupted) {
-                        Thread.currentThread().interrupt();
-                    }
-                    return;
-                }
-                publishPendingLocked(registry);
-                plan = reconcileLocked(registry);
-                registry.notifyAll();
-                if (plan == null && !(registry.get(STATE_PENDING_WINNERS_KEY) instanceof Map<?, ?>)) {
-                    if (interrupted) {
-                        Thread.currentThread().interrupt();
-                    }
-                    return;
-                }
+    private static boolean replaceWinner(Map<String, String> winners,
+                                         String projectId,
+                                         String token) {
+        if (token.isBlank()) {
+            return winners.remove(projectId) != null;
+        }
+        return !Objects.equals(winners.put(projectId, token), token);
+    }
+
+    private static boolean putLineage(Map<String, String> lineages,
+                                      String projectId,
+                                      String lineage) {
+        if (lineage == null || lineage.isBlank()) {
+            return false;
+        }
+        return !Objects.equals(lineages.put(projectId, lineage), lineage);
+    }
+
+    private static Map<String, Object> pendingSnapshot(String oldToken,
+                                                        String winnerToken,
+                                                        String lineage) {
+        LinkedHashMap<String, Object> pending = new LinkedHashMap<>();
+        pending.put(PENDING_OLD_TOKEN_KEY, oldToken);
+        pending.put(PENDING_WINNER_TOKEN_KEY, winnerToken);
+        pending.put(PENDING_LINEAGE_KEY, lineage == null ? "" : lineage);
+        return Collections.unmodifiableMap(pending);
+    }
+
+    private static Map<String, Map<String, Object>> pendingProjects(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        LinkedHashMap<String, Map<String, Object>> pending = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() != null && entry.getValue() instanceof Map<?, ?> value) {
+                pending.put(entry.getKey().toString(), copyStringObjectMap(value));
             }
         }
+        return pending;
     }
 
-    private static void publishPendingLocked(ConcurrentHashMap<String, Object> registry) {
-        Object pendingWinners = registry.get(STATE_PENDING_WINNERS_KEY);
-        if (!(pendingWinners instanceof Map<?, ?> winners)) {
-            return;
+    private static Map<String, Map<String, Object>> immutablePendingProjects(
+            Map<String, Map<String, Object>> pending) {
+        LinkedHashMap<String, Map<String, Object>> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Map<String, Object>> entry : pending.entrySet()) {
+            copy.put(entry.getKey(), Collections.unmodifiableMap(new LinkedHashMap<>(entry.getValue())));
         }
-        Map<String, String> lineages = stringMap(registry.get(STATE_PENDING_LINEAGES_KEY));
-        List<Map<String, Object>> diagnostics = diagnosticList(registry.get(STATE_PENDING_DIAGNOSTICS_KEY));
-        String fingerprint = stringValue(registry.get(STATE_PENDING_FINGERPRINT_KEY));
-        long revision = numberValue(registry.get(STATE_PENDING_REVISION_KEY));
-        registry.put(STATE_WINNERS_KEY, immutableStringMap(stringMap(winners)));
-        registry.put(STATE_LINEAGES_KEY, immutableStringMap(lineages));
-        registry.put(STATE_DIAGNOSTICS_KEY, immutableDiagnosticList(diagnostics));
-        registry.put(STATE_FINGERPRINT_KEY, fingerprint);
-        registry.put(STATE_REVISION_KEY, revision);
-        registry.remove(STATE_PENDING_WINNERS_KEY);
-        registry.remove(STATE_PENDING_LINEAGES_KEY);
-        registry.remove(STATE_PENDING_DIAGNOSTICS_KEY);
-        registry.remove(STATE_PENDING_FINGERPRINT_KEY);
-        registry.remove(STATE_PENDING_REVISION_KEY);
-        registry.remove(STATE_FENCED_KEY);
+        return Collections.unmodifiableMap(copy);
     }
 
-    private static boolean hasInFlightLocked(ConcurrentHashMap<String, Object> registry,
-                                             List<String> tokens) {
-        Map<String, Integer> inFlight = integerMap(registry.get(STATE_IN_FLIGHT_KEY));
-        for (String token : tokens) {
-            if (inFlight.getOrDefault(token, 0) > 0) {
-                return true;
+    private static List<Map<String, Object>> copyStringObjectMapList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        ArrayList<Map<String, Object>> copy = new ArrayList<>();
+        for (Object value : list) {
+            if (value instanceof Map<?, ?> map) {
+                copy.add(copyStringObjectMap(map));
             }
         }
-        return false;
+        return List.copyOf(copy);
     }
 
     private static boolean isFencedLocked(ConcurrentHashMap<String, Object> registry,
@@ -514,98 +566,43 @@ public final class TelemetryProjectContributionRegistry {
                 counts.remove(token);
             }
             registry.put(STATE_IN_FLIGHT_KEY, Collections.unmodifiableMap(counts));
-            finalizeReadyHandoffLocked(registry);
-            registry.notifyAll();
+            reconcileLocked(registry);
         }
     }
 
-    private static void incrementCurrentLease(String token) {
-        Map<String, Integer> leases = ACTIVE_LEASES.get();
-        leases.put(token, leases.getOrDefault(token, 0) + 1);
+    private static long nextSequenceLocked(ConcurrentHashMap<String, Object> registry) {
+        long next = numberValue(registry.get(STATE_NEXT_SEQUENCE_KEY)) + 1L;
+        registry.put(STATE_NEXT_SEQUENCE_KEY, next);
+        return next;
     }
 
-    private static void decrementCurrentLease(String token) {
-        Map<String, Integer> leases = ACTIVE_LEASES.get();
-        int remaining = leases.getOrDefault(token, 0) - 1;
-        if (remaining > 0) {
-            leases.put(token, remaining);
-        } else {
-            leases.remove(token);
-        }
-        if (leases.isEmpty()) {
-            ACTIVE_LEASES.remove();
-        }
-    }
-
-    private static boolean currentThreadOwnsAnyInFlight(ConcurrentHashMap<String, Object> registry,
-                                                        List<String> tokens) {
-        Map<String, Integer> inFlight = integerMap(registry.get(STATE_IN_FLIGHT_KEY));
-        Map<String, Integer> current = ACTIVE_LEASES.get();
-        for (String token : tokens) {
-            if (inFlight.getOrDefault(token, 0) > 0 && current.getOrDefault(token, 0) > 0) {
-                return true;
+    private static void ensureRegistrationSequencesLocked(ConcurrentHashMap<String, Object> registry) {
+        long next = numberValue(registry.get(STATE_NEXT_SEQUENCE_KEY));
+        boolean changed = false;
+        for (Map.Entry<String, Object> item : List.copyOf(registry.entrySet())) {
+            if (!isEntry(item.getValue())) {
+                continue;
             }
-        }
-        return false;
-    }
-
-    private static void finalizeReadyHandoffLocked(ConcurrentHashMap<String, Object> registry) {
-        while (registry.get(STATE_PENDING_WINNERS_KEY) instanceof Map<?, ?>) {
-            List<String> fenced = new ArrayList<>(stringMap(registry.get(STATE_FENCED_KEY)).keySet());
-            if (hasInFlightLocked(registry, fenced)) {
-                return;
+            Map<?, ?> source = (Map<?, ?>) item.getValue();
+            Object rawSequence = source.get(ENTRY_SEQUENCE_KEY);
+            if (rawSequence instanceof Number number && number.longValue() > 0L) {
+                next = Math.max(next, number.longValue());
+                continue;
             }
-            publishPendingLocked(registry);
-            HandoffPlan next = reconcileLocked(registry);
-            if (next == null) {
-                return;
+            next++;
+            LinkedHashMap<String, Object> replacement = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> field : source.entrySet()) {
+                if (field.getKey() != null) {
+                    replacement.put(field.getKey().toString(), field.getValue());
+                }
             }
+            replacement.put(ENTRY_SEQUENCE_KEY, next);
+            registry.put(item.getKey(), Collections.unmodifiableMap(replacement));
+            changed = true;
         }
-    }
-
-    private static Map<String, Object> findDuplicateLocked(ConcurrentHashMap<String, Object> registry,
-                                                            Map<String, Object> candidate) {
-        for (Map<String, Object> entry : entriesLocked(registry)) {
-            if (sameCandidateFields(candidate, entry)) {
-                return entry;
-            }
+        if (changed || registry.get(STATE_NEXT_SEQUENCE_KEY) == null) {
+            registry.put(STATE_NEXT_SEQUENCE_KEY, next);
         }
-        return null;
-    }
-
-    private static boolean sameCandidateFields(Map<String, Object> left,
-                                               Map<String, Object> right) {
-        for (String field : CANDIDATE_KEYS) {
-            if (!Objects.equals(left.get(field), right.get(field))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static void incrementReferenceLocked(ConcurrentHashMap<String, Object> registry,
-                                                 String token) {
-        setReferenceCountLocked(registry, token, referenceCountLocked(registry, token) + 1);
-    }
-
-    private static int referenceCountLocked(ConcurrentHashMap<String, Object> registry,
-                                            String token) {
-        return integerMap(registry.get(STATE_REFERENCE_COUNTS_KEY)).getOrDefault(token, 1);
-    }
-
-    private static void setReferenceCountLocked(ConcurrentHashMap<String, Object> registry,
-                                                String token,
-                                                int count) {
-        LinkedHashMap<String, Integer> references = new LinkedHashMap<>(integerMap(registry.get(STATE_REFERENCE_COUNTS_KEY)));
-        references.put(token, count);
-        registry.put(STATE_REFERENCE_COUNTS_KEY, Collections.unmodifiableMap(references));
-    }
-
-    private static void removeReferenceLocked(ConcurrentHashMap<String, Object> registry,
-                                              String token) {
-        LinkedHashMap<String, Integer> references = new LinkedHashMap<>(integerMap(registry.get(STATE_REFERENCE_COUNTS_KEY)));
-        references.remove(token);
-        registry.put(STATE_REFERENCE_COUNTS_KEY, Collections.unmodifiableMap(references));
     }
 
     private static final Comparator<Map<String, Object>> ELECTION_ORDER = (left, right) -> {
@@ -688,7 +685,7 @@ public final class TelemetryProjectContributionRegistry {
                 entries.add(copyEntry((Map<?, ?>) value));
             }
         }
-        entries.sort(Comparator.comparing(entry -> stringValue(entry.get("token"))));
+        entries.sort(Comparator.comparingLong(TelemetryProjectContributionRegistry::entrySequence));
         return List.copyOf(entries);
     }
 
@@ -740,7 +737,9 @@ public final class TelemetryProjectContributionRegistry {
             // Missing bridge methods are represented by invalid metadata below.
         }
         int candidateAbi = intValue(candidate.get("abiVersion"), bridgeAbi);
-        if (candidate.containsKey("abiVersion") && candidateAbi != bridgeAbi) {
+        if (!candidate.containsKey("abiVersion")
+                || candidate.get("abiVersion") == null
+                || candidateAbi != bridgeAbi) {
             candidate.put("abiVersion", -1);
         }
         candidate.putIfAbsent("abiVersion", bridgeAbi);
@@ -820,6 +819,7 @@ public final class TelemetryProjectContributionRegistry {
         }
         copy.put("token", stringValue(source.get("token")));
         copy.put("bridge", source.get("bridge"));
+        copy.put(ENTRY_SEQUENCE_KEY, numberValue(source.get(ENTRY_SEQUENCE_KEY)));
         return copy;
     }
 
@@ -1029,6 +1029,8 @@ public final class TelemetryProjectContributionRegistry {
         return type.getMethod(methodName, parameterTypes);
     }
 
-    private record HandoffPlan(List<String> oldTokens) {
+    private record DesiredState(Map<String, String> winners,
+                                Map<String, String> lineages,
+                                List<Map<String, Object>> diagnostics) {
     }
 }
