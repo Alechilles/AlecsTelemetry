@@ -24,6 +24,8 @@ class TelemetryConsentPageRenderingTest {
 
         TelemetryConsentPage.renderProjectRows(commands, events, projects);
 
+        assertEquals(CustomUICommandType.Clear, commands.getCommands()[0].type);
+        assertEquals("#TelemetryConsentRows", commands.getCommands()[0].selector);
         long appendedRows = java.util.Arrays.stream(commands.getCommands())
                 .filter(command -> command.type == CustomUICommandType.Append)
                 .filter(command -> "#TelemetryConsentRows".equals(command.selector))
