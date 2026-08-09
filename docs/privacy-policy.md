@@ -235,6 +235,10 @@ When you sign in or are invited to a project, the portal may store:
 - Discord guild/channel/role routing configuration selected by authorized project
   members
 - GitHub repository integration settings and GitHub issue-link metadata
+- linked CurseForge, Modtale, and Modifold project URLs and the public metadata
+  retrieved for those projects, such as provider project ID, summary, icon URL,
+  download total, and last-refresh time. This cached metadata is refreshed
+  periodically while its project URL remains linked.
 - account author profile settings, such as public slug, display name, avatar
   URL, bio, website URL, Discord URL, GitHub URL, CurseForge profile URL,
   Modtale profile URL, Modifold profile URL, featured link, theme tokens, and
