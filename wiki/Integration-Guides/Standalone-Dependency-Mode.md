@@ -26,15 +26,16 @@ Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Tha
 
 Then return here for the standalone-specific install and verification flow.
 
-## Step 1: Declare The Dependency
+## Step 1: List The Dependency
 
-Standalone mode only works when server owners install Alec's Telemetry with your project. Make that requirement visible in both places players and launchers check:
+Standalone mode only works when server owners install Alec's Telemetry with your project. On CurseForge, Modtale, and Modifold, list `Alec's Telemetry!` as a dependency for the release so players and server owners know to install it.
 
-1. On CurseForge, Modtale, and Modifold, set `Alec's Telemetry!` as a required dependency for the release.
-2. In your project's `manifest.json`, add Alec's Telemetry to `Dependencies` when your project expects the runtime to be present.
-3. Use `OptionalDependencies` only when your plugin still works normally without telemetry and your Java code treats the runtime API as optional.
+You do not need to declare Alec's Telemetry in your project's `manifest.json` for descriptor discovery or descriptor-only features such as crash/error collection, anonymous stats, and manual reports. Choose the manifest behavior that matches your mod:
 
-A required manifest dependency looks like this:
+- Omit Alec's Telemetry entirely from the manifest when your mod does not use the Java runtime API and should still boot and work normally without telemetry installed.
+- Add Alec's Telemetry to `Dependencies` only when you intentionally want Hytale to require the runtime before loading your mod.
+
+The optional enforcement entry looks like this:
 
 ```json
 {
@@ -44,8 +45,6 @@ A required manifest dependency looks like this:
   "OptionalDependencies": {}
 }
 ```
-
-An optional manifest dependency uses the same identifier under `OptionalDependencies` instead.
 
 ## Step 2: Install For Testing
 

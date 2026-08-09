@@ -135,10 +135,14 @@ Use the standalone Alec's Telemetry mod when you want the normal dependency
 model. The runtime discovers enabled project descriptors from installed mods and
 coordinates uploads for those projects.
 
-If your mod requires the standalone runtime, set `Alechilles:Alec's Telemetry!`
-as a required dependency in your `manifest.json` and on distribution platforms
-such as CurseForge, Modtale, and Modifold. Use an optional dependency only when
-your mod still works without telemetry installed.
+List Alec's Telemetry as a dependency on distribution platforms such as
+CurseForge, Modtale, and Modifold so server owners know to install it alongside
+your mod. Descriptor-only integrations such as crash/error collection, anonymous
+stats, and manual reports do not require a `manifest.json` dependency. Omit it
+entirely when your mod should still boot without telemetry installed. Add
+`Alechilles:Alec's Telemetry!` to `Dependencies` only when you intentionally want
+Hytale to require the runtime before loading your mod. Java runtime API
+integrations should locate the runtime defensively as shown in the wiki.
 
 ### Embedded Runtime
 
