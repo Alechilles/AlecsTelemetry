@@ -59,10 +59,13 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - Passive descriptor projects expose only the aggregate Stats heartbeat under
   independent project and Stats consent. Passive discovery loads no executable
   class from the descriptor and does not initialize library code; richer
-  categories require an explicit active contribution and operator review. A
-  passive descriptor may route that standard Stats-only heartbeat to Alec's
-  hosted platform or to an author-selected custom endpoint; the custom endpoint
-  operator controls data, security, and retention.
+  categories require an explicit active contribution. When a prior persisted
+  supported-category snapshot exists, newly added categories stay disabled until
+  operator review. Legacy reviewed records without a snapshot retain their
+  prior approvals and are not compared retrospectively. A passive descriptor
+  may route that standard Stats-only heartbeat to Alec's hosted platform or to
+  an author-selected custom endpoint; the custom endpoint operator controls
+  data, security, and retention.
 - When an active contribution adds categories to a previously reviewed logical
   project and a persisted supported-category snapshot exists, those categories
   remain disabled until an operator saves new consent choices. A review reminder

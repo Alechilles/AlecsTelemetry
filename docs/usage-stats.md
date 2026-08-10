@@ -132,7 +132,8 @@ passive namespaced descriptor, opt in with:
 {
   "telemetry": {
     "stats": {
-      "supported": true
+      "supported": true,
+      "allowedEvents": ["heartbeat"]
     }
   }
 }
