@@ -40,7 +40,18 @@ final class TelemetryRuntimeCommandRegistrar {
             return;
         }
         try {
-            plugin.getCommandRegistry().registerCommand(new TelemetryCommandRoot(handle));
+            if (plugin.getCommandRegistry().registerCommand(new TelemetryCommandRoot(handle)) == null) {
+                registered.set(false);
+                if (logger != null) {
+                    logger.at(Level.WARNING).log(
+                            "Telemetry runtime command registration was rejected; /telemetry is unavailable."
+                    );
+                }
+                return;
+            }
+            if (logger != null) {
+                logger.at(Level.INFO).log("Telemetry runtime registered /telemetry commands.");
+            }
         } catch (RuntimeException ex) {
             registered.set(false);
             if (logger != null) {
