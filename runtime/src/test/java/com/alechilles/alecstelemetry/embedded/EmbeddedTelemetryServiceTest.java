@@ -59,6 +59,8 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -240,6 +242,29 @@ class EmbeddedTelemetryServiceTest {
                 tempDir.resolve("conventional-success"),
                 "Server/Telemetry/project.json",
                 fixtureBytes("fixtures/conventional-project.json")
+        );
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
+
+        assertEquals("conventional-project", service.projectId());
+        assertNull(service.disabledReason());
+        assertEquals("Example:Host", service.projects().getFirst().pluginIdentifier());
+        assertEquals("9.9.9", service.projects().getFirst().pluginVersion());
+    }
+
+    @Test
+    void conventionalBootstrapPrefersOwningArchiveOverForeignClassLoaderDescriptor() throws Exception {
+        Path ownerJar = tempDir.resolve("owner-archive").resolve("Host.jar");
+        writeDescriptorArchive(
+                ownerJar,
+                "telemetry/project.json",
+                fixtureBytes("fixtures/conventional-project.json")
+        );
+        JavaPlugin plugin = conventionalPlugin(
+                tempDir.resolve("owner-archive"),
+                "Server/Telemetry/project.json",
+                fixtureBytes("fixtures/contributed-hosted-project.json"),
+                ownerJar
         );
 
         EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
@@ -1904,6 +1929,18 @@ class EmbeddedTelemetryServiceTest {
     private static JavaPlugin conventionalPlugin(Path dataDirectory,
                                                   String descriptorResource,
                                                   byte[] descriptorBytes) throws Exception {
+        return conventionalPlugin(
+                dataDirectory,
+                descriptorResource,
+                descriptorBytes,
+                dataDirectory.resolve("Host.jar")
+        );
+    }
+
+    private static JavaPlugin conventionalPlugin(Path dataDirectory,
+                                                  String descriptorResource,
+                                                  byte[] descriptorBytes,
+                                                  Path pluginFile) throws Exception {
         Options.parse(new String[0]);
         PluginFixtureClassLoader loader = new PluginFixtureClassLoader(
                 descriptorResource,
@@ -1913,11 +1950,22 @@ class EmbeddedTelemetryServiceTest {
         Class<?> pluginType = loader.definePlugin();
         Object plugin = unsafe().allocateInstance(pluginType);
         setField(pluginType, plugin, "dataDirectory", dataDirectory);
-        setField(pluginType, plugin, "file", dataDirectory.resolve("Host.jar"));
+        setField(pluginType, plugin, "file", pluginFile);
         PluginManifest manifest = testManifest();
         setField(pluginType, plugin, "manifest", manifest);
         setField(pluginType, plugin, "identifier", new PluginIdentifier(manifest));
         return (JavaPlugin) plugin;
+    }
+
+    private static void writeDescriptorArchive(Path archive,
+                                               String descriptorResource,
+                                               byte[] descriptorBytes) throws IOException {
+        Files.createDirectories(archive.getParent());
+        try (ZipOutputStream stream = new ZipOutputStream(Files.newOutputStream(archive))) {
+            stream.putNextEntry(new ZipEntry(descriptorResource));
+            stream.write(descriptorBytes);
+            stream.closeEntry();
+        }
     }
 
     private static Class<?> isolatedAnchor(String resourceName, byte[] descriptorBytes) throws IOException {

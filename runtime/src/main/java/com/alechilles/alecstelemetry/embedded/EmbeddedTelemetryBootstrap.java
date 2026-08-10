@@ -23,10 +23,13 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 /**
  * Bootstraps embedded telemetry for one owning mod.
@@ -142,6 +145,56 @@ public final class EmbeddedTelemetryBootstrap {
     @Nullable
     private static DescriptorBytes loadConventionalDescriptor(@Nonnull JavaPlugin plugin,
                                                               @Nullable HytaleLogger logger) {
+        Path sourcePath = resolvePluginSourcePath(plugin);
+        if (sourcePath != null && Files.exists(sourcePath)) {
+            return loadConventionalDescriptorFromSource(sourcePath, logger);
+        }
+        return loadConventionalDescriptorFromClassLoader(plugin, logger);
+    }
+
+    @Nullable
+    private static DescriptorBytes loadConventionalDescriptorFromSource(@Nonnull Path sourcePath,
+                                                                        @Nullable HytaleLogger logger) {
+        try {
+            if (Files.isDirectory(sourcePath)) {
+                for (String descriptorResource : List.of(
+                        TelemetryProjectDiscovery.DESCRIPTOR_PATH,
+                        TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH
+                )) {
+                    Path descriptorPath = sourcePath.resolve(descriptorResource);
+                    if (Files.isRegularFile(descriptorPath)) {
+                        return new DescriptorBytes(descriptorResource, Files.readAllBytes(descriptorPath));
+                    }
+                }
+                return null;
+            }
+            try (ZipFile archive = new ZipFile(sourcePath.toFile())) {
+                for (String descriptorResource : List.of(
+                        TelemetryProjectDiscovery.DESCRIPTOR_PATH,
+                        TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH
+                )) {
+                    ZipEntry descriptorEntry = archive.getEntry(descriptorResource);
+                    if (descriptorEntry == null) {
+                        continue;
+                    }
+                    try (InputStream stream = archive.getInputStream(descriptorEntry)) {
+                        return new DescriptorBytes(descriptorResource, stream.readAllBytes());
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            if (logger != null) {
+                logger.at(Level.WARNING).withCause(ex).log(
+                        "Failed to load embedded telemetry descriptor from owning plugin " + sourcePath + "."
+                );
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static DescriptorBytes loadConventionalDescriptorFromClassLoader(@Nonnull JavaPlugin plugin,
+                                                                              @Nullable HytaleLogger logger) {
         String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
         InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
         if (rawStream == null) {
