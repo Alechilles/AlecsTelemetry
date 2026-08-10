@@ -199,13 +199,15 @@ public final class TelemetryConsentCoordinator {
     }
 
     @Nonnull
-    private static String promptKey(@Nonnull List<TelemetryProjectRegistration> projects) {
+    static String promptKey(@Nonnull List<TelemetryProjectRegistration> projects) {
         return projects.stream()
                 .map(project -> project.projectId()
                         + "@"
                         + project.pluginIdentifier()
                         + "@"
-                        + project.pluginVersion())
+                        + project.pluginVersion()
+                        + "#"
+                        + TelemetryConsentCapabilities.fingerprint(project))
                 .map(value -> value.toLowerCase(Locale.ROOT))
                 .sorted()
                 .reduce((left, right) -> left + "|" + right)

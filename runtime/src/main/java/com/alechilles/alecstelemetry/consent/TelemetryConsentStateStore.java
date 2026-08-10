@@ -68,7 +68,9 @@ public final class TelemetryConsentStateStore {
         try {
             StateDocument document = read(file);
             LinkedHashMap<String, ReviewedProjectDocument> reviewed = reviewedEntries(document);
-            reviewed.put(key(project), ReviewedProjectDocument.from(project));
+            String projectKey = key(project);
+            reviewed.remove(projectKey);
+            reviewed.put(projectKey, ReviewedProjectDocument.from(project));
             document.reviewedProjects = new ArrayList<>(reviewed.values());
             write(file, document);
             return true;

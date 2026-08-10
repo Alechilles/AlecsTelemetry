@@ -121,6 +121,22 @@ class TelemetryConsentStateStoreTest {
         assertEquals(List.of(), store.unreviewedProjects(stateFile, List.of(expanded)));
     }
 
+    @Test
+    void fallbackBaselineUsesMostRecentlyReviewedVersion() {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration versionOne = registrationWithCapabilities("1.0.0", false, false, true);
+        TelemetryProjectRegistration versionTwo = registrationWithCapabilities("2.0.0", true, false, true);
+        TelemetryProjectRegistration versionThree = registrationWithCapabilities("3.0.0", true, true, true);
+
+        assertTrue(store.markReviewed(stateFile, versionOne));
+        assertTrue(store.markReviewed(stateFile, versionTwo));
+        assertTrue(store.markReviewed(stateFile, versionOne));
+
+        assertEquals(List.of("error", "usage"),
+                store.addedSupportedCategories(stateFile, versionThree));
+    }
+
     private static TelemetryProjectRegistration registration(String projectId,
                                                             String pluginIdentifier,
                                                             String pluginVersion) {
@@ -146,11 +162,18 @@ class TelemetryConsentStateStoreTest {
     private static TelemetryProjectRegistration registrationWithCapabilities(boolean error,
                                                                               boolean usage,
                                                                               boolean stats) {
+        return registrationWithCapabilities("1.0.0", error, usage, stats);
+    }
+
+    private static TelemetryProjectRegistration registrationWithCapabilities(String version,
+                                                                              boolean error,
+                                                                              boolean usage,
+                                                                              boolean stats) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
                 {
                   "projectId": "example-mod",
-                  "projectVersion": "1.0.0",
+                  "projectVersion": "%s",
                   "displayName": "Example Mod",
                   "ownerPluginIdentifiers": ["Example:Example Mod"],
                   "packagePrefixes": ["com.example.telemetry"],
@@ -162,13 +185,13 @@ class TelemetryConsentStateStoreTest {
                     "stats": { "supported": %s, "allowedEvents": ["heartbeat"] }
                   }
                 }
-                """.formatted(error, usage, stats),
+                """.formatted(version, error, usage, stats),
                 null
         );
         return new TelemetryProjectRegistration(
                 descriptor,
                 "Example:Example Mod",
-                "1.0.0",
+                version,
                 Path.of("Example Mod")
         );
     }
