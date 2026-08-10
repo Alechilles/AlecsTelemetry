@@ -11,9 +11,11 @@ jitter so servers do not all report at the same instant. Heartbeats are emitted
 for each project in the active coordinator's live catalog that is enabled and
 has opted into stats, regardless of whether the winning runtime came from the
 standalone jar or an embedded copy. Anchored embedded contributions use their
-elected logical project identity and logical plugin version. A passive, invalid,
-protocol-ineligible, or retired contribution is not in the active heartbeat
-snapshot. The hosted stats surface derives:
+elected logical project identity and logical plugin version. Passive namespaced
+descriptor projects use the same aggregate heartbeat path and are eligible when
+Stats consent and destination gates pass. Invalid, protocol-ineligible, or
+retired candidates are not in the active heartbeat snapshot. The hosted stats
+surface derives:
 
 - active servers
 - active players
@@ -43,14 +45,43 @@ servers cannot accidentally or deliberately report at an unsafe cadence. Hosted
 interval hints may temporarily keep older 5-minute clients working during
 rollout, but new runtime clients target the 30-minute cadence.
 
+## Descriptor-only embedded projects
+
+An embeddable library can ship only a direct descriptor resource under:
+
+```text
+META-INF/alecs-telemetry/projects/<stable-project-id>.json
+```
+
+Presence in the final host JAR is the installation signal. The descriptor must
+declare its logical `projectId`, build-stamped `projectVersion`, display name,
+owner identifier, and Stats `heartbeat` allowlist. No Alec's Telemetry dependency
+or Java initialization is required in the library; a standalone or embedded
+Telemetry runtime must be present to discover the resource. Without one, the
+descriptor is inert.
+
+Passive discovery exposes only Stats, even if the descriptor includes richer
+categories for a future active integration. If multiple host mods contain the
+same logical project, election deduplicates them into one consent row and one
+heartbeat project. It elects the highest logical semantic version, then uses
+deterministic host/path/hash tie-breakers; descriptors are not merged.
+
+To report richer categories, the library must explicitly register
+`EmbeddedTelemetryBootstrap.contribute(...)` with the same descriptor, logical
+ID/version, and declared owner. A matching contribution upgrades that existing
+logical project rather than adding another heartbeat project. Newly exposed
+categories remain disabled until an operator reviews them through
+`/telemetry consent`.
+
 ## Heartbeat Eligibility And Retirement
 
-Registration alone emits no stats. For a contributed project to emit a heartbeat,
-its candidate must be the current per-project winner, the project and stats
-category must be enabled by consent, the descriptor must allow `heartbeat`, and
-the project's hosted or custom destination must resolve. The coordinator checks
+Registration alone emits no stats. For a passive or contributed project to emit a
+heartbeat, its candidate must be the current per-project winner, the project and
+Stats category must be enabled by consent, the descriptor must allow
+`heartbeat`, and the project's destination must resolve. The coordinator checks
 these gates at emission time, so changing consent or destination immediately
-removes the project from later heartbeat snapshots.
+removes the project from later heartbeat snapshots. Multiple physical hosts
+carrying the same descriptor still produce one logical heartbeat entry.
 
 When a contribution retires, the project disappears from new consent and
 heartbeat snapshots without deleting its local crash, event, or report queue.
@@ -60,8 +91,8 @@ normal retry, destination, and retention rules still apply.
 Heartbeats are grouped by their resolved event destination, so projects routed
 to different endpoints are never combined into one upload. Anchored contributions
 use hosted destination mode in the 1.1.0 MVP. A same-ID contribution winner is
-not automatically replaced after retirement; restart is required before
-another candidate can emit.
+not automatically replaced by an unrelated candidate after retirement; restart
+is required before another candidate can emit.
 
 ## Consent
 
@@ -69,7 +100,8 @@ Stats are a separate consent category from usage events. A server owner can allo
 anonymous public server/player/environment stats while still disabling
 feature-usage telemetry.
 
-In `Server/Telemetry/project.json`, opt in with:
+In a conventional host descriptor (`Server/Telemetry/project.json`) or a
+passive namespaced descriptor, opt in with:
 
 ```json
 {

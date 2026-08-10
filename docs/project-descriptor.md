@@ -9,6 +9,61 @@ Server/Telemetry/project.json
 The same descriptor works for standalone dependency mode and embedded mode.
 Runtime ownership is decided by coordinator election at startup.
 
+## Passive descriptor-only libraries
+
+An embeddable library can report one aggregate Stats project without depending
+on Alec's Telemetry, loading a Telemetry class, or running Java initialization.
+Put a direct JSON resource in the final host JAR (or host mod folder) at:
+
+```text
+META-INF/alecs-telemetry/projects/<stable-project-id>.json
+```
+
+Presence of a valid resource is the installation signal. A standalone or
+embedded Alec's Telemetry runtime must still be present to discover and process
+it; without a runtime the resource is inert and the host continues normally.
+Passive discovery only exposes the standard Stats `heartbeat` capability. It
+does not execute contributor code or activate crash, error, lifecycle,
+performance, usage, breadcrumbs, or manual-report categories declared for a
+future active integration.
+
+The passive form requires an explicit logical identity, build-stamped logical
+version, display name, owner identifier, and Stats heartbeat allowlist:
+
+```json
+{
+  "schemaVersion": 1,
+  "projectId": "creditor",
+  "projectVersion": "1.4.0",
+  "displayName": "Creditor",
+  "ownerPluginIdentifiers": ["Author:Creditor"],
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "allowedEvents": ["heartbeat"]
+    }
+  }
+}
+```
+
+`projectVersion` is the library's logical semantic version; the containing
+host's manifest version is retained only as physical-host provenance. If the
+same library descriptor appears in multiple hosts, election chooses one whole
+logical project (highest logical version, then deterministic source/host/path/
+hash tie-breakers). It never merges descriptor fields, so consent and Stats
+contain one row and one heartbeat project.
+
+The descriptor may include richer categories for an active implementation, but
+passive registration masks them. To expose those categories, the library must
+explicitly call `EmbeddedTelemetryBootstrap.contribute(...)` using the same
+descriptor resource, project ID, logical version, and an owner declared in the
+descriptor. A matching contribution upgrades the existing passive row rather
+than creating a duplicate. Newly exposed categories remain disabled until an
+operator reviews them with `/telemetry consent`.
+
 An embedded component that owns a separate logical project can use
 `EmbeddedTelemetryBootstrap.contribute(...)` instead of the conventional
 descriptor lookup. That API reads a namespaced descriptor resource from the
@@ -19,6 +74,11 @@ declare an explicit `projectId` and `displayName`, and its
 `ownerPluginIdentifiers` must include the contribution's logical plugin
 identifier. See [Embedded Contributions](embedded-contributions.md) for the
 builder and election contract.
+
+The namespaced directory is intentionally discoverable for passive
+descriptor-only projects. `Server/Telemetry/project.json` remains the
+conventional descriptor owned by the physical host mod; it is not a substitute
+for the library's namespaced resource.
 
 ## Minimal Hosted Example
 
@@ -45,6 +105,13 @@ Telemetry category descriptors separate capability from initial consent:
 - legacy descriptor `"enabled"` is still accepted as a compatibility alias for `defaultEnabled`, but new descriptors should use `defaultEnabled`
 
 Runtime override files still use `enabled`; that is a saved consent state, not the packaged descriptor schema.
+
+For a passive namespaced descriptor, only Stats with the `heartbeat` event is
+available. Other declared categories are retained as metadata for a later
+explicit `contribute(...)` call and are masked from the passive project. When a
+matching active contribution exposes new categories, those additions remain
+disabled until an operator saves reviewed choices. Eligible operators receive
+a permission-scoped chat reminder to run `/telemetry consent`.
 
 ## Stats-Only Example
 
@@ -172,6 +239,9 @@ Runtime override files still use `enabled`; that is a saved consent state, not t
 Identity fields are optional overrides.
 
 - `projectId`: override only when the inferred ID would not match the portal project ID or a custom endpoint expects a different stable ID
+- `projectVersion`: the logical project release used for passive installation,
+  election, attribution, and active upgrade matching. Build-stamp this for an
+  embedded library; do not use the physical host manifest version.
 - `displayName`: local consent/runtime text and envelope metadata; it does not rename the portal project
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
@@ -266,6 +336,11 @@ replacement.
 
 `hosted.projectKey` is a publishable ingest key. Bake it into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
 
+Passive descriptor-only projects use the hosted destination and still require a
+publishable project key plus normal destination validation before a Stats
+heartbeat can be delivered. A custom endpoint remains a conventional-project
+choice and is not activated by passive discovery.
+
 `customEndpoint` supports:
 
 - `url`
@@ -298,12 +373,18 @@ Top-level `capture`, `events`, `performance`, `usage`, `stats`, and `reports` ar
 ## Live Contribution Catalog
 
 The active coordinator reconciles anchored contributions while the server is
-running. A valid elected contribution appears as an independent project in
-consent and command diagnostics. An invalid or protocol-ineligible candidate
-stays passive and contributes no telemetry. A valid same-owner passive copy can
-submit operations only through the established winner's descriptor and
-destination; it does not become a second writer. Retiring a contribution removes it
-from new consent and heartbeat snapshots but keeps its existing local queue
-available for replay under the normal project retention and destination rules.
-Only first registration is live in the MVP; an established winner remains the
-stable writable candidate until restart.
+running. A valid contribution that exactly matches an elected passive project's
+logical ID, version, owner, and descriptor hash upgrades that existing project
+row and exposes its additional supported categories. It does not create a
+second project or heartbeat. Newly exposed categories remain disabled until an
+operator reviews them through `/telemetry consent`.
+
+A valid elected contribution appears as an independent project in consent and
+command diagnostics. An invalid or protocol-ineligible candidate stays passive
+and contributes no telemetry. A valid same-owner passive copy can submit
+operations only through the established winner's descriptor and destination; it
+does not become a second writer. Retiring a contribution removes it from new
+consent and heartbeat snapshots but keeps its existing local queue available for
+replay under the normal project retention and destination rules. Only first
+registration is live in the MVP; an established winner remains the stable
+writable candidate until restart.

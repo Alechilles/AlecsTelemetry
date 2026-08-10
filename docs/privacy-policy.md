@@ -35,6 +35,10 @@ Alec's Telemetry is designed to avoid player identity data by default.
 
 - Server owners can review and change telemetry categories with
   `/telemetry consent`.
+- The runtime automatically enumerates valid direct JSON descriptors under
+  `META-INF/alecs-telemetry/projects/` in installed mod archives and folders.
+  Resource presence is treated as the library's installation signal; it does
+  not prove that the library code executed.
 - Public stats show aggregate counts and breakdowns, not raw server IDs, session
   IDs, IP addresses, player names, player UUIDs, chat, coordinates, world data,
   secrets, or full config files.
@@ -52,6 +56,14 @@ Alec's Telemetry is designed to avoid player identity data by default.
   are not added to uploaded telemetry fields. Existing loaded-mod metadata keeps
   its prior behavior and may still be included where the normal runtime payload
   includes it.
+- Passive descriptor projects expose only the aggregate Stats heartbeat under
+  independent project and Stats consent. Passive discovery loads no executable
+  class from the descriptor and does not initialize library code; richer
+  categories require an explicit active contribution and operator review.
+- When an active contribution adds categories to a previously reviewed logical
+  project, those categories remain disabled until an operator saves new consent
+  choices. A review reminder is sent only to players with
+  `telemetry.command.telemetry` or the local singleplayer owner.
 - Anchored contributions in the 1.1.0 MVP can upload only to Alec's hosted
   destination. Conventional projects may still opt into a custom endpoint; that
   endpoint operator, not Alec, controls its data and retention.
@@ -83,11 +95,13 @@ The runtime may store local files under the server or save's Alec's Telemetry da
 directory. These files can include:
 
 - project descriptors discovered from installed mods
+- passive descriptor capability snapshots and consent-review state
 - server-owner consent choices and runtime overrides
 - server identity and verification values used for ModStats server claiming
 - queued telemetry waiting to upload
-- local embedded-contribution election state and bounded candidate diagnostics,
-  including physical host/source information used to choose one provider
+- local project-election state and bounded candidate diagnostics, including the
+  logical project ID/version, physical host identifier/version, normalized source
+  path, registration source, and descriptor hash used to choose one provider
 - manual report drafts, review queues, submitted receipts, and local follow-up
   tokens
 - local runtime settings for manual reports, attachments, endpoints, and related
@@ -143,6 +157,16 @@ fields are not new crash, event, stats, or manual-report payload fields. A
 contribution still uses the existing runtime metadata contract, including loaded
 mod identifiers and versions where that metadata is enabled.
 
+For passive descriptor-only projects, the same logical identity/version and
+physical-host provenance are used locally for election and diagnostics. The
+runtime treats presence of a valid direct namespaced resource as installation;
+it does not load or instantiate an executable class named by that resource. The
+passive registration is Stats-only and can deliver one aggregate heartbeat per
+logical project when project and Stats consent, heartbeat allowlisting, and the
+configured destination all permit it. Declared crash, error, lifecycle,
+performance, usage, breadcrumbs, and manual-report categories remain masked
+until matching executable integration registers them.
+
 Contribution ABI 1 and coordinator protocol 3 make this routing explicit. A
 protocol-2 provider cannot own a generic contribution. A valid same-owner
 passive copy can submit only through the elected bridge; invalid,
@@ -166,19 +190,28 @@ aggregate stats such as:
   core count, hosting mode, server-country, and loaded-mod name/version
   breakdowns
 
+An embeddable library can contribute to this flow with only a direct
+`META-INF/alecs-telemetry/projects/<stable-project-id>.json` descriptor in the
+final host artifact. Presence is the installation signal, not evidence that the
+library executed. If several physical hosts carry the same logical
+`projectId`/`projectVersion`, local election deduplicates them into one logical
+Stats heartbeat project. The containing host identifier/version and source path
+are local election provenance, not new uploaded stats fields.
+
 The hosted service may use raw server IDs, session IDs, loaded mod evidence, and
 private heartbeat payloads internally to compute aggregates, prevent duplicates,
 verify server claims, and maintain the public stats data. Public stats responses
 must expose only aggregate counts and breakdowns.
 
-For embedded contributions, a heartbeat is eligible only for the current
-per-project winner after project/category consent, descriptor `heartbeat`
-allowlisting, and destination resolution. Passive, protocol-ineligible, or
-retired candidates are omitted from new heartbeat snapshots. Retirement does not
-delete queued crash, event, or report envelopes; the local coordinator retains
-the project registration needed to replay them under the normal retry and
-retention rules. Heartbeat payloads are grouped by resolved destination so
-projects routed to different endpoints are not combined in one upload.
+For passive projects and embedded contributions, a heartbeat is eligible only
+for the current per-project winner after project/Stats consent, descriptor
+`heartbeat` allowlisting, and destination resolution. Invalid,
+protocol-ineligible, or retired candidates are omitted from new heartbeat
+snapshots. Retirement does not delete queued crash, event, or report envelopes;
+the local coordinator retains the project registration needed to replay them
+under the normal retry and retention rules. Heartbeat payloads are grouped by
+resolved destination so projects routed to different endpoints are not combined
+in one upload.
 
 ### Manual Player Reports
 
@@ -431,6 +464,11 @@ Server owners can:
 
 - use `/telemetry consent` to review and change project/category telemetry
   choices
+- review every passively discovered logical project in the scrollable consent
+  list; passive projects expose Stats only until an active integration is
+  explicitly registered
+- review newly added categories after a permission-scoped reminder; new
+  categories remain disabled unless the operator saves them as enabled
 - review each embedded logical contribution as its own consent project, even
   when several contributions share one physical runtime provider
 - use runtime override files to disable telemetry categories or change endpoints

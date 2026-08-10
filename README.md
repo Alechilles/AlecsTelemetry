@@ -65,7 +65,9 @@ exposing raw server or player data.
 
 ## Quick Setup For Mod Authors
 
-Most web portal integrations start with a descriptor at:
+### Conventional host descriptor
+
+Most conventional web portal integrations start with a descriptor at:
 
 ```text
 Server/Telemetry/project.json
@@ -109,6 +111,60 @@ If you want your mod logo in the consent UI, package the texture under
 `Common/UI/Custom/...` and set `ui.iconTexturePath` to that custom UI texture
 path. Root mod icons such as `icon-256.png` are not used automatically.
 
+### Descriptor-only embedded library
+
+An embeddable or shaded library can opt into aggregate project stats without
+depending on Alec's Telemetry or running any Telemetry Java code. Put a direct
+JSON resource in the final host JAR (or host mod folder) at:
+
+```text
+META-INF/alecs-telemetry/projects/<stable-project-id>.json
+```
+
+Presence of a valid resource is the installation signal. A standalone or
+embedded Alec's Telemetry runtime still has to be installed somewhere in the
+process to discover and process it; without a runtime, the descriptor is inert
+and the host continues normally. Passive discovery exposes only the aggregate
+Stats `heartbeat` capability, even when the descriptor contains additional
+category definitions for a future active integration.
+
+The passive descriptor must include the library's logical identity and version,
+not the physical host mod's manifest version:
+
+```json
+{
+  "schemaVersion": 1,
+  "projectId": "creditor",
+  "projectVersion": "1.4.0",
+  "displayName": "Creditor",
+  "ownerPluginIdentifiers": ["Author:Creditor"],
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "allowedEvents": ["heartbeat"]
+    }
+  }
+}
+```
+
+Build-stamp `projectVersion` with the logical library release. If the same
+descriptor is present in several host mods, Telemetry elects one logical
+project (the highest logical semantic version, then deterministic host/path/
+hash tie-breakers), so consent and Stats contain one row and one heartbeat
+project rather than one per host. Invalid descriptors are skipped without
+blocking the host mod.
+
+If the library later needs crash, error, usage, performance, lifecycle,
+breadcrumbs, or report telemetry, add an explicit
+`EmbeddedTelemetryBootstrap.contribute(...)` registration using the same
+descriptor resource, `projectId`, logical version, and declared owner. That
+active registration upgrades the existing passive row; it does not create a
+second project. Newly exposed categories remain disabled until an operator
+reviews them in `/telemetry consent`.
+
 ## Quick Setup For Server Owners
 
 You do not need to create a mod project to list your server in the ModStats
@@ -132,23 +188,28 @@ join information are public.
 ### Standalone Dependency
 
 Use the standalone Alec's Telemetry mod when you want the normal dependency
-model. The runtime discovers enabled project descriptors from installed mods and
-coordinates uploads for those projects.
+model. The runtime discovers conventional host descriptors and valid passive
+namespaced descriptors from installed mods, then coordinates uploads for those
+projects.
 
 List Alec's Telemetry as a dependency on distribution platforms such as
 CurseForge, Modtale, and Modifold so server owners know to install it alongside
-your mod. Descriptor-only integrations such as crash/error collection, anonymous
-stats, and manual reports do not require a `manifest.json` dependency. Omit it
-entirely when your mod should still boot without telemetry installed. Add
-`Alechilles:Alec's Telemetry!` to `Dependencies` only when you intentionally want
-Hytale to require the runtime before loading your mod. Java runtime API
-integrations should locate the runtime defensively as shown in the wiki.
+your mod. Passive descriptor-only integrations do not require a
+`manifest.json` dependency and report only aggregate Stats. Conventional
+descriptors can still expose their declared categories when a runtime is
+present. Omit the dependency entirely when your mod should still boot without
+telemetry installed. Add `Alechilles:Alec's Telemetry!` to `Dependencies` only
+when you intentionally want Hytale to require the runtime before loading your
+mod. Java runtime API integrations should locate the runtime defensively as
+shown in the wiki.
 
 ### Embedded Runtime
 
 Use embedded mode when your mod needs to bundle the telemetry bootstrap directly.
 Embedded copies still participate in coordinator election, and the latest
-compatible runtime can serve all installed enabled projects.
+compatible runtime can serve all installed enabled projects, including passive
+descriptors carried by other shaded libraries. A library that ships only a
+descriptor does not need to bundle or initialize this runtime.
 
 The embeddable runtime artifact is published through the Telemetry downloads
 page and Maven-format repository:
@@ -242,7 +303,11 @@ https://www.modstats.io/servers
 ## Runtime API
 
 Mods can stay descriptor-only, but richer integrations can call the runtime API
-for explicit events and custom player-report entry points.
+for explicit events and custom player-report entry points. A shaded library that
+wants categories beyond passive Stats must register explicitly with
+`EmbeddedTelemetryBootstrap.contribute(...)`; use the same logical identity,
+version, and descriptor as the passive resource so the coordinator upgrades the
+existing project instead of creating a duplicate.
 
 ```java
 TelemetryRuntimeApi api = TelemetryRuntimeLocator.tryGet();
@@ -308,7 +373,7 @@ For the full runtime, web portal, and ModStats.io policy, see
 ## Docs and Examples
 
 - [Project descriptor reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/project-descriptor.md)
-- [Embedded mode guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
+- [Embedded contributions and passive descriptors](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-contributions.md)
 - [Runtime API guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-api.md)
 - [Runtime downloads](https://telemetry.alecsmods.com/downloads)
 - [Command reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/command-reference.md)

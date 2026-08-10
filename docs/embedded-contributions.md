@@ -9,6 +9,60 @@ its own descriptor, consent, destination, attribution, and queue.
 This guide describes the Alec's Telemetry 1.1.0 contribution ABI (ABI 1) and
 coordinator protocol 3.
 
+## Descriptor-only first, active integration when needed
+
+An embeddable library does not need to bundle or initialize Alec's Telemetry to
+identify its project. Ship a direct descriptor resource in the final host JAR
+or host mod folder:
+
+```text
+META-INF/alecs-telemetry/projects/<stable-project-id>.json
+```
+
+Presence of a valid resource is the accepted installation signal. Any
+standalone or embedded Alec's Telemetry runtime can discover it; if no runtime
+is installed, the resource is inert and the host remains operational. Passive
+discovery provides one independently consented aggregate Stats `heartbeat`
+project and never executes contributor code. It masks every richer category,
+even if the descriptor declares those categories for a later active integration.
+
+Use the passive descriptor shape below. `projectVersion` is the logical
+library version and should be build-stamped; the physical host's manifest
+version is used only as local provenance. The hosted project key is still
+required for delivery to Alec's hosted ingest:
+
+```json
+{
+  "schemaVersion": 1,
+  "projectId": "my-contributor",
+  "projectVersion": "1.4.0",
+  "displayName": "My Contributor",
+  "ownerPluginIdentifiers": ["Example:My Contributor"],
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "allowedEvents": ["heartbeat"]
+    }
+  }
+}
+```
+
+When the same descriptor is shaded into multiple host mods, logical project
+election keeps one complete winner by logical semantic version and deterministic
+host/path/hash tie-breakers. Consent and the heartbeat catalog therefore contain
+one project, not one row per host. Invalid descriptors are skipped with bounded
+diagnostics and do not block the host.
+
+If richer telemetry is valuable, add the explicit `contribute(...)` registration
+below. It must use the same descriptor resource, `projectId`, logical version,
+and a declared owner so it can upgrade the passive project. A matching active
+registration reuses the existing consent row and destination. Newly exposed
+categories stay disabled until an eligible operator reviews them through
+`/telemetry consent`.
+
 ## Register a logical project
 
 Put the contribution descriptor in the contributor's own jar and anchor the
@@ -55,13 +109,13 @@ endpoint/project key. The conventional `bootstrap(plugin)` path continues to
 support custom destinations; a custom destination in an anchored contribution
 is rejected as a disabled contribution before it can register.
 
-An established logical project winner is not hot-replaced or automatically
-failed over. Unregistering the winner fences its token and leaves any already
-registered fallback passive, so a second copy cannot begin writing while the
-active catalog is changing. Restart the server after retirement when a
-replacement is required. Re-registering that project ID in the same process
-keeps it passive. This boundary
-also keeps queued envelopes on the destination that created them.
+An established active contribution is not automatically failed over to an
+unrelated candidate. Unregistering the winner fences its token and leaves any
+already registered fallback passive, so a second copy cannot begin writing
+while the active catalog is changing. Restart the server after retirement when
+an unrelated replacement is required. A matching explicit contribution may
+still upgrade its elected passive base as described below. This boundary also
+keeps queued envelopes on the destination that created them.
 
 Before `start()`, only setup breadcrumbs, lifecycle events, and setup-failure
 captures are accepted for bounded replay. Manual reports, flushes, and other
@@ -76,8 +130,10 @@ is removed from the resource path before lookup.
 
 The anchored API reads the descriptor from `resourceAnchor.getClassLoader()`;
 it does not search the host plugin's conventional `Server/Telemetry/project.json`.
-Give every logical contributor a namespaced path so two embedded jars cannot
-silently resolve one another's descriptor. A recommended layout is:
+That conventional path belongs to the physical host mod. The coordinator also
+scans direct JSON entries under the namespaced directory for passive
+descriptor-only projects, so give every logical contributor a stable unique path
+to prevent unrelated resources from colliding. A recommended layout is:
 
 ```text
 META-INF/alecs-telemetry/projects/<stable-contributor-name>.json
@@ -85,8 +141,10 @@ META-INF/alecs-telemetry/projects/<stable-contributor-name>.json
 
 The descriptor must explicitly declare `projectId` and `displayName`, and its
 `ownerPluginIdentifiers` must include the exact logical identifier supplied to
-the builder (case-insensitive). The logical version must parse as a Hytale
-semantic version. A contribution descriptor can otherwise use the normal
+the builder (case-insensitive). The logical version supplied to the builder
+must parse as a Hytale semantic version. For a passive upgrade, the descriptor
+must also declare the same `projectVersion` and it must exactly match the
+builder's logical version. A contribution descriptor can otherwise use the normal
 [Project Descriptor](project-descriptor.md) schema and telemetry categories.
 
 Example:
@@ -95,6 +153,7 @@ Example:
 {
   "schemaVersion": 1,
   "projectId": "my-contributor",
+  "projectVersion": "1.4.0",
   "displayName": "My Contributor",
   "ownerPluginIdentifiers": ["Example:My Contributor"],
   "packagePrefixes": ["com.example.contributor"],
@@ -119,7 +178,8 @@ The conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)` API remains
 source and binary compatible. It still loads `Server/Telemetry/project.json`
 with the legacy `telemetry/project.json` fallback. Use `contribute(...)` for
 anchored logical projects; do not make a contribution depend on a host-owned
-conventional resource path.
+conventional resource path. Passive namespaced discovery is performed by the
+coordinator independently of either bootstrap call.
 
 ## Election and protocol compatibility
 
@@ -155,6 +215,13 @@ version, owner, descriptor, origin, or source metadata leaves the candidate
 passive. Diagnostics are local operational information; a malformed candidate
 does not block the host mod's setup or start lifecycle.
 
+For a descriptor discovered passively, an explicit contribution replaces the
+Stats-only registration only when the logical project ID, logical version,
+declared owner, and canonical descriptor hash all match the elected passive
+snapshot. Other collisions remain passive. The replacement preserves one
+project row, one consent state, and one heartbeat project. If the contribution
+retires, the passive base can be restored by reconciliation.
+
 ## Independent project behavior
 
 One host-local provider may serve a conventional host project and several
@@ -175,15 +242,21 @@ event, stats, or manual-report envelopes. Existing runtime metadata such as the
 loaded-mod list retains its prior behavior and may still be included where the
 normal telemetry policy allows it.
 
+Passive descriptor discovery uses the same physical-host values only to elect a
+single candidate. It never proves that the library code executed and never
+grants a richer write capability merely because its resource is present.
+
 ## Heartbeats and live changes
 
 The active coordinator emits aggregate stats heartbeats for the current live
 project catalog. A contributed project is heartbeat-eligible only when its
 candidate is elected, the project and stats category are enabled by consent, the
-descriptor allows `heartbeat`, and a destination resolves. Passive, invalid,
-retired, disabled, or destination-less candidates do not emit heartbeats.
-Registration itself never emits a heartbeat. See [Usage Stats](usage-stats.md)
-for cadence and public aggregation behavior.
+descriptor allows `heartbeat`, and a destination resolves. Passive projects use
+the same gates and can emit one aggregate heartbeat when Stats consent is
+enabled. Multiple physical hosts carrying the same project still produce one
+logical heartbeat entry. Invalid, retired, disabled, or destination-less
+candidates do not emit heartbeats. Registration itself never emits a heartbeat.
+See [Usage Stats](usage-stats.md) for cadence and public aggregation behavior.
 
 Contribution reconciliation is live for first registration; adding a valid
 candidate makes its project available to consent and runtime operations without
