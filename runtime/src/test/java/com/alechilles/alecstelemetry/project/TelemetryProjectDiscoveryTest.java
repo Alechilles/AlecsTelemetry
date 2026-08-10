@@ -250,6 +250,33 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
+    void quarantinesSameProjectIdAcrossConflictingOwnerLineages() throws Exception {
+        writeJar(
+                tempDir.resolve("owner-a.jar"),
+                hostManifest("Example", "Owner A", "3.0.0"),
+                Map.of(
+                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        passiveDescriptor("creditor", "1.4.0", "Creditor", "Example:Owner A")
+                )
+        );
+        writeJar(
+                tempDir.resolve("owner-b.jar"),
+                hostManifest("Example", "Owner B", "3.0.0"),
+                Map.of(
+                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        passiveDescriptor("creditor", "2.0.0", "Creditor", "Example:Owner B")
+                )
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertTrue(result.projects().isEmpty());
+        assertTrue(result.consentProjects().isEmpty());
+        assertEquals(1, result.skippedRegistrationWarnings().size());
+        assertTrue(result.skippedRegistrationWarnings().getFirst().contains("conflicting owner lineages"));
+    }
+
+    @Test
     void skipsMalformedPassiveDescriptorWithoutAffectingValidProject() throws Exception {
         writeJar(
                 tempDir.resolve("host.jar"),
@@ -308,13 +335,20 @@ class TelemetryProjectDiscoveryTest {
     }
 
     private static String passiveDescriptor(String projectId, String projectVersion, String displayName) {
+        return passiveDescriptor(projectId, projectVersion, displayName, "Example:Library");
+    }
+
+    private static String passiveDescriptor(String projectId,
+                                            String projectVersion,
+                                            String displayName,
+                                            String ownerPluginIdentifier) {
         return """
                 {
                   "schemaVersion": 1,
                   "projectId": "%s",
                   "projectVersion": "%s",
                   "displayName": "%s",
-                  "ownerPluginIdentifiers": ["Example:Library"],
+                  "ownerPluginIdentifiers": ["%s"],
                   "telemetry": {
                     "stats": {
                       "supported": true,
@@ -322,6 +356,6 @@ class TelemetryProjectDiscoveryTest {
                     }
                   }
                 }
-                """.formatted(projectId, projectVersion, displayName);
+                """.formatted(projectId, projectVersion, displayName, ownerPluginIdentifier);
     }
 }

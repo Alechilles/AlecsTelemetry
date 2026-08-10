@@ -62,11 +62,11 @@ public final class TelemetryRuntimeDiscovery {
             @Nonnull TelemetryLoadedModSnapshotProvider snapshotProvider) {
         List<CrashReportEnvelope.LoadedModMetadata> activeLoadedMods = snapshotProvider.snapshotLoadedMods();
         List<TelemetryProjectRegistration> activeProjects = filterRegistrationsToLoadedMods(
-                discoveryResult.projects(),
+                discoveryResult.candidates(),
                 activeLoadedMods
         );
         List<TelemetryProjectRegistration> activeConsentProjects = filterRegistrationsToLoadedMods(
-                discoveryResult.consentProjects(),
+                discoveryResult.candidates(),
                 activeLoadedMods
         );
         TelemetryProjectOverrideStore overrideStore = new TelemetryProjectOverrideStore(logger);
@@ -121,7 +121,7 @@ public final class TelemetryRuntimeDiscovery {
                 filtered.add(project);
             }
         }
-        return List.copyOf(filtered);
+        return TelemetryProjectDiscovery.electCandidates(filtered);
     }
 
     @Nonnull
@@ -166,6 +166,9 @@ public final class TelemetryRuntimeDiscovery {
             @Nonnull TelemetryProjectOverrideStore store) {
         LinkedHashMap<String, TelemetryProjectOverride> cleaned = new LinkedHashMap<>(overrides);
         for (TelemetryProjectRegistration project : projects) {
+            if (project.isPassiveDescriptor()) {
+                continue;
+            }
             String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
             TelemetryProjectOverride override = cleaned.get(projectIdKey);
             if (override == null || !hasUnsupportedConsentValues(project, override)) {

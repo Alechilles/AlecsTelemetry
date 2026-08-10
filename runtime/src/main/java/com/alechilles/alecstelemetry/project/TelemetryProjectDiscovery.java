@@ -96,8 +96,21 @@ public final class TelemetryProjectDiscovery {
         }
 
         LinkedHashMap<String, TelemetryProjectRegistration> registrations = new LinkedHashMap<>();
+        ArrayList<TelemetryProjectRegistration> electedCandidates = new ArrayList<>();
         for (Map.Entry<String, List<TelemetryProjectCandidate>> item : candidatesByProject.entrySet()) {
             List<TelemetryProjectCandidate> projectCandidates = deduplicateCandidates(item.getValue());
+            if (hasOwnerLineageConflict(projectCandidates)) {
+                addSkippedWarning(
+                        skippedRegistrationWarnings,
+                        "Rejected telemetry project "
+                                + projectCandidates.getFirst().registration().projectId()
+                                + " because descriptors declare conflicting owner lineages."
+                );
+                continue;
+            }
+            for (TelemetryProjectCandidate candidate : projectCandidates) {
+                electedCandidates.add(candidate.registration());
+            }
             if (hasDescriptorDrift(projectCandidates)) {
                 addSkippedWarning(
                         skippedRegistrationWarnings,
@@ -114,8 +127,35 @@ public final class TelemetryProjectDiscovery {
                 List.copyOf(registrations.values()),
                 List.copyOf(registrations.values()),
                 List.copyOf(loadedMods.values()),
-                List.copyOf(skippedRegistrationWarnings)
+                List.copyOf(skippedRegistrationWarnings),
+                List.copyOf(electedCandidates)
         );
+    }
+
+    /** Elects one registration per project from a candidate set after host filtering. */
+    @Nonnull
+    public static List<TelemetryProjectRegistration> electCandidates(
+            @Nonnull Collection<TelemetryProjectRegistration> registrations) {
+        LinkedHashMap<String, List<TelemetryProjectCandidate>> candidatesByProject = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration registration : registrations) {
+            if (registration == null) {
+                continue;
+            }
+            candidatesByProject.computeIfAbsent(
+                    registration.projectId().toLowerCase(Locale.ROOT),
+                    ignored -> new ArrayList<>())
+                    .add(new TelemetryProjectCandidate(registration));
+        }
+
+        ArrayList<TelemetryProjectRegistration> elected = new ArrayList<>();
+        for (List<TelemetryProjectCandidate> projectCandidates : candidatesByProject.values()) {
+            List<TelemetryProjectCandidate> deduplicated = deduplicateCandidates(projectCandidates);
+            if (deduplicated.isEmpty() || hasOwnerLineageConflict(deduplicated)) {
+                continue;
+            }
+            elected.add(elect(deduplicated).registration());
+        }
+        return List.copyOf(elected);
     }
 
     @Nonnull
@@ -508,6 +548,30 @@ public final class TelemetryProjectDiscovery {
         return false;
     }
 
+    private static boolean hasOwnerLineageConflict(@Nonnull List<TelemetryProjectCandidate> candidates) {
+        if (candidates.size() < 2) {
+            return false;
+        }
+        String lineage = ownerLineage(candidates.getFirst().registration());
+        for (int i = 1; i < candidates.size(); i++) {
+            if (!lineage.equals(ownerLineage(candidates.get(i).registration()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Nonnull
+    private static String ownerLineage(@Nonnull TelemetryProjectRegistration registration) {
+        if (!registration.ownerPluginIdentifiers().isEmpty()) {
+            String owner = registration.ownerPluginIdentifiers().getFirst();
+            if (owner != null && !owner.isBlank()) {
+                return owner.trim().toLowerCase(Locale.ROOT);
+            }
+        }
+        return registration.pluginIdentifier().trim().toLowerCase(Locale.ROOT);
+    }
+
     private static boolean sameLogicalVersion(@Nonnull TelemetryProjectCandidate left,
                                               @Nonnull TelemetryProjectCandidate right) {
         if (left.semanticVersion() != null && right.semanticVersion() != null) {
@@ -603,7 +667,15 @@ public final class TelemetryProjectDiscovery {
     public record DiscoveryResult(@Nonnull List<TelemetryProjectRegistration> projects,
                                   @Nonnull List<TelemetryProjectRegistration> consentProjects,
                                   @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
-                                  @Nonnull List<String> skippedRegistrationWarnings) {
+                                  @Nonnull List<String> skippedRegistrationWarnings,
+                                  @Nonnull List<TelemetryProjectRegistration> candidates) {
+
+        public DiscoveryResult(@Nonnull List<TelemetryProjectRegistration> projects,
+                               @Nonnull List<TelemetryProjectRegistration> consentProjects,
+                               @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                               @Nonnull List<String> skippedRegistrationWarnings) {
+            this(projects, consentProjects, loadedMods, skippedRegistrationWarnings, projects);
+        }
     }
 
     private record EntryData(@Nonnull List<TelemetryProjectRegistration> registrations,

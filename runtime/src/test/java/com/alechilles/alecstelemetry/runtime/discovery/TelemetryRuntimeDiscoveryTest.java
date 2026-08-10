@@ -366,6 +366,62 @@ class TelemetryRuntimeDiscoveryTest {
                 .toList());
     }
 
+    @Test
+    void preservesNonStatsCentralOverridesForPassiveProject() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "Tamework", "Example", "Tamework", "3.0.0");
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("creditor"),
+                """
+                {
+                  "enabled": true,
+                  "capture": { "uncaughtExceptions": false },
+                  "events": { "errors": { "enabled": false } },
+                  "performance": { "enabled": false },
+                  "usage": { "enabled": false },
+                  "stats": { "enabled": false }
+                }
+                """
+        );
+
+        new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Tamework", "3.0.0")
+                ))
+        );
+
+        String persisted = Files.readString(dataPaths.projectOverrideFile("creditor"));
+        assertTrue(persisted.contains("\"capture\""));
+        assertTrue(persisted.contains("\"events\""));
+        assertTrue(persisted.contains("\"performance\""));
+        assertTrue(persisted.contains("\"usage\""));
+        assertTrue(persisted.contains("\"stats\""));
+    }
+
+    @Test
+    void electsLoadedLowerVersionWhenHigherVersionHostIsInactive() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "High Host", "Example", "High Host", "3.0.0", "2.0.0");
+        writePassiveModFolder(modsDirectory, "Low Host", "Example", "Low Host", "3.0.0", "1.0.0");
+        TelemetryProjectDiscovery.DiscoveryResult discovered = new TelemetryProjectDiscovery(null)
+                .discover(modsDirectory);
+
+        TelemetryRuntimeDiscoveryResult active = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                discovered,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Low Host", "3.0.0")
+                ))
+        );
+
+        assertEquals(1, active.projects().size());
+        assertEquals("1.0.0", active.projects().getFirst().descriptor().projectVersion());
+        assertEquals("Example:Low Host", active.projects().getFirst().hostPluginIdentifier());
+    }
+
     private TelemetryDataPaths dataPaths(Path modsDirectory) {
         Path runtimeRoot = tempDir.resolve("runtime");
         Path settingsRoot = runtimeRoot.resolve("Settings");
@@ -408,6 +464,15 @@ class TelemetryRuntimeDiscoveryTest {
                                               String group,
                                               String name,
                                               String version) throws Exception {
+        writePassiveModFolder(modsDirectory, folderName, group, name, version, "1.4.0");
+    }
+
+    private static void writePassiveModFolder(Path modsDirectory,
+                                              String folderName,
+                                              String group,
+                                              String name,
+                                              String version,
+                                              String projectVersion) throws Exception {
         Path modFolder = modsDirectory.resolve(folderName);
         Files.createDirectories(modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects"));
         Files.writeString(
@@ -427,7 +492,7 @@ class TelemetryRuntimeDiscoveryTest {
                 {
                   "schemaVersion": 1,
                   "projectId": "creditor",
-                  "projectVersion": "1.4.0",
+                  "projectVersion": "%s",
                   "displayName": "Creditor",
                   "ownerPluginIdentifiers": ["Example:Library"],
                   "telemetry": {
@@ -437,7 +502,7 @@ class TelemetryRuntimeDiscoveryTest {
                     }
                   }
                 }
-                """
+                """.formatted(projectVersion)
         );
     }
 
