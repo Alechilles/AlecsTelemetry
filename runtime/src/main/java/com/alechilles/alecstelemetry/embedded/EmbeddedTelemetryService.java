@@ -4,6 +4,7 @@ import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentCapabilities;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
@@ -320,7 +321,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (!usesLocalCoordinator(active)) {
             return projectsFromSummaries(activeProjects(active));
         }
-        return List.copyOf(consentProjects);
+        return currentConsentProjects();
     }
 
     @Nullable
@@ -716,7 +717,21 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         if (consentStateStore == null || consentPaths == null) {
             return List.of();
         }
-        return consentStateStore.unreviewedProjects(consentPaths.consentStateFile(), consentProjects);
+        return consentStateStore.unreviewedProjects(consentPaths.consentStateFile(), currentConsentProjects());
+    }
+
+    @Nonnull
+    @Override
+    public List<String> addedConsentCategories(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return List.of();
+        }
+        TelemetryDataPaths consentPaths = consentDataPaths();
+        TelemetryProjectRegistration consentProject = findConsentProject(projectId);
+        return consentStateStore == null || consentPaths == null || consentProject == null
+                ? List.of()
+                : consentStateStore.addedSupportedCategories(consentPaths.consentStateFile(), consentProject);
     }
 
     @Override
@@ -772,7 +787,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     private boolean applyLocalConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
-        for (TelemetryProjectRegistration project : consentProjects) {
+        for (TelemetryProjectRegistration project : currentConsentProjects()) {
             appliedAll &= applyLocalConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
         }
         return appliedAll;
@@ -789,7 +804,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     private boolean applyLocalConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
-        for (TelemetryProjectRegistration project : consentProjects) {
+        for (TelemetryProjectRegistration project : currentConsentProjects()) {
             TelemetryConsentSnapshot supported = supportedSnapshot(project);
             if (!supported.categoryEnabled(category)) {
                 continue;
@@ -1437,8 +1452,9 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     private TelemetryRuntimeDiagnostics localConsentDiagnostics() {
-        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
-        for (TelemetryProjectRegistration project : consentProjects) {
+        List<TelemetryProjectRegistration> currentProjects = currentConsentProjects();
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(currentProjects.size());
+        for (TelemetryProjectRegistration project : currentProjects) {
             projectDiagnostics.add(buildProjectDiagnostics(project));
         }
         TelemetryDataPaths consentPaths = consentDataPaths();
@@ -1629,12 +1645,45 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
     @Nullable
     private TelemetryProjectRegistration findConsentProject(@Nonnull String projectId) {
         String normalized = projectId.trim();
+        TelemetryProjectRegistration consentProject = null;
         for (TelemetryProjectRegistration project : consentProjects) {
             if (project.projectId().equalsIgnoreCase(normalized)) {
-                return project;
+                consentProject = project;
+                break;
             }
         }
-        return null;
+        if (consentProject != null && consentProject.hasOverride()) {
+            return consentProject;
+        }
+        if (coordinatorBridge != null) {
+            TelemetryProjectRegistration runtimeProject = coordinatorBridge.service.findProject(normalized);
+            if (runtimeProject != null) {
+                return runtimeProject;
+            }
+        }
+        return consentProject;
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> currentConsentProjects() {
+        if (coordinatorBridge == null) {
+            return consentProjects;
+        }
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : coordinatorBridge.service.projects()) {
+            String key = project.projectId().toLowerCase(Locale.ROOT);
+            TelemetryProjectRegistration existing = projects.get(key);
+            if (existing == null || !existing.hasOverride() || project.hasOverride()) {
+                projects.put(key, project);
+            }
+        }
+        for (TelemetryProjectRegistration project : coordinatorBridge.service.manualReportProjects()) {
+            projects.putIfAbsent(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        return List.copyOf(projects.values());
     }
 
     private boolean usesLocalCoordinator(@Nullable TelemetryCoordinatorBridge active) {
@@ -1666,16 +1715,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     @Nonnull
     private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
-        return new TelemetryConsentSnapshot(
-                true,
-                supportsCrash(project),
-                project.descriptor().events().errors().supported(),
-                project.descriptor().events().lifecycle().supported(),
-                project.descriptor().performance().supported(),
-                project.descriptor().usage().supported(),
-                project.descriptor().stats().supported(),
-                project.descriptor().events().breadcrumbs().supported()
-        );
+        return TelemetryConsentCapabilities.supportedSnapshot(project);
     }
 
     private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {

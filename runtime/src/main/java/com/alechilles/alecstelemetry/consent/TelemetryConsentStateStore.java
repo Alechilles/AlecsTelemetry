@@ -33,7 +33,35 @@ public final class TelemetryConsentStateStore {
     }
 
     public boolean isReviewed(@Nonnull Path file, @Nonnull TelemetryProjectRegistration project) {
-        return reviewedEntries(file).containsKey(key(project));
+        LinkedHashMap<String, ReviewedProjectDocument> reviewed = reviewedEntries(file);
+        ReviewedProjectDocument exact = reviewed.get(key(project));
+        return exact != null && addedSupportedCategories(file, project).isEmpty();
+    }
+
+    /**
+     * Returns categories supported by the current registration that were not
+     * present in the most recent reviewed capability snapshot for this logical
+     * project. Legacy entries without a capability snapshot intentionally
+     * produce no additions so existing consent remains compatible.
+     */
+    @Nonnull
+    public List<String> addedSupportedCategories(@Nonnull Path file,
+                                                  @Nonnull TelemetryProjectRegistration project) {
+        StateDocument document = read(file);
+        ReviewedProjectDocument baseline = reviewedBaseline(document, project);
+        if (baseline == null || baseline.supportedCategories == null) {
+            return List.of();
+        }
+        List<String> current = TelemetryConsentCapabilities.supportedCategoryNames(project);
+        java.util.HashSet<String> previous = new java.util.HashSet<>();
+        for (String category : baseline.supportedCategories) {
+            if (category != null && !category.isBlank()) {
+                previous.add(category.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        return current.stream()
+                .filter(category -> !previous.contains(category))
+                .toList();
     }
 
     public boolean markReviewed(@Nonnull Path file, @Nonnull TelemetryProjectRegistration project) {
@@ -57,7 +85,8 @@ public final class TelemetryConsentStateStore {
         Map<String, ReviewedProjectDocument> reviewed = reviewedEntries(read(file));
         ArrayList<TelemetryProjectRegistration> unreviewed = new ArrayList<>();
         for (TelemetryProjectRegistration project : projects) {
-            if (!reviewed.containsKey(key(project))) {
+            ReviewedProjectDocument exact = reviewed.get(key(project));
+            if (exact == null || !addedSupportedCategories(file, project).isEmpty()) {
                 unreviewed.add(project);
             }
         }
@@ -125,6 +154,34 @@ public final class TelemetryConsentStateStore {
             reviewed.put(key(entry.projectId, entry.pluginIdentifier, entry.pluginVersion), entry);
         }
         return reviewed;
+    }
+
+    @Nullable
+    private ReviewedProjectDocument reviewedBaseline(@Nonnull StateDocument document,
+                                                     @Nonnull TelemetryProjectRegistration project) {
+        LinkedHashMap<String, ReviewedProjectDocument> reviewed = reviewedEntries(document);
+        ReviewedProjectDocument exact = reviewed.get(key(project));
+        if (exact != null) {
+            return exact;
+        }
+        String normalizedProjectId = normalize(project.projectId());
+        String normalizedPluginIdentifier = normalize(project.pluginIdentifier());
+        if (document.reviewedProjects == null) {
+            return null;
+        }
+        ReviewedProjectDocument latest = null;
+        for (ReviewedProjectDocument entry : document.reviewedProjects) {
+            if (entry == null
+                    || entry.projectId == null
+                    || entry.pluginIdentifier == null
+                    || entry.pluginVersion == null
+                    || !normalizedProjectId.equals(normalize(entry.projectId))
+                    || !normalizedPluginIdentifier.equals(normalize(entry.pluginIdentifier))) {
+                continue;
+            }
+            latest = entry;
+        }
+        return latest;
     }
 
     @Nonnull
@@ -253,7 +310,7 @@ public final class TelemetryConsentStateStore {
     @Nonnull
     private static String promptKey(@Nonnull List<TelemetryProjectRegistration> projects) {
         return projects.stream()
-                .map(TelemetryConsentStateStore::key)
+                .map(project -> key(project) + "|" + TelemetryConsentCapabilities.fingerprint(project))
                 .sorted()
                 .reduce((left, right) -> left + ";" + right)
                 .orElse("none");
@@ -287,6 +344,7 @@ public final class TelemetryConsentStateStore {
         private String projectId;
         private String pluginIdentifier;
         private String pluginVersion;
+        private List<String> supportedCategories;
 
         @Nonnull
         private static ReviewedProjectDocument from(@Nonnull TelemetryProjectRegistration project) {
@@ -294,6 +352,7 @@ public final class TelemetryConsentStateStore {
             document.projectId = project.projectId();
             document.pluginIdentifier = project.pluginIdentifier();
             document.pluginVersion = project.pluginVersion();
+            document.supportedCategories = TelemetryConsentCapabilities.supportedCategoryNames(project);
             return document;
         }
     }

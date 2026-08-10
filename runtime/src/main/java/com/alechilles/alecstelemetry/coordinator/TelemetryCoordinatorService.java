@@ -5,14 +5,17 @@ import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.report.ManualReportEnvelope;
 import com.alechilles.alecstelemetry.report.ManualReportKind;
 import com.alechilles.alecstelemetry.report.ManualReportSubmission;
 import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryBreadcrumbBridgePayload;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
@@ -46,6 +49,8 @@ public final class TelemetryCoordinatorService {
     private List<TelemetryProjectRegistration> baseManualReportProjects;
     private Set<String> rejectedContributionTokens = Set.of();
     private volatile long contributionRevision = -1L;
+    private final TelemetryConsentStateStore consentStateStore;
+    private final TelemetryProjectOverrideStore overrideStore;
 
     public TelemetryCoordinatorService(@Nonnull TelemetryRuntimeSettings settings,
                                        @Nonnull TelemetryDataPaths dataPaths,
@@ -81,6 +86,8 @@ public final class TelemetryCoordinatorService {
         );
         this.baseProjects = List.copyOf(projects);
         this.baseManualReportProjects = List.copyOf(manualReportProjects);
+        this.consentStateStore = new TelemetryConsentStateStore(logger);
+        this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.statsHeartbeat = onlinePlayers == null
                 ? null
                 : new TelemetryCoordinatorStatsHeartbeat(engine, onlinePlayers, executor, logger);
@@ -109,6 +116,8 @@ public final class TelemetryCoordinatorService {
         );
         this.baseProjects = List.copyOf(projects);
         this.baseManualReportProjects = List.copyOf(manualReportProjects);
+        this.consentStateStore = new TelemetryConsentStateStore(logger);
+        this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.statsHeartbeat = playerIntervalSnapshot == null
                 ? null
                 : new TelemetryCoordinatorStatsHeartbeat(engine, playerIntervalSnapshot, executor, logger);
@@ -234,6 +243,29 @@ public final class TelemetryCoordinatorService {
                     rejectedTokens.add(token);
                 }
                 continue;
+            }
+            if (base != null && base.isPassiveDescriptor()) {
+                List<String> additions = consentStateStore.addedSupportedCategories(
+                        dataPaths.consentStateFile(),
+                        registration
+                );
+                Path overrideFile = dataPaths.projectOverrideFile(registration.projectId());
+                if (!additions.isEmpty() && !overrideStore.disableCategories(overrideFile, additions)) {
+                    if (!token.isBlank()) {
+                        rejectedTokens.add(token);
+                    }
+                    continue;
+                }
+                TelemetryProjectOverride override = overrideStore.load(overrideFile);
+                if (!additions.isEmpty() && override == null) {
+                    if (!token.isBlank()) {
+                        rejectedTokens.add(token);
+                    }
+                    continue;
+                }
+                if (override != null) {
+                    registration = registration.withOverride(override);
+                }
             }
             byProjectId.put(normalizedProjectId, registration);
         }

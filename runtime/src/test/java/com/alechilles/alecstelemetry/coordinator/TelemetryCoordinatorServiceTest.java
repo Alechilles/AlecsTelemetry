@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.coordinator;
 
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -115,6 +116,11 @@ class TelemetryCoordinatorServiceTest {
                 null
         );
 
+        assertTrue(new TelemetryConsentStateStore(null).markReviewed(
+                dataPaths.consentStateFile(),
+                passive
+        ));
+
         Map<String, Object> contribution = contribution(
                 "creditor-token",
                 declared,
@@ -129,6 +135,8 @@ class TelemetryCoordinatorServiceTest {
         assertEquals(TelemetryProjectRegistrationSource.CONTRIBUTION,
                 service.projects().getFirst().source());
         assertTrue(service.projects().getFirst().usage().supported());
+        assertFalse(service.isUsageEnabled("creditor"));
+        assertTrue(service.isStatsEnabled("creditor"));
 
         assertTrue(service.reconcileProjectContributions(2L, List.of()));
         assertEquals(1, service.projects().size());

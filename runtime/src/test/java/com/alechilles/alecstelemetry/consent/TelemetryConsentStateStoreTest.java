@@ -78,6 +78,49 @@ class TelemetryConsentStateStoreTest {
         assertFalse(reloaded.isReviewed(stateFile, firstVersion));
     }
 
+    @Test
+    void detectsReviewedCapabilityExpansionsWithoutAlertingOnRemovals() throws Exception {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration statsOnly = registrationWithCapabilities(false, false, true);
+        TelemetryProjectRegistration expanded = registrationWithCapabilities(true, true, true);
+        TelemetryProjectRegistration removed = registrationWithCapabilities(false, false, true);
+
+        assertTrue(store.markReviewed(stateFile, statsOnly));
+        assertEquals(List.of("error", "usage"), store.addedSupportedCategories(stateFile, expanded));
+        assertFalse(store.isReviewed(stateFile, expanded));
+        assertEquals(List.of(expanded), store.unreviewedProjects(stateFile, List.of(expanded)));
+
+        assertTrue(store.markReviewed(stateFile, expanded));
+        assertEquals(List.of(), store.addedSupportedCategories(stateFile, expanded));
+        assertTrue(store.isReviewed(stateFile, expanded));
+        assertEquals(List.of(), store.addedSupportedCategories(stateFile, removed));
+    }
+
+    @Test
+    void treatsLegacyReviewedEntriesWithoutCapabilitiesAsReviewed() throws Exception {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        Files.createDirectories(stateFile.getParent());
+        Files.writeString(stateFile, """
+                {
+                  "version": 1,
+                  "reviewedProjects": [
+                    {
+                      "projectId": "example-mod",
+                      "pluginIdentifier": "Example:Example Mod",
+                      "pluginVersion": "1.0.0"
+                    }
+                  ]
+                }
+                """);
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration expanded = registrationWithCapabilities(true, true, true);
+
+        assertTrue(store.isReviewed(stateFile, expanded));
+        assertEquals(List.of(), store.addedSupportedCategories(stateFile, expanded));
+        assertEquals(List.of(), store.unreviewedProjects(stateFile, List.of(expanded)));
+    }
+
     private static TelemetryProjectRegistration registration(String projectId,
                                                             String pluginIdentifier,
                                                             String pluginVersion) {
@@ -96,6 +139,36 @@ class TelemetryConsentStateStoreTest {
                 descriptor,
                 pluginIdentifier,
                 pluginVersion,
+                Path.of("Example Mod")
+        );
+    }
+
+    private static TelemetryProjectRegistration registrationWithCapabilities(boolean error,
+                                                                              boolean usage,
+                                                                              boolean stats) {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "example-mod",
+                  "projectVersion": "1.0.0",
+                  "displayName": "Example Mod",
+                  "ownerPluginIdentifiers": ["Example:Example Mod"],
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "telemetry": {
+                    "events": {
+                      "errors": { "supported": %s }
+                    },
+                    "usage": { "supported": %s },
+                    "stats": { "supported": %s, "allowedEvents": ["heartbeat"] }
+                  }
+                }
+                """.formatted(error, usage, stats),
+                null
+        );
+        return new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Example Mod",
+                "1.0.0",
                 Path.of("Example Mod")
         );
     }

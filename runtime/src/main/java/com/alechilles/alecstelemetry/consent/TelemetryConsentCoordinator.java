@@ -15,7 +15,10 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +48,13 @@ public final class TelemetryConsentCoordinator {
         if (unreviewed.isEmpty()) {
             return;
         }
+        LinkedHashMap<String, List<String>> additionsByProject = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : unreviewed) {
+            List<String> additions = runtimeService.addedConsentCategories(project.projectId());
+            if (!additions.isEmpty()) {
+                additionsByProject.put(project.projectId().trim().toLowerCase(Locale.ROOT), additions);
+            }
+        }
         Ref<EntityStore> playerEntityRef = event.getPlayerRef();
         Store<EntityStore> store = playerEntityRef.getStore();
         PlayerRef playerRef = store.getComponent(playerEntityRef, PlayerRef.getComponentType());
@@ -59,7 +69,10 @@ public final class TelemetryConsentCoordinator {
         if (!promptedKeys.add(promptKey)) {
             return;
         }
-        if (!sendFirstRunNotice(playerRef)) {
+        String notice = additionsByProject.isEmpty()
+                ? FIRST_RUN_NOTICE
+                : reviewNotice(unreviewed, additionsByProject);
+        if (!sendNotice(playerRef, notice)) {
             promptedKeys.remove(promptKey);
             return;
         }
@@ -92,14 +105,71 @@ public final class TelemetryConsentCoordinator {
         return true;
     }
 
-    private boolean sendFirstRunNotice(@Nonnull PlayerRef playerRef) {
+    private boolean sendNotice(@Nonnull PlayerRef playerRef, @Nonnull String notice) {
         try {
-            playerRef.sendMessage(Message.raw(FIRST_RUN_NOTICE).color(FIRST_RUN_NOTICE_COLOR));
+            playerRef.sendMessage(Message.raw(notice).color(FIRST_RUN_NOTICE_COLOR));
             return true;
         } catch (Exception ex) {
             warn("Unable to send telemetry consent notice.", ex);
             return false;
         }
+    }
+
+    @Nonnull
+    static String reviewNotice(@Nonnull List<TelemetryProjectRegistration> projects,
+                               @Nonnull Map<String, List<String>> additionsByProject) {
+        ArrayList<String> projectNotices = new ArrayList<>();
+        for (TelemetryProjectRegistration project : projects) {
+            List<String> additions = additionsByProject.get(project.projectId().trim().toLowerCase(Locale.ROOT));
+            if (additions == null || additions.isEmpty()) {
+                continue;
+            }
+            ArrayList<String> labels = new ArrayList<>();
+            for (String category : additions) {
+                String label = categoryLabel(category);
+                if (label != null && !labels.contains(label)) {
+                    labels.add(label);
+                }
+            }
+            if (!labels.isEmpty()) {
+                projectNotices.add(project.displayName()
+                        + " added telemetry options: "
+                        + joinLabels(labels)
+                        + ".");
+            }
+        }
+        if (projectNotices.isEmpty()) {
+            return FIRST_RUN_NOTICE;
+        }
+        return String.join(" ", projectNotices)
+                + " These remain disabled until reviewed. Run `/telemetry consent`.";
+    }
+
+    @Nullable
+    private static String categoryLabel(@Nonnull String category) {
+        return switch (category.trim().toLowerCase(Locale.ROOT)) {
+            case "crash" -> "Crash";
+            case "error" -> "Errors";
+            case "lifecycle" -> "Lifecycle";
+            case "performance" -> "Performance";
+            case "usage" -> "Usage";
+            case "stats" -> "Stats";
+            case "breadcrumbs" -> "Breadcrumbs";
+            default -> null;
+        };
+    }
+
+    @Nonnull
+    private static String joinLabels(@Nonnull List<String> labels) {
+        if (labels.size() == 1) {
+            return labels.getFirst();
+        }
+        if (labels.size() == 2) {
+            return labels.get(0) + " and " + labels.get(1);
+        }
+        return String.join(", ", labels.subList(0, labels.size() - 1))
+                + ", and "
+                + labels.getLast();
     }
 
     private static boolean hasConsentAccess(@Nullable PlayerRef playerRef) {

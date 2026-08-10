@@ -15,6 +15,15 @@ public interface TelemetryConsentRuntime {
     @Nonnull
     List<TelemetryProjectRegistration> unreviewedConsentProjects();
 
+    /**
+     * Returns newly supported consent categories for a project since its last
+     * reviewed capability snapshot.
+     */
+    @Nonnull
+    default List<String> addedConsentCategories(@Nonnull String projectId) {
+        return List.of();
+    }
+
     boolean isConsentNoticeShown(@Nonnull String viewerKey,
                                  @Nonnull List<TelemetryProjectRegistration> projects);
 

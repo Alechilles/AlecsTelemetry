@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.Locale;
 import java.util.Map;
 import java.util.logging.Level;
@@ -116,6 +117,41 @@ public final class TelemetryProjectOverrideStore {
         return update(file, root -> object(root, "stats").addProperty("enabled", enabled));
     }
 
+    /**
+     * Persists a protective opt-out for only the newly exposed categories,
+     * preserving all unrelated project choices already present in the file.
+     */
+    public boolean disableCategories(@Nonnull Path file, @Nonnull Collection<String> categories) {
+        return update(file, root -> {
+            for (String rawCategory : categories) {
+                if (rawCategory == null || rawCategory.isBlank()) {
+                    continue;
+                }
+                switch (rawCategory.trim().toLowerCase(Locale.ROOT)) {
+                    case "crash" -> {
+                        JsonObject capture = object(root, "capture");
+                        capture.addProperty("uncaughtExceptions", false);
+                        capture.addProperty("setupFailures", false);
+                        capture.addProperty("startFailures", false);
+                        capture.addProperty("exceptionalWorldRemovals", false);
+                    }
+                    case "error" -> updateEventTypeEnabled(root, "errors", false);
+                    case "lifecycle", "breadcrumbs" -> updateEventTypeEnabled(
+                            root,
+                            rawCategory.trim().toLowerCase(Locale.ROOT),
+                            false
+                    );
+                    case "performance", "usage", "stats" -> object(root, rawCategory.trim().toLowerCase(Locale.ROOT))
+                            .addProperty("enabled", false);
+                    default -> {
+                        // Ignore unknown labels so future categories do not
+                        // overwrite unrelated user settings.
+                    }
+                }
+            }
+        });
+    }
+
     public boolean saveConsentSnapshot(@Nonnull Path file,
                                        @Nonnull TelemetryConsentSnapshot snapshot,
                                        @Nonnull TelemetryConsentSnapshot supported) {
@@ -193,10 +229,16 @@ public final class TelemetryProjectOverrideStore {
 
     private boolean updateEventTypeEnabled(@Nonnull Path file, @Nonnull String eventType, boolean enabled) {
         return update(file, root -> {
-            JsonObject events = object(root, "events");
-            JsonObject eventObject = object(events, eventType);
-            eventObject.addProperty("enabled", enabled);
+            updateEventTypeEnabled(root, eventType, enabled);
         });
+    }
+
+    private static void updateEventTypeEnabled(@Nonnull JsonObject root,
+                                               @Nonnull String eventType,
+                                               boolean enabled) {
+        JsonObject events = object(root, "events");
+        JsonObject eventObject = object(events, eventType);
+        eventObject.addProperty("enabled", enabled);
     }
 
     private static void updateEventType(@Nonnull JsonObject root,

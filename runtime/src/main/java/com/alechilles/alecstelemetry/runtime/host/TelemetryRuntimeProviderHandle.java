@@ -12,6 +12,7 @@ import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentCapabilities;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentMetricReporter;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
@@ -354,7 +355,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (!usesLocalCoordinator(active)) {
             return List.of();
         }
-        return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), consentProjects);
+        return consentStateStore.unreviewedProjects(dataPaths.consentStateFile(), currentConsentProjects());
+    }
+
+    @Nonnull
+    @Override
+    public List<String> addedConsentCategories(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return List.of();
+        }
+        TelemetryProjectRegistration project = findConsentProject(projectId);
+        return project == null
+                ? List.of()
+                : consentStateStore.addedSupportedCategories(dataPaths.consentStateFile(), project);
     }
 
     @Override
@@ -415,7 +429,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     private boolean applyLocalConsentToAll(@Nonnull TelemetryConsentSnapshot snapshot) {
         boolean appliedAll = true;
-        for (TelemetryProjectRegistration project : consentProjects) {
+        for (TelemetryProjectRegistration project : currentConsentProjects()) {
             appliedAll &= applyLocalConsent(project.projectId(), clampToSupported(snapshot, supportedSnapshot(project)));
         }
         return appliedAll;
@@ -432,7 +446,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     private boolean applyLocalConsentCategoryToAll(@Nonnull String category, boolean enabled) {
         boolean appliedAll = true;
-        for (TelemetryProjectRegistration project : consentProjects) {
+        for (TelemetryProjectRegistration project : currentConsentProjects()) {
             TelemetryConsentSnapshot supported = supportedSnapshot(project);
             if (!supported.categoryEnabled(category)) {
                 continue;
@@ -511,13 +525,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Nonnull
     private TelemetryRuntimeDiagnostics localConsentDiagnostics() {
-        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(consentProjects.size());
-        for (TelemetryProjectRegistration project : consentProjects) {
+        List<TelemetryProjectRegistration> currentProjects = currentConsentProjects();
+        ArrayList<TelemetryRuntimeDiagnostics.ProjectDiagnostics> projectDiagnostics = new ArrayList<>(currentProjects.size());
+        for (TelemetryProjectRegistration project : currentProjects) {
             projectDiagnostics.add(buildLocalProjectDiagnostics(project));
         }
         return new TelemetryRuntimeDiagnostics(
                 coordinator.isEnabled(),
-                consentProjects.size(),
+                currentProjects.size(),
                 coordinator.loadedMods().size(),
                 coordinator.pendingReports(null),
                 coordinator.flushInProgress(),
@@ -1152,16 +1167,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Nonnull
     private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
-        return new TelemetryConsentSnapshot(
-                true,
-                supportsCrash(project),
-                project.descriptor().events().errors().supported(),
-                project.descriptor().events().lifecycle().supported(),
-                project.descriptor().performance().supported(),
-                project.descriptor().usage().supported(),
-                project.descriptor().stats().supported(),
-                project.descriptor().events().breadcrumbs().supported()
-        );
+        return TelemetryConsentCapabilities.supportedSnapshot(project);
     }
 
     private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
@@ -1186,12 +1192,37 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nullable
     private TelemetryProjectRegistration findConsentProject(@Nonnull String projectId) {
         String normalized = projectId.trim();
+        TelemetryProjectRegistration consentProject = null;
         for (TelemetryProjectRegistration project : consentProjects) {
             if (project.projectId().equalsIgnoreCase(normalized)) {
-                return project;
+                consentProject = project;
+                break;
             }
         }
-        return null;
+        if (consentProject != null && consentProject.hasOverride()) {
+            return consentProject;
+        }
+        TelemetryProjectRegistration runtimeProject = coordinator.findProject(normalized);
+        if (runtimeProject != null) {
+            return runtimeProject;
+        }
+        return consentProject;
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> currentConsentProjects() {
+        LinkedHashMap<String, TelemetryProjectRegistration> projects = new LinkedHashMap<>();
+        for (TelemetryProjectRegistration project : consentProjects) {
+            projects.put(project.projectId().toLowerCase(Locale.ROOT), project);
+        }
+        for (TelemetryProjectRegistration project : coordinator.projects()) {
+            String key = project.projectId().toLowerCase(Locale.ROOT);
+            TelemetryProjectRegistration existing = projects.get(key);
+            if (existing == null || !existing.hasOverride() || project.hasOverride()) {
+                projects.put(key, project);
+            }
+        }
+        return List.copyOf(projects.values());
     }
 
 
