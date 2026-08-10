@@ -59,11 +59,16 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - Passive descriptor projects expose only the aggregate Stats heartbeat under
   independent project and Stats consent. Passive discovery loads no executable
   class from the descriptor and does not initialize library code; richer
-  categories require an explicit active contribution and operator review.
+  categories require an explicit active contribution and operator review. A
+  passive descriptor may route that standard Stats-only heartbeat to Alec's
+  hosted platform or to an author-selected custom endpoint; the custom endpoint
+  operator controls data, security, and retention.
 - When an active contribution adds categories to a previously reviewed logical
-  project, those categories remain disabled until an operator saves new consent
-  choices. A review reminder is sent only to players with
-  `telemetry.command.telemetry` or the local singleplayer owner.
+  project and a persisted supported-category snapshot exists, those categories
+  remain disabled until an operator saves new consent choices. A review reminder
+  is sent only to players with `telemetry.command.telemetry` or the local
+  singleplayer owner. Legacy reviewed records without a supported-category
+  snapshot remain honored and cannot be compared retrospectively.
 - Anchored contributions in the 1.1.0 MVP can upload only to Alec's hosted
   destination. Conventional projects may still opt into a custom endpoint; that
   endpoint operator, not Alec, controls its data and retention.
@@ -196,7 +201,10 @@ final host artifact. Presence is the installation signal, not evidence that the
 library executed. If several physical hosts carry the same logical
 `projectId`/`projectVersion`, local election deduplicates them into one logical
 Stats heartbeat project. The containing host identifier/version and source path
-are local election provenance, not new uploaded stats fields.
+are local election provenance, not new uploaded stats fields. The descriptor may
+route this standard Stats-only heartbeat to Alec's hosted platform or to an
+author-selected custom endpoint; custom endpoint operators, rather than Alec,
+control the received data, security, and retention.
 
 The hosted service may use raw server IDs, session IDs, loaded mod evidence, and
 private heartbeat payloads internally to compute aggregates, prevent duplicates,
@@ -397,11 +405,14 @@ configuration should be confirmed before production launch.
 
 Retention depends on the data type and operational need.
 
-- Retiring an embedded contribution removes it from new consent and heartbeat
-  snapshots but does not by itself delete queued crash, event, or manual-report
-  envelopes. The active coordinator may replay those envelopes using the
-  retained project registration until normal upload, retry, queue-limit, or
-  deletion rules apply.
+- Retiring an embedded contribution while its elected passive Stats-only base
+  remains present resumes/continues that base as the logical project's consent
+  and heartbeat entry. Only when no passive base remains does the logical
+  project leave new consent and heartbeat snapshots. Retirement does not by
+  itself delete queued crash, event, or manual-report envelopes. The active
+  coordinator may replay those envelopes using the retained project
+  registration until normal upload, retry, queue-limit, or deletion rules
+  apply.
 - Successful stats raw private payloads and retained heartbeat rows are deleted
   after compact rollups or snapshots exist. Loaded-mod heartbeat evidence is
   deleted after compact loaded-mod snapshots exist. Operators may temporarily
@@ -467,8 +478,10 @@ Server owners can:
 - review every passively discovered logical project in the scrollable consent
   list; passive projects expose Stats only until an active integration is
   explicitly registered
-- review newly added categories after a permission-scoped reminder; new
-  categories remain disabled unless the operator saves them as enabled
+- review newly added categories after a permission-scoped reminder when a
+  persisted supported-category snapshot exists; those additions remain disabled
+  unless the operator saves them as enabled. Legacy reviewed records without a
+  snapshot remain honored and cannot be compared retrospectively
 - review each embedded logical contribution as its own consent project, even
   when several contributions share one physical runtime provider
 - use runtime override files to disable telemetry categories or change endpoints

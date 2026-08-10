@@ -28,8 +28,11 @@ even if the descriptor declares those categories for a later active integration.
 
 Use the passive descriptor shape below. `projectVersion` is the logical
 library version and should be build-stamped; the physical host's manifest
-version is used only as local provenance. The hosted project key is still
-required for delivery to Alec's hosted ingest:
+version is used only as local provenance. This example uses Alec's hosted
+destination and its publishable project key. Passive descriptors may instead
+select `defaults.destinationMode: "custom"` with `customEndpoint.url`; in that
+case the standard Stats-only heartbeat goes to the author-selected endpoint,
+whose operator controls the received data, security, and retention.
 
 ```json
 {
@@ -51,17 +54,20 @@ required for delivery to Alec's hosted ingest:
 ```
 
 When the same descriptor is shaded into multiple host mods, logical project
-election keeps one complete winner by logical semantic version and deterministic
-host/path/hash tie-breakers. Consent and the heartbeat catalog therefore contain
-one project, not one row per host. Invalid descriptors are skipped with bounded
-diagnostics and do not block the host.
+election keeps one complete winner by logical semantic version, source kind, and
+deterministic host/path/hash tie-breakers. Consent and the heartbeat catalog
+therefore contain one project, not one row per host. Invalid descriptors are
+skipped with bounded diagnostics and do not block the host.
 
 If richer telemetry is valuable, add the explicit `contribute(...)` registration
 below. It must use the same descriptor resource, `projectId`, logical version,
 and a declared owner so it can upgrade the passive project. A matching active
-registration reuses the existing consent row and destination. Newly exposed
-categories stay disabled until an eligible operator reviews them through
-`/telemetry consent`.
+registration reuses the existing consent row and destination. When a persisted
+supported-category snapshot exists for the previously reviewed logical project,
+newly exposed categories stay disabled until an eligible operator reviews them
+through `/telemetry consent`; eligible operators are notified. Legacy reviewed
+records without that snapshot remain honored and cannot be compared
+retrospectively.
 
 ## Register a logical project
 
@@ -260,12 +266,15 @@ See [Usage Stats](usage-stats.md) for cadence and public aggregation behavior.
 
 Contribution reconciliation is live for first registration; adding a valid
 candidate makes its project available to consent and runtime operations without
-restarting the server. Retiring a candidate removes it from new consent and
-heartbeat snapshots, but it does not delete that project's local crash, event,
-or manual-report queue. The coordinator retains the project registration needed
-to replay queued envelopes; queued data remains subject to the normal consent,
-destination, retry, and retention rules. A same-ID replacement is intentionally
-deferred until restart.
+restarting the server. If an active contribution retires while its elected
+passive Stats-only base remains present, that base resumes/continues as the
+logical project's consent and heartbeat entry. Only when no passive base remains
+does the logical project leave new consent and heartbeat snapshots. Retirement
+does not delete that project's local crash, event, or manual-report queue; the
+coordinator retains the project registration needed to replay queued envelopes,
+which remain subject to the normal consent, destination, retry, and retention
+rules. An unrelated same-ID replacement is intentionally deferred until
+restart.
 
 ## Hosted and custom destinations
 
@@ -274,13 +283,15 @@ With `defaults.destinationMode` set to `hosted`, the descriptor's publishable
 platform's validation, retention, portal, and public-stats rules apply there.
 
 With `defaults.destinationMode` set to `custom`, use `customEndpoint.url` (and,
-when needed, `eventUrl` and `headers`) for a conventional project. A custom
-endpoint operator controls the data received at that endpoint, including any
-descriptor-approved fields, attachments, or sensitive values supplied by a mod
-or player. Alec's hosted platform policy and retention commitments do not cover
-a custom endpoint; the mod author and server owner must document, secure, and
-retain that data under their own rules. Anchored contributions using custom mode
-are disabled by the 1.1.0 MVP gate above.
+when needed, `eventUrl` and `headers`) for a conventional project or a passive
+descriptor-only Stats project. A custom endpoint operator controls the data
+received at that endpoint, including any descriptor-approved fields,
+attachments, or sensitive values supplied by a mod or player. Alec's hosted
+platform policy and retention commitments do not cover a custom endpoint; the
+mod author and server owner must document, secure, and retain that data under
+their own rules. Executable anchored contributions using custom mode are
+disabled by the 1.1.0 MVP gate above; that gate does not disable passive
+descriptor Stats delivery to an author-selected custom endpoint.
 
 ## Failure behavior
 

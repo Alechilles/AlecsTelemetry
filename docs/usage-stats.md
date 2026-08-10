@@ -61,17 +61,39 @@ Telemetry runtime must be present to discover the resource. Without one, the
 descriptor is inert.
 
 Passive discovery exposes only Stats, even if the descriptor includes richer
-categories for a future active integration. If multiple host mods contain the
+categories for a future active integration. A minimal passive Stats declaration
+is:
+
+```json
+{
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "allowedEvents": ["heartbeat"]
+    }
+  }
+}
+```
+
+If multiple host mods contain the
 same logical project, election deduplicates them into one consent row and one
 heartbeat project. It elects the highest logical semantic version, then uses
-deterministic host/path/hash tie-breakers; descriptors are not merged.
+source kind and deterministic host/path/hash tie-breakers; descriptors are not
+merged.
 
 To report richer categories, the library must explicitly register
 `EmbeddedTelemetryBootstrap.contribute(...)` with the same descriptor, logical
 ID/version, and declared owner. A matching contribution upgrades that existing
-logical project rather than adding another heartbeat project. Newly exposed
-categories remain disabled until an operator reviews them through
-`/telemetry consent`.
+logical project rather than adding another heartbeat project. When a persisted
+supported-category snapshot exists for the previously reviewed logical project,
+newly exposed categories remain disabled until an operator reviews them through
+`/telemetry consent`; eligible operators are notified. Legacy reviewed records
+without that snapshot remain honored and cannot be compared retrospectively.
+
+Passive descriptors may select either the hosted destination or an author-
+selected custom endpoint. A custom destination receives the same standard
+Stats-only heartbeat metadata, while its endpoint operator—not Alec's hosted
+platform—controls the data, security, and retention.
 
 ## Heartbeat Eligibility And Retirement
 
@@ -83,10 +105,13 @@ these gates at emission time, so changing consent or destination immediately
 removes the project from later heartbeat snapshots. Multiple physical hosts
 carrying the same descriptor still produce one logical heartbeat entry.
 
-When a contribution retires, the project disappears from new consent and
-heartbeat snapshots without deleting its local crash, event, or report queue.
-The coordinator retains the project registration needed to replay queued data;
-normal retry, destination, and retention rules still apply.
+When an active contribution retires while its elected passive Stats-only base is
+still present, that base resumes/continues as the logical project's consent and
+heartbeat entry. Only when no passive base remains does the logical project leave
+new consent and heartbeat snapshots. Retirement does not delete its local crash,
+event, or report queue; the coordinator retains the project registration needed
+to replay queued data, and normal retry, destination, and retention rules still
+apply.
 
 Heartbeats are grouped by their resolved event destination, so projects routed
 to different endpoints are never combined into one upload. Anchored contributions

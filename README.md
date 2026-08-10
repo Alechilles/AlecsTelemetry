@@ -150,20 +150,30 @@ not the physical host mod's manifest version:
 }
 ```
 
+This example uses Alec's hosted destination. A passive descriptor may instead
+set `defaults.destinationMode` to `custom` and provide `customEndpoint.url` (and
+the optional event endpoint/headers). In that mode the standard Stats-only
+heartbeat is delivered to the author-selected endpoint rather than Alec's
+hosted ingest; that endpoint's operator controls the received data, security,
+and retention.
+
 Build-stamp `projectVersion` with the logical library release. If the same
 descriptor is present in several host mods, Telemetry elects one logical
-project (the highest logical semantic version, then deterministic host/path/
-hash tie-breakers), so consent and Stats contain one row and one heartbeat
-project rather than one per host. Invalid descriptors are skipped without
-blocking the host mod.
+project (the highest logical semantic version, then source kind and
+deterministic host/path/hash tie-breakers), so consent and Stats contain one row
+and one heartbeat project rather than one per host. Invalid descriptors are
+skipped without blocking the host mod.
 
 If the library later needs crash, error, usage, performance, lifecycle,
 breadcrumbs, or report telemetry, add an explicit
 `EmbeddedTelemetryBootstrap.contribute(...)` registration using the same
 descriptor resource, `projectId`, logical version, and declared owner. That
 active registration upgrades the existing passive row; it does not create a
-second project. Newly exposed categories remain disabled until an operator
-reviews them in `/telemetry consent`.
+second project. If a persisted supported-category snapshot exists for the
+previously reviewed logical project, newly exposed categories remain disabled
+until an operator reviews them in `/telemetry consent`; eligible operators are
+notified. Legacy reviewed records without that snapshot remain honored and
+cannot be compared retrospectively.
 
 ## Quick Setup For Server Owners
 

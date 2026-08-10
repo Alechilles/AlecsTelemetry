@@ -52,17 +52,20 @@ version, display name, owner identifier, and Stats heartbeat allowlist:
 `projectVersion` is the library's logical semantic version; the containing
 host's manifest version is retained only as physical-host provenance. If the
 same library descriptor appears in multiple hosts, election chooses one whole
-logical project (highest logical version, then deterministic source/host/path/
-hash tie-breakers). It never merges descriptor fields, so consent and Stats
-contain one row and one heartbeat project.
+logical project (highest logical version, then source kind and deterministic
+host/path/hash tie-breakers). It never merges descriptor fields, so consent and
+Stats contain one row and one heartbeat project.
 
 The descriptor may include richer categories for an active implementation, but
 passive registration masks them. To expose those categories, the library must
 explicitly call `EmbeddedTelemetryBootstrap.contribute(...)` using the same
 descriptor resource, project ID, logical version, and an owner declared in the
 descriptor. A matching contribution upgrades the existing passive row rather
-than creating a duplicate. Newly exposed categories remain disabled until an
-operator reviews them with `/telemetry consent`.
+than creating a duplicate. When a persisted supported-category snapshot exists
+for the previously reviewed logical project, newly exposed categories remain
+disabled until an operator reviews them with `/telemetry consent`; eligible
+operators are notified. Legacy reviewed records without that snapshot remain
+honored and cannot be compared retrospectively.
 
 An embedded component that owns a separate logical project can use
 `EmbeddedTelemetryBootstrap.contribute(...)` instead of the conventional
@@ -109,9 +112,12 @@ Runtime override files still use `enabled`; that is a saved consent state, not t
 For a passive namespaced descriptor, only Stats with the `heartbeat` event is
 available. Other declared categories are retained as metadata for a later
 explicit `contribute(...)` call and are masked from the passive project. When a
-matching active contribution exposes new categories, those additions remain
-disabled until an operator saves reviewed choices. Eligible operators receive
-a permission-scoped chat reminder to run `/telemetry consent`.
+matching active contribution exposes new categories, and a persisted
+supported-category snapshot exists for the previously reviewed logical project,
+those additions remain disabled until an operator saves reviewed choices.
+Eligible operators receive a permission-scoped chat reminder to run
+`/telemetry consent`. Legacy reviewed records without a snapshot remain honored
+and cannot be compared retrospectively.
 
 ## Stats-Only Example
 
@@ -336,10 +342,13 @@ replacement.
 
 `hosted.projectKey` is a publishable ingest key. Bake it into the shipped descriptor for plug-and-play telemetry, but keep destructive or admin capabilities out of ingest-key auth scope.
 
-Passive descriptor-only projects use the hosted destination and still require a
-publishable project key plus normal destination validation before a Stats
-heartbeat can be delivered. A custom endpoint remains a conventional-project
-choice and is not activated by passive discovery.
+Passive descriptor-only projects may use either the hosted or custom destination
+declared in the descriptor. Hosted delivery requires a publishable project key
+plus normal destination validation. With `defaults.destinationMode` set to
+`custom`, the standard Stats-only heartbeat is delivered to the author-selected
+`customEndpoint.url` (and its configured headers/event endpoint); that endpoint
+operator controls the received data, security, and retention. Passive discovery
+does not change the endpoint's ownership or activate richer categories.
 
 `customEndpoint` supports:
 
@@ -376,15 +385,20 @@ The active coordinator reconciles anchored contributions while the server is
 running. A valid contribution that exactly matches an elected passive project's
 logical ID, version, owner, and descriptor hash upgrades that existing project
 row and exposes its additional supported categories. It does not create a
-second project or heartbeat. Newly exposed categories remain disabled until an
-operator reviews them through `/telemetry consent`.
+second project or heartbeat. When a persisted supported-category snapshot
+exists for the previously reviewed logical project, newly exposed categories
+remain disabled until an operator reviews them through `/telemetry consent`.
+Legacy reviewed records without that snapshot remain honored and cannot be
+compared retrospectively.
 
 A valid elected contribution appears as an independent project in consent and
 command diagnostics. An invalid or protocol-ineligible candidate stays passive
 and contributes no telemetry. A valid same-owner passive copy can submit
 operations only through the established winner's descriptor and destination; it
-does not become a second writer. Retiring a contribution removes it from new
-consent and heartbeat snapshots but keeps its existing local queue available for
-replay under the normal project retention and destination rules. Only first
-registration is live in the MVP; an established winner remains the stable
-writable candidate until restart.
+does not become a second writer. If an active contribution retires while its
+elected passive Stats-only base is still present, that base resumes/continues as
+the logical project's heartbeat and consent entry. Only when no passive base
+remains does the logical project leave new consent and heartbeat snapshots.
+Existing local queues remain available for replay under the normal project
+retention and destination rules. Only first registration is live in the MVP; an
+established winner remains the stable writable candidate until restart.
