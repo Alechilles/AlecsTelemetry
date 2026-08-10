@@ -15,7 +15,7 @@ public final class TelemetryCommandRoot extends AbstractCommandCollection {
     public TelemetryCommandRoot(@Nonnull TelemetryCommandRuntime runtime) {
         super("telemetry", "Alec's Telemetry commands.");
         requirePermission(ROOT_PERMISSION);
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         addSubCommand(new TelemetryStatusCommand(runtime));
         addSubCommand(new TelemetryProjectsCommand(runtime));
         addSubCommand(new TelemetryProjectCommand(runtime));

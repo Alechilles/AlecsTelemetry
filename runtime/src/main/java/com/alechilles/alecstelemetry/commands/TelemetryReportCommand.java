@@ -26,7 +26,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
     public TelemetryReportCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("report", "Open a telemetry issue or suggestion report.");
         this.runtime = runtime;
-        setPermissionGroups("Player", "OP", "Admin", "Operator");
+        setPermissionGroups("Player", "hytale:Admin", "OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
 

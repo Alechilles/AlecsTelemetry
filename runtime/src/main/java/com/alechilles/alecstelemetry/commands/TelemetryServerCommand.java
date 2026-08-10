@@ -12,7 +12,7 @@ public final class TelemetryServerCommand extends AbstractCommandCollection {
 
     public TelemetryServerCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("server", "Manage Alec's Telemetry server profile verification.");
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         addSubCommand(new TelemetryServerVerifyCommand(runtime));
     }
 }

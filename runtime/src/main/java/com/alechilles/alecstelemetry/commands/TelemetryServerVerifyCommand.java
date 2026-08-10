@@ -19,7 +19,7 @@ public final class TelemetryServerVerifyCommand extends CommandBase {
     public TelemetryServerVerifyCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("verify", "Send a server claim token to ModStats. Usage: /telemetry server verify [key]");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
     }
 

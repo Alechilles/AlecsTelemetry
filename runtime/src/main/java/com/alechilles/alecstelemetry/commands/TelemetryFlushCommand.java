@@ -16,7 +16,7 @@ public final class TelemetryFlushCommand extends CommandBase {
     public TelemetryFlushCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("flush", "Flush pending telemetry reports. Optional: <project-id>");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
     }
 

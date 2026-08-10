@@ -17,7 +17,7 @@ public final class TelemetryStatusCommand extends CommandBase {
     public TelemetryStatusCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("status", "Show Alec's Telemetry runtime status.");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
     }
 

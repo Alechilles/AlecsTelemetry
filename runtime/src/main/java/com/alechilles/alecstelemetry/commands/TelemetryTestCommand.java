@@ -16,7 +16,7 @@ public final class TelemetryTestCommand extends CommandBase {
     public TelemetryTestCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("test", "Capture a manual telemetry test report. Usage: /telemetry test <project-id> [detail]");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
     }
 

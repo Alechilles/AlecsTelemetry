@@ -21,7 +21,7 @@ public final class TelemetryReportReviewCommand extends CommandBase {
     public TelemetryReportReviewCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("reports", "Review player-submitted telemetry reports.");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups("hytale:Admin", "OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
     }
 

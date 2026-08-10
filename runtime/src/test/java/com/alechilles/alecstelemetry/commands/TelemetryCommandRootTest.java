@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCommandRootTest {
 
@@ -56,6 +57,13 @@ class TelemetryCommandRootTest {
 
         assertInstanceOf(AbstractPlayerCommand.class, root.getSubCommands().get("consent"));
         assertInstanceOf(AbstractPlayerCommand.class, root.getSubCommands().get("report"));
+    }
+
+    @Test
+    void adminCommandIsAvailableToTheBuiltInAdminGroup() {
+        TelemetryCommandRoot root = new TelemetryCommandRoot(null);
+
+        assertTrue(root.getPermissionGroups().contains("hytale:Admin"));
     }
 
     private static void assertConsoleSafe(com.hypixel.hytale.server.core.command.system.AbstractCommand parent,

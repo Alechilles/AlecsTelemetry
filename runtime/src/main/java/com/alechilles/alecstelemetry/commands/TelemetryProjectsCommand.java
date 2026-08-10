@@ -17,7 +17,7 @@ public final class TelemetryProjectsCommand extends CommandBase {
     public TelemetryProjectsCommand(@Nonnull TelemetryCommandRuntime runtime) {
         super("projects", "List registered telemetry projects.");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
     }
 

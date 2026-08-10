@@ -21,7 +21,7 @@ public final class TelemetryConsentCommand extends AbstractPlayerCommand {
     public TelemetryConsentCommand(TelemetryCommandRuntime runtime) {
         super("consent", "Open telemetry consent settings.");
         this.runtime = runtime;
-        setPermissionGroups("OP", "Admin", "Operator");
+        setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(false);
     }
 
