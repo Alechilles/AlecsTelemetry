@@ -346,6 +346,26 @@ class TelemetryRuntimeDiscoveryTest {
         assertEquals("discovered-project", result.projects().getFirst().projectId());
     }
 
+    @Test
+    void discoverActiveKeepsPassiveProjectWhenOnlyPhysicalHostIsLoaded() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "Tamework", "Example", "Tamework", "3.0.0");
+        TelemetryProjectDiscovery.DiscoveryResult discovered = new TelemetryProjectDiscovery(null)
+                .discover(modsDirectory);
+
+        TelemetryRuntimeDiscoveryResult active = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                discovered,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Tamework", "3.0.0")
+                ))
+        );
+
+        assertEquals(List.of("creditor"), active.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+    }
+
     private TelemetryDataPaths dataPaths(Path modsDirectory) {
         Path runtimeRoot = tempDir.resolve("runtime");
         Path settingsRoot = runtimeRoot.resolve("Settings");
@@ -381,6 +401,44 @@ class TelemetryRuntimeDiscoveryTest {
                 """.formatted(group, name, version, slug(name))
         );
         Files.writeString(modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"), descriptorJson);
+    }
+
+    private static void writePassiveModFolder(Path modsDirectory,
+                                              String folderName,
+                                              String group,
+                                              String name,
+                                              String version) throws Exception {
+        Path modFolder = modsDirectory.resolve(folderName);
+        Files.createDirectories(modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "%s",
+                  "Name": "%s",
+                  "Version": "%s",
+                  "Main": "example.host.Host"
+                }
+                """.formatted(group, name, version)
+        );
+        Files.writeString(
+                modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects").resolve("creditor.json"),
+                """
+                {
+                  "schemaVersion": 1,
+                  "projectId": "creditor",
+                  "projectVersion": "1.4.0",
+                  "displayName": "Creditor",
+                  "ownerPluginIdentifiers": ["Example:Library"],
+                  "telemetry": {
+                    "stats": {
+                      "supported": true,
+                      "allowedEvents": ["heartbeat"]
+                    }
+                  }
+                }
+                """
+        );
     }
 
     private static TelemetryProjectRegistration registration(String projectId,

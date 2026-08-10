@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime.discovery;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentCapabilities;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
@@ -171,7 +172,10 @@ public final class TelemetryRuntimeDiscovery {
                 continue;
             }
             java.nio.file.Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
-            if (store.removeUnsupportedConsentValues(overrideFile, supportedSnapshot(project))) {
+            if (store.removeUnsupportedConsentValues(
+                    overrideFile,
+                    TelemetryConsentCapabilities.supportedSnapshot(project)
+            )) {
                 TelemetryProjectOverride reloaded = store.load(overrideFile);
                 if (reloaded == null) {
                     cleaned.remove(projectIdKey);
@@ -185,7 +189,7 @@ public final class TelemetryRuntimeDiscovery {
 
     private static boolean hasUnsupportedConsentValues(@Nonnull TelemetryProjectRegistration project,
                                                        @Nonnull TelemetryProjectOverride override) {
-        TelemetryConsentSnapshot supported = supportedSnapshot(project);
+        TelemetryConsentSnapshot supported = TelemetryConsentCapabilities.supportedSnapshot(project);
         boolean hasUnsupportedCapture = !supported.crashEnabled()
                 && override.capture() != null
                 && override.capture().hasAnyValue();
@@ -219,26 +223,11 @@ public final class TelemetryRuntimeDiscovery {
                 || hasUnsupportedStats;
     }
 
-    @Nonnull
-    private static TelemetryConsentSnapshot supportedSnapshot(@Nonnull TelemetryProjectRegistration project) {
-        return new TelemetryConsentSnapshot(
-                true,
-                supportsCrash(project),
-                project.descriptor().events().errors().supported(),
-                project.descriptor().events().lifecycle().supported(),
-                project.descriptor().performance().supported(),
-                project.descriptor().usage().supported(),
-                project.descriptor().stats().supported(),
-                project.descriptor().events().breadcrumbs().supported()
-        );
-    }
-
-    private static boolean supportsCrash(@Nonnull TelemetryProjectRegistration project) {
-        return project.descriptor().capture().supportsAnySource();
-    }
-
     private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,
                                             @Nonnull Map<String, Boolean> loadedIdentifiers) {
+        if (project.isPassiveDescriptor()) {
+            return containsIdentifierVariant(loadedIdentifiers, project.hostPluginIdentifier());
+        }
         if (containsIdentifierVariant(loadedIdentifiers, project.pluginIdentifier())) {
             return true;
         }
