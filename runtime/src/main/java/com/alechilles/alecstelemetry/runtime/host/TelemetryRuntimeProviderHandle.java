@@ -254,18 +254,26 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     void onPlayerReady(@Nonnull PlayerReadyEvent event) {
         if (ownsActiveCoordinator()) {
+            commandRegistrar.onPlayerReady(event);
             refreshDiscoveredProjects();
             consentCoordinator.onPlayerReady(event);
-            commandRegistrar.onPlayerReady(event);
         }
     }
 
     private void refreshDiscoveredProjects() {
-        TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
-                dataPaths,
-                TelemetryLoadedModSnapshotProvider.hytalePluginManager(coordinator.loadedMods(), logger)
-        );
-        refreshDiscoveredProjects(discovery);
+        try {
+            TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
+                    dataPaths,
+                    TelemetryLoadedModSnapshotProvider.hytalePluginManager(coordinator.loadedMods(), logger)
+            );
+            refreshDiscoveredProjects(discovery);
+        } catch (RuntimeException ex) {
+            if (logger != null) {
+                logger.at(java.util.logging.Level.WARNING).withCause(ex).log(
+                        "Telemetry skipped late passive-project discovery after player ready."
+                );
+            }
+        }
     }
 
     void refreshDiscoveredProjects(@Nonnull TelemetryRuntimeDiscoveryResult discovery) {
