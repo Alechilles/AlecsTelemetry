@@ -227,8 +227,9 @@ public final class TelemetryCoordinatorService {
                 return false;
             }
             String normalizedProjectId = registration.projectId().toLowerCase(Locale.ROOT);
-            if (byProjectId.containsKey(normalizedProjectId)
-                    || "custom".equalsIgnoreCase(registration.destinationMode())) {
+            TelemetryProjectRegistration base = byProjectId.get(normalizedProjectId);
+            if ("custom".equalsIgnoreCase(registration.destinationMode())
+                    || (base != null && !canUpgradePassiveBase(base, registration))) {
                 if (!token.isBlank()) {
                     rejectedTokens.add(token);
                 }
@@ -872,16 +873,40 @@ public final class TelemetryCoordinatorService {
                     || descriptor.ownerPluginIdentifiers().stream().noneMatch(owner -> owner.equalsIgnoreCase(logicalIdentifier))) {
                 return null;
             }
+            if (descriptor.projectVersion() != null
+                    && !descriptor.projectVersion().isBlank()
+                    && !descriptor.projectVersion().equals(logicalVersion)) {
+                return null;
+            }
             String sourcePath = stringValue(contribution.get("sourcePath"));
-            return new TelemetryProjectRegistration(
+            String hostPluginIdentifier = stringValue(contribution.get("hostPluginIdentifier"));
+            String hostPluginVersion = stringValue(contribution.get("hostPluginVersion"));
+            String descriptorHash = stringValue(contribution.get("descriptorHash"));
+            return TelemetryProjectRegistration.contribution(
                     descriptor,
                     logicalIdentifier,
                     logicalVersion,
-                    sourcePath == null ? null : Path.of(sourcePath)
+                    sourcePath.isBlank() ? null : Path.of(sourcePath),
+                    hostPluginIdentifier,
+                    hostPluginVersion,
+                    descriptorHash
             );
         } catch (RuntimeException | LinkageError ignored) {
             return null;
         }
+    }
+
+    private static boolean canUpgradePassiveBase(@Nonnull TelemetryProjectRegistration base,
+                                                 @Nonnull TelemetryProjectRegistration contribution) {
+        String baseHash = base.declaredDescriptorHash();
+        String contributionHash = contribution.declaredDescriptorHash();
+        return base.isPassiveDescriptor()
+                && base.pluginVersion().equals(contribution.pluginVersion())
+                && base.ownerPluginIdentifiers().stream()
+                .anyMatch(owner -> owner.equalsIgnoreCase(contribution.pluginIdentifier()))
+                && baseHash != null
+                && contributionHash != null
+                && baseHash.equalsIgnoreCase(contributionHash);
     }
 
     @Nonnull

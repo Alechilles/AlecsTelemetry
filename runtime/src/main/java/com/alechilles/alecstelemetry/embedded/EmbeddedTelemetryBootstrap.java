@@ -287,6 +287,16 @@ public final class EmbeddedTelemetryBootstrap {
                                 + " does not declare logical owner " + logicalIdentifier + "."
                 );
             }
+            if (descriptor.projectVersion() != null
+                    && !descriptor.projectVersion().isBlank()
+                    && !descriptor.projectVersion().equals(logicalVersion)) {
+                return disabledContribution(
+                        descriptor.projectId(),
+                        descriptor.displayName(),
+                        logger,
+                        "descriptor_version_mismatch"
+                );
+            }
             try {
                 Semver.fromString(logicalVersion);
             } catch (RuntimeException ex) {
@@ -305,12 +315,26 @@ public final class EmbeddedTelemetryBootstrap {
         TelemetryRuntimeSettings sharedSettings = TelemetryRuntimeSettings.load(sharedDataPaths.settingsFile(), logger);
         TelemetryProjectOverride override = loadProjectOverride(sharedDataPaths, ownerDataPaths, logger, descriptor.projectId());
         Path sourcePath = resolvePluginSourcePath(plugin);
-        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
-                descriptor,
-                logicalIdentifier,
-                logicalVersion,
-                sourcePath
-        ).withOverride(override);
+        String hostPluginIdentifier = resolvePluginIdentifier(plugin);
+        String hostPluginVersion = resolvePluginVersion(plugin);
+        String descriptorHash = descriptor.canonicalHash();
+        TelemetryProjectRegistration registration = validateContribution
+                ? TelemetryProjectRegistration.contribution(
+                        descriptor,
+                        logicalIdentifier,
+                        logicalVersion,
+                        sourcePath,
+                        hostPluginIdentifier,
+                        hostPluginVersion,
+                        descriptorHash
+                )
+                : new TelemetryProjectRegistration(
+                        descriptor,
+                        logicalIdentifier,
+                        logicalVersion,
+                        sourcePath
+                );
+        registration = registration.withOverride(override);
         if (validateContribution && "custom".equalsIgnoreCase(registration.destinationMode())) {
             return disabledContribution(
                     descriptor.projectId(),
@@ -329,9 +353,9 @@ public final class EmbeddedTelemetryBootstrap {
                     sharedDataPaths,
                     registration,
                     host,
-                    resolvePluginIdentifier(plugin),
-                    resolvePluginVersion(plugin),
-                    sha256(descriptor.toJson()),
+                    hostPluginIdentifier,
+                    hostPluginVersion,
+                    descriptorHash,
                     logger
             );
         }

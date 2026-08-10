@@ -5,6 +5,7 @@ import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistrationSource;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
@@ -86,6 +87,90 @@ class TelemetryCoordinatorServiceTest {
         );
         assertFalse((Boolean) result.get("accepted"));
         assertEquals("contribution_not_found", result.get("reason"));
+    }
+
+    @Test
+    void matchingContributionUpgradesPassiveBaseAndRetirementRestoresIt() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryDataPaths dataPaths = dataPaths(settings);
+        TelemetryProjectDescriptor declared = creditorDescriptor(true);
+        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
+                declared,
+                tempDir.resolve("Creditor.jar"),
+                "Example:Host",
+                "3.0.0"
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths,
+                List.of(passive),
+                List.of(passive),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+
+        Map<String, Object> contribution = contribution(
+                "creditor-token",
+                declared,
+                "Author:Creditor",
+                "1.4.0",
+                "Example:Host",
+                "3.0.0"
+        );
+
+        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
+        assertEquals(1, service.projects().size());
+        assertEquals(TelemetryProjectRegistrationSource.CONTRIBUTION,
+                service.projects().getFirst().source());
+        assertTrue(service.projects().getFirst().usage().supported());
+
+        assertTrue(service.reconcileProjectContributions(2L, List.of()));
+        assertEquals(1, service.projects().size());
+        assertEquals(TelemetryProjectRegistrationSource.PASSIVE_DESCRIPTOR,
+                service.projects().getFirst().source());
+        assertFalse(service.projects().getFirst().usage().supported());
+    }
+
+    @Test
+    void contributionVersionMismatchIsRejectedWithoutChangingBaseCatalog() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
+                creditorDescriptor(true),
+                tempDir.resolve("Creditor.jar"),
+                "Example:Host",
+                "3.0.0"
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(passive),
+                List.of(passive),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+
+        Map<String, Object> mismatch = contribution(
+                "creditor-mismatch-token",
+                creditorDescriptor(true),
+                "Author:Creditor",
+                "9.9.9",
+                "Example:Host",
+                "3.0.0"
+        );
+
+        assertFalse(service.reconcileProjectContributions(1L, List.of(mismatch)));
+        assertEquals(TelemetryProjectRegistrationSource.PASSIVE_DESCRIPTOR,
+                service.projects().getFirst().source());
     }
 
     @Test
@@ -175,6 +260,50 @@ class TelemetryCoordinatorServiceTest {
                 .anyMatch(endpoint -> endpoint.contains("example.invalid")));
         assertTrue(client.targets.stream().map(CrashReportClient.DeliveryTarget::endpoint)
                 .anyMatch(endpoint -> endpoint.contains("hosted.example")));
+    }
+
+    @Test
+    void upgradedPassiveProjectAppearsOnceInAggregateHeartbeat() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectDescriptor declared = creditorDescriptor(true);
+        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
+                declared,
+                tempDir.resolve("Creditor.jar"),
+                "Example:Host",
+                "3.0.0"
+        );
+        SequencedClient client = new SequencedClient(CrashReportClient.UploadResult.success(204));
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(passive),
+                List.of(passive),
+                List.of(),
+                client,
+                null,
+                null,
+                () -> 3
+        );
+
+        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution(
+                "creditor-heartbeat-token",
+                declared,
+                "Author:Creditor",
+                "1.4.0",
+                "Example:Host",
+                "3.0.0"
+        ))));
+        service.emitStatsHeartbeatNow();
+        assertEquals(1, service.flushPendingReportsNow("upgraded-passive-heartbeat").attempted());
+
+        JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
+        var projects = payload.getAsJsonObject("details").getAsJsonArray("projects");
+        assertEquals(1, projects.size());
+        assertEquals("creditor", projects.get(0).getAsJsonObject().get("projectId").getAsString());
+        assertEquals("1.4.0", projects.get(0).getAsJsonObject().get("pluginVersion").getAsString());
     }
 
     @Test
@@ -1007,6 +1136,58 @@ class TelemetryCoordinatorServiceTest {
                 }
                 """.formatted(projectId, displayName, runtimeMode, displayName),
                 null
+        );
+    }
+
+    private static TelemetryProjectDescriptor creditorDescriptor(boolean hosted) {
+        return TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "creditor",
+                  "projectVersion": "1.4.0",
+                  "displayName": "Creditor",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Author:Creditor"],
+                  "packagePrefixes": ["com.example.creditor"],
+                  "usage": {
+                    "supported": true,
+                    "defaultEnabled": true,
+                    "allowedEvents": ["credit_applied"]
+                  },
+                  "stats": {
+                    "supported": true,
+                    "defaultEnabled": true,
+                    "allowedEvents": ["heartbeat"]
+                  },
+                  "defaults": {
+                    "destinationMode": "%s"
+                  },
+                  "%s": {
+                    "%s": "https://creditor.example/ingest/crash",
+                    "eventEndpoint": "https://creditor.example/ingest/event"
+                  }
+                }
+                """.formatted(hosted ? "hosted" : "custom", hosted ? "hosted" : "customEndpoint", hosted ? "endpoint" : "url"),
+                null
+        );
+    }
+
+    private static Map<String, Object> contribution(String token,
+                                                     TelemetryProjectDescriptor descriptor,
+                                                     String logicalIdentifier,
+                                                     String logicalVersion,
+                                                     String hostIdentifier,
+                                                     String hostVersion) {
+        return Map.of(
+                "token", token,
+                "projectId", descriptor.projectId(),
+                "logicalPluginIdentifier", logicalIdentifier,
+                "logicalPluginVersion", logicalVersion,
+                "hostPluginIdentifier", hostIdentifier,
+                "hostPluginVersion", hostVersion,
+                "sourcePath", "Creditor.jar",
+                "descriptorJson", descriptor.toJson(),
+                "descriptorHash", descriptor.canonicalHash()
         );
     }
 

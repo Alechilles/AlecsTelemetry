@@ -106,6 +106,33 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void anchoredContributionRejectsDescriptorVersionMismatch() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("descriptor-version-mismatch"));
+        String descriptor = new String(
+                fixtureBytes("fixtures/contributed-hosted-project.json"),
+                java.nio.charset.StandardCharsets.UTF_8
+        ).replace(
+                "  \"displayName\": \"Example Library\",",
+                "  \"projectVersion\": \"2.0.0\",\n"
+                        + "  \"displayName\": \"Example Library\","
+        );
+        Class<?> anchor = isolatedAnchor(
+                "isolated/version-mismatch.json",
+                descriptor.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "/isolated/version-mismatch.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("1.0.0")
+                .build();
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        assertEquals("descriptor_version_mismatch", service.disabledReason());
+        assertTrue(TelemetryProjectContributionRegistry.activeContributions().isEmpty());
+    }
+
+    @Test
     void anchoredContributionWithCustomDestinationIsDisabledForMvp() throws Exception {
         TestPlugin plugin = testPlugin(tempDir.resolve("custom-contribution"));
         Class<?> anchor = isolatedAnchor(
