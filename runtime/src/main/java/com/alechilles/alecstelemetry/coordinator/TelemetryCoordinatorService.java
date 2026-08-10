@@ -882,6 +882,9 @@ public final class TelemetryCoordinatorService {
             String hostPluginIdentifier = stringValue(contribution.get("hostPluginIdentifier"));
             String hostPluginVersion = stringValue(contribution.get("hostPluginVersion"));
             String descriptorHash = stringValue(contribution.get("descriptorHash"));
+            if (!descriptor.canonicalHash().equalsIgnoreCase(descriptorHash)) {
+                return null;
+            }
             return TelemetryProjectRegistration.contribution(
                     descriptor,
                     logicalIdentifier,

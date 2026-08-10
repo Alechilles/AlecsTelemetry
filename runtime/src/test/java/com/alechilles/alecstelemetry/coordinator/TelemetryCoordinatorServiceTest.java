@@ -73,7 +73,8 @@ class TelemetryCoordinatorServiceTest {
                 "logicalPluginIdentifier", "Example:Base",
                 "logicalPluginVersion", "10.0.0",
                 "sourcePath", tempDir.resolve("Contribution.jar").toString(),
-                "descriptorJson", base.descriptor().toJson()
+                "descriptorJson", base.descriptor().toJson(),
+                "descriptorHash", base.descriptor().canonicalHash()
         );
 
         assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
@@ -174,6 +175,51 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void alteredDescriptorCannotClaimPassiveDescriptorHash() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectDescriptor declared = creditorDescriptor(true);
+        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
+                declared,
+                tempDir.resolve("Creditor.jar"),
+                "Example:Host",
+                "3.0.0"
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(passive),
+                List.of(passive),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+        String alteredDescriptorJson = declared.toJson().replace(
+                "\"displayName\":\"Creditor\"",
+                "\"displayName\":\"Creditor Altered\""
+        );
+        Map<String, Object> altered = Map.of(
+                "token", "creditor-altered-token",
+                "projectId", "creditor",
+                "logicalPluginIdentifier", "Author:Creditor",
+                "logicalPluginVersion", "1.4.0",
+                "hostPluginIdentifier", "Example:Host",
+                "hostPluginVersion", "3.0.0",
+                "sourcePath", "Creditor.jar",
+                "descriptorJson", alteredDescriptorJson,
+                "descriptorHash", declared.canonicalHash()
+        );
+
+        assertFalse(service.reconcileProjectContributions(1L, List.of(altered)));
+        assertEquals(TelemetryProjectRegistrationSource.PASSIVE_DESCRIPTOR,
+                service.projects().getFirst().source());
+        assertFalse(service.projects().getFirst().usage().supported());
+    }
+
+    @Test
     void lateBaseCollisionCannotReplaceAnEstablishedContributionDestination() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),
@@ -198,7 +244,8 @@ class TelemetryCoordinatorServiceTest {
                 "logicalPluginIdentifier", "Example:Contributed",
                 "logicalPluginVersion", "1.0.0",
                 "sourcePath", tempDir.resolve("Contribution.jar").toString(),
-                "descriptorJson", contributedDescriptor.toJson()
+                "descriptorJson", contributedDescriptor.toJson(),
+                "descriptorHash", contributedDescriptor.canonicalHash()
         );
 
         assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
