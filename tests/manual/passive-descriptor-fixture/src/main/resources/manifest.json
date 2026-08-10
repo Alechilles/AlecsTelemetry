@@ -1,0 +1,25 @@
+{
+    "Group": "Alechilles",
+    "Name": "Passive Telemetry Descriptor Host Fixture",
+    "Version": "1.0.0",
+    "Description": "Manual fixture for a descriptor-only shaded telemetry library.",
+    "Authors": [
+        {
+            "Name": "Alec (Alechilles)"
+        }
+    ],
+    "Main": "com.alechilles.telemetryfixture.PassiveDescriptorHostPlugin",
+    "ServerVersion": "0.5.x",
+    "Dependencies": {
+        "Hytale:AssetModule": "*"
+    },
+    "OptionalDependencies": {
+        
+    },
+    "DisabledByDefault": false,
+    "IncludesAssetPack": false,
+    "Website": "",
+    "UpdateChecker": {
+        "CurseForge": ""
+    }
+}

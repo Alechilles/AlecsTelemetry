@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "projectId": "telemetry-demo",
+  "projectVersion": "1.0.0",
+  "displayName": "Passive Descriptor Library (Dev Fixture)",
+  "ownerPluginIdentifiers": [
+    "Alechilles:Passive Descriptor Library Fixture"
+  ],
+  "packagePrefixes": [
+    "com.alechilles.passivedescriptorlibrary"
+  ],
+  "hosted": {
+    "endpoint": "https://telemetry-dev.alecsmods.com/ingest/event",
+    "projectKey": "telemetry-demo-project-key"
+  },
+  "telemetry": {
+    "stats": {
+      "supported": true,
+      "allowedEvents": [
+        "heartbeat"
+      ]
+    }
+  }
+}

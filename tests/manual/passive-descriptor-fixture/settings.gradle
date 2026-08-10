@@ -1,0 +1,9 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+        maven { url = uri('https://maven.azuredoom.com/mods') }
+    }
+}
+
+rootProject.name = 'passive-descriptor-fixture'

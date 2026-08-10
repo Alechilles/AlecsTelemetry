@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+    id 'com.azuredoom.hytale-tools' version '1.0.46'
+}
+
+group = 'com.alechilles.telemetryfixture'
+version = providers.gradleProperty('mod_version').getOrElse('1.0.0')
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+sourceSets {
+    embeddedLibrary
+}
+
+sourceSets.named('main') {
+    compileClasspath += sourceSets.embeddedLibrary.output
+}
+
+hytaleTools {
+    hytaleVersion = providers.gradleProperty('hytale_version').getOrElse('0.5.7')
+    patchline = providers.gradleProperty('hytale_patchline').getOrElse('release')
+    manifestServerVersion = '0.5.x'
+    manifestGroup = 'Alechilles'
+    modId = 'Passive Telemetry Descriptor Host Fixture'
+    modDescription = 'Manual fixture for a descriptor-only shaded telemetry library.'
+    modCredits = 'Alec (Alechilles)'
+    mainClass = 'com.alechilles.telemetryfixture.PassiveDescriptorHostPlugin'
+    includesPack = false
+    bundleAssetEditorRuntime = false
+}
+
+def embeddedLibraryJar = tasks.register('embeddedDescriptorLibraryJar', Jar) {
+    archiveBaseName = 'passive-descriptor-library'
+    archiveVersion = project.version
+    from(sourceSets.embeddedLibrary.output)
+}
+
+tasks.named('compileJava') {
+    dependsOn(tasks.named('embeddedLibraryClasses'))
+}
+
+tasks.named('jar', Jar) {
+    dependsOn(embeddedLibraryJar)
+    archiveFileName = "Passive Telemetry Descriptor Host Fixture v${project.version}.jar"
+    from({ zipTree(embeddedLibraryJar.get().archiveFile.get().asFile) }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Plugin-Group': project.group, 'Plugin-Name': project.name, 'Plugin-Version': project.version)
+    }
+}
