@@ -223,6 +223,33 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
+    void warnsWhenSemanticallyEqualBuildMetadataSnapshotsDrift() throws Exception {
+        writeJar(
+                tempDir.resolve("host-a.jar"),
+                hostManifest("Example", "Host A", "3.0.0"),
+                Map.of(
+                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        passiveDescriptor("creditor", "1.4.0+shade-a", "Creditor")
+                )
+        );
+        writeJar(
+                tempDir.resolve("host-b.jar"),
+                hostManifest("Example", "Host B", "3.0.0"),
+                Map.of(
+                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        passiveDescriptor("creditor", "1.4.0+shade-b", "Creditor")
+                )
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(1, result.projects().size());
+        assertEquals("creditor", result.projects().getFirst().projectId());
+        assertEquals(1, result.skippedRegistrationWarnings().size());
+        assertTrue(result.skippedRegistrationWarnings().getFirst().contains("descriptor drift"));
+    }
+
+    @Test
     void skipsMalformedPassiveDescriptorWithoutAffectingValidProject() throws Exception {
         writeJar(
                 tempDir.resolve("host.jar"),

@@ -22,11 +22,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -492,18 +490,32 @@ public final class TelemetryProjectDiscovery {
     }
 
     private static boolean hasDescriptorDrift(@Nonnull List<TelemetryProjectCandidate> candidates) {
-        LinkedHashMap<String, Set<String>> hashesByVersion = new LinkedHashMap<>();
-        for (TelemetryProjectCandidate candidate : candidates) {
-            String hash = candidate.descriptorHash();
-            if (hash.isBlank()) {
+        for (int i = 0; i < candidates.size(); i++) {
+            TelemetryProjectCandidate left = candidates.get(i);
+            if (left.descriptorHash().isBlank()) {
                 continue;
             }
-            String version = candidate.semanticVersion() == null
-                    ? candidate.logicalVersion().toLowerCase(Locale.ROOT)
-                    : candidate.semanticVersion().toString();
-            hashesByVersion.computeIfAbsent(version, ignored -> new LinkedHashSet<>()).add(hash);
+            for (int j = i + 1; j < candidates.size(); j++) {
+                TelemetryProjectCandidate right = candidates.get(j);
+                if (right.descriptorHash().isBlank()
+                        || left.descriptorHash().equals(right.descriptorHash())
+                        || !sameLogicalVersion(left, right)) {
+                    continue;
+                }
+                return true;
+            }
         }
-        return hashesByVersion.values().stream().anyMatch(hashes -> hashes.size() > 1);
+        return false;
+    }
+
+    private static boolean sameLogicalVersion(@Nonnull TelemetryProjectCandidate left,
+                                              @Nonnull TelemetryProjectCandidate right) {
+        if (left.semanticVersion() != null && right.semanticVersion() != null) {
+            return compareSemanticVersions(left.semanticVersion(), right.semanticVersion()) == 0;
+        }
+        return left.semanticVersion() == null
+                && right.semanticVersion() == null
+                && left.logicalVersion().equalsIgnoreCase(right.logicalVersion());
     }
 
     @Nonnull
