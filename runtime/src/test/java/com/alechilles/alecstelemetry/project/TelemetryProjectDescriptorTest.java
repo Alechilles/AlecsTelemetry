@@ -553,4 +553,22 @@ class TelemetryProjectDescriptorTest {
         assertEquals(TelemetryProjectDescriptor.RUNTIME_MODE_EMBEDDED, descriptor.runtimeMode());
         assertTrue(descriptor.isEmbeddedMode());
     }
+
+    @Test
+    void parsesAndRoundTripsProjectVersion() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "versioned-mod",
+                  "projectVersion": "1.4.0",
+                  "displayName": "Versioned Mod"
+                }
+                """,
+                null
+        );
+
+        assertEquals("1.4.0", descriptor.projectVersion());
+        TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(descriptor.toJson(), null);
+        assertEquals("1.4.0", roundTripped.projectVersion());
+    }
 }

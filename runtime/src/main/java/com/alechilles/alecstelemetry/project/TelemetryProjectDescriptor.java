@@ -7,6 +7,9 @@ import com.google.gson.GsonBuilder;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +21,7 @@ import java.util.Map;
  */
 public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull String projectId,
+                                         @Nullable String projectVersion,
                                          @Nonnull String displayName,
                                          @Nonnull String runtimeMode,
                                          @Nonnull List<String> ownerPluginIdentifiers,
@@ -32,6 +36,41 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull Defaults defaults,
                                          @Nonnull HostedDestination hosted,
                                          @Nonnull CustomEndpoint customEndpoint) {
+
+    public TelemetryProjectDescriptor(int schemaVersion,
+                                      @Nonnull String projectId,
+                                      @Nonnull String displayName,
+                                      @Nonnull String runtimeMode,
+                                      @Nonnull List<String> ownerPluginIdentifiers,
+                                      @Nonnull List<String> packagePrefixes,
+                                      @Nonnull CaptureOptions capture,
+                                      @Nonnull EventOptions events,
+                                      @Nonnull PerformanceOptions performance,
+                                      @Nonnull UsageOptions usage,
+                                      @Nonnull StatsOptions stats,
+                                      @Nonnull UiOptions ui,
+                                      @Nonnull ManualReportOptions reports,
+                                      @Nonnull Defaults defaults,
+                                      @Nonnull HostedDestination hosted,
+                                      @Nonnull CustomEndpoint customEndpoint) {
+        this(schemaVersion,
+                projectId,
+                null,
+                displayName,
+                runtimeMode,
+                ownerPluginIdentifiers,
+                packagePrefixes,
+                capture,
+                events,
+                performance,
+                usage,
+                stats,
+                ui,
+                reports,
+                defaults,
+                hosted,
+                customEndpoint);
+    }
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
     private static final int CURRENT_SCHEMA_VERSION = 1;
@@ -53,6 +92,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
         String displayName = chooseNonBlank(safe.displayName, fallbackDisplayName, "Unknown Project");
         String projectId = chooseNonBlank(safe.projectId, fallbackProjectId, slugify(displayName));
+        String projectVersion = normalizeNullable(safe.projectVersion);
 
         List<String> ownerPluginIdentifiers = normalizeList(safe.ownerPluginIdentifiers);
         if (ownerPluginIdentifiers.isEmpty() && fallbackOwnerPluginIdentifier != null && !fallbackOwnerPluginIdentifier.isBlank()) {
@@ -151,6 +191,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         return new TelemetryProjectDescriptor(
                 safe.schemaVersion == null || safe.schemaVersion <= 0 ? CURRENT_SCHEMA_VERSION : safe.schemaVersion,
                 projectId,
+                projectVersion,
                 displayName,
                 normalizeRuntimeMode(safe.runtimeMode),
                 ownerPluginIdentifiers,
@@ -173,6 +214,9 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         LinkedHashMap<String, Object> document = new LinkedHashMap<>();
         document.put("schemaVersion", schemaVersion);
         document.put("projectId", projectId);
+        if (projectVersion != null && !projectVersion.isBlank()) {
+            document.put("projectVersion", projectVersion);
+        }
         document.put("displayName", displayName);
         document.put("runtimeMode", runtimeMode);
         document.put("ownerPluginIdentifiers", ownerPluginIdentifiers);
@@ -228,6 +272,45 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         customDocument.put("headers", customEndpoint.headers());
         document.put("customEndpoint", customDocument);
         return GSON.toJson(document);
+    }
+
+    @Nonnull
+    public String canonicalHash() {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(toJson().getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte part : digest) {
+                hex.append(Character.forDigit((part >>> 4) & 0x0f, 16));
+                hex.append(Character.forDigit(part & 0x0f, 16));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+        }
+    }
+
+    @Nonnull
+    public TelemetryProjectDescriptor statsOnly() {
+        return new TelemetryProjectDescriptor(
+                schemaVersion,
+                projectId,
+                projectVersion,
+                displayName,
+                runtimeMode,
+                ownerPluginIdentifiers,
+                packagePrefixes,
+                new CaptureOptions(false, false, false, false, false, false),
+                EventOptions.defaults(),
+                new PerformanceOptions(false, false, 1.0d, 100, Map.of()),
+                new UsageOptions(false, false, List.of(), Map.of()),
+                stats,
+                ui,
+                normalizeManualReports(null),
+                defaults,
+                hosted,
+                customEndpoint
+        );
     }
 
     @Nonnull
@@ -1082,6 +1165,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     private static final class Document {
         private Integer schemaVersion;
         private String projectId;
+        private String projectVersion;
         private String displayName;
         private String runtimeMode;
         private List<String> ownerPluginIdentifiers;

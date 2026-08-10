@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.project;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentCapabilities;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import org.junit.jupiter.api.Test;
@@ -9,7 +10,9 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProjectRegistrationTest {
 
@@ -238,5 +241,37 @@ class TelemetryProjectRegistrationTest {
 
         assertEquals(false, snapshot.usageEnabled());
         assertEquals(true, snapshot.statsEnabled());
+    }
+
+    @Test
+    void passiveDescriptorUsesLogicalVersionAndMasksExecutableCategories() {
+        TelemetryProjectDescriptor declared = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "creditor",
+                  "projectVersion": "1.4.0",
+                  "displayName": "Creditor",
+                  "ownerPluginIdentifiers": ["Author:Creditor"],
+                  "telemetry": {
+                    "usage": { "supported": true, "allowedEvents": ["credit_applied"] },
+                    "stats": { "supported": true, "allowedEvents": ["heartbeat"] }
+                  }
+                }
+                """,
+                null
+        );
+
+        TelemetryProjectRegistration registration = TelemetryProjectRegistration.passiveDescriptor(
+                declared, Path.of("Host.jar"), "Example:Host", "3.0.0"
+        );
+
+        assertEquals("1.4.0", registration.pluginVersion());
+        assertEquals("Example:Host", registration.hostPluginIdentifier());
+        assertTrue(registration.isPassiveDescriptor());
+        assertTrue(registration.stats().supported());
+        assertFalse(registration.usage().supported());
+        assertEquals(declared.canonicalHash(), registration.declaredDescriptorHash());
+        assertEquals(List.of("stats"),
+                TelemetryConsentCapabilities.supportedCategoryNames(registration));
     }
 }

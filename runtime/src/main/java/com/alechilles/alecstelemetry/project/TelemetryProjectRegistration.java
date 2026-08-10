@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Normalized runtime registration for one discovered telemetry-enabled project.
@@ -18,13 +19,93 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                                            @Nonnull String pluginIdentifier,
                                            @Nonnull String pluginVersion,
                                            @Nullable Path sourcePath,
-                                           @Nullable TelemetryProjectOverride override) {
+                                           @Nullable TelemetryProjectOverride override,
+                                           @Nonnull TelemetryProjectRegistrationSource source,
+                                           @Nullable String hostPluginIdentifier,
+                                           @Nullable String hostPluginVersion,
+                                           @Nullable String declaredDescriptorHash) {
 
     public TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor descriptor,
                                         @Nonnull String pluginIdentifier,
                                         @Nonnull String pluginVersion,
                                         @Nullable Path sourcePath) {
-        this(descriptor, pluginIdentifier, pluginVersion, sourcePath, null);
+        this(descriptor,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                null,
+                TelemetryProjectRegistrationSource.CONVENTIONAL,
+                null,
+                null,
+                null);
+    }
+
+    public TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor descriptor,
+                                        @Nonnull String pluginIdentifier,
+                                        @Nonnull String pluginVersion,
+                                        @Nullable Path sourcePath,
+                                        @Nullable TelemetryProjectOverride override) {
+        this(descriptor,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                override,
+                TelemetryProjectRegistrationSource.CONVENTIONAL,
+                null,
+                null,
+                null);
+    }
+
+    @Nonnull
+    public static TelemetryProjectRegistration passiveDescriptor(@Nonnull TelemetryProjectDescriptor declared,
+                                                                  @Nullable Path sourcePath,
+                                                                  @Nonnull String hostPluginIdentifier,
+                                                                  @Nonnull String hostPluginVersion) {
+        Objects.requireNonNull(declared, "declared");
+        if (declared.projectVersion() == null || declared.projectVersion().isBlank()) {
+            throw new IllegalArgumentException("Passive descriptor projectVersion must not be blank");
+        }
+        if (declared.ownerPluginIdentifiers().isEmpty()
+                || declared.ownerPluginIdentifiers().getFirst() == null
+                || declared.ownerPluginIdentifiers().getFirst().isBlank()) {
+            throw new IllegalArgumentException("Passive descriptor ownerPluginIdentifiers must not be empty");
+        }
+        return new TelemetryProjectRegistration(
+                declared.statsOnly(),
+                declared.ownerPluginIdentifiers().getFirst(),
+                declared.projectVersion(),
+                sourcePath,
+                null,
+                TelemetryProjectRegistrationSource.PASSIVE_DESCRIPTOR,
+                hostPluginIdentifier,
+                hostPluginVersion,
+                declared.canonicalHash()
+        );
+    }
+
+    @Nonnull
+    public static TelemetryProjectRegistration contribution(@Nonnull TelemetryProjectDescriptor descriptor,
+                                                             @Nonnull String pluginIdentifier,
+                                                             @Nonnull String pluginVersion,
+                                                             @Nullable Path sourcePath,
+                                                             @Nullable String hostPluginIdentifier,
+                                                             @Nullable String hostPluginVersion,
+                                                             @Nullable String declaredDescriptorHash) {
+        return new TelemetryProjectRegistration(
+                descriptor,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                null,
+                TelemetryProjectRegistrationSource.CONTRIBUTION,
+                hostPluginIdentifier,
+                hostPluginVersion,
+                declaredDescriptorHash
+        );
+    }
+
+    public boolean isPassiveDescriptor() {
+        return source == TelemetryProjectRegistrationSource.PASSIVE_DESCRIPTOR;
     }
 
     @Nonnull
@@ -335,7 +416,17 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
 
     @Nonnull
     public TelemetryProjectRegistration withOverride(@Nullable TelemetryProjectOverride override) {
-        return new TelemetryProjectRegistration(descriptor, pluginIdentifier, pluginVersion, sourcePath, override);
+        return new TelemetryProjectRegistration(
+                descriptor,
+                pluginIdentifier,
+                pluginVersion,
+                sourcePath,
+                override,
+                source,
+                hostPluginIdentifier,
+                hostPluginVersion,
+                declaredDescriptorHash
+        );
     }
 
     @Nonnull
