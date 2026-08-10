@@ -879,6 +879,55 @@ class TelemetryRuntimeHostTest {
         handle.shutdown();
     }
 
+    @Test
+    void refreshDiscoveredProjectsAddsLatePassiveDescriptorToConsent() {
+        TelemetryProjectRegistration provider = project(
+                "Example:Telemetry",
+                "telemetry-provider",
+                "Telemetry Provider"
+        );
+        ProviderFixture fixture = consentFixture(
+                "late-passive-descriptor",
+                List.of(provider),
+                List.of(provider)
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "late-passive-library",
+                  "projectVersion": "1.0.0",
+                  "displayName": "Late Passive Library",
+                  "ownerPluginIdentifiers": ["Example:Late Passive Library"],
+                  "packagePrefixes": ["com.example.latepassive"],
+                  "telemetry": { "stats": { "supported": true, "allowedEvents": ["heartbeat"] } }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
+                descriptor,
+                tempDir.resolve("late-passive-host.jar"),
+                "Example:Late Passive Host",
+                "2.0.0"
+        );
+
+        fixture.handle().refreshDiscoveredProjects(new TelemetryRuntimeDiscoveryResult(
+                List.of(passive),
+                List.of(passive),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Late Passive Host", "2.0.0")),
+                List.of(),
+                List.of()
+        ));
+
+        assertEquals(
+                List.of("telemetry-provider", "late-passive-library"),
+                fixture.handle().projects().stream().map(TelemetryProjectRegistration::projectId).toList()
+        );
+        assertTrue(fixture.handle().unreviewedConsentProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .anyMatch("late-passive-library"::equals));
+    }
+
     private TelemetryRuntimeProviderHandle handle(String providerId,
                                                   TelemetryRuntimeOrigin origin,
                                                   String runtimeVersion) {
