@@ -92,6 +92,62 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
+    void contributionWithEnumDetailRulesReconcilesIntoTheRuntimeCatalog() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
+                settings,
+                dataPaths(settings),
+                List.of(),
+                List.of(),
+                List.of(),
+                new SequencedClient(),
+                null,
+                null
+        );
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "patchwork",
+                  "displayName": "Patchwork",
+                  "runtimeMode": "embedded",
+                  "ownerPluginIdentifiers": ["Alechilles:Patchwork"],
+                  "telemetry": {
+                    "events": {
+                      "errors": {
+                        "supported": true,
+                        "details": {
+                          "generation_failed": {
+                            "allowedFields": {
+                              "phase": {"type": "enum", "values": ["scan", "plan", "startup"]}
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(service.reconcileProjectContributions(
+                1L,
+                List.of(contribution(
+                        "patchwork-token",
+                        descriptor,
+                        "Alechilles:Patchwork",
+                        "1.3.0",
+                        "Alechilles:Alec's Tamework!",
+                        "3.1.1"
+                ))
+        ));
+        assertEquals("Alechilles:Patchwork", service.projects().getFirst().pluginIdentifier());
+    }
+
+    @Test
     void matchingContributionUpgradesPassiveBaseAndRetirementRestoresIt() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),

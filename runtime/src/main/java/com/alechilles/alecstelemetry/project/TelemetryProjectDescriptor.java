@@ -383,10 +383,14 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             LinkedHashMap<String, Object> ruleDocument = new LinkedHashMap<>();
             LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
             for (Map.Entry<String, DetailFieldRule> fieldEntry : ruleEntry.getValue().allowedFields().entrySet()) {
-                fields.put(fieldEntry.getKey(), Map.of(
-                        "type", fieldEntry.getValue().type(),
-                        "maxLength", fieldEntry.getValue().maxLength()
-                ));
+                DetailFieldRule field = fieldEntry.getValue();
+                LinkedHashMap<String, Object> fieldDocument = new LinkedHashMap<>();
+                fieldDocument.put("type", field.type());
+                if (!field.values().isEmpty()) {
+                    fieldDocument.put("values", field.values());
+                }
+                fieldDocument.put("maxLength", field.maxLength());
+                fields.put(fieldEntry.getKey(), fieldDocument);
             }
             ruleDocument.put("allowedFields", fields);
             document.put(ruleEntry.getKey(), ruleDocument);

@@ -3,6 +3,7 @@ package com.alechilles.alecstelemetry.runtime.host;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.event.EventRegistration;
 import com.hypixel.hytale.logger.HytaleLogger;
+import com.hypixel.hytale.server.core.event.events.BootEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerDisconnectEvent;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
@@ -22,6 +23,7 @@ final class TelemetryRuntimePluginEvents {
     private EventRegistration<?, ?> playerReadyRegistration;
     private EventRegistration<?, ?> playerDisconnectRegistration;
     private EventRegistration<?, ?> removeWorldRegistration;
+    private EventRegistration<?, ?> bootRegistration;
 
     TelemetryRuntimePluginEvents(@Nonnull TelemetryRuntimeProviderHandle handle,
                                  @Nonnull TelemetryPlayerCounter playerCounter,
@@ -40,6 +42,7 @@ final class TelemetryRuntimePluginEvents {
             return;
         }
         try {
+            bootRegistration = plugin.getEventRegistry().registerGlobal(BootEvent.class, this::onBoot);
             playerReadyRegistration = plugin.getEventRegistry().registerGlobal(PlayerReadyEvent.class, this::onPlayerReady);
             playerDisconnectRegistration = plugin.getEventRegistry().registerGlobal(PlayerDisconnectEvent.class, this::onPlayerDisconnected);
             removeWorldRegistration = plugin.getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
@@ -59,12 +62,15 @@ final class TelemetryRuntimePluginEvents {
 
     void unregister() {
         registered.set(false);
+        EventRegistration<?, ?> boot = bootRegistration;
         EventRegistration<?, ?> removeWorld = removeWorldRegistration;
         EventRegistration<?, ?> playerDisconnect = playerDisconnectRegistration;
         EventRegistration<?, ?> playerReady = playerReadyRegistration;
+        bootRegistration = null;
         removeWorldRegistration = null;
         playerDisconnectRegistration = null;
         playerReadyRegistration = null;
+        unregister(boot, "boot");
         unregister(removeWorld, "remove world");
         unregister(playerDisconnect, "player disconnect");
         unregister(playerReady, "player ready");
@@ -102,6 +108,10 @@ final class TelemetryRuntimePluginEvents {
     private void onPlayerReady(@Nonnull PlayerReadyEvent event) {
         playerCounter.onPlayerReady(event);
         handle.onPlayerReady(event);
+    }
+
+    private void onBoot(@Nonnull BootEvent event) {
+        handle.onBoot();
     }
 
     private void onPlayerDisconnected(@Nonnull PlayerDisconnectEvent event) {

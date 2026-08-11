@@ -260,6 +260,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
     }
 
+    void onBoot() {
+        if (ownsActiveCoordinator()) {
+            refreshDiscoveredProjects();
+        }
+    }
+
     private void refreshDiscoveredProjects() {
         try {
             TelemetryRuntimeDiscoveryResult discovery = new TelemetryRuntimeDiscovery(logger).discoverActive(
