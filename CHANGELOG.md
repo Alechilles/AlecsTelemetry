@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.2.0 - Passive Descriptor Projects - 2026-08-12
+
+### Added
+- Embedded libraries can declare a namespaced telemetry project descriptor
+  without packaging or calling the Telemetry runtime. An installed standalone
+  or embedded runtime discovers the project and reports consented Stats
+  heartbeats for it.
+- An active contribution can upgrade the same passive project with more
+  telemetry categories. New categories stay disabled until the player reviews
+  them, and the player receives an in-game review notice.
+- Added logical project versions, descriptor hashes, source provenance, and a
+  manual host fixture for passive descriptor validation.
+
+### Changed
+- Passive descriptors expose Stats only until an active contribution supplies
+  more capabilities. Duplicate copies use owner, project version, source, and
+  host data to elect one logical project.
+- Telemetry discovery refreshes after all server plugins load. Descriptor-only
+  projects are available before a player joins.
+- Hytale administrators can use the Telemetry commands without a separate
+  Telemetry permission assignment.
+
+### Fixed
+- Preserved saved consent overrides when a passive project later becomes an
+  active contribution.
+- Rejected conflicting owner identities and invalid contribution descriptor
+  hashes before project election.
+- Kept Telemetry commands registered while projects refresh, and detected
+  command registration failures instead of reporting a false success.
+- Preserved enum detail allowlists when descriptors move through the embedded
+  contribution bridge. This prevents valid contributions from blocking runtime
+  activation and making all `/telemetry` commands unavailable.
+
 ## 1.1.0 - Generic Embedded Contributions - 2026-08-06
 
 ### Added

@@ -21,3 +21,21 @@ This is the default operating contract for human and AI contributors working in 
 
 - Build from the shared workspace with `bash ../gradlew :alecstelemetry:standalone:build`; the runtime module remains an embeddable library and the standalone module produces the shaded plugin JAR.
 - Do not place the standalone Telemetry plugin in the default `runAllMods` workspace alongside Tamework, which already embeds the runtime. Use `C:\Users\22ale\AppData\Roaming\Hytale\Modding\run\mods` for local workspace staging and treat `UserData\Mods` as legacy comparison-only state.
+
+## Release Distribution
+
+- Each Alec's Telemetry release has two deliverables from the same committed
+  source: the standalone plugin JAR and the embeddable runtime Maven artifact.
+- Release prep must record the SHA-256 for both JARs. It must also stage the
+  runtime POM and parent POM for the exact release version.
+- Release prep must not change the production downloads site. The live publish
+  step must upload the runtime JAR, runtime POM, parent POM, checksum sidecars,
+  and Maven metadata to the production downloads repository.
+- The verified production root is
+  `/srv/apps/alecs-telemetry-downloads/maven/releases` on the current Telemetry
+  VPS. Use the `alecs-telemetry-vps` skill before you change this path.
+- Do not mark a release as published until all these checks pass:
+  - `/api/v1/downloads` lists the new version as `latestRuntime`.
+  - `/downloads/runtime/latest` redirects to the new runtime JAR.
+  - The versioned runtime JAR and POM return HTTP 200 from `/maven/releases`.
+  - The downloaded runtime JAR has the same SHA-256 as the staged artifact.

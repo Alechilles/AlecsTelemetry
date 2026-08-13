@@ -1,5 +1,9 @@
 target/
 build/
+.gradle/
+artifacts/
+.superpowers/
+docs/superpowers/
 .idea/
 *.iml
 .settings/
