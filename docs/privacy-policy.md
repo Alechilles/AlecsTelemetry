@@ -198,6 +198,15 @@ aggregate stats such as:
   core count, hosting mode, server-country, and loaded-mod name/version
   breakdowns
 
+Public ModStats usage and download charts can also show timeline markers. Site
+administrators can enter manual global chart annotations with a title and time.
+The service can also show provider-backed stable release metadata from linked
+CurseForge, Modtale, and Modifold projects. These release markers can include the
+provider, version, and source link. Provider timestamps come from the provider's
+publication, file, or version record. They may not match the exact time that a
+release became public on ModStats. The service does not infer release times from
+telemetry first-seen data.
+
 An embeddable library can contribute to this flow with only a direct
 `META-INF/alecs-telemetry/projects/<stable-project-id>.json` descriptor in the
 final host artifact. Presence is the installation signal, not evidence that the
@@ -281,8 +290,14 @@ When you sign in or are invited to a project, the portal may store:
 - GitHub repository integration settings and GitHub issue-link metadata
 - linked CurseForge, Modtale, and Modifold project URLs and the public metadata
   retrieved for those projects, such as provider project ID, summary, icon URL,
-  download total, and last-refresh time. This cached metadata is refreshed
-  periodically while its project URL remains linked.
+  download total, and last-refresh time. For provider-backed stable release
+  metadata used on public ModStats charts, the service may also store the
+  provider release ID, version, published timestamp, timestamp provenance, source
+  URL, active status, and first-sync and last-sync times, as applicable. This
+  cached metadata is refreshed periodically while its project URL remains linked.
+  Provider timestamps describe the provider's publication, file, or version
+  record. They may not equal the exact public launch time on ModStats, and release
+  times are not inferred from telemetry first-seen data.
 - account author profile settings, such as public slug, display name, avatar
   URL, bio, website URL, Discord URL, GitHub URL, CurseForge profile URL,
   Modtale profile URL, Modifold profile URL, featured link, theme tokens, and
