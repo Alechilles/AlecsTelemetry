@@ -17,6 +17,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,6 +31,116 @@ class TelemetryCoreEngineMvpTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void blockedAsyncUploadDoesNotDelaySchedulerTasks() throws Exception {
+        Path settingsFile = tempDir.resolve("Settings").resolve("runtime.json");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+        TelemetryProjectRegistration project = registration();
+        BlockingClient client = new BlockingClient();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(
+                runnable -> new Thread(runnable, "test-scheduler")
+        );
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths(settings),
+                List.of(project),
+                List.of(project),
+                List.of(),
+                client,
+                null,
+                scheduler
+        );
+
+        try {
+            ManualReportEnvelope.CreateResult created = engine.submitManualReport(
+                    project.projectId(),
+                    new ManualReportSubmission(
+                            ManualReportKind.ISSUE,
+                            "Blocked upload",
+                            "The scheduler must remain available while this upload waits.",
+                            null,
+                            Map.of("severity", "major"),
+                            false,
+                            false,
+                            false,
+                            false,
+                            false
+                    ),
+                    PlayerReportRuntimeContext.UNKNOWN
+            );
+
+            assertTrue(created.accepted());
+            assertTrue(client.uploadStarted.await(2, TimeUnit.SECONDS));
+            assertEquals(
+                    "test-scheduler",
+                    scheduler.submit(() -> Thread.currentThread().getName()).get(1, TimeUnit.SECONDS)
+            );
+        } finally {
+            client.releaseUpload.countDown();
+            engine.flushPendingReportsNow("test-cleanup");
+            scheduler.shutdown();
+            scheduler.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void shutdownWaitsForAsyncFlushWithoutUploadingPendingReportTwice() throws Exception {
+        Path settingsFile = tempDir.resolve("Settings").resolve("runtime.json");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+        TelemetryProjectRegistration project = registration();
+        BlockingClient client = new BlockingClient();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths(settings),
+                List.of(project),
+                List.of(project),
+                List.of(),
+                client,
+                null,
+                scheduler
+        );
+        CountDownLatch shutdownComplete = new CountDownLatch(1);
+
+        try {
+            ManualReportEnvelope.CreateResult created = engine.submitManualReport(
+                    project.projectId(),
+                    new ManualReportSubmission(
+                            ManualReportKind.ISSUE,
+                            "Shutdown overlap",
+                            "Shutdown must not upload this queued report twice.",
+                            null,
+                            Map.of("severity", "major"),
+                            false,
+                            false,
+                            false,
+                            false,
+                            false
+                    ),
+                    PlayerReportRuntimeContext.UNKNOWN
+            );
+
+            assertTrue(created.accepted());
+            assertTrue(client.uploadStarted.await(2, TimeUnit.SECONDS));
+            Thread.ofPlatform().start(() -> {
+                try {
+                    engine.shutdown();
+                } finally {
+                    shutdownComplete.countDown();
+                }
+            });
+
+            assertFalse(client.secondUploadStarted.await(500, TimeUnit.MILLISECONDS));
+        } finally {
+            client.releaseUpload.countDown();
+            assertTrue(shutdownComplete.await(2, TimeUnit.SECONDS));
+            scheduler.shutdownNow();
+            scheduler.awaitTermination(2, TimeUnit.SECONDS);
+        }
+
+        assertEquals(1, client.calls.get());
+    }
 
     @Test
     void retiredManualReportRegistrationStillSupportsReviewAndFlushButRejectsNewSubmission() throws Exception {
@@ -159,6 +274,29 @@ class TelemetryCoreEngineMvpTest {
         public UploadResult upload(DeliveryTarget target, String payloadJson) {
             calls++;
             return UploadResult.success(204);
+        }
+    }
+
+    private static final class BlockingClient implements CrashReportClient {
+        private final CountDownLatch uploadStarted = new CountDownLatch(1);
+        private final CountDownLatch secondUploadStarted = new CountDownLatch(1);
+        private final CountDownLatch releaseUpload = new CountDownLatch(1);
+        private final AtomicInteger calls = new AtomicInteger();
+
+        @Override
+        public UploadResult upload(DeliveryTarget target, String payloadJson) {
+            if (calls.incrementAndGet() == 1) {
+                uploadStarted.countDown();
+            } else {
+                secondUploadStarted.countDown();
+            }
+            try {
+                releaseUpload.await();
+                return UploadResult.success(204);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return UploadResult.failure(0, "Interrupted");
+            }
         }
     }
 }

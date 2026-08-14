@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -51,6 +52,10 @@ import java.util.logging.Level;
  * Shared crash telemetry engine used by standalone and embedded telemetry modes.
  */
 public final class TelemetryCoreEngine {
+
+    private static final Executor DEFAULT_FLUSH_EXECUTOR = command -> Thread.ofVirtual()
+            .name("AlecsTelemetry-Upload")
+            .start(command);
 
     private static final String SOURCE_UNCAUGHT_EXCEPTION = "uncaught_exception";
     private static final String SOURCE_EXCEPTIONAL_WORLD_REMOVAL = "exceptional_world_removal";
@@ -73,10 +78,11 @@ public final class TelemetryCoreEngine {
     private final CrashReportClient client;
     private final HytaleLogger logger;
     private final ScheduledExecutorService executor;
+    private final Executor flushExecutor;
     private final AtomicBoolean enabled;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private final AtomicBoolean uncaughtHandlerInstalled = new AtomicBoolean(false);
-    private final AtomicBoolean flushInProgress = new AtomicBoolean(false);
+    private final Object asyncFlushMonitor = new Object();
     private final ConcurrentHashMap<String, CrashReportStore> storesByProjectId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, TelemetryEventStore> eventStoresByProjectId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ManualReportStore> manualReportStoresByProjectId = new ConcurrentHashMap<>();
@@ -102,6 +108,8 @@ public final class TelemetryCoreEngine {
     private volatile TelemetryUncaughtExceptionHandler installedUncaughtHandler;
     private volatile ScheduledFuture<?> periodicFlushFuture;
     private volatile String lastFlushResult = "No flush attempts yet.";
+    private boolean asyncFlushInProgress;
+    private boolean shuttingDown;
 
     public TelemetryCoreEngine(@Nonnull TelemetryRuntimeSettings settings,
                                @Nonnull TelemetryDataPaths dataPaths,
@@ -121,6 +129,28 @@ public final class TelemetryCoreEngine {
                                @Nonnull CrashReportClient client,
                                @Nullable HytaleLogger logger,
                                @Nullable ScheduledExecutorService executor) {
+        this(
+                settings,
+                dataPaths,
+                projects,
+                manualReportProjects,
+                loadedMods,
+                client,
+                logger,
+                executor,
+                executor == null ? null : DEFAULT_FLUSH_EXECUTOR
+        );
+    }
+
+    private TelemetryCoreEngine(@Nonnull TelemetryRuntimeSettings settings,
+                                @Nonnull TelemetryDataPaths dataPaths,
+                                @Nonnull List<TelemetryProjectRegistration> projects,
+                                @Nonnull List<TelemetryProjectRegistration> manualReportProjects,
+                                @Nonnull List<CrashReportEnvelope.LoadedModMetadata> loadedMods,
+                                @Nonnull CrashReportClient client,
+                                @Nullable HytaleLogger logger,
+                                @Nullable ScheduledExecutorService executor,
+                                @Nullable Executor flushExecutor) {
         this.settings = settings;
         this.dataPaths = dataPaths;
         this.projectCatalog = new TelemetryProjectCatalog(projects, manualReportProjects);
@@ -128,6 +158,7 @@ public final class TelemetryCoreEngine {
         this.client = client;
         this.logger = logger;
         this.executor = executor;
+        this.flushExecutor = flushExecutor;
         this.enabled = new AtomicBoolean(settings.enabled());
         this.breadcrumbs = new TelemetryBreadcrumbBuffer(settings.maxBreadcrumbsPerProject());
         TelemetryServerIdentity.Identity identity = TelemetryServerIdentity.loadOrCreate(dataPaths.serverIdentityFile(), dataPaths.serverIdFile(), logger);
@@ -143,6 +174,9 @@ public final class TelemetryCoreEngine {
         if (!started.compareAndSet(false, true)) {
             return;
         }
+        synchronized (asyncFlushMonitor) {
+            shuttingDown = false;
+        }
         installUncaughtExceptionHandler();
         requestFlushAsync("startup", null);
         if (executor != null) {
@@ -156,6 +190,9 @@ public final class TelemetryCoreEngine {
     }
 
     public void shutdown() {
+        synchronized (asyncFlushMonitor) {
+            shuttingDown = true;
+        }
         ScheduledFuture<?> scheduledFuture = periodicFlushFuture;
         periodicFlushFuture = null;
         if (scheduledFuture != null) {
@@ -230,7 +267,9 @@ public final class TelemetryCoreEngine {
     }
 
     public boolean flushInProgress() {
-        return flushInProgress.get();
+        synchronized (asyncFlushMonitor) {
+            return asyncFlushInProgress;
+        }
     }
 
     public boolean isProjectEnabled(@Nonnull String projectId) {
@@ -1021,7 +1060,7 @@ public final class TelemetryCoreEngine {
     }
 
     @Nonnull
-    public FlushSummary flushPendingReportsNow(@Nonnull String reason, @Nullable String projectIdFilter) {
+    public synchronized FlushSummary flushPendingReportsNow(@Nonnull String reason, @Nullable String projectIdFilter) {
         if (!enabled.get()) {
             FlushSummary summary = new FlushSummary(0, 0, totalPendingCount(projectIdFilter), "disabled");
             updateFlushStatus(reason, summary, null);
@@ -1380,39 +1419,69 @@ public final class TelemetryCoreEngine {
 
     private boolean requestFlushAsync(@Nonnull String reason, @Nullable String projectIdFilter) {
         if (!enabled.get()
-                || executor == null
+                || flushExecutor == null
                 || (matchingProjects(projectIdFilter).isEmpty() && matchingManualReportProjects(projectIdFilter).isEmpty())) {
             return false;
         }
-        if (!flushInProgress.compareAndSet(false, true)) {
-            return false;
+        synchronized (asyncFlushMonitor) {
+            if (shuttingDown || asyncFlushInProgress) {
+                return false;
+            }
+            asyncFlushInProgress = true;
         }
         try {
-            executor.execute(() -> {
+            flushExecutor.execute(() -> {
                 try {
                     flushPendingReportsNow(reason, projectIdFilter);
                 } finally {
-                    flushInProgress.set(false);
+                    finishAsyncFlush();
                 }
             });
             return true;
         } catch (Exception ex) {
-            flushInProgress.set(false);
+            finishAsyncFlush();
             logWarning("Crash telemetry flush scheduling failed.", ex);
             return false;
         }
     }
 
     private void flushPendingOnShutdown() {
+        boolean interrupted = awaitAsyncFlushCompletion();
+        try {
+            flushPendingOnShutdownNow();
+        } finally {
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    private void flushPendingOnShutdownNow() {
         if (!enabled.get()
                 || (projects().isEmpty() && manualReportProjects().isEmpty())) {
             return;
         }
-        flushInProgress.set(true);
-        try {
-            flushPendingReportsNow("shutdown", null);
-        } finally {
-            flushInProgress.set(false);
+        flushPendingReportsNow("shutdown", null);
+    }
+
+    private boolean awaitAsyncFlushCompletion() {
+        boolean interrupted = false;
+        synchronized (asyncFlushMonitor) {
+            while (asyncFlushInProgress) {
+                try {
+                    asyncFlushMonitor.wait();
+                } catch (InterruptedException ignored) {
+                    interrupted = true;
+                }
+            }
+        }
+        return interrupted;
+    }
+
+    private void finishAsyncFlush() {
+        synchronized (asyncFlushMonitor) {
+            asyncFlushInProgress = false;
+            asyncFlushMonitor.notifyAll();
         }
     }
 

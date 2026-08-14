@@ -500,9 +500,9 @@ class TelemetryCoordinatorServiceTest {
 
         service.start();
         executor.runNext();
-        executor.runNext();
+        service.flushPendingReportsNow("legacy-discovery-heartbeat-barrier");
 
-        assertEquals(1, service.flushPendingReportsNow("legacy-discovery-heartbeat").attempted());
+        assertEquals(1, client.calls);
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         JsonObject details = payload.getAsJsonObject("details");
         assertEquals(7, details.get("playersOnline").getAsInt());
@@ -982,14 +982,14 @@ class TelemetryCoordinatorServiceTest {
         service.start();
 
         assertEquals(0, service.pendingReports(null));
-        assertEquals(2, executor.queuedTasks());
+        assertEquals(1, executor.queuedTasks());
         assertTrue(executor.lastScheduledDelaySeconds() >= 120);
         assertTrue(executor.lastScheduledDelaySeconds() <= 300);
 
         executor.runNext();
-        executor.runNext();
+        service.flushPendingReportsNow("startup-heartbeat-barrier");
 
-        assertEquals(1, service.flushPendingReportsNow("startup-heartbeat").attempted());
+        assertEquals(1, client.calls);
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
         assertEquals("stats", payload.get("eventType").getAsString());
         assertEquals("heartbeat", payload.get("eventName").getAsString());
