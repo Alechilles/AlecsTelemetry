@@ -33,5 +33,7 @@ Key pieces:
 
 - `Server/Telemetry/project.json` declares the same hosted project settings as dependency mode.
 - The mod boots telemetry in its own lifecycle.
+- `manifest.json` publishes an asset pack, and the build merges the runtime's
+  `Common/**` UI resources into that pack.
 
 Use this example only when embedded mode is an intentional packaging or lifecycle choice.

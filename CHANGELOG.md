@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Corrected the embedded-runtime packaging guide and example manifest so hosts
+  publish the Telemetry `Common/**` UI assets required by `/telemetry consent`.
+
 ## 1.2.1 - Upload Scheduler Hotfix - 2026-08-14
 
 ### Changed

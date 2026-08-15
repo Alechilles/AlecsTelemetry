@@ -51,6 +51,75 @@ dependencies {
 Package that runtime jar inside your mod. Do not ask server owners to install the
 runtime jar separately when you choose embedded mode.
 
+## Publish The Client UI Asset Pack
+
+An embedded host must publish the runtime's `Common/**` resources to Hytale
+clients. The final mod package must:
+
+- set `IncludesAssetPack` to `true` in `manifest.json`
+- contain every `Common/**` resource from `alecstelemetry-runtime`
+- expose the merged resources as the host's development asset-pack source
+
+Shading the runtime classes into the host jar is not sufficient. If the client
+cannot load `Common/UI/Custom/TelemetryConsentPage.ui`, `/telemetry consent`
+disconnects the client.
+
+This Gradle Groovy DSL example merges the host resources with the runtime UI.
+It uses the AzureDoom Hytale Gradle plugin names:
+
+```groovy
+def telemetryVersion = '1.2.1'
+def telemetryCoordinates =
+        "com.alechilles:alecstelemetry-runtime:${telemetryVersion}"
+def embeddedAssetPackDirectory =
+        layout.buildDirectory.dir('generated/embeddedAssetPack')
+
+configurations {
+    telemetryAssetPack {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
+dependencies {
+    implementation telemetryCoordinates
+    telemetryAssetPack telemetryCoordinates
+}
+
+sourceSets.main.resources.setSrcDirs([embeddedAssetPackDirectory])
+
+hytaleTools {
+    includesPack = true
+    assetPackSourceDirectory = embeddedAssetPackDirectory
+}
+
+tasks.register('prepareEmbeddedAssetPack', Sync) {
+    from(layout.projectDirectory.dir('src/main/resources'))
+    from({ configurations.telemetryAssetPack.collect { zipTree(it) } }) {
+        include 'Common/**'
+    }
+    into(embeddedAssetPackDirectory)
+}
+
+tasks.named('classes') {
+    dependsOn(tasks.named('prepareEmbeddedAssetPack'))
+}
+
+tasks.named('processResources') {
+    dependsOn(tasks.named('prepareEmbeddedAssetPack'))
+}
+
+tasks.named('prepareRunServer') {
+    dependsOn(tasks.named('prepareEmbeddedAssetPack'))
+}
+```
+
+If the host already prepares an asset pack, merge the same `Common/**` tree into
+that source instead of creating a second pack. A descriptor-only library does
+not do this work. The installed standalone or embedded runtime host publishes
+the shared UI for descriptor-only projects.
+
 ## Descriptor Shape
 
 Embedded mode uses the same `Server/Telemetry/project.json` descriptor as the standalone dependency flow. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and bootstrapping it from the owning mod.

@@ -49,6 +49,10 @@ The descriptor does not choose standalone or embedded mode. New descriptors shou
 - standalone mode installs Alec's Telemetry as its own runtime package
 - embedded mode bundles the runtime and calls `EmbeddedTelemetryBootstrap`
 
+An embedded runtime host must also publish the runtime's `Common/**` client UI
+resources as an asset pack. Shading only the Java classes does not provide the
+consent UI to clients. The Embedded Mode guide includes the packaging steps.
+
 ## Next Step
 
 After you choose:

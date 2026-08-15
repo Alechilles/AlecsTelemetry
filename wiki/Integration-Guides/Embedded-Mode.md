@@ -49,7 +49,7 @@ Then add the embeddable runtime dependency:
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.0.5</version>
+  <version>1.2.1</version>
 </dependency>
 ```
 
@@ -63,13 +63,34 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.0.5")
+    implementation("com.alechilles:alecstelemetry-runtime:1.2.1")
 }
 ```
 
 Package that runtime jar inside your plugin. Server owners should not need to download a separate runtime jar when your plugin uses embedded mode.
 
-## Step 2: Bootstrap From Your Plugin
+## Step 2: Publish The Client UI Asset Pack
+
+An embedded host must set `IncludesAssetPack` to `true` and merge every
+`Common/**` resource from `alecstelemetry-runtime` into its asset-pack source.
+Shading the Java classes is not sufficient. If your build already prepares an
+asset pack, add the runtime `Common/**` tree to that source.
+
+Before release, confirm that the final mod contains:
+
+```text
+Common/UI/Custom/TelemetryConsentPage.ui
+```
+
+If this file is not published to the client, `/telemetry consent` disconnects
+the client because Hytale cannot find the UI document. See the repository
+[`docs/embedded-mode.md`](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
+page for a Gradle merge example.
+
+Descriptor-only libraries do not publish this UI. Their installed standalone or
+embedded runtime host supplies it.
+
+## Step 3: Bootstrap From Your Plugin
 
 The owning plugin boots telemetry directly:
 
@@ -141,12 +162,14 @@ Standalone and embedded runtimes use the same Alec's Telemetry data root:
 ## Verify Embedded Setup
 
 1. Package your plugin.
-2. Install the plugin.
-3. Start a local server.
-4. Run `/telemetry status` and confirm the active coordinator.
-5. Run `/telemetry project <project-id>` and confirm your project source path.
-6. Run `/telemetry test <project-id> embedded-check`.
-7. Confirm the test report appears in the portal.
+2. Confirm the package contains `Common/UI/Custom/TelemetryConsentPage.ui`.
+3. Install the plugin.
+4. Start a local server.
+5. Run `/telemetry status` and confirm the active coordinator.
+6. Run `/telemetry consent` and confirm the consent page opens.
+7. Run `/telemetry project <project-id>` and confirm your project source path.
+8. Run `/telemetry test <project-id> embedded-check`.
+9. Confirm the test report appears in the portal.
 
 ## Important Rule
 

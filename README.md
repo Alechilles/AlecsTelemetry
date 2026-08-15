@@ -256,6 +256,14 @@ dependencies {
 }
 ```
 
+An embedded host must also publish the runtime's client UI as an Hytale asset
+pack. Set `IncludesAssetPack` to `true`, and merge the runtime artifact's
+`Common/**` resources into the host asset-pack source during packaging. Shading
+the Java classes is not sufficient. Confirm that the final mod contains
+`Common/UI/Custom/TelemetryConsentPage.ui`; otherwise `/telemetry consent`
+disconnects the client because Hytale cannot find the UI document. See
+[Embedded Mode](docs/embedded-mode.md) for a Gradle example.
+
 ### Custom Endpoint
 
 Use a custom endpoint when you want the runtime but not Alec's web portal.
