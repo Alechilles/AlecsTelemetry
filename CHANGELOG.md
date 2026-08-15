@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.1 - Upload Scheduler Hotfix - 2026-08-14
+
+### Changed
+- Telemetry uploads now run on isolated virtual threads instead of Hytale's
+  shared scheduler. Slow upload responses no longer delay unrelated scheduled
+  server tasks.
+- Updated the privacy policy to describe anonymous ModStats chart-view and
+  refresh events.
+
+### Fixed
+- Coordinated shutdown with active uploads to prevent duplicate delivery
+  attempts and lingering upload tasks during runtime handoff.
+- Corrected the standalone Telemetry credit asset key so its logo resolves in
+  the credits UI.
+
 ## 1.2.0 - Passive Descriptor Projects - 2026-08-12
 
 ### Added
