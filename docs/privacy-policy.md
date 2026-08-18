@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: August 13, 2026
+Effective date: August 18, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -462,7 +462,7 @@ Retention depends on the data type and operational need.
   public server listing history are retained while the project or server profile
   exists. Per-server stats bucket snapshots are retained for a
   recent active/evidence window of 30 days by default, and per-server loaded-mod
-  bucket snapshots are retained for 7 days by default; both are deleted after
+  bucket snapshots are retained for 24 hours by default; both are deleted after
   matching aggregate rollups exist.
   Loaded-mod breakdowns retain 30-minute detail for 7 days by default, daily
   aggregates for 90 days by default, and weekly aggregates for 730 days by
