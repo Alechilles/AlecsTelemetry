@@ -18,6 +18,7 @@ record SparkProfileReadResult(@Nonnull Status status,
         NOT_BACKGROUND,
         UNSUPPORTED_SAMPLER,
         NO_DATA,
+        NO_ACTIONABLE_DATA,
         TOO_COMPLEX,
         INCOMPATIBLE
     }
@@ -42,6 +43,17 @@ record SparkProfileReadResult(@Nonnull Status status,
     @Nonnull
     static SparkProfileReadResult noData(@Nonnull String detail) {
         return of(Status.NO_DATA, null, detail);
+    }
+
+    @Nonnull
+    static SparkProfileReadResult noActionableData(@Nonnull String sparkVersion,
+                                                    @Nonnull String detail) {
+        return of(Status.NO_ACTIONABLE_DATA, sparkVersion, detail);
+    }
+
+    @Nonnull
+    static SparkProfileReadResult noActionableData(@Nonnull String detail) {
+        return of(Status.NO_ACTIONABLE_DATA, null, detail);
     }
 }
 

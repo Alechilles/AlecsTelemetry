@@ -263,7 +263,7 @@ public final class SparkProfilerCanary implements AutoCloseable {
             case NOT_RUNNING, NOT_BACKGROUND -> SparkProfilerDiagnostics.State.NOT_RUNNING;
             case UNSUPPORTED_PLUGIN, UNSUPPORTED_VERSION, UNSUPPORTED_ARTIFACT, UNSUPPORTED_SAMPLER ->
                     SparkProfilerDiagnostics.State.UNSUPPORTED;
-            case NO_DATA -> SparkProfilerDiagnostics.State.NO_DATA;
+            case NO_DATA, NO_ACTIONABLE_DATA -> SparkProfilerDiagnostics.State.NO_DATA;
             case TOO_COMPLEX -> SparkProfilerDiagnostics.State.TOO_COMPLEX;
             case INCOMPATIBLE -> SparkProfilerDiagnostics.State.INCOMPATIBLE;
             case COMPLETE -> SparkProfilerDiagnostics.State.NO_DATA;

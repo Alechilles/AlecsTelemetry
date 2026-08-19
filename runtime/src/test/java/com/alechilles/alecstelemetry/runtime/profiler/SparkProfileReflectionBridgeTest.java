@@ -48,6 +48,74 @@ class SparkProfileReflectionBridgeTest {
     }
 
     @Test
+    void ranksOnlyWorldThreadJavaSelfTimeAndKeepsSourceAttribution() {
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                worldThreadRankingProfileData()
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 2);
+
+        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
+        SparkProfileSnapshot snapshot = result.snapshot();
+        assertNotNull(snapshot);
+        assertEquals(4, snapshot.totalThreadCount());
+        assertEquals(2, snapshot.selectedThreadCount());
+        assertEquals(8, snapshot.totalFrameCount());
+        assertEquals(6, snapshot.selectedFrameCount());
+        assertEquals(800.0d, snapshot.totalSelfMilliseconds(), 0.001d);
+        assertEquals(2, snapshot.hotPaths().size());
+        assertEquals("GameMod", snapshot.hotPaths().getFirst().source());
+        assertEquals("com.game.Tick#work()V", snapshot.hotPaths().getFirst().frame());
+        assertEquals(550.0d, snapshot.hotPaths().getFirst().selfMilliseconds(), 0.001d);
+        assertEquals(68.75d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
+        assertEquals("com.game.Tick#tick()V", snapshot.hotPaths().get(1).frame());
+        assertEquals(200.0d, snapshot.hotPaths().get(1).selfMilliseconds(), 0.001d);
+        assertEquals(25.0d, snapshot.hotPaths().get(1).selfSharePercent(), 0.001d);
+    }
+
+    @Test
+    void reportsNoActionableDataWhenCompletedWindowHasNoWorldThreadSamples() {
+        SamplerData data = new SamplerData(
+                List.of(700),
+                List.of(new ThreadNode(
+                        "ServerWorker-1",
+                        List.of(new StackNode(
+                                "com.example.Background",
+                                "run",
+                                "()V",
+                                List.of(900.0d),
+                                List.of()
+                        )),
+                        List.of()
+                )),
+                Map.of("com.example.Background", "OtherMod"),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals("NO_ACTIONABLE_DATA", result.status().name());
+        assertNull(result.snapshot());
+    }
+
+    @Test
     void skipsAnUntestedSparkVersionBeforeReadingItsProfile() {
         FakeSampler sampler = new FakeSampler(
                 true,
@@ -243,6 +311,90 @@ class SparkProfileReflectionBridgeTest {
                         "example.Other", "OtherMod"
                 ),
                 Map.of("example.Parent;run;()V", "ExampleMod")
+        );
+    }
+
+    private static SamplerData worldThreadRankingProfileData() {
+        StackNode nativeWait = new StackNode(
+                "native",
+                "Unsafe_Park",
+                "",
+                List.of(900.0d, 900.0d),
+                List.of()
+        );
+        StackNode nonWorldJava = new StackNode(
+                "com.example.Background",
+                "run",
+                "()V",
+                List.of(600.0d, 600.0d),
+                List.of()
+        );
+        StackNode worldNativeWait = new StackNode(
+                "native",
+                "Unsafe_Park",
+                "",
+                List.of(900.0d, 900.0d),
+                List.of()
+        );
+        StackNode worldTick = new StackNode(
+                "com.game.Tick",
+                "tick",
+                "()V",
+                List.of(500.0d, 500.0d),
+                List.of(2)
+        );
+        StackNode worldLeaf = new StackNode(
+                "com.game.Tick",
+                "work",
+                "()V",
+                List.of(300.0d, 300.0d),
+                List.of()
+        );
+        StackNode repeatedWorldWork = new StackNode(
+                "com.game.Tick",
+                "work",
+                "()V",
+                List.of(150.0d, 150.0d),
+                List.of()
+        );
+        StackNode netherWorldWork = new StackNode(
+                "com.game.Tick",
+                "work",
+                "()V",
+                List.of(100.0d, 100.0d),
+                List.of()
+        );
+        StackNode worldRender = new StackNode(
+                "com.game.Render",
+                "render",
+                "()V",
+                List.of(50.0d, 50.0d),
+                List.of()
+        );
+        return new SamplerData(
+                List.of(100, 200),
+                List.of(
+                        new ThreadNode("NativeWait-1", List.of(nativeWait), List.of(0)),
+                        new ThreadNode("ServerWorker-1", List.of(nonWorldJava), List.of(0)),
+                        new ThreadNode(
+                                "WorldThread - default",
+                                List.of(worldNativeWait, worldTick, worldLeaf, repeatedWorldWork),
+                                List.of(0, 2)
+                        ),
+                        new ThreadNode(
+                                "WorldThread - nether",
+                                List.of(netherWorldWork, worldRender),
+                                List.of(0, 1)
+                        )
+                ),
+                Map.of(
+                        "com.example.Background", "OtherMod",
+                        "com.game.Render", "RenderMod"
+                ),
+                Map.of(
+                        "com.game.Tick;tick;()V", "GameMod",
+                        "com.game.Tick;work;()V", "GameMod"
+                )
         );
     }
 

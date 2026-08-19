@@ -14,6 +14,7 @@ import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -221,11 +222,20 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         Map<?, ?> methodSources = mapValue(invokeNoArgs(profileData, "getMethodSourcesMap"));
 
         Map<FrameKey, MutableHotPath> aggregates = new HashMap<>();
-        int frameCount = 0;
+        Set<FrameKey> distinctFrames = new HashSet<>();
+        int totalFrameCount = 0;
+        int selectedThreadCount = 0;
+        int selectedFrameCount = 0;
         double totalSelfMilliseconds = 0.0d;
         for (Object thread : threads) {
             List<?> nodes = listValue(invokeNoArgs(thread, "getChildrenList"));
-            frameCount += nodes.size();
+            totalFrameCount += nodes.size();
+            String threadName = safeText(String.valueOf(invokeNoArgs(thread, "getName")));
+            boolean selectedThread = isWorldThread(threadName);
+            if (selectedThread) {
+                selectedThreadCount++;
+                selectedFrameCount += nodes.size();
+            }
             for (Object node : nodes) {
                 double inclusive = timeAt(node, latestIndex);
                 if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
@@ -249,7 +259,6 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 } else {
                     self = Math.max(0.0d, self);
                 }
-                totalSelfMilliseconds += self;
                 if (self == 0.0d) {
                     continue;
                 }
@@ -258,16 +267,30 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 String methodName = safeText(String.valueOf(invokeNoArgs(node, "getMethodName")));
                 String methodDesc = safeText(String.valueOf(invokeNoArgs(node, "getMethodDesc")));
                 String source = sourceFor(classSources, methodSources, className, methodName, methodDesc);
-                FrameKey key = new FrameKey(source, className, methodName, methodDesc);
+                FrameKey key = new FrameKey(
+                        source,
+                        className,
+                        methodName,
+                        methodDesc,
+                        selectedThread ? "WORLD_THREAD" : "OTHER_THREAD"
+                );
+                if (!distinctFrames.add(key)) {
+                    if (!selectedThread) {
+                        continue;
+                    }
+                } else if (distinctFrames.size() > MAX_DISTINCT_FRAMES) {
+                    return SparkProfileReadResult.of(
+                            SparkProfileReadResult.Status.TOO_COMPLEX,
+                            version,
+                            "Spark's latest completed window exceeded 25,000 distinct frames. No partial summary was kept."
+                    );
+                }
+                if (!selectedThread || !isJavaFrame(className)) {
+                    continue;
+                }
+                totalSelfMilliseconds += self;
                 MutableHotPath aggregate = aggregates.get(key);
                 if (aggregate == null) {
-                    if (aggregates.size() >= MAX_DISTINCT_FRAMES) {
-                        return SparkProfileReadResult.of(
-                                SparkProfileReadResult.Status.TOO_COMPLEX,
-                                version,
-                                "Spark's latest completed window exceeded 25,000 distinct frames. No partial summary was kept."
-                        );
-                    }
                     aggregate = new MutableHotPath(key);
                     aggregates.put(key, aggregate);
                 }
@@ -275,11 +298,20 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             }
         }
 
-        if (frameCount == 0 || totalSelfMilliseconds <= 0.0d || aggregates.isEmpty()) {
+        if (totalFrameCount == 0) {
             return SparkProfileReadResult.of(
                     SparkProfileReadResult.Status.NO_DATA,
                     version,
                     "Spark's latest completed background window had no usable execution samples."
+            );
+        }
+        if (selectedThreadCount == 0
+                || selectedFrameCount == 0
+                || totalSelfMilliseconds <= 0.0d
+                || aggregates.isEmpty()) {
+            return SparkProfileReadResult.noActionableData(
+                    version,
+                    "Spark's latest completed background window had no usable WorldThread execution samples."
             );
         }
 
@@ -296,7 +328,9 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 version,
                 windowKey,
                 threads.size(),
-                frameCount,
+                selectedThreadCount,
+                totalFrameCount,
+                selectedFrameCount,
                 totalSelfMilliseconds,
                 hotPaths
         ));
@@ -323,6 +357,14 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             source = classSources.get(className);
         }
         return source == null ? "<unknown>" : safeText(String.valueOf(source));
+    }
+
+    private static boolean isWorldThread(@Nonnull String threadName) {
+        return threadName.startsWith("WorldThread");
+    }
+
+    private static boolean isJavaFrame(@Nonnull String className) {
+        return !className.isBlank() && !"native".equals(className);
     }
 
     private static int latestWindowIndex(@Nonnull List<?> windows) {
@@ -445,7 +487,8 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
     private record FrameKey(@Nonnull String source,
                             @Nonnull String className,
                             @Nonnull String methodName,
-                            @Nonnull String methodDesc) {
+                            @Nonnull String methodDesc,
+                            @Nonnull String threadScope) {
         @Nonnull
         private String frame() {
             return safeText(className + "#" + methodName + methodDesc);
