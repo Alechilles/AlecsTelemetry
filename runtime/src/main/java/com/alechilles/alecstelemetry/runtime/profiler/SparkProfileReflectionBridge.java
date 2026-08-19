@@ -377,7 +377,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             DecodedFrame frame = decodedFrames.get(originalIndex);
             int parent = nearestRetainedParents[originalIndex];
             frames.add(new SparkProfileWindow.Frame(
-                    parent < 0 ? -1 : retainedIndexes[parent],
+                    parent,
                     frame.source(),
                     frame.className(),
                     frame.methodName(),

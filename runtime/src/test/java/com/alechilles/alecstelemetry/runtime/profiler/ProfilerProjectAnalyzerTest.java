@@ -78,6 +78,50 @@ class ProfilerProjectAnalyzerTest {
                 .anyMatch(path -> path.attribution() == TelemetryProfilerAttribution.SELF));
     }
 
+    @Test
+    void disabledNearestOwnerBlocksAttributionToFartherOwner() {
+        SparkProfileWindow window = window(1, "1.0.0", List.of(
+                new SparkProfileWindow.Frame(-1, "mod-a", "example.a.Tick", "tick", DESCRIPTOR, 0.0d),
+                new SparkProfileWindow.Frame(0, "hytale", "com.hypixel.Store", "tick", DESCRIPTOR, 0.0d),
+                new SparkProfileWindow.Frame(1, "mod-b", "example.b.Callback", "run", DESCRIPTOR, 0.0d),
+                new SparkProfileWindow.Frame(2, "hytale", "com.hypixel.Metric", "add", DESCRIPTOR, 10.0d)
+        ));
+
+        List<ProfilerProjectWindow> projects = analyze(window, owners(), id -> !id.equals("mod-b"));
+
+        assertTrue(projects.isEmpty());
+    }
+
+    @Test
+    void nonfatalEligibilityFailureReturnsLocalAnalysisFailure() {
+        ProfilerProjectAnalyzer.Analysis analysis = ProfilerProjectAnalyzer.analyze(
+                window(1, "1.0.0"),
+                owners().index(),
+                ignored -> {
+                    throw new IllegalStateException("eligibility failed");
+                },
+                5
+        );
+
+        assertEquals(ProfilerProjectAnalyzer.Analysis.Status.FAILED, analysis.status());
+        assertTrue(analysis.detail().contains("eligibility failed"));
+        assertTrue(analysis.projects().isEmpty());
+    }
+
+    @Test
+    void analysisClampsPathBoundToFive() {
+        ProfilerProjectAnalyzer.Analysis analysis = ProfilerProjectAnalyzer.analyze(
+                manyPathsWindow(),
+                owners().index(),
+                id -> true,
+                10
+        );
+
+        assertEquals(ProfilerProjectAnalyzer.Analysis.Status.COMPLETE, analysis.status());
+        assertEquals(5, analysis.projects().getFirst().paths().size());
+        assertEquals(1, analysis.omittedPathCount());
+    }
+
     private static List<ProfilerProjectWindow> analyze(SparkProfileWindow window,
                                                         ProfilerProjectOwnershipIndex.BuildResult owners,
                                                         Predicate<String> eligible) {
@@ -92,6 +136,20 @@ class ProfilerProjectAnalyzerTest {
                 new SparkProfileWindow.Frame(2, "mod-b", "example.b.Callback", "run", DESCRIPTOR, 10.0d),
                 new SparkProfileWindow.Frame(3, "hytale", "com.hypixel.Metric", "add", DESCRIPTOR, 30.0d)
         ));
+    }
+
+    private static SparkProfileWindow manyPathsWindow() {
+        List<SparkProfileWindow.Frame> frames = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(index -> new SparkProfileWindow.Frame(
+                        -1,
+                        "hytale",
+                        "example.a.Path" + index,
+                        "run" + index,
+                        DESCRIPTOR,
+                        index + 1.0d
+                ))
+                .toList();
+        return window(1, "1.0.0", frames);
     }
 
     private static SparkProfileWindow window(int key, String version) {

@@ -329,7 +329,8 @@ class SparkProfileReflectionBridgeTest {
                 List.of(new ThreadNode(
                         "WorldThread - default",
                         List.of(
-                                new StackNode("example.a.Tick", "tick", "()V", List.of(100.0d), List.of(1)),
+                                new StackNode("native", "wait", "", List.of(100.0d), List.of(1)),
+                                new StackNode("example.a.Tick", "tick", "()V", List.of(100.0d), List.of(2)),
                                 new StackNode("com.hypixel.Store", "tick", "()V", List.of(100.0d), List.of())
                         ),
                         List.of(0)

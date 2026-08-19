@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 final class ProfilerProjectAnalyzer {
     private static final int MAX_REPRESENTATIVE_FRAMES = 8;
     private static final int MAX_FRAME_LENGTH = 512;
+    private static final int MAX_PATHS_PER_PROJECT = 5;
 
     private ProfilerProjectAnalyzer() {
     }
@@ -32,10 +33,14 @@ final class ProfilerProjectAnalyzer {
             Objects.requireNonNull(window, "window");
             Objects.requireNonNull(ownership, "ownership");
             Objects.requireNonNull(currentlyEligible, "currentlyEligible");
-            return analyzeInternal(window, ownership, currentlyEligible, Math.max(0, maxPathsPerProject), startedAt);
+            int boundedPathLimit = Math.min(
+                    MAX_PATHS_PER_PROJECT,
+                    Math.max(0, maxPathsPerProject)
+            );
+            return analyzeInternal(window, ownership, currentlyEligible, boundedPathLimit, startedAt);
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
-            return new Analysis(List.of(), 0, elapsedMillis(startedAt));
+            return Analysis.failed(elapsedMillis(startedAt), failure);
         }
     }
 
@@ -65,10 +70,12 @@ final class ProfilerProjectAnalyzer {
                 if (sampled.selfMilliseconds() <= 0.0d) {
                     continue;
                 }
-                Optional<ProfilerProjectOwnershipIndex.Owner> sampledOwner = ownerOf(
-                        sampled, ownership, currentlyEligible);
-                if (sampledOwner.isPresent()) {
-                    ProfilerProjectOwnershipIndex.Owner owner = sampledOwner.get();
+                FrameOwnership sampledOwner = ownerOf(sampled, ownership, currentlyEligible);
+                if (sampledOwner.owner() != null) {
+                    if (!sampledOwner.eligible()) {
+                        continue;
+                    }
+                    ProfilerProjectOwnershipIndex.Owner owner = sampledOwner.owner();
                     MutableProject project = projects.computeIfAbsent(
                             owner.projectId(), ignored -> new MutableProject(owner));
                     ProfilerPathIdentity identity = ProfilerPathIdentity.self(
@@ -87,10 +94,12 @@ final class ProfilerProjectAnalyzer {
                 int parentIndex = frames.get(childIndex).parentIndex();
                 while (parentIndex >= 0) {
                     SparkProfileWindow.Frame candidate = frames.get(parentIndex);
-                    Optional<ProfilerProjectOwnershipIndex.Owner> candidateOwner = ownerOf(
-                            candidate, ownership, currentlyEligible);
-                    if (candidateOwner.isPresent()) {
-                        ProfilerProjectOwnershipIndex.Owner owner = candidateOwner.get();
+                    FrameOwnership candidateOwner = ownerOf(candidate, ownership, currentlyEligible);
+                    if (candidateOwner.owner() != null) {
+                        if (!candidateOwner.eligible()) {
+                            break;
+                        }
+                        ProfilerProjectOwnershipIndex.Owner owner = candidateOwner.owner();
                         SparkProfileWindow.Frame firstExternal = frames.get(childIndex);
                         MutableProject project = projects.computeIfAbsent(
                                 owner.projectId(), ignored -> new MutableProject(owner));
@@ -143,19 +152,15 @@ final class ProfilerProjectAnalyzer {
     }
 
     @Nonnull
-    private static Optional<ProfilerProjectOwnershipIndex.Owner> ownerOf(
+    private static FrameOwnership ownerOf(
             @Nonnull SparkProfileWindow.Frame frame,
             @Nonnull ProfilerProjectOwnershipIndex ownership,
             @Nonnull Predicate<String> currentlyEligible) {
         Optional<ProfilerProjectOwnershipIndex.Owner> owner = ownership.resolve(frame.source(), frame.className());
         if (owner.isEmpty()) {
-            return Optional.empty();
+            return FrameOwnership.UNOWNED;
         }
-        try {
-            return currentlyEligible.test(owner.get().projectId()) ? owner : Optional.empty();
-        } catch (RuntimeException ignored) {
-            return Optional.empty();
-        }
+        return new FrameOwnership(owner.get(), currentlyEligible.test(owner.get().projectId()));
     }
 
     @Nonnull
@@ -208,13 +213,46 @@ final class ProfilerProjectAnalyzer {
 
     record Analysis(@Nonnull List<ProfilerProjectWindow> projects,
                     int omittedPathCount,
-                    long durationMillis) {
+                    long durationMillis,
+                    @Nonnull Status status,
+                    @Nonnull String detail) {
+        enum Status {
+            COMPLETE,
+            FAILED
+        }
+
+        Analysis(@Nonnull List<ProfilerProjectWindow> projects,
+                 int omittedPathCount,
+                 long durationMillis) {
+            this(projects, omittedPathCount, durationMillis, Status.COMPLETE, "");
+        }
+
         Analysis {
             projects = projects == null ? List.of() : List.copyOf(projects);
             if (omittedPathCount < 0 || durationMillis < 0L) {
                 throw new IllegalArgumentException("Analysis counts and duration must be non-negative");
             }
+            status = status == null ? Status.FAILED : status;
+            detail = detail == null ? "" : detail;
         }
+
+        @Nonnull
+        static Analysis failed(long durationMillis, @Nonnull Throwable failure) {
+            String detail = failure.getClass().getSimpleName();
+            String message = failure.getMessage();
+            if (message != null && !message.isBlank()) {
+                detail += ": " + message;
+            }
+            if (detail.length() > 240) {
+                detail = detail.substring(0, 240);
+            }
+            return new Analysis(List.of(), 0, durationMillis, Status.FAILED, detail);
+        }
+    }
+
+    private record FrameOwnership(ProfilerProjectOwnershipIndex.Owner owner,
+                                  boolean eligible) {
+        private static final FrameOwnership UNOWNED = new FrameOwnership(null, false);
     }
 
     private static final class MutableProject {
