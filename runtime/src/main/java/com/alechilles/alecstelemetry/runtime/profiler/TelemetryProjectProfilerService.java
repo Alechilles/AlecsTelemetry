@@ -227,7 +227,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 long sequence = ++publicationSequence;
                 state.lastState = TelemetryProfilerStatus.State.COMPLETE;
                 state.lastDetail = "Latest Spark project profile window was summarized locally.";
-                state.projectStatusAuthoritative = true;
+                state.projectStatusAuthoritative = false;
                 state.lastSparkVersion = snapshot.sparkVersion();
                 state.analysisDurationMillis = analysis.durationMillis();
                 state.omittedPathCount = Math.max(
@@ -479,7 +479,8 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 project.lastDetail = bounded(result.detail());
                 project.lastSparkVersion = result.sparkVersion();
                 project.analysisDurationMillis = 0L;
-                project.projectStatusAuthoritative = true;
+                project.projectStatusAuthoritative = state == TelemetryProfilerStatus.State.NO_DATA
+                        || state == TelemetryProfilerStatus.State.FAILED;
             }
         }
     }
