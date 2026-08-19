@@ -1730,7 +1730,6 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             projectProfilerService.deactivateProvider();
             commandRegistrar.unregister();
             service.shutdown();
-            projectProfilerService.close();
             TelemetryRuntimeLocator.clearIfCurrent(api);
         }
 

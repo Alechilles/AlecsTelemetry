@@ -116,6 +116,50 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
     }
 
     @Test
+    void fallbackProviderPublishesAfterRegainingCoordinatorOwnership() throws Exception {
+        ProviderFixture providerA = fixture(
+                "standalone:Alechilles:SparkFallbackA",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1)
+        );
+        ProviderFixture providerB = fixture(
+                "embedded:Alechilles:SparkFallbackB",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                new BlockingReader(2)
+        );
+
+        try {
+            providerA.handle.start();
+            assertTrue(providerA.reader.entered.await(2, TimeUnit.SECONDS));
+
+            providerB.handle.start();
+            assertEquals("embedded:Alechilles:SparkFallbackB", TelemetryCoordinatorRegistry.activeBridge().providerId());
+
+            providerA.reader.release.countDown();
+            awaitReads(providerA.reader, 1);
+            providerB.reader.release.countDown();
+            awaitHistory(providerB.monitor, 1);
+
+            providerB.handle.shutdown();
+            assertEquals("standalone:Alechilles:SparkFallbackA", TelemetryCoordinatorRegistry.activeBridge().providerId());
+
+            providerA.publishAndAwait(2);
+
+            TelemetryProfilerView view = providerA.handle.api().findProject("mod-a").profiler();
+            assertEquals(List.of(2), view.history().stream()
+                    .map(TelemetryProfilerSnapshot::windowKey)
+                    .toList());
+        } finally {
+            providerA.reader.release.countDown();
+            providerB.reader.release.countDown();
+            providerA.handle.shutdown();
+            providerB.handle.shutdown();
+        }
+    }
+
+    @Test
     void bootDoesNotReactivateASuspendedMonitor() throws Exception {
         ProviderFixture provider = fixture(
                 "standalone:Alechilles:SparkBoot",
