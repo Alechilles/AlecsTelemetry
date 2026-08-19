@@ -302,6 +302,35 @@ class TelemetryProjectProfilerServiceTest {
     }
 
     @Test
+    void statusOnlyFailureDoesNotHideLaterGlobalRecovery() {
+        AtomicReference<SparkProfilerDiagnostics> diagnostics = new AtomicReference<>(
+                SparkProfilerDiagnostics.simple(
+                        SparkProfilerDiagnostics.State.FAILED,
+                        "spark-1",
+                        "Global monitor failed."
+                )
+        );
+        TelemetryProjectProfilerService service = service();
+        service.attachMonitorDiagnostics(diagnostics::get);
+        try {
+            service.publish(SparkProfileReadResult.of(null, "spark-1", "Unknown read status."));
+            assertEquals(TelemetryProfilerStatus.State.FAILED,
+                    service.view("mod-a").status().state());
+
+            diagnostics.set(SparkProfilerDiagnostics.simple(
+                    SparkProfilerDiagnostics.State.COMPLETE,
+                    "spark-1",
+                    "Global monitor recovered."
+            ));
+
+            assertEquals(TelemetryProfilerStatus.State.COMPLETE,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
     void consentRevocationPreventsInFlightAnalysisFromReinsertingEvidence() throws Exception {
         CountDownLatch analyzed = new CountDownLatch(1);
         CountDownLatch allowInsert = new CountDownLatch(1);

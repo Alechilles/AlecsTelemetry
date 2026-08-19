@@ -479,8 +479,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 project.lastDetail = bounded(result.detail());
                 project.lastSparkVersion = result.sparkVersion();
                 project.analysisDurationMillis = 0L;
-                project.projectStatusAuthoritative = state == TelemetryProfilerStatus.State.NO_DATA
-                        || state == TelemetryProfilerStatus.State.FAILED;
+                project.projectStatusAuthoritative = state == TelemetryProfilerStatus.State.NO_DATA;
             }
         }
     }
