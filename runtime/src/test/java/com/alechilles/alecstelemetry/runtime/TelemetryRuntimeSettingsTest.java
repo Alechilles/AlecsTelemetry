@@ -123,6 +123,57 @@ class TelemetryRuntimeSettingsTest {
     }
 
     @Test
+    void explicitNullCanonicalSparkProfilerWinsOverLegacyAlias() throws Exception {
+        Path settingsFile = tempDir.resolve("runtime.json");
+        Files.writeString(settingsFile, """
+                {
+                  "sparkProfiler": null,
+                  "sparkProfilerCanary": {
+                    "enabled": true,
+                    "initialDelaySeconds": 300,
+                    "timeoutSeconds": 15,
+                    "maxSummaryEntries": 6
+                  }
+                }
+                """);
+
+        TelemetryRuntimeSettings.SparkProfilerSettings settings =
+                TelemetryRuntimeSettings.load(settingsFile, null).sparkProfiler();
+
+        assertFalse(settings.enabled());
+        assertEquals(90, settings.initialDelaySeconds());
+        assertEquals(60, settings.intervalSeconds());
+        assertEquals(10, settings.timeoutSeconds());
+        assertEquals(5, settings.maxSummaryEntries());
+        assertEquals(10, settings.maxHistorySnapshots());
+    }
+
+    @Test
+    void sparkProfilerClampsUpperDelayAndIntervalAndLowerOperatorLimits() throws Exception {
+        Path settingsFile = tempDir.resolve("runtime.json");
+        Files.writeString(settingsFile, """
+                {
+                  "sparkProfiler": {
+                    "initialDelaySeconds": 9999,
+                    "intervalSeconds": 9999,
+                    "timeoutSeconds": 0,
+                    "maxSummaryEntries": 0,
+                    "maxHistorySnapshots": 0
+                  }
+                }
+                """);
+
+        TelemetryRuntimeSettings.SparkProfilerSettings settings =
+                TelemetryRuntimeSettings.load(settingsFile, null).sparkProfiler();
+
+        assertEquals(3600, settings.initialDelaySeconds());
+        assertEquals(3600, settings.intervalSeconds());
+        assertEquals(1, settings.timeoutSeconds());
+        assertEquals(1, settings.maxSummaryEntries());
+        assertEquals(1, settings.maxHistorySnapshots());
+    }
+
+    @Test
     void newTemplateWritesOnlyCanonicalSparkProfilerBlock() throws Exception {
         Path settingsFile = tempDir.resolve("runtime.json");
 

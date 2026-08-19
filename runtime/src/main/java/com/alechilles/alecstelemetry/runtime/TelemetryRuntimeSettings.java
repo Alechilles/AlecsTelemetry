@@ -2,6 +2,8 @@ package com.alechilles.alecstelemetry.runtime;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -157,7 +159,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(parsed.maxUploadsPerFlush, DEFAULT_MAX_UPLOADS_PER_FLUSH, 1, 500),
                 clamp(parsed.maxBreadcrumbsPerProject, DEFAULT_MAX_BREADCRUMBS_PER_PROJECT, 1, 200),
                 normalizeManualReportSettings(parsed.manualReports),
-                parsed.sparkProfiler != null
+                parsed.sparkProfilerPresent
                         ? normalizeSparkProfilerSettings(parsed.sparkProfiler)
                         : normalizeSparkProfilerCanarySettings(parsed.sparkProfilerCanary),
                 parsed.hostedIngestEndpoint == null || parsed.hostedIngestEndpoint.isBlank()
@@ -183,8 +185,13 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
             if (raw.isBlank()) {
                 return new SettingsDocument();
             }
-            SettingsDocument parsed = GSON.fromJson(raw, SettingsDocument.class);
-            return parsed == null ? new SettingsDocument() : parsed;
+            JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
+            SettingsDocument parsed = GSON.fromJson(json, SettingsDocument.class);
+            if (parsed == null) {
+                return new SettingsDocument();
+            }
+            parsed.sparkProfilerPresent = json.has("sparkProfiler");
+            return parsed;
         } catch (Exception ex) {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log(
@@ -333,6 +340,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
 
     private static final class SettingsDocument {
         private Integer version;
+        private transient boolean sparkProfilerPresent;
         private Boolean enabled;
         private Integer flushIntervalSeconds = DEFAULT_FLUSH_INTERVAL_SECONDS;
         private Integer connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS;
