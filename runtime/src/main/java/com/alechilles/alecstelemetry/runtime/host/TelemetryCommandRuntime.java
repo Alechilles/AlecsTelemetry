@@ -10,6 +10,7 @@ import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -39,6 +40,11 @@ public interface TelemetryCommandRuntime {
     @Nonnull
     default SparkProfilerDiagnostics sparkProfilerDiagnostics() {
         return SparkProfilerDiagnostics.disabled();
+    }
+
+    @Nonnull
+    default List<SparkProfileSnapshot> sparkProfilerHistory() {
+        return List.of();
     }
 
     @Nonnull

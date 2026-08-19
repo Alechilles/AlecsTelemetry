@@ -38,8 +38,9 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
-import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerCanary;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.component.Ref;
@@ -78,7 +79,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
     private final HytaleLogger logger;
-    private final SparkProfilerCanary sparkProfilerCanary;
+    private final SparkProfilerMonitor sparkProfilerMonitor;
     private final List<String> registrationWarnings;
     private List<TelemetryProjectRegistration> consentProjects;
 
@@ -221,6 +222,34 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                    @Nullable HytaleLogger logger,
                                    @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar,
                                    @Nonnull CrashReportClient consentMetricClient) {
+        this(
+                request,
+                candidate,
+                settings,
+                dataPaths,
+                coordinator,
+                consentProjects,
+                registrationWarnings,
+                playerCounter,
+                logger,
+                commandRegistrar,
+                consentMetricClient,
+                null
+        );
+    }
+
+    TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,
+                                   @Nonnull TelemetryRuntimeCandidate candidate,
+                                   @Nonnull TelemetryRuntimeSettings settings,
+                                   @Nonnull TelemetryDataPaths dataPaths,
+                                   @Nonnull TelemetryCoordinatorService coordinator,
+                                   @Nonnull List<TelemetryProjectRegistration> consentProjects,
+                                   @Nonnull List<String> registrationWarnings,
+                                   @Nonnull TelemetryPlayerCounter playerCounter,
+                                   @Nullable HytaleLogger logger,
+                                   @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar,
+                                   @Nonnull CrashReportClient consentMetricClient,
+                                   @Nullable SparkProfilerMonitor monitor) {
         this.request = request;
         this.settings = settings;
         this.dataPaths = dataPaths;
@@ -233,12 +262,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.logger = logger;
-        this.sparkProfilerCanary = new SparkProfilerCanary(
-                settings.sparkProfilerCanary(),
-                () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
-                this::ownsActiveCoordinator,
-                logger
-        );
+        this.sparkProfilerMonitor = monitor == null
+                ? new SparkProfilerMonitor(
+                        settings.sparkProfiler(),
+                        () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
+                        this::ownsActiveCoordinator,
+                        logger
+                )
+                : monitor;
         this.consentProjects = List.copyOf(consentProjects);
         this.registrationWarnings = List.copyOf(registrationWarnings);
         this.pluginEvents = new TelemetryRuntimePluginEvents(this, playerCounter, logger);
@@ -253,11 +284,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Override
     public void shutdown() {
-        sparkProfilerCanary.close();
         TelemetryCoordinatorRegistry.unregister(bridge.providerId());
         commandRegistrar.unregister();
         TelemetryRuntimeLocator.clearIfCurrent(api);
         pluginEvents.unregister();
+        sparkProfilerMonitor.close();
     }
 
     @Override
@@ -277,7 +308,6 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     void onBoot() {
         if (ownsActiveCoordinator()) {
             refreshDiscoveredProjects();
-            sparkProfilerCanary.start();
         }
     }
 
@@ -643,7 +673,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Nonnull
     @Override
     public SparkProfilerDiagnostics sparkProfilerDiagnostics() {
-        return sparkProfilerCanary.diagnostics();
+        return sparkProfilerMonitor.diagnostics();
+    }
+
+    @Nonnull
+    @Override
+    public List<SparkProfileSnapshot> sparkProfilerHistory() {
+        return sparkProfilerMonitor.history();
     }
 
     @Nullable
@@ -1624,10 +1660,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             service.start();
             TelemetryRuntimeLocator.register(api);
             commandRegistrar.register();
+            sparkProfilerMonitor.activate();
         }
 
         @Override
         public void shutdown() {
+            sparkProfilerMonitor.suspend();
             commandRegistrar.unregister();
             service.shutdown();
             TelemetryRuntimeLocator.clearIfCurrent(api);
