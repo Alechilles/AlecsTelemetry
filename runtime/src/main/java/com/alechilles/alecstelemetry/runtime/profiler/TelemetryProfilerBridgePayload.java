@@ -602,7 +602,7 @@ public final class TelemetryProfilerBridgePayload {
             try {
                 Object frame = frames.get(index);
                 if (frame instanceof String value) {
-                    copy.add(value);
+                    copy.add(bounded(value, MAX_METHOD_LENGTH));
                 }
             } catch (RuntimeException | LinkageError ignored) {
                 break;
@@ -660,6 +660,14 @@ public final class TelemetryProfilerBridgePayload {
     private static Object copyTree(@Nullable Object value,
                                    int depth,
                                    @Nonnull IdentityHashMap<Object, Boolean> active) {
+        return copyTree(value, depth, active, new TreeBudget());
+    }
+
+    @Nullable
+    private static Object copyTree(@Nullable Object value,
+                                   int depth,
+                                   @Nonnull IdentityHashMap<Object, Boolean> active,
+                                   @Nonnull TreeBudget budget) {
         if (value == null || depth > MAX_TREE_DEPTH) {
             return null;
         }
@@ -671,6 +679,9 @@ public final class TelemetryProfilerBridgePayload {
         }
         if (value instanceof Number number) {
             return finiteNumber(number);
+        }
+        if (!budget.hasRemaining()) {
+            return null;
         }
         if (active.put(value, Boolean.TRUE) != null) {
             return null;
@@ -686,13 +697,16 @@ public final class TelemetryProfilerBridgePayload {
                 int end = Math.min(size, MAX_TREE_ENTRIES);
                 ArrayList<Object> copy = new ArrayList<>(end);
                 for (int index = 0; index < end; index++) {
+                    if (!budget.inspect()) {
+                        break;
+                    }
                     Object child;
                     try {
                         child = list.get(index);
                     } catch (RuntimeException | LinkageError ignored) {
                         break;
                     }
-                    Object copied = copyTree(child, depth + 1, active);
+                    Object copied = copyTree(child, depth + 1, active, budget);
                     if (copied != null) {
                         copy.add(copied);
                     }
@@ -701,17 +715,18 @@ public final class TelemetryProfilerBridgePayload {
             }
             if (value instanceof Map<?, ?> map) {
                 LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
-                int inspected = 0;
                 try {
                     Iterator<? extends Map.Entry<?, ?>> entries = map.entrySet().iterator();
-                    while (inspected < MAX_TREE_ENTRIES && entries.hasNext()) {
+                    while (budget.hasRemaining() && entries.hasNext()) {
+                        if (!budget.inspect()) {
+                            break;
+                        }
                         Map.Entry<?, ?> entry = entries.next();
-                        inspected++;
                         if (entry == null || !(entry.getKey() instanceof String key)
                                 || key.length() > MAX_DETAIL_LENGTH) {
                             continue;
                         }
-                        Object copied = copyTree(entry.getValue(), depth + 1, active);
+                        Object copied = copyTree(entry.getValue(), depth + 1, active, budget);
                         if (copied != null) {
                             copy.put(key, copied);
                         }
@@ -726,6 +741,22 @@ public final class TelemetryProfilerBridgePayload {
             return null;
         } finally {
             active.remove(value);
+        }
+    }
+
+    private static final class TreeBudget {
+        private int remaining = MAX_TREE_ENTRIES;
+
+        private boolean hasRemaining() {
+            return remaining > 0;
+        }
+
+        private boolean inspect() {
+            if (remaining <= 0) {
+                return false;
+            }
+            remaining--;
+            return true;
         }
     }
 

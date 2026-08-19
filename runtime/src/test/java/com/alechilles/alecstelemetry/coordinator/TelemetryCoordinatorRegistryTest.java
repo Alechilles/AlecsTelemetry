@@ -110,7 +110,9 @@ class TelemetryCoordinatorRegistryTest {
     @Test
     void reflectiveProfilerCallbackIsSanitizedToBoundedImmutableJdkTree() {
         CapableForeignBridge provider = capableForeignBridge();
-        provider.callbackPayload = snapshotPayload(7, "a".repeat(32));
+        String oversizedFrame = "f".repeat(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH + 1);
+        provider.latestPayload = snapshotPayload(7, "a".repeat(32), oversizedFrame);
+        provider.callbackPayload = snapshotPayload(7, "a".repeat(32), oversizedFrame);
         provider.callbackPayload.put("projectId", "p".repeat(121));
         provider.callbackPayload.put("foreign", new MutableForeignValue());
         TelemetryCoordinatorRegistry.register(provider);
@@ -118,6 +120,9 @@ class TelemetryCoordinatorRegistryTest {
         AtomicReference<Map<String, Object>> received = new AtomicReference<>();
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         assertNotNull(active);
+        assertEquals(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH, firstFrameLength(
+                active.profilerLatest("mod-a")
+        ));
         assertEquals(
                 "foreign-subscription",
                 active.subscribeProfiler("mod-a", received::set)
@@ -134,12 +139,27 @@ class TelemetryCoordinatorRegistryTest {
         );
         assertTrue(maxStringLength(payload) <= TelemetryProfilerBridgePayload.MAX_DETAIL_LENGTH);
         assertTrue(payload.values().stream().noneMatch(value -> value instanceof MutableForeignValue));
+        assertEquals(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH, firstFrameLength(payload));
     }
 
     @Test
     void malformedNestedMapsInspectOnlyTheBoundedEntryPrefix() {
         CapableForeignBridge provider = capableForeignBridge();
         CountingMalformedMap malformed = new CountingMalformedMap(1_000);
+        provider.latestPayload = snapshotPayloadWithContextCounts(7, malformed);
+        TelemetryCoordinatorRegistry.register(provider);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertNotNull(active);
+        active.profilerLatest("mod-a");
+
+        assertTrue(malformed.inspected.get() <= MAX_INSPECTED_TREE_ENTRIES);
+    }
+
+    @Test
+    void nestedMalformedMapsShareOneGlobalInspectionBudget() {
+        CapableForeignBridge provider = capableForeignBridge();
+        CountingNestedMap malformed = new CountingNestedMap(2, 256);
         provider.latestPayload = snapshotPayloadWithContextCounts(7, malformed);
         TelemetryCoordinatorRegistry.register(provider);
 
@@ -663,6 +683,12 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     private static Map<String, Object> snapshotPayload(int windowKey, String fingerprint) {
+        return snapshotPayload(windowKey, fingerprint, "com.example.Mod#tick()V");
+    }
+
+    private static Map<String, Object> snapshotPayload(int windowKey,
+                                                       String fingerprint,
+                                                       String frame) {
         Map<String, Object> path = new java.util.LinkedHashMap<>();
         path.put("fingerprint", fingerprint);
         path.put("attribution", "SELF");
@@ -672,7 +698,7 @@ class TelemetryCoordinatorRegistryTest {
         path.put("sampledMilliseconds", 1.0d);
         path.put("selectedWorldThreadSharePercent", 2.0d);
         path.put("qualification", "OBSERVED");
-        path.put("representativePath", new ArrayList<>(List.of("com.example.Mod#tick()V")));
+        path.put("representativePath", new ArrayList<>(List.of(frame)));
         Map<String, Object> context = new java.util.LinkedHashMap<>();
         context.put("observedAtMillis", 1L);
         context.put("breadcrumbCategoryCounts", new java.util.LinkedHashMap<>());
@@ -740,15 +766,32 @@ class TelemetryCoordinatorRegistryTest {
         return 0;
     }
 
+    private static int firstFrameLength(Map<String, Object> payload) {
+        Object paths = payload.get("paths");
+        assertTrue(paths instanceof List<?> && !((List<?>) paths).isEmpty());
+        Object path = ((List<?>) paths).get(0);
+        assertTrue(path instanceof Map<?, ?>);
+        Object frames = ((Map<?, ?>) path).get("representativePath");
+        assertTrue(frames instanceof List<?> && !((List<?>) frames).isEmpty());
+        Object frame = ((List<?>) frames).get(0);
+        assertTrue(frame instanceof String);
+        return ((String) frame).length();
+    }
+
     private static final class MutableForeignValue {
     }
 
     private static final class CountingMalformedMap extends AbstractMap<Object, Object> {
         private final int size;
-        private final AtomicInteger inspected = new AtomicInteger();
+        private final AtomicInteger inspected;
 
         private CountingMalformedMap(int size) {
+            this(size, new AtomicInteger());
+        }
+
+        private CountingMalformedMap(int size, AtomicInteger inspected) {
             this.size = size;
+            this.inspected = inspected;
         }
 
         @Override
@@ -775,6 +818,45 @@ class TelemetryCoordinatorRegistryTest {
                 @Override
                 public int size() {
                     return size;
+                }
+            };
+        }
+    }
+
+    private static final class CountingNestedMap extends AbstractMap<Object, Object> {
+        private final int branchCount;
+        private final int entryCount;
+        private final AtomicInteger inspected = new AtomicInteger();
+
+        private CountingNestedMap(int branchCount, int entryCount) {
+            this.branchCount = branchCount;
+            this.entryCount = entryCount;
+        }
+
+        @Override
+        public Set<Entry<Object, Object>> entrySet() {
+            return new AbstractSet<>() {
+                @Override
+                public Iterator<Entry<Object, Object>> iterator() {
+                    return new Iterator<>() {
+                        private int index;
+
+                        @Override
+                        public boolean hasNext() {
+                            return index < branchCount;
+                        }
+
+                        @Override
+                        public Entry<Object, Object> next() {
+                            inspected.incrementAndGet();
+                            return Map.entry("branch-" + index++, new CountingMalformedMap(entryCount, inspected));
+                        }
+                    };
+                }
+
+                @Override
+                public int size() {
+                    return branchCount;
                 }
             };
         }
