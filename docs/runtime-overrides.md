@@ -104,11 +104,13 @@ time it starts.
   "maxPendingEventsPerProject": 500,
   "maxUploadsPerFlush": 10,
   "maxBreadcrumbsPerProject": 30,
-  "sparkProfilerCanary": {
+  "sparkProfiler": {
     "enabled": false,
     "initialDelaySeconds": 90,
+    "intervalSeconds": 60,
     "timeoutSeconds": 10,
-    "maxSummaryEntries": 5
+    "maxSummaryEntries": 5,
+    "maxHistorySnapshots": 10
   },
   "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
   "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
@@ -140,39 +142,85 @@ upload, disable logs, disable installed-mod lists, disable diagnostics, disable
 contact fields, and disable resolution updates. Log attachments are clipped to
 `maxLogAttachmentBytes` and redacted before local storage or upload.
 
-## Optional Spark profiler canary
+## Optional Spark hot-path monitor
 
-The `sparkProfilerCanary` block is an experimental server-owner setting. It is
-off by default. To use it, enable Spark's background profiler, set `enabled` to
-`true` in the canonical `Settings/runtime.json`, and restart the server.
+The canonical `sparkProfiler` block is an opt-in server-owner setting. It is off
+by default. To use it, enable Spark's passive background profiler, set
+`enabled` to `true` in the canonical `Settings/runtime.json`, and restart the
+server.
 
-The active Telemetry coordinator schedules one read after the startup delay.
-The canary reads only Spark's latest completed `ASYNC` `EXECUTION` background
-window. It does not read a profile that a user started. A completed Spark window
-can be up to 60 seconds behind the current server activity.
+The active Telemetry coordinator starts the monitor after its service starts.
+The monitor reads only completed Spark `ASYNC` `EXECUTION` background windows; it
+does not read a profile started by a user. It checks the latest completed window
+after `initialDelaySeconds`, then polls every `intervalSeconds`. Each window is
+summarized once. A completed window can be behind current server activity by the
+Spark background-profiler interval.
 
-The result is local only. Telemetry keeps a bounded in-memory summary and writes
-up to `maxSummaryEntries` source/frame hot paths to the server log. It does not
-retain the raw Spark profile, create a profile file, or send the profile or
-summary to Alec's hosted platform or a custom telemetry endpoint. Use
-`/telemetry status` to inspect the canary state.
+The ranking uses Java self time from Hytale thread names containing
+`WorldThread`. Native frames and Java work from other thread names do not enter
+the ranking. Telemetry keeps only bounded immutable summaries and history in
+memory, and writes up to `maxSummaryEntries` hot paths for each new actionable
+window to the ordinary server log. It does not retain raw Spark profile data,
+create a raw profile file, or send profile data or summaries to Alec's hosted
+platform or a custom endpoint. Spark may retain its own profiler data under its
+own settings.
 
-Safety limits are fixed or bounded:
+### Settings
 
-- `initialDelaySeconds`: 60 to 3600; default 90
-- `timeoutSeconds`: 1 to 60; default 10
-- `maxSummaryEntries`: 1 to 10; default 5
-- at least 256 MiB of JVM heap headroom is required
-- a window with more than 25,000 distinct frames is discarded as `TOO_COMPLEX`
-  instead of producing a partial ranking
-- only one capture attempt runs per server process
-- a timeout or compatibility failure opens the canary circuit; there is no retry
-- capture work uses dedicated daemon threads and does not run on Hytale's shared
-  scheduler
+The canonical `sparkProfiler` fields are:
 
-A Java thread cannot forcibly stop a Spark export that ignores interruption.
-After a timeout, Telemetry discards any late result and does not retry. The
-dedicated worker is a daemon thread, so it cannot keep the server process alive.
+| Field | Default | Accepted range |
+| --- | ---: | ---: |
+| `enabled` | `false` | `true` or `false` |
+| `initialDelaySeconds` | `90` | 60 to 3600 |
+| `intervalSeconds` | `60` | 30 to 3600 |
+| `timeoutSeconds` | `10` | 1 to 60 |
+| `maxSummaryEntries` | `5` | 1 to 10 |
+| `maxHistorySnapshots` | `10` | 1 to 10 |
+
+Values outside a numeric range are clamped. New settings templates write only
+the canonical `sparkProfiler` block. The legacy `sparkProfilerCanary` JSON block
+is still accepted for compatibility. It supports `enabled`,
+`initialDelaySeconds`, `timeoutSeconds`, and `maxSummaryEntries`; its interval
+is 60 seconds and its history limit is 10. If both JSON blocks are present, the
+canonical `sparkProfiler` block wins. This includes an explicit `null` canonical
+value, which uses safe canonical defaults instead of the legacy block.
+
+### Safety and compatibility
+
+- At least 256 MiB of JVM heap headroom is required before a Spark read. Low
+  headroom skips that read and tries again at the next interval.
+- A window with more than 25,000 distinct frames is discarded as `TOO_COMPLEX`;
+  Telemetry does not keep a partial ranking.
+- A JVM-wide capture gate allows only one Telemetry Spark read at a time, even
+  when standalone and embedded runtimes are present. Capture work uses daemon
+  threads and does not run on Hytale's shared scheduler.
+- The reflection bridge accepts only the exact tested Spark artifacts in the
+  table below. It checks both the reported base version and the SHA-256 of the
+  complete loaded Spark JAR before reading private Spark state. A repackaged,
+  later, or changed artifact fails closed. A missing or changed private member
+  also fails closed.
+- Unsupported Spark, incompatible Spark, excessive profile complexity, a
+  failed read, or a timeout opens the monitor circuit for the process. The
+  monitor does not retry after the circuit opens. A late export result is
+  discarded if Spark ignores interruption. Spark absence, no active background
+  sampler, no completed window, no actionable WorldThread data, and low heap do
+  not open the circuit; the monitor can poll again.
+- The monitor reads only while its provider owns the active Telemetry
+  coordinator. Ownership loss suspends future work and fences late results.
+  Coordinator shutdown suspends the monitor before service shutdown, and the
+  provider handle closes it on permanent shutdown.
+
+The status output uses states such as `READY`, `WAITING`, `CAPTURING`,
+`COMPLETE`, `ABSENT`, `NOT_RUNNING`, `NO_DATA`, `NO_ACTIONABLE_DATA`,
+`LOW_HEAP`, `UNSUPPORTED`, `TOO_COMPLEX`, `INCOMPATIBLE`, `TIMED_OUT`,
+`FAILED`, `NOT_OWNER`, and `SHUTDOWN`. `DISABLED` means the setting is off.
+The `circuitOpen` flag identifies a permanent session stop after a compatibility,
+complexity, failure, or timeout condition.
+
+Inspect local state with `/telemetry status`,
+`/telemetry profiler status`, `/telemetry profiler top`, and
+`/telemetry profiler history`.
 
 ### Tested Spark Hytale builds
 
@@ -193,8 +241,8 @@ The compatibility gate checks Spark's manifest base version and the SHA-256 of
 the complete loaded Spark JAR before it reads private Spark state. Only the
 exact official artifacts in this table are accepted. A repackaged or later
 build is skipped even if it reuses a listed version. Any missing or changed
-runtime member also makes the canary fail closed. Normal Telemetry and Spark
-behavior continue when the canary is disabled, absent, unsupported, timed out,
+runtime member also makes the monitor fail closed. Normal Telemetry and Spark
+behavior continue when the monitor is disabled, absent, unsupported, timed out,
 or incompatible.
 
 ## Supported Override Fields

@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: August 18, 2026
+Effective date: August 19, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -89,11 +89,12 @@ Alec's Telemetry is designed to avoid player identity data by default.
   are rejected while stopped and are not replayed after startup.
 - Consent metrics are collected separately and are limited to project/version,
   category choice, and first-review funnel events.
-- The optional Spark profiler canary is off by default. When a server owner
-  enables it, the runtime computes the loaded Spark JAR's SHA-256 in memory,
-  reads one completed passive Spark background window, and writes a bounded
-  hot-path summary to the local server log. It does not retain or upload the JAR
-  hash or raw Spark profile, or send the summary to a telemetry endpoint.
+- The optional Spark hot-path monitor is off by default. When a server owner
+  enables it, the runtime reads completed passive Spark background windows,
+  computes the loaded Spark JAR's SHA-256 in memory, and writes bounded
+  WorldThread hot-path summaries to the local server log. It keeps only bounded
+  summaries and history in memory. It does not retain or upload the JAR hash or
+  raw Spark profile, or send the summaries to a telemetry endpoint.
 - The hosted platform may use IP addresses and request metadata for rate
   limiting, abuse prevention, server-country derivation, security logging, and
   normal hosting operations.
@@ -119,23 +120,29 @@ directory. These files can include:
   tokens
 - local runtime settings for manual reports, attachments, endpoints, and related
   controls
-- when the optional Spark profiler canary is enabled, a bounded hot-path summary
-  in the ordinary server log
+- when the optional Spark hot-path monitor is enabled, bounded hot-path
+  summary lines in the ordinary server log
 
 Local files stay on the server or local machine unless the configured telemetry
 category or report workflow uploads them.
 
-The Spark profiler canary processes Spark thread, class, method, source, and
-timing labels transiently in memory. It also computes the loaded Spark JAR's
-SHA-256 in memory to enforce the tested-artifact gate. The runtime does not
-retain that hash. It keeps only its bounded hot-path summary in memory and in
-ordinary server log output. It does not create a raw Spark profile file. The
-server owner and the server's logging setup control retention of that local log.
-Spark can keep its own profiler data under Spark's settings and behavior.
+The Spark hot-path monitor reads Spark thread, class, method, source, and timing
+labels only while it creates a summary. It selects Java self time from Hytale
+`WorldThread` threads. Native frames and Java work on other thread names do not
+enter the ranking. The monitor also computes the loaded Spark JAR's SHA-256 in
+memory to enforce the tested-artifact gate. The runtime does not retain that
+hash or raw profile data. It keeps only bounded summaries and history in memory
+and bounded summary lines in ordinary server log output. It does not create a
+raw Spark profile file. The server owner and the server's logging setup control
+retention of that local log. Spark can keep its own profiler data under Spark's
+settings and behavior; that retention is separate from Alec's Telemetry.
+Local summaries can contain Spark-reported source or mod labels, Java class and
+method names, timing values, and bounded thread/frame counts.
 
-The Spark profiler canary does not queue or send its raw profile, hot-path
+The Spark hot-path monitor does not queue or send its raw profile, hot-path
 summary, status, capture duration, or heap delta to Alec's hosted platform or a
-custom telemetry endpoint.
+custom telemetry endpoint. A supported Spark window with no usable WorldThread
+Java samples produces no actionable ranking.
 
 ## Telemetry Sent To The Hosted Platform
 

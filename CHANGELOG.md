@@ -3,10 +3,11 @@
 ## Unreleased
 
 ### Added
-- Added an opt-in, local-only Spark profiler canary. It reads one completed
-  passive background window from fingerprinted official Spark Hytale builds,
-  logs a bounded hot-path summary, and fails closed when Spark is absent or
-  incompatible.
+- Added an opt-in, recurring local Spark hot-path monitor. It reads completed
+  passive background windows from fingerprinted official Spark Hytale builds,
+  ranks Java self time on Hytale WorldThread threads, keeps bounded summaries
+  and history in memory, logs local hot paths, and fails closed on unsupported
+  or incompatible Spark artifacts.
 
 ### Fixed
 - Corrected the embedded-runtime packaging guide and example manifest so hosts
