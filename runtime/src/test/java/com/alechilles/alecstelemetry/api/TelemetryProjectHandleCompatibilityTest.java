@@ -133,6 +133,24 @@ class TelemetryProjectHandleCompatibilityTest {
     }
 
     @Test
+    void profilerPathEvidenceBoundsRepresentativeFrames() {
+        ArrayList<String> representativePath = new ArrayList<>();
+        String overlongFrame = "x".repeat(513);
+        for (int index = 0; index < 9; index++) {
+            representativePath.add(overlongFrame);
+        }
+
+        TelemetryProfilerPathEvidence evidence = pathEvidence(
+                "00112233445566778899aabbccddeeff",
+                representativePath
+        );
+
+        assertEquals(8, evidence.representativePath().size());
+        assertEquals(512, evidence.representativePath().getFirst().length());
+        assertTrue(evidence.representativePath().stream().allMatch(frame -> frame.length() <= 512));
+    }
+
+    @Test
     void runtimeBackedHandleDelegatesProfilerByProjectId() {
         FakeRuntimeOperations runtime = new FakeRuntimeOperations(true, true);
         runtime.profiler = TelemetryProfilerView.unavailable();
@@ -350,6 +368,13 @@ class TelemetryProjectHandleCompatibilityTest {
 
     @Nonnull
     private static TelemetryProfilerPathEvidence pathEvidence(@Nonnull String fingerprint) {
+        return pathEvidence(fingerprint, List.of("example.Tick#tick()V"));
+    }
+
+    @Nonnull
+    private static TelemetryProfilerPathEvidence pathEvidence(
+            @Nonnull String fingerprint,
+            @Nonnull List<String> representativePath) {
         return new TelemetryProfilerPathEvidence(
                 fingerprint,
                 TelemetryProfilerAttribution.SELF,
@@ -362,7 +387,7 @@ class TelemetryProjectHandleCompatibilityTest {
                 1.0d,
                 10.0d,
                 TelemetryProfilerQualification.OBSERVED,
-                List.of("example.Tick#tick()V")
+                representativePath
         );
     }
 

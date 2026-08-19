@@ -21,6 +21,9 @@ public record TelemetryProfilerPathEvidence(
         @Nonnull TelemetryProfilerQualification qualification,
         @Nonnull List<String> representativePath) {
 
+    private static final int MAX_REPRESENTATIVE_FRAMES = 8;
+    private static final int MAX_FRAME_LENGTH = 512;
+
     public TelemetryProfilerPathEvidence {
         fingerprint = requiredText(fingerprint);
         attribution = Objects.requireNonNull(attribution, "attribution");
@@ -57,9 +60,15 @@ public record TelemetryProfilerPathEvidence(
         if (values == null || values.isEmpty()) {
             return List.of();
         }
-        ArrayList<String> normalized = new ArrayList<>(values.size());
+        ArrayList<String> normalized = new ArrayList<>(Math.min(values.size(), MAX_REPRESENTATIVE_FRAMES));
         for (String value : values) {
-            normalized.add(requiredText(value));
+            if (normalized.size() >= MAX_REPRESENTATIVE_FRAMES) {
+                break;
+            }
+            String frame = requiredText(value);
+            normalized.add(frame.length() <= MAX_FRAME_LENGTH
+                    ? frame
+                    : frame.substring(0, MAX_FRAME_LENGTH));
         }
         return List.copyOf(normalized);
     }
