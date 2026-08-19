@@ -25,7 +25,7 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static final int MAX_PROJECT_TOP_ENTRIES = 5;
     private static final int MAX_HISTORY_ENTRIES = 10;
     private static final int MAX_PROJECT_ID_LENGTH = 120;
-    private static final int MAX_PROJECT_METHOD_TEXT = 72;
+    private static final int MAX_PROJECT_METHOD_TEXT = 66;
     private static final int MAX_PROJECT_MEASUREMENT_TEXT = 12;
     private static final int MAX_OUTPUT_TEXT = 320;
 

@@ -267,8 +267,8 @@ class TelemetryProfilerCommandTest {
                 .findFirst()
                 .orElseThrow();
         assertTrue(pathLine.contains("attribution=DOWNSTREAM"));
-        assertTrue(pathLine.contains("sampledMs=25.00 ms"));
-        assertTrue(pathLine.contains("worldThreadShare=25.00%"));
+        assertTrue(pathLine.contains("sampledMs=123456789.00 ms"));
+        assertTrue(pathLine.contains("worldThreadShare=123456789.00%"));
         assertTrue(pathLine.contains("ownedMethod="));
         assertTrue(pathLine.contains("externalMethod="));
         assertTrue(pathLine.contains("qualification=OBSERVED"));
@@ -554,8 +554,8 @@ class TelemetryProfilerCommandTest {
                 "external-class-".repeat(12),
                 "external-method-".repeat(12),
                 "(external-descriptor-".repeat(8) + ")V",
-                25.0,
-                25.0,
+                123456789.0,
+                123456789.0,
                 TelemetryProfilerQualification.OBSERVED,
                 List.of()
         );
