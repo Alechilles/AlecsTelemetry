@@ -56,6 +56,25 @@ class TelemetryProjectProfilerServiceTest {
     }
 
     @Test
+    void ineligibleReadMethodsReturnEmptyBeforeInvalidate() {
+        TelemetryProjectProfilerService service = service();
+        TelemetryProfilerView view = service.view("mod-a");
+        try {
+            service.publish(result(1));
+            assertTrue(view.latest().isPresent());
+            assertFalse(view.history().isEmpty());
+
+            performanceEnabled.set(false);
+
+            assertTrue(view.latest().isEmpty());
+            assertTrue(view.history().isEmpty());
+            assertEquals(TelemetryProfilerStatus.State.DISABLED, view.status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
     void blockedListenerCoalescesLatestWithoutStarvingAnotherListener() throws Exception {
         CountDownLatch blocked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -78,6 +97,95 @@ class TelemetryProjectProfilerServiceTest {
             slow.close();
             healthy.close();
             service.close();
+        }
+    }
+
+    @Test
+    void mailboxKeepsNewerDeliveryAcrossInvalidationAndPausedOlderOffer() throws Exception {
+        AtomicBoolean armOfferHook = new AtomicBoolean();
+        AtomicBoolean pauseOlderOffer = new AtomicBoolean();
+        CountDownLatch olderOfferPaused = new CountDownLatch(1);
+        CountDownLatch releaseOlderOffer = new CountDownLatch(1);
+        CountDownLatch firstEntered = new CountDownLatch(1);
+        CountDownLatch releaseFirst = new CountDownLatch(1);
+        CountDownLatch newerDelivered = new CountDownLatch(1);
+        List<Integer> delivered = new CopyOnWriteArrayList<>();
+        TelemetryProjectProfilerService service = serviceWithDeliveryOfferHook(() -> {
+            if (armOfferHook.get() && pauseOlderOffer.compareAndSet(false, true)) {
+                olderOfferPaused.countDown();
+                awaitIgnoringInterrupt(releaseOlderOffer);
+            }
+        });
+        TelemetryProfilerSubscription subscription = service.view("mod-a").subscribe(snapshot -> {
+            delivered.add(snapshot.windowKey());
+            if (snapshot.windowKey() == 0) {
+                firstEntered.countDown();
+                awaitIgnoringInterrupt(releaseFirst);
+            }
+            if (snapshot.windowKey() == 2) {
+                newerDelivered.countDown();
+            }
+        });
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            service.publish(result(0));
+            assertTrue(firstEntered.await(1, SECONDS));
+            armOfferHook.set(true);
+
+            Future<?> olderPublish = executor.submit(() -> service.publish(result(1)));
+            assertTrue(olderOfferPaused.await(1, SECONDS));
+
+            performanceEnabled.set(false);
+            service.invalidate("mod-a");
+            performanceEnabled.set(true);
+            service.publish(result(2));
+
+            releaseOlderOffer.countDown();
+            olderPublish.get(1, SECONDS);
+            releaseFirst.countDown();
+
+            assertTrue(newerDelivered.await(1, SECONDS));
+            assertEquals(List.of(0, 2), delivered);
+        } finally {
+            releaseOlderOffer.countDown();
+            releaseFirst.countDown();
+            subscription.close();
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void closedMailboxRejectsPausedOlderOffer() throws Exception {
+        AtomicBoolean armOfferHook = new AtomicBoolean();
+        AtomicBoolean pauseOffer = new AtomicBoolean();
+        CountDownLatch offerPaused = new CountDownLatch(1);
+        CountDownLatch releaseOffer = new CountDownLatch(1);
+        AtomicInteger delivered = new AtomicInteger();
+        TelemetryProjectProfilerService service = serviceWithDeliveryOfferHook(() -> {
+            if (armOfferHook.get() && pauseOffer.compareAndSet(false, true)) {
+                offerPaused.countDown();
+                awaitIgnoringInterrupt(releaseOffer);
+            }
+        });
+        TelemetryProfilerSubscription subscription = service.view("mod-a")
+                .subscribe(snapshot -> delivered.incrementAndGet());
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            armOfferHook.set(true);
+            Future<?> publish = executor.submit(() -> service.publish(result(1)));
+            assertTrue(offerPaused.await(1, SECONDS));
+            subscription.close();
+            releaseOffer.countDown();
+            publish.get(1, SECONDS);
+            service.publish(result(2));
+            Thread.sleep(100L);
+            assertEquals(0, delivered.get());
+        } finally {
+            releaseOffer.countDown();
+            subscription.close();
+            service.close();
+            executor.shutdownNow();
         }
     }
 
@@ -120,6 +228,45 @@ class TelemetryProjectProfilerServiceTest {
                     .sum();
             assertTrue(retained <= 500);
             assertTrue(service.view(projectIds.getLast()).status().omittedPathCount() > 0);
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
+    void projectNoDataStatusOverridesGlobalCompleteDiagnostics() {
+        TelemetryProjectProfilerService service = service();
+        service.attachMonitorDiagnostics(() -> SparkProfilerDiagnostics.simple(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "spark-1",
+                "Global monitor completed a window."
+        ));
+        try {
+            service.publish(SparkProfileReadResult.noActionableData(
+                    "spark-1",
+                    "No actionable project data."
+            ));
+            assertEquals(TelemetryProfilerStatus.State.NO_DATA,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
+    void projectAnalysisFailureStatusOverridesGlobalCompleteDiagnostics() {
+        TelemetryProjectProfilerService service = serviceWithBeforeInsertHook(analysis -> {
+            throw new IllegalStateException("analysis failed");
+        });
+        service.attachMonitorDiagnostics(() -> SparkProfilerDiagnostics.simple(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "spark-1",
+                "Global monitor completed a window."
+        ));
+        try {
+            service.publish(result(1));
+            assertEquals(TelemetryProfilerStatus.State.FAILED,
+                    service.view("mod-a").status().state());
         } finally {
             service.close();
         }
@@ -241,6 +388,23 @@ class TelemetryProjectProfilerServiceTest {
                 (level, message) -> {
                 },
                 beforeInsert
+        );
+        service.activateProvider();
+        return service;
+    }
+
+    private static TelemetryProjectProfilerService serviceWithDeliveryOfferHook(
+            Runnable beforeDeliveryOffer) {
+        performanceEnabled.set(true);
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(project("mod-a", "example.a", "ModA")),
+                ignored -> performanceEnabled.get(),
+                "runtime-1",
+                (level, message) -> {
+                },
+                ignored -> {
+                },
+                beforeDeliveryOffer
         );
         service.activateProvider();
         return service;
