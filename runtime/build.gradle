@@ -15,6 +15,10 @@ java {
     }
 }
 
+repositories {
+    mavenCentral()
+}
+
 dependencies {
     compileOnly files(localProperty('hytale_server_jar_path'))
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'

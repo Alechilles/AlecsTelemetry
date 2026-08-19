@@ -21,8 +21,8 @@ require an in-game player sender.
 ```
 
 - `status` shows runtime enablement, loaded-mod count, registered projects,
-  pending queue count, last flush state, active coordinator, and discovered mods
-  directory.
+  pending queue count, last flush state, active coordinator, discovered mods
+  directory, and the local Spark profiler canary state.
 - `projects` lists each registered project, effective destination mode, pending
   count, and override state.
 - `project` shows one project's endpoint, plugin identity, package prefixes,

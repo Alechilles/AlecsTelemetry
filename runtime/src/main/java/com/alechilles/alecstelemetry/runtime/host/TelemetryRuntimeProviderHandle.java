@@ -38,12 +38,16 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerCanary;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
+import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
 import com.hypixel.hytale.server.core.HytaleServer;
 import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
+import com.hypixel.hytale.server.core.plugin.PluginManager;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -59,6 +63,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
+    private static final PluginIdentifier SPARK_PLUGIN_IDENTIFIER = new PluginIdentifier("spark", "spark");
+
     private final TelemetryRuntimeBootstrapRequest request;
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -72,6 +78,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
     private final HytaleLogger logger;
+    private final SparkProfilerCanary sparkProfilerCanary;
     private final List<String> registrationWarnings;
     private List<TelemetryProjectRegistration> consentProjects;
 
@@ -226,6 +233,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.logger = logger;
+        this.sparkProfilerCanary = new SparkProfilerCanary(
+                settings.sparkProfilerCanary(),
+                () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
+                this::ownsActiveCoordinator,
+                logger
+        );
         this.consentProjects = List.copyOf(consentProjects);
         this.registrationWarnings = List.copyOf(registrationWarnings);
         this.pluginEvents = new TelemetryRuntimePluginEvents(this, playerCounter, logger);
@@ -240,6 +253,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Override
     public void shutdown() {
+        sparkProfilerCanary.close();
         TelemetryCoordinatorRegistry.unregister(bridge.providerId());
         commandRegistrar.unregister();
         TelemetryRuntimeLocator.clearIfCurrent(api);
@@ -263,6 +277,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     void onBoot() {
         if (ownsActiveCoordinator()) {
             refreshDiscoveredProjects();
+            sparkProfilerCanary.start();
         }
     }
 
@@ -623,6 +638,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public TelemetryRuntimeDiagnostics diagnostics() {
         return consentDiagnostics();
+    }
+
+    @Nonnull
+    @Override
+    public SparkProfilerDiagnostics sparkProfilerDiagnostics() {
+        return sparkProfilerCanary.diagnostics();
     }
 
     @Nullable

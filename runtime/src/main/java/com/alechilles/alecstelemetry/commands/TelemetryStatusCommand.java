@@ -42,6 +42,10 @@ public final class TelemetryStatusCommand extends CommandBase {
                         + ", standaloneOwnsRuntime=" + runtime.ownsActiveCoordinator()
         );
         TelemetryCommandSupport.send(commandContext, "Telemetry last flush: " + diagnostics.lastFlushResult());
+        TelemetryCommandSupport.send(
+                commandContext,
+                "Telemetry Spark profiler canary: " + runtime.sparkProfilerDiagnostics().commandSummary()
+        );
         if (diagnostics.modsDirectory() != null) {
             TelemetryCommandSupport.send(commandContext, "Telemetry mods directory: " + diagnostics.modsDirectory());
         }

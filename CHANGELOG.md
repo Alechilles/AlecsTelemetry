@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- Added an opt-in, local-only Spark profiler canary. It reads one completed
+  passive background window from fingerprinted official Spark Hytale builds,
+  logs a bounded hot-path summary, and fails closed when Spark is absent or
+  incompatible.
+
 ### Fixed
 - Corrected the embedded-runtime packaging guide and example manifest so hosts
   publish the Telemetry `Common/**` UI assets required by `/telemetry consent`.

@@ -60,6 +60,13 @@ Project category choices are stored under the canonical Alec's Telemetry setting
 
 Runtime settings and consent state also live under the same canonical root.
 
+The optional Spark profiler canary is a separate server-owner tool. It is off by
+default. When enabled, it reads one completed passive Spark profile window and
+writes a bounded hot-path summary to the local server log. Telemetry does not
+retain or upload the raw Spark profile or send this summary to an endpoint. It
+also computes the loaded Spark JAR's SHA-256 in memory for its tested-artifact
+gate and does not retain or upload that hash.
+
 ## Privacy Rules For Mod Authors
 
 - Use stable reason codes instead of raw player data.

@@ -43,6 +43,9 @@ backend, the same runtime can target custom endpoints instead.
   optional log attachments, server-owner review controls, and portal follow-up.
 - Runtime coordination: standalone and embedded copies participate in version
   election so one active runtime can serve all enabled projects.
+- Optional Spark hot-path canary: server owners can opt into one bounded,
+  local-only summary of Spark's passive background profile after startup. An
+  exact official-artifact gate isolates the unsupported private integration.
 - Consent and overrides: descriptor defaults seed the first-run consent UI, while
   server owners keep final control through runtime settings and per-project
   overrides.

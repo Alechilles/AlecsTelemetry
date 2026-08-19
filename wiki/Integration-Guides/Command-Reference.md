@@ -19,7 +19,7 @@ The root command is `/telemetry`. The root permission is `telemetry.command.tele
 /telemetry project <project-id>
 ```
 
-Use these to inspect runtime enablement, active coordinator ownership, registered projects, endpoints, pending queues, overrides, source paths, and registration warnings.
+Use these to inspect runtime enablement, active coordinator ownership, registered projects, endpoints, pending queues, overrides, source paths, registration warnings, and the local Spark profiler canary state.
 
 ## Consent
 

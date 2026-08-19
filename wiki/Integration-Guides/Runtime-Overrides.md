@@ -130,10 +130,30 @@ Global runtime settings live in `Settings/runtime.json`, not per-project overrid
   "maxPendingEventsPerProject": 500,
   "maxUploadsPerFlush": 10,
   "maxBreadcrumbsPerProject": 30,
+  "sparkProfilerCanary": {
+    "enabled": false,
+    "initialDelaySeconds": 90,
+    "timeoutSeconds": 10,
+    "maxSummaryEntries": 5
+  },
   "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
   "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
 }
 ```
+
+## Optional Spark Profiler Canary
+
+The `sparkProfilerCanary` setting is off by default. When a server owner enables
+it, the active Telemetry coordinator reads one completed `ASYNC` `EXECUTION`
+window from Spark's passive background profiler after startup. It skips manual
+profiles and Spark artifacts whose full JAR fingerprint is not in the tested
+release matrix.
+
+Telemetry logs up to `maxSummaryEntries` local hot paths and exposes the canary
+state through `/telemetry status`. It does not retain or upload the raw Spark
+profile or send the summary to any telemetry endpoint. The supported bounds and
+tested Spark release matrix are in the repository's
+[runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md).
 
 ## Merge Rules
 
