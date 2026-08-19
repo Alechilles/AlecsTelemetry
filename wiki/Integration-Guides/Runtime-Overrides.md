@@ -130,30 +130,74 @@ Global runtime settings live in `Settings/runtime.json`, not per-project overrid
   "maxPendingEventsPerProject": 500,
   "maxUploadsPerFlush": 10,
   "maxBreadcrumbsPerProject": 30,
-  "sparkProfilerCanary": {
+  "sparkProfiler": {
     "enabled": false,
     "initialDelaySeconds": 90,
+    "intervalSeconds": 60,
     "timeoutSeconds": 10,
-    "maxSummaryEntries": 5
+    "maxSummaryEntries": 5,
+    "maxHistorySnapshots": 10
   },
   "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
   "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
 }
 ```
 
-## Optional Spark Profiler Canary
+## Optional Spark Hot-Path Monitor
 
-The `sparkProfilerCanary` setting is off by default. When a server owner enables
-it, the active Telemetry coordinator reads one completed `ASYNC` `EXECUTION`
-window from Spark's passive background profiler after startup. It skips manual
-profiles and Spark artifacts whose full JAR fingerprint is not in the tested
-release matrix.
+The canonical `sparkProfiler` setting is off by default. When a server owner
+enables it, the active Telemetry coordinator reads completed `ASYNC` `EXECUTION`
+windows from Spark's passive background profiler after startup. It does not read
+a profile started by a user. After `initialDelaySeconds`, the monitor polls
+`intervalSeconds` after each capture attempt resolves without opening the
+circuit. It can re-read the same latest completed window. A completed actionable
+window key is retained and logged once; `NO_ACTIONABLE_DATA` can be processed
+again on later polls.
 
-Telemetry logs up to `maxSummaryEntries` local hot paths and exposes the canary
-state through `/telemetry status`. It does not retain or upload the raw Spark
-profile or send the summary to any telemetry endpoint. The supported bounds and
-tested Spark release matrix are in the repository's
-[runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md).
+The ranking uses Java self time from Hytale thread names containing
+`WorldThread`. Native frames and Java work on other thread names do not enter
+the ranking. Telemetry keeps bounded summaries and history in memory and logs up
+to `maxSummaryEntries` hot paths when it first retains and logs an actionable
+window key.
+
+The monitor does not directly queue or upload profiler data. Ordinary log
+summary lines can be included if a user submits a manual report with current or
+previous server-log attachments and the manual-report settings, project
+descriptor, review, redaction, and clipping controls allow them. The monitor
+does not write raw Spark profile data to the log or a profile file, and does not
+upload that raw data. Spark may retain its own profiler data under its settings.
+
+### Spark monitor settings
+
+| Field | Default | Accepted range |
+| --- | ---: | ---: |
+| `enabled` | `false` | `true` or `false` |
+| `initialDelaySeconds` | `90` | 60 to 3600 |
+| `intervalSeconds` | `60` | 30 to 3600 |
+| `timeoutSeconds` | `10` | 1 to 60 |
+| `maxSummaryEntries` | `5` | 1 to 10 |
+| `maxHistorySnapshots` | `10` | 1 to 10 |
+
+Values outside a numeric range are clamped. The legacy `sparkProfilerCanary`
+JSON block remains accepted with `enabled`, `initialDelaySeconds`,
+`timeoutSeconds`, and `maxSummaryEntries`; its interval is 60 seconds and its
+history limit is 10. If both blocks are present, canonical `sparkProfiler`
+wins, including an explicit `null` canonical value, which uses safe canonical
+defaults.
+
+The monitor checks Spark's reported base version and the SHA-256 of the complete
+loaded Spark JAR before reading private Spark state. Only the exact artifacts in
+the tested release matrix are accepted. A changed, repackaged, later, or
+otherwise incompatible artifact fails closed. At least 256 MiB of JVM heap
+headroom is required. A window with more than 25,000 distinct frames is
+discarded without a partial ranking. Unsupported or incompatible Spark,
+excessive complexity, a failed read, or a timeout opens the session circuit;
+the monitor does not retry after that. Spark absence, no active background
+sampler, no completed window, no actionable WorldThread data, and low heap do
+not open the circuit. Ownership loss requests cancellation, stops future polls,
+and fences late results, but an export that ignores interruption can continue
+until Spark returns. See the repository's [runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+for the complete tested Spark version and JAR hash matrix.
 
 ## Merge Rules
 

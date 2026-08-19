@@ -60,12 +60,21 @@ Project category choices are stored under the canonical Alec's Telemetry setting
 
 Runtime settings and consent state also live under the same canonical root.
 
-The optional Spark profiler canary is a separate server-owner tool. It is off by
-default. When enabled, it reads one completed passive Spark profile window and
-writes a bounded hot-path summary to the local server log. Telemetry does not
-retain or upload the raw Spark profile or send this summary to an endpoint. It
-also computes the loaded Spark JAR's SHA-256 in memory for its tested-artifact
-gate and does not retain or upload that hash.
+The optional Spark hot-path monitor is a separate server-owner tool. It is off
+by default. When enabled, it reads completed passive Spark `ASYNC` `EXECUTION`
+windows and ranks Java self time from Hytale thread names containing
+`WorldThread`. It keeps bounded summaries and history in memory and writes
+bounded summary lines to the local server log.
+
+The monitor does not directly queue or upload profiler data. Ordinary log
+summary lines can be included if a user submits a manual report with current or
+previous server-log attachments and the manual-report settings, project
+descriptor, review, redaction, and clipping controls allow them. The monitor
+does not write raw Spark profile data to the log or a profile file, and does not
+upload that raw data. It computes the loaded Spark JAR's SHA-256 in memory for
+the exact tested-artifact gate and does not retain that hash. See [Runtime
+Overrides](/mod/alecs-telemetry/integration-guides/runtime-overrides) for
+settings, bounds, and fail-closed behavior.
 
 ## Privacy Rules For Mod Authors
 
