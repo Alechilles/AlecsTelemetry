@@ -9,7 +9,10 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,6 +20,48 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SparkProfilerMonitorTest {
+
+    @Test
+    void cancelledQueuedCaptureTaskReleasesGateBeforeReaderStarts() throws Exception {
+        SparkProfilerCaptureAttempt attempt = new SparkProfilerCaptureAttempt(
+                1L,
+                System.nanoTime(),
+                0L,
+                new Object()
+        );
+        assertTrue(SparkProfilerMonitorSupport.tryAcquireJvmCapture(attempt));
+        AtomicBoolean readerStarted = new AtomicBoolean();
+        SparkProfilerCaptureTask task = new SparkProfilerCaptureTask(
+                attempt,
+                () -> {
+                    readerStarted.set(true);
+                    return null;
+                }
+        );
+        CountDownLatch blockerEntered = new CountDownLatch(1);
+        CountDownLatch releaseBlocker = new CountDownLatch(1);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        try {
+            executor.execute(() -> {
+                blockerEntered.countDown();
+                awaitIgnoringInterrupt(releaseBlocker);
+            });
+            assertTrue(blockerEntered.await(1, TimeUnit.SECONDS));
+            executor.execute(task);
+            assertTrue(task.cancel(false));
+            assertFalse(readerStarted.get());
+
+            Object replacement = new Object();
+            assertTrue(SparkProfilerMonitorSupport.tryAcquireJvmCapture(replacement));
+            SparkProfilerMonitorSupport.releaseJvmCapture(replacement);
+        } finally {
+            releaseBlocker.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+            SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+        }
+    }
 
     @Test
     void publishesEachNewWindowOnceAndKeepsBoundedHistoryAndLogs() throws Exception {

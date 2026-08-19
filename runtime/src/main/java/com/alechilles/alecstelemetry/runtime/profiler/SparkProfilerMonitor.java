@@ -7,7 +7,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayDeque;
 import java.util.List;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -350,7 +349,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             deferBusyCapture();
             return;
         }
-        FutureTask<Void> task = new FutureTask<>(() -> {
+        SparkProfilerCaptureTask task = new SparkProfilerCaptureTask(attempt, () -> {
             capture(attempt);
             return null;
         });
@@ -396,7 +395,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             }
         } finally {
             if (!submitted) {
-                SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+                attempt.releaseJvmCapture();
             }
         }
     }
@@ -427,7 +426,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         synchronized (lifecycleLock) {
             if (inFlight != attempt || !isCurrentAttemptLocked(attempt)) {
                 retireLateAttemptLocked(attempt);
-                SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+                attempt.releaseJvmCapture();
                 return;
             }
             attempt.started = true;
@@ -440,7 +439,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             SparkProfilerMonitorSupport.rethrowIfFatal(caught);
             failure = caught;
         } finally {
-            SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+            attempt.releaseJvmCapture();
         }
         if (failure != null) {
             handleCaptureFailure(attempt, failure);
