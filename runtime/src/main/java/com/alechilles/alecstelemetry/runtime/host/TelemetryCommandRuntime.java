@@ -1,5 +1,6 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -45,6 +46,11 @@ public interface TelemetryCommandRuntime {
     @Nonnull
     default List<SparkProfileSnapshot> sparkProfilerHistory() {
         return List.of();
+    }
+
+    @Nonnull
+    default TelemetryProfilerView projectProfiler(@Nonnull String projectId) {
+        return TelemetryProfilerView.unavailable();
     }
 
     default void logProfilerCommandOutput(@Nonnull String message) {

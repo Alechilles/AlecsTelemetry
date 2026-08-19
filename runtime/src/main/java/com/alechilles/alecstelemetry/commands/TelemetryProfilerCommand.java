@@ -1,5 +1,9 @@
 package com.alechilles.alecstelemetry.commands;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerPathEvidence;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
@@ -11,13 +15,16 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Shows the local summaries produced by the optional Spark profiler monitor.
  */
 public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static final int MAX_TOP_ENTRIES = 10;
+    private static final int MAX_PROJECT_TOP_ENTRIES = 5;
     private static final int MAX_HISTORY_ENTRIES = 10;
+    private static final int MAX_PROJECT_ID_LENGTH = 120;
     private static final int MAX_OUTPUT_TEXT = 320;
 
     public TelemetryProfilerCommand(@Nonnull TelemetryCommandRuntime runtime) {
@@ -59,13 +66,22 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
             super("top", "Show the latest Spark WorldThread hot paths.");
             this.runtime = runtime;
             setPermissionGroups(TelemetryCommandPermissions.adminGroups());
-            setAllowsExtraArguments(false);
+            setAllowsExtraArguments(true);
         }
 
         @Override
         protected void executeSync(@Nonnull CommandContext commandContext) {
             if (runtime == null) {
                 send(commandContext, null, "Telemetry profiler is unavailable.");
+                return;
+            }
+            ProjectArgument projectArgument = projectArgument(commandContext, "top");
+            if (!projectArgument.valid()) {
+                send(commandContext, runtime, usage("top"));
+                return;
+            }
+            if (projectArgument.projectId() != null) {
+                executeProjectTop(commandContext, runtime, projectArgument.projectId());
                 return;
             }
             SparkProfilerDiagnostics diagnostics = runtime.sparkProfilerDiagnostics();
@@ -113,13 +129,22 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
             super("history", "Show retained Spark profiler windows.");
             this.runtime = runtime;
             setPermissionGroups(TelemetryCommandPermissions.adminGroups());
-            setAllowsExtraArguments(false);
+            setAllowsExtraArguments(true);
         }
 
         @Override
         protected void executeSync(@Nonnull CommandContext commandContext) {
             if (runtime == null) {
                 send(commandContext, null, "Telemetry profiler is unavailable.");
+                return;
+            }
+            ProjectArgument projectArgument = projectArgument(commandContext, "history");
+            if (!projectArgument.valid()) {
+                send(commandContext, runtime, usage("history"));
+                return;
+            }
+            if (projectArgument.projectId() != null) {
+                executeProjectHistory(commandContext, runtime, projectArgument.projectId());
                 return;
             }
             List<SparkProfileSnapshot> history = runtime.sparkProfilerHistory();
@@ -143,6 +168,231 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
             for (int index = start; index < history.size(); index++) {
                 send(commandContext, runtime, formatHistoryLine(history.get(index)));
             }
+        }
+    }
+
+    private static void executeProjectTop(@Nonnull CommandContext commandContext,
+                                          @Nonnull TelemetryCommandRuntime runtime,
+                                          @Nonnull String projectId) {
+        TelemetryProfilerView view = projectView(runtime, projectId);
+        if (isUnavailable(view)) {
+            send(commandContext, runtime,
+                    "Spark profiler top: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                            + " unavailable.");
+            return;
+        }
+
+        Optional<TelemetryProfilerSnapshot> latest;
+        try {
+            latest = view.latest();
+        } catch (RuntimeException | LinkageError ignored) {
+            latest = Optional.empty();
+        }
+        if (latest == null || latest.isEmpty()) {
+            send(commandContext, runtime, projectNoData("top", projectId, view));
+            return;
+        }
+
+        TelemetryProfilerSnapshot snapshot = latest.get();
+        List<TelemetryProfilerPathEvidence> paths = snapshot.paths();
+        int count = Math.min(MAX_PROJECT_TOP_ENTRIES, paths.size());
+        send(commandContext, runtime, bounded(String.format(
+                Locale.ROOT,
+                "Spark profiler top: project=%s, window=%d, sparkVersion=%s, showing=%d of %d",
+                bounded(projectId, MAX_PROJECT_ID_LENGTH),
+                snapshot.windowKey(),
+                safeValue(snapshot.sparkVersion()),
+                count,
+                paths.size()
+        )));
+        for (int index = 0; index < count; index++) {
+            send(commandContext, runtime, formatProjectPath(index + 1, paths.get(index)));
+        }
+    }
+
+    private static void executeProjectHistory(@Nonnull CommandContext commandContext,
+                                              @Nonnull TelemetryCommandRuntime runtime,
+                                              @Nonnull String projectId) {
+        TelemetryProfilerView view = projectView(runtime, projectId);
+        if (isUnavailable(view)) {
+            send(commandContext, runtime,
+                    "Spark profiler history: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                            + " unavailable.");
+            return;
+        }
+
+        List<TelemetryProfilerSnapshot> history;
+        try {
+            history = view.history();
+        } catch (RuntimeException | LinkageError ignored) {
+            history = List.of();
+        }
+        if (history == null || history.isEmpty()) {
+            send(commandContext, runtime, projectNoData("history", projectId, view));
+            return;
+        }
+
+        int start = Math.max(0, history.size() - MAX_HISTORY_ENTRIES);
+        int count = history.size() - start;
+        send(commandContext, runtime,
+                "Spark profiler history: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                        + ", showing " + count + " of " + history.size()
+                        + " retained windows.");
+        for (int index = start; index < history.size(); index++) {
+            send(commandContext, runtime, formatProjectHistoryLine(history.get(index)));
+        }
+    }
+
+    @Nonnull
+    private static TelemetryProfilerView projectView(@Nonnull TelemetryCommandRuntime runtime,
+                                                     @Nonnull String projectId) {
+        try {
+            TelemetryProfilerView view = runtime.projectProfiler(projectId);
+            return view == null ? TelemetryProfilerView.unavailable() : view;
+        } catch (RuntimeException | LinkageError ignored) {
+            return TelemetryProfilerView.unavailable();
+        }
+    }
+
+    private static boolean isUnavailable(@Nullable TelemetryProfilerView view) {
+        if (view == null) {
+            return true;
+        }
+        try {
+            TelemetryProfilerStatus status = view.status();
+            return status == null || status.state() == TelemetryProfilerStatus.State.UNAVAILABLE;
+        } catch (RuntimeException | LinkageError ignored) {
+            return true;
+        }
+    }
+
+    @Nonnull
+    private static String projectNoData(@Nonnull String command,
+                                        @Nonnull String projectId,
+                                        @Nonnull TelemetryProfilerView view) {
+        String state = "UNAVAILABLE";
+        try {
+            TelemetryProfilerStatus status = view.status();
+            if (status != null && status.state() != null) {
+                state = status.state().name();
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+        }
+        return "Spark profiler " + command + ": project="
+                + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                + " has no completed data (state=" + state + ").";
+    }
+
+    @Nonnull
+    private static String formatProjectPath(int rank,
+                                            @Nonnull TelemetryProfilerPathEvidence path) {
+        StringBuilder line = new StringBuilder()
+                .append(rank)
+                .append(". attribution=").append(path.attribution().name())
+                .append(", sampledMs=").append(formatNumber(path.sampledMilliseconds())).append(" ms")
+                .append(", worldThreadShare=").append(formatNumber(path.selectedWorldThreadSharePercent()))
+                .append('%')
+                .append(", ownedMethod=").append(projectMethod(path.ownedClassName(),
+                        path.ownedMethodName(), path.ownedMethodDescriptor()))
+                .append(", qualification=").append(path.qualification().name())
+                .append(", fingerprint=").append(bounded(path.fingerprint(), 32));
+        if (path.firstExternalClassName() != null
+                || path.firstExternalMethodName() != null
+                || path.firstExternalMethodDescriptor() != null) {
+            line.append(", externalMethod=").append(projectMethod(
+                    path.firstExternalClassName(),
+                    path.firstExternalMethodName(),
+                    path.firstExternalMethodDescriptor()
+            ));
+        }
+        return bounded(line.toString());
+    }
+
+    @Nonnull
+    private static String formatProjectHistoryLine(@Nonnull TelemetryProfilerSnapshot snapshot) {
+        return bounded(String.format(
+                Locale.ROOT,
+                "window=%d, sparkVersion=%s, observedAtMillis=%d, worldThreadSelfMs=%.2f, paths=%d",
+                snapshot.windowKey(),
+                safeValue(snapshot.sparkVersion()),
+                snapshot.observedAtMillis(),
+                snapshot.selectedWorldThreadSelfMilliseconds(),
+                snapshot.paths().size()
+        ));
+    }
+
+    @Nonnull
+    private static String projectMethod(@Nullable String className,
+                                        @Nullable String methodName,
+                                        @Nullable String descriptor) {
+        String safeClass = bounded(className, 56);
+        String safeMethod = bounded(methodName, 56);
+        String safeDescriptor = bounded(descriptor, 56);
+        return safeClass + "#" + safeMethod + safeDescriptor;
+    }
+
+    @Nonnull
+    private static String formatNumber(double value) {
+        return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    @Nonnull
+    private static String usage(@Nonnull String command) {
+        return "Usage: /telemetry profiler " + command + " [project-id]";
+    }
+
+    @Nonnull
+    private static ProjectArgument projectArgument(@Nonnull CommandContext commandContext,
+                                                   @Nonnull String subcommand) {
+        String input = commandContext.getInputString();
+        if (input == null || input.isBlank()) {
+            return ProjectArgument.none();
+        }
+        String[] tokens = input.trim().split("\\s+");
+        int subcommandIndex = -1;
+        for (int index = 0; index < tokens.length; index++) {
+            if (subcommand.equals(tokens[index])) {
+                subcommandIndex = index;
+                break;
+            }
+        }
+        if (subcommandIndex < 0) {
+            if (tokens.length != 1) {
+                return ProjectArgument.invalid();
+            }
+            return normalizeProjectArgument(tokens[0]);
+        }
+        int argumentCount = tokens.length - subcommandIndex - 1;
+        if (argumentCount == 0) {
+            return ProjectArgument.none();
+        }
+        if (argumentCount != 1) {
+            return ProjectArgument.invalid();
+        }
+        return normalizeProjectArgument(tokens[subcommandIndex + 1]);
+    }
+
+    @Nonnull
+    private static ProjectArgument normalizeProjectArgument(@Nullable String value) {
+        if (value == null) {
+            return ProjectArgument.invalid();
+        }
+        String projectId = value.trim();
+        if (projectId.isBlank() || projectId.length() > MAX_PROJECT_ID_LENGTH) {
+            return ProjectArgument.invalid();
+        }
+        return new ProjectArgument(true, projectId);
+    }
+
+    private record ProjectArgument(boolean valid, @Nullable String projectId) {
+        @Nonnull
+        private static ProjectArgument none() {
+            return new ProjectArgument(true, null);
+        }
+
+        @Nonnull
+        private static ProjectArgument invalid() {
+            return new ProjectArgument(false, null);
         }
     }
 
@@ -224,13 +474,21 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
 
     @Nonnull
     private static String bounded(@Nullable String value) {
+        return bounded(value, MAX_OUTPUT_TEXT);
+    }
+
+    @Nonnull
+    private static String bounded(@Nullable String value, int maxLength) {
         if (value == null || value.isBlank()) {
             return "<none>";
         }
         String normalized = value.replace('\n', ' ').replace('\r', ' ');
-        if (normalized.length() <= MAX_OUTPUT_TEXT) {
+        if (normalized.length() <= maxLength) {
             return normalized;
         }
-        return normalized.substring(0, MAX_OUTPUT_TEXT - 3) + "...";
+        if (maxLength <= 3) {
+            return normalized.substring(0, maxLength);
+        }
+        return normalized.substring(0, maxLength - 3) + "...";
     }
 }

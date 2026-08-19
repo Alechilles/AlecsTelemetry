@@ -1,5 +1,13 @@
 package com.alechilles.alecstelemetry.commands;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerAttribution;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerContext;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerPathEvidence;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerQualification;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
@@ -15,6 +23,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -203,6 +212,132 @@ class TelemetryProfilerCommandTest {
         assertTrue(sender.text().contains("window=20"));
     }
 
+    @Test
+    void projectTopShowsDirectAndDownstreamPathsAndMirrorsEveryLine() throws Exception {
+        TelemetryProfilerSnapshot snapshot = snapshot(
+                selfPath(40.0),
+                downstreamPath(25.0)
+        );
+        List<String> logLines = new ArrayList<>();
+        TelemetryCommandRuntime runtime = runtimeWithProjectSnapshot(
+                "mod-a",
+                snapshot,
+                logLines
+        );
+
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtime),
+                "top",
+                "/telemetry profiler top mod-a"
+        );
+
+        assertTrue(sender.text().contains("project=mod-a"));
+        assertTrue(sender.text().contains("SELF"));
+        assertTrue(sender.text().contains("DOWNSTREAM"));
+        assertTrue(sender.text().contains("sampledMs=40.00"));
+        assertTrue(sender.text().contains("worldThreadShare=40.00%"));
+        assertTrue(sender.text().contains("ownedMethod=com.example.Mod#tick()V"));
+        assertTrue(sender.text().contains("externalMethod=com.example.Other#call()V"));
+        assertTrue(sender.text().contains("fingerprint=00112233445566778899aabbccddeeff"));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void unavailableProjectDoesNotLeakGlobalPaths() throws Exception {
+        SparkProfileSnapshot.HotPath globalPath = new SparkProfileSnapshot.HotPath(
+                "OtherMod", "com.example.OtherMod#tick()V", 12.0, 100.0
+        );
+        SparkProfilerDiagnostics diagnostics = new SparkProfilerDiagnostics(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "1.10.172-beta7",
+                "complete",
+                1L,
+                1L,
+                1,
+                1,
+                1,
+                List.of(globalPath)
+        );
+        List<String> logLines = new ArrayList<>();
+        TelemetryCommandRuntime runtime = runtimeWithProjectView(
+                diagnostics,
+                List.of(),
+                "missing",
+                TelemetryProfilerView.unavailable(),
+                logLines
+        );
+
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtime),
+                "top",
+                "/telemetry profiler top missing"
+        );
+
+        assertEquals(1, sender.messages.size());
+        assertTrue(sender.text().contains("unavailable"));
+        assertFalse(sender.text().contains("com.example.OtherMod"));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void projectHistoryShowsNewestTenRetainedSnapshotsInOldestToNewestOrder() throws Exception {
+        List<TelemetryProfilerSnapshot> history = new ArrayList<>();
+        for (int window = 1; window <= 20; window++) {
+            history.add(snapshot(window));
+        }
+        List<String> logLines = new ArrayList<>();
+        TelemetryCommandRuntime runtime = runtimeWithProjectView(
+                SparkProfilerDiagnostics.disabled(),
+                List.of(),
+                "mod-a",
+                projectView(history.getLast(), history),
+                logLines
+        );
+
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtime),
+                "history",
+                "/telemetry profiler history mod-a"
+        );
+
+        assertEquals(11, sender.messages.size());
+        assertTrue(sender.messages.get(0).getRawText().contains("project=mod-a"));
+        assertFalse(sender.text().contains("window=1,"));
+        assertTrue(sender.text().contains("window=11,"));
+        assertTrue(sender.text().contains("window=20,"));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void projectProfilerRejectsMultipleOrOversizedProjectArgumentsWithOneUsageLine() throws Exception {
+        TelemetryCommandRuntime runtime = runtimeWithProjectView(
+                SparkProfilerDiagnostics.disabled(),
+                List.of(),
+                "mod-a",
+                projectView(snapshot(1), List.of(snapshot(1))),
+                new ArrayList<>()
+        );
+        TelemetryProfilerCommand profiler = new TelemetryProfilerCommand(runtime);
+
+        TestCommandSender multiple = execute(
+                profiler,
+                "top",
+                "/telemetry profiler top mod-a extra"
+        );
+        TestCommandSender oversized = execute(
+                profiler,
+                "history",
+                "/telemetry profiler history " + "x".repeat(121)
+        );
+
+        assertEquals(1, multiple.messages.size());
+        assertTrue(multiple.text().contains("Usage: /telemetry profiler top [project-id]"));
+        assertEquals(1, oversized.messages.size());
+        assertTrue(oversized.text().contains("Usage: /telemetry profiler history [project-id]"));
+    }
+
     private static TelemetryCommandRuntime runtime(SparkProfilerDiagnostics diagnostics,
                                                      List<SparkProfileSnapshot> history) {
         return runtime(diagnostics, history, new ArrayList<>());
@@ -211,6 +346,27 @@ class TelemetryProfilerCommandTest {
     private static TelemetryCommandRuntime runtime(SparkProfilerDiagnostics diagnostics,
                                                      List<SparkProfileSnapshot> history,
                                                      List<String> logLines) {
+        return runtimeWithProjectView(diagnostics, history, null, null, logLines);
+    }
+
+    private static TelemetryCommandRuntime runtimeWithProjectSnapshot(String projectId,
+                                                                        TelemetryProfilerSnapshot snapshot,
+                                                                        List<String> logLines) {
+        return runtimeWithProjectView(
+                SparkProfilerDiagnostics.disabled(),
+                List.of(),
+                projectId,
+                projectView(snapshot, List.of(snapshot)),
+                logLines
+        );
+    }
+
+    private static TelemetryCommandRuntime runtimeWithProjectView(
+            SparkProfilerDiagnostics diagnostics,
+            List<SparkProfileSnapshot> history,
+            String projectId,
+            TelemetryProfilerView projectView,
+            List<String> logLines) {
         return (TelemetryCommandRuntime) Proxy.newProxyInstance(
                 TelemetryCommandRuntime.class.getClassLoader(),
                 new Class<?>[]{TelemetryCommandRuntime.class},
@@ -224,6 +380,12 @@ class TelemetryProfilerCommandTest {
                     if ("logProfilerCommandOutput".equals(method.getName())) {
                         logLines.add((String) args[0]);
                         return null;
+                    }
+                    if ("projectProfiler".equals(method.getName())) {
+                        if (projectId != null && projectId.equals(args[0])) {
+                            return projectView;
+                        }
+                        return TelemetryProfilerView.unavailable();
                     }
                     if ("diagnostics".equals(method.getName())) {
                         return new TelemetryRuntimeDiagnostics(
@@ -246,6 +408,105 @@ class TelemetryProfilerCommandTest {
                     }
                     throw new UnsupportedOperationException(method.getName());
                 }
+        );
+    }
+
+    private static TelemetryProfilerView projectView(TelemetryProfilerSnapshot latest,
+                                                      List<TelemetryProfilerSnapshot> history) {
+        return new TelemetryProfilerView() {
+            @Override
+            public TelemetryProfilerStatus status() {
+                return new TelemetryProfilerStatus(
+                        TelemetryProfilerStatus.State.COMPLETE,
+                        "complete",
+                        true,
+                        false,
+                        latest.sparkVersion(),
+                        "runtime",
+                        0L,
+                        1L,
+                        0,
+                        0
+                );
+            }
+
+            @Override
+            public Optional<TelemetryProfilerSnapshot> latest() {
+                return Optional.ofNullable(latest);
+            }
+
+            @Override
+            public List<TelemetryProfilerSnapshot> history() {
+                return List.copyOf(history);
+            }
+
+            @Override
+            public TelemetryProfilerSubscription subscribe(
+                    java.util.function.Consumer<? super TelemetryProfilerSnapshot> listener) {
+                return TelemetryProfilerSubscription.closed();
+            }
+        };
+    }
+
+    private static TelemetryProfilerSnapshot snapshot(TelemetryProfilerPathEvidence... paths) {
+        return new TelemetryProfilerSnapshot(
+                "mod-a",
+                "1.0.0",
+                "1.10.172-beta7",
+                17,
+                1000L,
+                100.0,
+                "observed-v1",
+                List.of(paths),
+                TelemetryProfilerContext.unavailable()
+        );
+    }
+
+    private static TelemetryProfilerSnapshot snapshot(int window) {
+        return new TelemetryProfilerSnapshot(
+                "mod-a",
+                "1.0.0",
+                "1.10.172-beta7",
+                window,
+                window,
+                100.0,
+                "observed-v1",
+                List.of(selfPath(1.0)),
+                TelemetryProfilerContext.unavailable()
+        );
+    }
+
+    private static TelemetryProfilerPathEvidence selfPath(double sampledMilliseconds) {
+        return new TelemetryProfilerPathEvidence(
+                "00112233445566778899aabbccddeeff",
+                TelemetryProfilerAttribution.SELF,
+                "com.example.Mod",
+                "tick",
+                "()V",
+                null,
+                null,
+                null,
+                sampledMilliseconds,
+                sampledMilliseconds,
+                TelemetryProfilerQualification.OBSERVED,
+                List.of("com.example.Mod#tick()V")
+        );
+    }
+
+    private static TelemetryProfilerPathEvidence downstreamPath(double sampledMilliseconds) {
+        return new TelemetryProfilerPathEvidence(
+                "ffeeddccbbaa99887766554433221100",
+                TelemetryProfilerAttribution.DOWNSTREAM,
+                "com.example.Mod",
+                "tick",
+                "()V",
+                "com.example.Other",
+                "call",
+                "()V",
+                sampledMilliseconds,
+                sampledMilliseconds,
+                TelemetryProfilerQualification.OBSERVED,
+                List.of("com.example.Mod#tick()V", "com.example.Other#call()V")
         );
     }
 
@@ -322,6 +583,10 @@ class TelemetryProfilerCommandTest {
 
         private String text() {
             return messages.stream().map(Message::getRawText).reduce("", (a, b) -> a + "\n" + b);
+        }
+
+        private List<String> rawLines() {
+            return messages.stream().map(Message::getRawText).toList();
         }
     }
 }

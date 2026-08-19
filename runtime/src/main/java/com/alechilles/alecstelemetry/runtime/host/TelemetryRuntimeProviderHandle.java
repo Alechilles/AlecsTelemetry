@@ -711,6 +711,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Nonnull
     @Override
+    public TelemetryProfilerView projectProfiler(@Nonnull String projectId) {
+        return profiler(projectId);
+    }
+
+    @Nonnull
+    @Override
     public TelemetryProfilerView profiler(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (usesLocalCoordinator(active)) {
