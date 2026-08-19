@@ -289,14 +289,22 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     }
 
     private void beginCapture() {
+        long admittedGeneration;
         synchronized (lifecycleLock) {
             if (closed || !active || circuitOpen || inFlight != null) {
                 return;
             }
             scheduledTask = null;
+            admittedGeneration = lifecycleGeneration;
         }
-        if (!isActiveOwner()) {
-            deactivateForLostOwnership();
+        if (!isCurrentGeneration(admittedGeneration)) {
+            return;
+        }
+        if (!isActiveOwner(admittedGeneration)) {
+            deactivateForLostOwnership(admittedGeneration);
+            return;
+        }
+        if (!isCurrentGeneration(admittedGeneration)) {
             return;
         }
 
@@ -304,11 +312,15 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         try {
             sparkPlugin = sparkPluginLookup.get();
         } catch (Throwable failure) {
-            fail("Spark plugin lookup failed", failure);
+            failForGeneration(admittedGeneration, "Spark plugin lookup failed", failure);
+            return;
+        }
+        if (!isCurrentGeneration(admittedGeneration)) {
             return;
         }
         if (sparkPlugin == null) {
             finishWithoutCapture(
+                    admittedGeneration,
                     SparkProfilerDiagnostics.State.ABSENT,
                     "Spark is not loaded.",
                     false,
@@ -321,11 +333,15 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         try {
             headroom = heapHeadroomBytes.getAsLong();
         } catch (Throwable failure) {
-            fail("Heap headroom check failed", failure);
+            failForGeneration(admittedGeneration, "Heap headroom check failed", failure);
+            return;
+        }
+        if (!isCurrentGeneration(admittedGeneration)) {
             return;
         }
         if (headroom < SparkProfilerMonitorSupport.MIN_HEAP_HEADROOM_BYTES) {
             finishWithoutCapture(
+                    admittedGeneration,
                     SparkProfilerDiagnostics.State.LOW_HEAP,
                     "Capture was skipped because JVM heap headroom was below 256 MiB.",
                     false,
@@ -334,19 +350,19 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             return;
         }
 
-        startCapture(sparkPlugin);
+        startCapture(sparkPlugin, admittedGeneration);
     }
 
-    private void startCapture(@Nonnull Object sparkPlugin) {
+    private void startCapture(@Nonnull Object sparkPlugin, long admittedGeneration) {
         long startedAtNanos = System.nanoTime();
         SparkProfilerCaptureAttempt attempt = new SparkProfilerCaptureAttempt(
-                lifecycleGeneration(),
+                admittedGeneration,
                 startedAtNanos,
                 SparkProfilerMonitorSupport.usedHeapBytes(),
                 sparkPlugin
         );
         if (!SparkProfilerMonitorSupport.tryAcquireJvmCapture(attempt)) {
-            deferBusyCapture();
+            deferBusyCapture(admittedGeneration);
             return;
         }
         SparkProfilerCaptureTask task = new SparkProfilerCaptureTask(attempt, () -> {
@@ -400,9 +416,10 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
-    private void deferBusyCapture() {
+    private void deferBusyCapture(long admittedGeneration) {
         synchronized (lifecycleLock) {
-            if (closed || !active || circuitOpen || inFlight != null) {
+            if (closed || !active || circuitOpen || inFlight != null
+                    || lifecycleGeneration != admittedGeneration) {
                 return;
             }
             diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
@@ -565,13 +582,14 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
-    private void finishWithoutCapture(@Nonnull SparkProfilerDiagnostics.State state,
+    private void finishWithoutCapture(long admittedGeneration,
+                                      @Nonnull SparkProfilerDiagnostics.State state,
                                       @Nonnull String detail,
                                       boolean openCircuit,
                                       @Nullable String warning) {
         boolean logWarning = false;
         synchronized (lifecycleLock) {
-            if (closed || !active) {
+            if (closed || !active || lifecycleGeneration != admittedGeneration) {
                 return;
             }
             if (openCircuit) {
@@ -609,9 +627,23 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
+    private boolean isActiveOwner(long admittedGeneration) {
+        try {
+            return activeCoordinatorOwner.getAsBoolean();
+        } catch (Throwable failure) {
+            failForGeneration(admittedGeneration, "Active coordinator check failed", failure);
+            return false;
+        }
+    }
+
     private void deactivateForLostOwnership() {
+        deactivateForLostOwnership(null);
+    }
+
+    private void deactivateForLostOwnership(@Nullable Long admittedGeneration) {
         synchronized (lifecycleLock) {
-            if (closed || !active) {
+            if (closed || !active
+                    || (admittedGeneration != null && lifecycleGeneration != admittedGeneration)) {
                 return;
             }
             active = false;
@@ -636,6 +668,18 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         SparkProfilerMonitorSupport.rethrowIfFatal(failure);
         synchronized (lifecycleLock) {
             if (closed) {
+                return;
+            }
+            failLocked(operation, failure);
+        }
+    }
+
+    private void failForGeneration(long admittedGeneration,
+                                   @Nonnull String operation,
+                                   @Nonnull Throwable failure) {
+        SparkProfilerMonitorSupport.rethrowIfFatal(failure);
+        synchronized (lifecycleLock) {
+            if (closed || !active || lifecycleGeneration != admittedGeneration) {
                 return;
             }
             failLocked(operation, failure);
@@ -819,9 +863,12 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 && attempt.generation == lifecycleGeneration;
     }
 
-    private long lifecycleGeneration() {
+    private boolean isCurrentGeneration(long admittedGeneration) {
         synchronized (lifecycleLock) {
-            return lifecycleGeneration;
+            return !closed
+                    && active
+                    && !circuitOpen
+                    && lifecycleGeneration == admittedGeneration;
         }
     }
 

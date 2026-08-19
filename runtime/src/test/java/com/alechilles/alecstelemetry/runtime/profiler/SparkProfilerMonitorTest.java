@@ -142,6 +142,62 @@ class SparkProfilerMonitorTest {
     }
 
     @Test
+    void staleAdmittedPollRetiresAfterReactivationWithoutStartingAnotherTimerChain() throws Exception {
+        CountDownLatch oldLookupEntered = new CountDownLatch(1);
+        CountDownLatch releaseOldLookup = new CountDownLatch(1);
+        CountDownLatch oldRead = new CountDownLatch(1);
+        AtomicInteger lookupCalls = new AtomicInteger();
+        AtomicInteger reads = new AtomicInteger();
+        Queue<Object> readPlugins = new ConcurrentLinkedQueue<>();
+        Object oldPlugin = new Object();
+        Object newPlugin = new Object();
+        SparkProfilerMonitor monitor = new SparkProfilerMonitor(
+                settings(1, 5, 5),
+                () -> {
+                    if (lookupCalls.incrementAndGet() == 1) {
+                        oldLookupEntered.countDown();
+                        awaitIgnoringInterrupt(releaseOldLookup);
+                        return oldPlugin;
+                    }
+                    return newPlugin;
+                },
+                () -> true,
+                (plugin, maxEntries) -> {
+                    readPlugins.add(plugin);
+                    if (plugin == oldPlugin) {
+                        oldRead.countDown();
+                    }
+                    return complete(reads.incrementAndGet());
+                },
+                () -> Long.MAX_VALUE,
+                null,
+                (level, message) -> {
+                }
+        );
+        try {
+            monitor.activate();
+            assertTrue(oldLookupEntered.await(1, TimeUnit.SECONDS));
+
+            monitor.suspend();
+            monitor.activateNow();
+            awaitHistorySize(monitor, 1, Duration.ofSeconds(2));
+            assertEquals(1, reads.get());
+            assertTrue(readPlugins.peek() == newPlugin);
+
+            releaseOldLookup.countDown();
+            assertFalse(oldRead.await(250L, TimeUnit.MILLISECONDS));
+            assertEquals(1, reads.get());
+
+            awaitReads(reads, 2, Duration.ofSeconds(2));
+            Thread.sleep(100L);
+            assertEquals(2, reads.get());
+        } finally {
+            releaseOldLookup.countDown();
+            monitor.close();
+        }
+    }
+
+    @Test
     void recurringPollStartsOnlyAfterThePriorCaptureResolves() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
