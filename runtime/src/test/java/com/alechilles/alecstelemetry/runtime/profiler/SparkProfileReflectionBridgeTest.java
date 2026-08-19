@@ -323,11 +323,48 @@ class SparkProfileReflectionBridgeTest {
     }
 
     @Test
-    void rejectsAWindowThatCannotProduceACompleteBoundedRanking() {
+    void completeWindowRetainsValidatedParentIndexesAndGlobalSummary() {
+        SamplerData data = new SamplerData(
+                List.of(500),
+                List.of(new ThreadNode(
+                        "WorldThread - default",
+                        List.of(
+                                new StackNode("example.a.Tick", "tick", "()V", List.of(100.0d), List.of(1)),
+                                new StackNode("com.hypixel.Store", "tick", "()V", List.of(100.0d), List.of())
+                        ),
+                        List.of(0)
+                )),
+                Map.of("example.a.Tick", "ModA", "com.hypixel.Store", "Hytale"),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
+        assertNotNull(result.window());
+        assertEquals(List.of(-1, 0), result.window().threads().getFirst().frames().stream()
+                .map(SparkProfileWindow.Frame::parentIndex)
+                .toList());
+        assertEquals(100.0d, result.snapshot().totalSelfMilliseconds(), 0.001d);
+        assertEquals("com.hypixel.Store#tick()V", result.snapshot().hotPaths().getFirst().frame());
+    }
+
+    @Test
+    void repeatedSymbolTreeOverNodeLimitFailsClosed() {
         List<StackNode> nodes = new ArrayList<>(25_001);
         for (int index = 0; index < 25_001; index++) {
             nodes.add(new StackNode(
-                    "example.Frame" + index,
+                    "example.Repeated",
                     "run",
                     "()V",
                     List.of(index == 25_000 ? 10_000.0d : 1.0d),

@@ -6,6 +6,7 @@ import javax.annotation.Nullable;
 record SparkProfileReadResult(@Nonnull Status status,
                               @Nullable String sparkVersion,
                               @Nullable SparkProfileSnapshot snapshot,
+                              @Nullable SparkProfileWindow window,
                               @Nonnull String detail) {
 
     enum Status {
@@ -24,11 +25,25 @@ record SparkProfileReadResult(@Nonnull Status status,
     }
 
     @Nonnull
+    static SparkProfileReadResult complete(@Nonnull SparkProfileSnapshot snapshot,
+                                           @Nonnull SparkProfileWindow window) {
+        return new SparkProfileReadResult(
+                Status.COMPLETE,
+                snapshot.sparkVersion(),
+                snapshot,
+                window,
+                "Latest completed Spark background window was summarized locally."
+        );
+    }
+
+    /** Compatibility constructor for existing global-only profiler fixtures. */
+    @Nonnull
     static SparkProfileReadResult complete(@Nonnull SparkProfileSnapshot snapshot) {
         return new SparkProfileReadResult(
                 Status.COMPLETE,
                 snapshot.sparkVersion(),
                 snapshot,
+                null,
                 "Latest completed Spark background window was summarized locally."
         );
     }
@@ -37,7 +52,7 @@ record SparkProfileReadResult(@Nonnull Status status,
     static SparkProfileReadResult of(@Nonnull Status status,
                                      @Nullable String sparkVersion,
                                      @Nonnull String detail) {
-        return new SparkProfileReadResult(status, sparkVersion, null, detail);
+        return new SparkProfileReadResult(status, sparkVersion, null, null, detail);
     }
 
     @Nonnull

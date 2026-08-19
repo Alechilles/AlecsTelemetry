@@ -14,8 +14,9 @@ import java.security.CodeSource;
 import java.security.MessageDigest;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,7 +50,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             Map.entry("5e536469e7f4511e9ba279114ddf1b634938161bb896e4098a5a4af28966d19f", "1.10.172-beta6"),
             Map.entry("1c5806cdc276af608051b8fc6c3aee05ab184da28e81735ba9682e5950c5617a", "1.10.172-beta7")
     );
-    private static final int MAX_DISTINCT_FRAMES = 25_000;
+    private static final int MAX_DECODED_NODES = 25_000;
     private static final int MAX_TEXT_LENGTH = 240;
 
     private final SparkArtifactVerifier artifactVerifier;
@@ -221,8 +222,20 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         Map<?, ?> classSources = mapValue(invokeNoArgs(profileData, "getClassSourcesMap"));
         Map<?, ?> methodSources = mapValue(invokeNoArgs(profileData, "getMethodSourcesMap"));
 
+        int decodedNodeCount = 0;
+        for (Object thread : threads) {
+            decodedNodeCount += listValue(invokeNoArgs(thread, "getChildrenList")).size();
+            if (decodedNodeCount > MAX_DECODED_NODES) {
+                return SparkProfileReadResult.of(
+                        SparkProfileReadResult.Status.TOO_COMPLEX,
+                        version,
+                        "Spark's latest completed window exceeded 25,000 decoded nodes. No partial summary was kept."
+                );
+            }
+        }
+
         Map<FrameKey, MutableHotPath> aggregates = new HashMap<>();
-        Set<FrameKey> distinctFrames = new HashSet<>();
+        List<SparkProfileWindow.ThreadFrames> selectedThreads = new ArrayList<>();
         int totalFrameCount = 0;
         int selectedThreadCount = 0;
         int selectedFrameCount = 0;
@@ -236,56 +249,52 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 selectedThreadCount++;
                 selectedFrameCount += nodes.size();
             }
+            int[] parentIndexes = validatedParentIndexes(thread, nodes);
+            List<DecodedFrame> decodedFrames = new ArrayList<>(nodes.size());
             for (Object node : nodes) {
                 double inclusive = timeAt(node, latestIndex);
-                if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
-                    continue;
-                }
-
                 double directChildren = 0.0d;
                 for (Object childRefValue : listValue(invokeNoArgs(node, "getChildrenRefsList"))) {
                     int childRef = numberValue(childRefValue).intValue();
-                    if (childRef >= 0 && childRef < nodes.size()) {
-                        double childTime = timeAt(nodes.get(childRef), latestIndex);
-                        if (Double.isFinite(childTime) && childTime > 0.0d) {
-                            directChildren += childTime;
-                        }
+                    double childTime = timeAt(nodes.get(childRef), latestIndex);
+                    if (Double.isFinite(childTime) && childTime > 0.0d) {
+                        directChildren += childTime;
                     }
                 }
-                double self = inclusive - directChildren;
-                double tolerance = Math.max(0.001d, inclusive * 0.000001d);
-                if (self < -tolerance) {
-                    self = 0.0d;
-                } else {
-                    self = Math.max(0.0d, self);
+                double self = 0.0d;
+                if (Double.isFinite(inclusive) && inclusive > 0.0d) {
+                    self = inclusive - directChildren;
+                    double tolerance = Math.max(0.001d, inclusive * 0.000001d);
+                    if (self < -tolerance) {
+                        self = 0.0d;
+                    } else {
+                        self = Math.max(0.0d, self);
+                    }
                 }
-                if (self == 0.0d) {
-                    continue;
-                }
-
                 String className = safeText(String.valueOf(invokeNoArgs(node, "getClassName")));
                 String methodName = safeText(String.valueOf(invokeNoArgs(node, "getMethodName")));
                 String methodDesc = safeText(String.valueOf(invokeNoArgs(node, "getMethodDesc")));
                 String source = sourceFor(classSources, methodSources, className, methodName, methodDesc);
+                decodedFrames.add(new DecodedFrame(source, className, methodName, methodDesc, self));
+            }
+
+            if (selectedThread) {
+                selectedThreads.add(selectedThreadFrames(threadName, decodedFrames, parentIndexes));
+            }
+            for (int nodeIndex = 0; nodeIndex < decodedFrames.size(); nodeIndex++) {
+                DecodedFrame decoded = decodedFrames.get(nodeIndex);
+                double self = decoded.selfMilliseconds();
+                if (self <= 0.0d) {
+                    continue;
+                }
                 FrameKey key = new FrameKey(
-                        source,
-                        className,
-                        methodName,
-                        methodDesc,
+                        decoded.source(),
+                        decoded.className(),
+                        decoded.methodName(),
+                        decoded.methodDescriptor(),
                         selectedThread ? "WORLD_THREAD" : "OTHER_THREAD"
                 );
-                if (!distinctFrames.add(key)) {
-                    if (!selectedThread) {
-                        continue;
-                    }
-                } else if (distinctFrames.size() > MAX_DISTINCT_FRAMES) {
-                    return SparkProfileReadResult.of(
-                            SparkProfileReadResult.Status.TOO_COMPLEX,
-                            version,
-                            "Spark's latest completed window exceeded 25,000 distinct frames. No partial summary was kept."
-                    );
-                }
-                if (!selectedThread || !isJavaFrame(className, methodDesc)) {
+                if (!selectedThread || !isJavaFrame(decoded.className(), decoded.methodDescriptor())) {
                     continue;
                 }
                 totalSelfMilliseconds += self;
@@ -333,7 +342,137 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 selectedFrameCount,
                 totalSelfMilliseconds,
                 hotPaths
+        ), new SparkProfileWindow(
+                version,
+                windowKey,
+                threads.size(),
+                selectedThreadCount,
+                totalFrameCount,
+                selectedFrameCount,
+                totalSelfMilliseconds,
+                selectedThreads
         ));
+    }
+
+    @Nonnull
+    private static SparkProfileWindow.ThreadFrames selectedThreadFrames(
+            @Nonnull String threadName,
+            @Nonnull List<DecodedFrame> decodedFrames,
+            @Nonnull int[] parentIndexes) {
+        int[] retainedIndexes = new int[decodedFrames.size()];
+        Arrays.fill(retainedIndexes, -1);
+        ArrayList<Integer> originalIndexes = new ArrayList<>();
+        for (int index = 0; index < decodedFrames.size(); index++) {
+            DecodedFrame frame = decodedFrames.get(index);
+            if (isJavaFrame(frame.className(), frame.methodDescriptor())) {
+                retainedIndexes[index] = originalIndexes.size();
+                originalIndexes.add(index);
+            }
+        }
+
+        int[] nearestRetainedParents = nearestRetainedParents(decodedFrames.size(), parentIndexes, retainedIndexes);
+
+        ArrayList<SparkProfileWindow.Frame> frames = new ArrayList<>(originalIndexes.size());
+        for (int originalIndex : originalIndexes) {
+            DecodedFrame frame = decodedFrames.get(originalIndex);
+            int parent = nearestRetainedParents[originalIndex];
+            frames.add(new SparkProfileWindow.Frame(
+                    parent < 0 ? -1 : retainedIndexes[parent],
+                    frame.source(),
+                    frame.className(),
+                    frame.methodName(),
+                    frame.methodDescriptor(),
+                    frame.selfMilliseconds()
+            ));
+        }
+        return new SparkProfileWindow.ThreadFrames(threadName, frames);
+    }
+
+    @Nonnull
+    private static int[] nearestRetainedParents(int nodeCount,
+                                                 @Nonnull int[] parentIndexes,
+                                                 @Nonnull int[] retainedIndexes) {
+        int[] nearest = new int[nodeCount];
+        Arrays.fill(nearest, Integer.MIN_VALUE);
+        ArrayList<Integer> path = new ArrayList<>();
+        for (int start = 0; start < nodeCount; start++) {
+            if (nearest[start] != Integer.MIN_VALUE) {
+                continue;
+            }
+            path.clear();
+            int current = start;
+            while (current >= 0 && nearest[current] == Integer.MIN_VALUE) {
+                path.add(current);
+                current = parentIndexes[current];
+            }
+            for (int pathIndex = path.size() - 1; pathIndex >= 0; pathIndex--) {
+                int originalIndex = path.get(pathIndex);
+                int parent = parentIndexes[originalIndex];
+                nearest[originalIndex] = parent < 0
+                        ? -1
+                        : retainedIndexes[parent] >= 0 ? retainedIndexes[parent] : nearest[parent];
+            }
+        }
+        return nearest;
+    }
+
+    @Nonnull
+    private static int[] validatedParentIndexes(@Nonnull Object thread,
+                                                 @Nonnull List<?> nodes) throws Throwable {
+        int[] parents = new int[nodes.size()];
+        Arrays.fill(parents, -1);
+        for (int parent = 0; parent < nodes.size(); parent++) {
+            for (Object childRefValue : listValue(invokeNoArgs(nodes.get(parent), "getChildrenRefsList"))) {
+                int child = validatedIndex(childRefValue, "child");
+                if (child < 0 || child >= nodes.size()) {
+                    throw new IllegalArgumentException("Spark child reference is outside the thread node list.");
+                }
+                if (parents[child] >= 0 && parents[child] != parent) {
+                    throw new IllegalArgumentException("Spark node has multiple parents.");
+                }
+                parents[child] = parent;
+            }
+        }
+        for (Object rootRefValue : listValue(invokeNoArgs(thread, "getChildrenRefsList"))) {
+            int root = validatedIndex(rootRefValue, "root");
+            if (root < 0 || root >= nodes.size()) {
+                throw new IllegalArgumentException("Spark root reference is outside the thread node list.");
+            }
+        }
+        byte[] colors = new byte[parents.length];
+        for (int start = 0; start < parents.length; start++) {
+            if (colors[start] != 0) {
+                continue;
+            }
+            ArrayList<Integer> path = new ArrayList<>();
+            int current = start;
+            while (current >= 0 && colors[current] == 0) {
+                colors[current] = 1;
+                path.add(current);
+                current = parents[current];
+            }
+            if (current >= 0 && colors[current] == 1) {
+                throw new IllegalArgumentException("Spark parent links contain a cycle.");
+            }
+            for (int index : path) {
+                colors[index] = 2;
+            }
+        }
+        return parents;
+    }
+
+    private static int validatedIndex(@Nullable Object value, @Nonnull String kind) {
+        if (!(value instanceof Number number)) {
+            throw new IllegalArgumentException("Spark " + kind + " reference was not an integer.");
+        }
+        double candidate = number.doubleValue();
+        if (!Double.isFinite(candidate)
+                || candidate != Math.rint(candidate)
+                || candidate < Integer.MIN_VALUE
+                || candidate > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Spark " + kind + " reference was not an integer.");
+        }
+        return (int) candidate;
     }
 
     private static double timeAt(@Nonnull Object node, int index) throws Throwable {
@@ -537,6 +676,13 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         private String frame() {
             return safeText(className + "#" + methodName + methodDesc);
         }
+    }
+
+    private record DecodedFrame(@Nonnull String source,
+                                @Nonnull String className,
+                                @Nonnull String methodName,
+                                @Nonnull String methodDescriptor,
+                                double selfMilliseconds) {
     }
 
     private static final class MutableHotPath {
