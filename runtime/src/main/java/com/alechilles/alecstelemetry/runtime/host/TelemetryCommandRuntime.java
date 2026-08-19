@@ -47,6 +47,9 @@ public interface TelemetryCommandRuntime {
         return List.of();
     }
 
+    default void logProfilerCommandOutput(@Nonnull String message) {
+    }
+
     @Nonnull
     TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId);
 

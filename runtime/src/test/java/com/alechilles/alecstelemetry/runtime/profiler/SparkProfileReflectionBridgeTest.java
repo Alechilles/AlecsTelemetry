@@ -81,6 +81,56 @@ class SparkProfileReflectionBridgeTest {
     }
 
     @Test
+    void excludesNativeLibraryFramesThatUseInvalidJvmDescriptors() {
+        SamplerData data = new SamplerData(
+                List.of(702),
+                List.of(new ThreadNode(
+                        "WorldThread - default",
+                        List.of(
+                                new StackNode(
+                                        "libc.so.6",
+                                        "__futex_abstimed_wait_common",
+                                        "()L;",
+                                        List.of(990.0d),
+                                        List.of()
+                                ),
+                                new StackNode(
+                                        "com.example.WorldWork",
+                                        "tick",
+                                        "()V",
+                                        List.of(10.0d),
+                                        List.of()
+                                )
+                        ),
+                        List.of()
+                )),
+                Map.of("com.example.WorldWork", "ExampleMod"),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
+        SparkProfileSnapshot snapshot = result.snapshot();
+        assertNotNull(snapshot);
+        assertEquals(10.0d, snapshot.totalSelfMilliseconds(), 0.001d);
+        assertEquals(1, snapshot.hotPaths().size());
+        assertEquals("ExampleMod", snapshot.hotPaths().getFirst().source());
+        assertEquals("com.example.WorldWork#tick()V", snapshot.hotPaths().getFirst().frame());
+        assertEquals(100.0d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
+    }
+
+    @Test
     void reportsNoActionableDataWhenCompletedWindowHasNoWorldThreadSamples() {
         SamplerData data = new SamplerData(
                 List.of(700),

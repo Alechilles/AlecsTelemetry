@@ -51,7 +51,9 @@ upload profiler data. A user-submitted manual report can include ordinary log
 summary lines through current or previous log attachments when the manual-report
 settings, project descriptor, review, redaction, and clipping controls allow
 them. Raw Spark profile data is not written by the monitor to the log or a
-profile file and is not uploaded by it.
+profile file and is not uploaded by it. Every line returned by `profiler
+status`, `profiler top`, and `profiler history` is also written at `INFO` to the
+ordinary server log with a `Spark profiler command output` prefix.
 
 ## Consent
 

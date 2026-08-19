@@ -41,11 +41,12 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         @Override
         protected void executeSync(@Nonnull CommandContext commandContext) {
             if (runtime == null) {
-                TelemetryCommandSupport.send(commandContext, "Telemetry profiler is unavailable.");
+                send(commandContext, null, "Telemetry profiler is unavailable.");
                 return;
             }
-            TelemetryCommandSupport.send(
+            send(
                     commandContext,
+                    runtime,
                     formatStatus(runtime.sparkProfilerDiagnostics())
             );
         }
@@ -64,21 +65,23 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         @Override
         protected void executeSync(@Nonnull CommandContext commandContext) {
             if (runtime == null) {
-                TelemetryCommandSupport.send(commandContext, "Telemetry profiler is unavailable.");
+                send(commandContext, null, "Telemetry profiler is unavailable.");
                 return;
             }
             SparkProfilerDiagnostics diagnostics = runtime.sparkProfilerDiagnostics();
             if (diagnostics.state() == SparkProfilerDiagnostics.State.DISABLED) {
-                TelemetryCommandSupport.send(
+                send(
                         commandContext,
+                        runtime,
                         "Spark profiler top: disabled. " + bounded(diagnostics.detail())
                 );
                 return;
             }
             if (diagnostics.state() != SparkProfilerDiagnostics.State.COMPLETE
                     || diagnostics.hotPaths().isEmpty()) {
-                TelemetryCommandSupport.send(
+                send(
                         commandContext,
+                        runtime,
                         "Spark profiler top: no actionable data (state="
                                 + diagnostics.state().name()
                                 + ", detail="
@@ -90,14 +93,15 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
 
             List<SparkProfileSnapshot.HotPath> hotPaths = diagnostics.hotPaths();
             int count = Math.min(MAX_TOP_ENTRIES, hotPaths.size());
-            TelemetryCommandSupport.send(
+            send(
                     commandContext,
+                    runtime,
                     "Spark profiler top: window=" + diagnostics.windowKey()
                             + ", sparkVersion=" + safeValue(diagnostics.sparkVersion())
                             + ", showing=" + count + " of " + hotPaths.size()
             );
             for (int index = 0; index < count; index++) {
-                TelemetryCommandSupport.send(commandContext, formatHotPath(index + 1, hotPaths.get(index)));
+                send(commandContext, runtime, formatHotPath(index + 1, hotPaths.get(index)));
             }
         }
     }
@@ -115,13 +119,14 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         @Override
         protected void executeSync(@Nonnull CommandContext commandContext) {
             if (runtime == null) {
-                TelemetryCommandSupport.send(commandContext, "Telemetry profiler is unavailable.");
+                send(commandContext, null, "Telemetry profiler is unavailable.");
                 return;
             }
             List<SparkProfileSnapshot> history = runtime.sparkProfilerHistory();
             if (history == null || history.isEmpty()) {
-                TelemetryCommandSupport.send(
+                send(
                         commandContext,
+                        runtime,
                         "Spark profiler history: no completed windows retained."
                 );
                 return;
@@ -129,14 +134,28 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
 
             int start = Math.max(0, history.size() - MAX_HISTORY_ENTRIES);
             int count = history.size() - start;
-            TelemetryCommandSupport.send(
+            send(
                     commandContext,
+                    runtime,
                     "Spark profiler history: showing " + count + " of " + history.size()
                             + " retained windows."
             );
             for (int index = start; index < history.size(); index++) {
-                TelemetryCommandSupport.send(commandContext, formatHistoryLine(history.get(index)));
+                send(commandContext, runtime, formatHistoryLine(history.get(index)));
             }
+        }
+    }
+
+    private static void send(@Nonnull CommandContext commandContext,
+                             @Nullable TelemetryCommandRuntime runtime,
+                             @Nonnull String message) {
+        TelemetryCommandSupport.send(commandContext, message);
+        if (runtime == null) {
+            return;
+        }
+        try {
+            runtime.logProfilerCommandOutput(message);
+        } catch (RuntimeException ignored) {
         }
     }
 

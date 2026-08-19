@@ -285,7 +285,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                             "Spark's latest completed window exceeded 25,000 distinct frames. No partial summary was kept."
                     );
                 }
-                if (!selectedThread || !isJavaFrame(className)) {
+                if (!selectedThread || !isJavaFrame(className, methodDesc)) {
                     continue;
                 }
                 totalSelfMilliseconds += self;
@@ -363,8 +363,52 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         return threadName.contains("WorldThread");
     }
 
-    private static boolean isJavaFrame(@Nonnull String className) {
-        return !className.isBlank() && !"native".equals(className);
+    private static boolean isJavaFrame(@Nonnull String className,
+                                       @Nonnull String methodDesc) {
+        return !className.isBlank()
+                && !"native".equals(className)
+                && isJvmMethodDescriptor(methodDesc);
+    }
+
+    private static boolean isJvmMethodDescriptor(@Nonnull String descriptor) {
+        if (descriptor.length() < 3 || descriptor.charAt(0) != '(') {
+            return false;
+        }
+        int index = 1;
+        while (index < descriptor.length() && descriptor.charAt(index) != ')') {
+            index = nextJvmTypeDescriptor(descriptor, index, false);
+            if (index < 0) {
+                return false;
+            }
+        }
+        if (index >= descriptor.length() || descriptor.charAt(index) != ')') {
+            return false;
+        }
+        return nextJvmTypeDescriptor(descriptor, index + 1, true) == descriptor.length();
+    }
+
+    private static int nextJvmTypeDescriptor(@Nonnull String descriptor,
+                                             int start,
+                                             boolean allowVoid) {
+        if (start < 0 || start >= descriptor.length()) {
+            return -1;
+        }
+        int index = start;
+        while (index < descriptor.length() && descriptor.charAt(index) == '[') {
+            index++;
+        }
+        if (index >= descriptor.length()) {
+            return -1;
+        }
+        return switch (descriptor.charAt(index)) {
+            case 'B', 'C', 'D', 'F', 'I', 'J', 'S', 'Z' -> index + 1;
+            case 'V' -> allowVoid && index == start ? index + 1 : -1;
+            case 'L' -> {
+                int end = descriptor.indexOf(';', index + 1);
+                yield end > index + 1 ? end + 1 : -1;
+            }
+            default -> -1;
+        };
     }
 
     private static int latestWindowIndex(@Nonnull List<?> windows) {

@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
 
 final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
     private static final PluginIdentifier SPARK_PLUGIN_IDENTIFIER = new PluginIdentifier("spark", "spark");
@@ -680,6 +681,15 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public List<SparkProfileSnapshot> sparkProfilerHistory() {
         return sparkProfilerMonitor.history();
+    }
+
+    @Override
+    public void logProfilerCommandOutput(@Nonnull String message) {
+        if (logger == null) {
+            return;
+        }
+        String safe = message.replace('\n', ' ').replace('\r', ' ');
+        logger.at(Level.INFO).log("Spark profiler command output: " + safe);
     }
 
     @Nullable

@@ -10,8 +10,13 @@
   or incompatible Spark artifacts. The monitor does not directly queue or
   upload profiler data; ordinary log lines remain subject to the manual-report
   attachment controls if a user submits a report.
+- Added server-log copies of every `/telemetry profiler status`, `top`, and
+  `history` reply so operators can retain and compare command results.
 
 ### Fixed
+- Excluded async-profiler native-library frames with invalid JVM method
+  descriptors from WorldThread rankings, preventing native waits from
+  displacing actionable Java hot paths.
 - Corrected the embedded-runtime packaging guide and example manifest so hosts
   publish the Telemetry `Common/**` UI assets required by `/telemetry consent`.
 

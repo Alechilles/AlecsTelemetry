@@ -92,9 +92,11 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - The optional Spark hot-path monitor is off by default. When a server owner
   enables it, the runtime reads completed passive Spark background windows,
   computes the loaded Spark JAR's SHA-256 in memory, and writes bounded
-  WorldThread hot-path summaries to the local server log. It keeps only bounded
-  summaries and history in memory. It does not directly queue or upload
-  profiler data. Ordinary log summary lines can be included if a user submits
+  WorldThread hot-path summaries to the local server log. Replies from the
+  local `profiler status`, `profiler top`, and `profiler history` commands are
+  also copied to that log. It keeps only bounded summaries and history in
+  memory. It does not directly queue or upload profiler data. Ordinary log
+  summary and command-output lines can be included if a user submits
   a manual report with current or previous server-log attachments and the
   manual-report settings, project descriptor, review, redaction, and clipping
   controls allow them. The monitor does not write raw Spark profile data to the
@@ -135,20 +137,22 @@ labels only while it creates a summary. It selects Java self time from Hytale
 `WorldThread` threads. Native frames and Java work on other thread names do not
 enter the ranking. The monitor also computes the loaded Spark JAR's SHA-256 in
 memory to enforce the tested-artifact gate. The runtime does not retain that
-hash or raw profile data. It keeps only bounded summaries and history in memory
-and bounded summary lines in ordinary server log output. It does not create a
-raw Spark profile file. The server owner and the server's logging setup control
-retention of that local log. Spark can keep its own profiler data under Spark's
-settings and behavior; that retention is separate from Alec's Telemetry.
+hash or raw profile data. It keeps only bounded summaries and history in memory.
+It writes bounded automatic summary lines and operator-requested profiler
+command replies to ordinary server log output. It does not create a raw Spark
+profile file. The server owner and the server's logging setup control retention
+of that local log. Spark can keep its own profiler data under Spark's settings
+and behavior; that retention is separate from Alec's Telemetry.
 Local summaries can contain Spark-reported source or mod labels, Java class and
 method names, timing values, and bounded thread/frame counts.
 
 The Spark hot-path monitor does not directly queue or send its raw profile,
 hot-path summary, status, capture duration, or heap delta to Alec's hosted
-platform or a custom telemetry endpoint. Its ordinary log summary lines can be
-part of a user-submitted manual report when current or previous server-log
-attachments are enabled by runtime settings and the project descriptor, pass
-any required local review, and receive configured redaction and byte clipping.
+platform or a custom telemetry endpoint. Its ordinary log summary and profiler
+command-output lines can be part of a user-submitted manual report when current
+or previous server-log attachments are enabled by runtime settings and the
+project descriptor, pass any required local review, and receive configured
+redaction and byte clipping.
 Raw Spark profile data is not written to the server log or a profile file by the
 monitor, and the monitor does not upload it. A supported Spark window with no
 usable WorldThread Java samples produces no actionable ranking.

@@ -167,6 +167,12 @@ descriptor, review, redaction, and clipping controls allow them. The monitor
 does not write raw Spark profile data to the log or a profile file, and does not
 upload that raw data. Spark may retain its own profiler data under its settings.
 
+Every line returned by `/telemetry profiler status`, `/telemetry profiler top`,
+and `/telemetry profiler history` is also written at `INFO` to the ordinary
+server log with a `Spark profiler command output` prefix. This includes status,
+ranked hot paths, and retained-window summaries shown by the commands. A logging
+failure does not prevent the operator reply.
+
 ### Spark monitor settings
 
 | Field | Default | Accepted range |

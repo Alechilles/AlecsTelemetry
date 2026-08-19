@@ -64,14 +64,16 @@ The optional Spark hot-path monitor is a separate server-owner tool. It is off
 by default. When enabled, it reads completed passive Spark `ASYNC` `EXECUTION`
 windows and ranks Java self time from Hytale thread names containing
 `WorldThread`. It keeps bounded summaries and history in memory and writes
-bounded summary lines to the local server log.
+bounded summary lines to the local server log. Replies from `/telemetry
+profiler status`, `/telemetry profiler top`, and `/telemetry profiler history`
+are also copied to that log.
 
 The monitor does not directly queue or upload profiler data. Ordinary log
-summary lines can be included if a user submits a manual report with current or
-previous server-log attachments and the manual-report settings, project
-descriptor, review, redaction, and clipping controls allow them. The monitor
-does not write raw Spark profile data to the log or a profile file, and does not
-upload that raw data. It computes the loaded Spark JAR's SHA-256 in memory for
+summary and command-output lines can be included if a user submits a manual
+report with current or previous server-log attachments and the manual-report
+settings, project descriptor, review, redaction, and clipping controls allow
+them. The monitor does not write raw Spark profile data to the log or a profile
+file, and does not upload that raw data. It computes the loaded Spark JAR's SHA-256 in memory for
 the exact tested-artifact gate and does not retain that hash. See [Runtime
 Overrides](/mod/alecs-telemetry/integration-guides/runtime-overrides) for
 settings, bounds, and fail-closed behavior.

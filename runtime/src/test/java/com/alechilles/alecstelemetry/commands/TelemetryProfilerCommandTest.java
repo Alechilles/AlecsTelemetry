@@ -101,6 +101,43 @@ class TelemetryProfilerCommandTest {
     }
 
     @Test
+    void profilerCommandsMirrorEveryReplyToTheRuntimeLog() throws Exception {
+        SparkProfileSnapshot.HotPath hotPath = new SparkProfileSnapshot.HotPath(
+                "ExampleMod", "com.example.TickSystem#tick()V", 42.5, 100.0
+        );
+        SparkProfileSnapshot snapshot = new SparkProfileSnapshot(
+                "1.10.172-beta7", 17, 2, 1, 42.5, List.of(hotPath)
+        );
+        SparkProfilerDiagnostics diagnostics = new SparkProfilerDiagnostics(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "1.10.172-beta7",
+                "Raw Spark profile data was not retained.",
+                40L,
+                2048L,
+                17,
+                2,
+                1,
+                List.of(hotPath)
+        );
+        List<String> logLines = new ArrayList<>();
+        TelemetryProfilerCommand profiler = new TelemetryProfilerCommand(
+                runtime(diagnostics, List.of(snapshot), logLines)
+        );
+        List<String> replies = new ArrayList<>();
+
+        for (String subcommand : List.of("status", "top", "history")) {
+            TestCommandSender sender = execute(
+                    profiler,
+                    subcommand,
+                    "/telemetry profiler " + subcommand
+            );
+            sender.messages.stream().map(Message::getRawText).forEach(replies::add);
+        }
+
+        assertEquals(replies, logLines);
+    }
+
+    @Test
     void rootStatusIncludesCompactProfilerStateAndCommandHint() throws Exception {
         SparkProfilerDiagnostics diagnostics = new SparkProfilerDiagnostics(
                 SparkProfilerDiagnostics.State.COMPLETE,
@@ -168,6 +205,12 @@ class TelemetryProfilerCommandTest {
 
     private static TelemetryCommandRuntime runtime(SparkProfilerDiagnostics diagnostics,
                                                      List<SparkProfileSnapshot> history) {
+        return runtime(diagnostics, history, new ArrayList<>());
+    }
+
+    private static TelemetryCommandRuntime runtime(SparkProfilerDiagnostics diagnostics,
+                                                     List<SparkProfileSnapshot> history,
+                                                     List<String> logLines) {
         return (TelemetryCommandRuntime) Proxy.newProxyInstance(
                 TelemetryCommandRuntime.class.getClassLoader(),
                 new Class<?>[]{TelemetryCommandRuntime.class},
@@ -177,6 +220,10 @@ class TelemetryProfilerCommandTest {
                     }
                     if ("sparkProfilerHistory".equals(method.getName())) {
                         return history;
+                    }
+                    if ("logProfilerCommandOutput".equals(method.getName())) {
+                        logLines.add((String) args[0]);
+                        return null;
                     }
                     if ("diagnostics".equals(method.getName())) {
                         return new TelemetryRuntimeDiagnostics(

@@ -67,7 +67,10 @@ manual report with current or previous server-log attachments and the
 manual-report settings, project descriptor, review, redaction, and clipping
 controls allow them. The monitor does not write raw Spark profile data to the
 log or a profile file, and does not upload that raw data. These text commands
-use the root Telemetry permission and accept server console senders.
+use the root Telemetry permission and accept server console senders. Every line
+returned by `profiler status`, `profiler top`, and `profiler history` is also
+written at `INFO` to the ordinary server log with a `Spark profiler command
+output` prefix.
 
 ## Consent
 
