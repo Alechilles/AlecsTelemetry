@@ -637,12 +637,19 @@ public final class TelemetryCoordinatorRegistry {
         public String subscribeProfiler(@Nonnull String projectId,
                                         @Nonnull Consumer<Map<String, Object>> listener) {
             try {
+                Consumer<Map<String, Object>> safeListener = payload -> {
+                    try {
+                        listener.accept(TelemetryProfilerBridgePayload.foreignSnapshotMap(payload));
+                    } catch (RuntimeException | LinkageError ignored) {
+                        // A foreign callback or payload must not escape through the provider boundary.
+                    }
+                };
                 Object value = invoke(
                         delegate,
                         "subscribeProfiler",
                         new Class<?>[]{String.class, Consumer.class},
                         projectId,
-                        listener
+                        safeListener
                 );
                 if (value instanceof String subscriptionId && !subscriptionId.isBlank()) {
                     return subscriptionId;

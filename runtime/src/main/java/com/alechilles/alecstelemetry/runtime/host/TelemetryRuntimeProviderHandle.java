@@ -304,6 +304,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public void shutdown() {
         sparkProfilerMonitor.close();
         TelemetryCoordinatorRegistry.unregister(bridge.providerId());
+        bridge.closeProfilerSubscriptions();
         commandRegistrar.unregister();
         projectProfilerService.deactivateProvider();
         projectProfilerService.close();
@@ -1671,8 +1672,10 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
         private final AtomicBoolean active = new AtomicBoolean(false);
+        private final Object profilerSubscriptionLock = new Object();
         private final ConcurrentHashMap<String, com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription>
                 profilerSubscriptions = new ConcurrentHashMap<>();
+        private boolean profilerSubscriptionsOpen;
 
         private ProviderBridge(@Nonnull TelemetryRuntimeCandidate candidate,
                                @Nonnull TelemetryCoordinatorService service) {
@@ -1728,6 +1731,9 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public void deactivate() {
             active.set(false);
+            synchronized (profilerSubscriptionLock) {
+                profilerSubscriptionsOpen = false;
+            }
         }
 
         @Override
@@ -1769,6 +1775,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         public String subscribeProfiler(@Nonnull String projectId,
                                         @Nonnull Consumer<Map<String, Object>> listener) {
             Objects.requireNonNull(listener, "listener");
+            synchronized (profilerSubscriptionLock) {
+                if (!active.get() || !profilerSubscriptionsOpen) {
+                    return "";
+                }
+            }
             final com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription;
             try {
                 subscription = projectProfilerService.view(projectId).subscribe(snapshot -> {
@@ -1790,10 +1801,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             if (subscription == null) {
                 return "";
             }
-            String subscriptionId;
-            do {
-                subscriptionId = UUID.randomUUID().toString();
-            } while (profilerSubscriptions.putIfAbsent(subscriptionId, subscription) != null);
+            String subscriptionId = UUID.randomUUID().toString();
+            boolean accepted;
+            synchronized (profilerSubscriptionLock) {
+                accepted = active.get() && profilerSubscriptionsOpen;
+                if (accepted) {
+                    while (profilerSubscriptions.putIfAbsent(subscriptionId, subscription) != null) {
+                        subscriptionId = UUID.randomUUID().toString();
+                    }
+                }
+            }
+            if (!accepted) {
+                closeProfilerSubscription(subscription);
+                return "";
+            }
             return subscriptionId;
         }
 
@@ -1802,8 +1823,10 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             if (subscriptionId == null || subscriptionId.isBlank()) {
                 return false;
             }
-            com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription =
-                    profilerSubscriptions.remove(subscriptionId);
+            com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription;
+            synchronized (profilerSubscriptionLock) {
+                subscription = profilerSubscriptions.remove(subscriptionId);
+            }
             if (subscription == null) {
                 return false;
             }
@@ -1819,6 +1842,9 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         public void start() {
             service.start();
             projectProfilerService.activateProvider();
+            synchronized (profilerSubscriptionLock) {
+                profilerSubscriptionsOpen = active.get();
+            }
             TelemetryRuntimeLocator.register(api);
             commandRegistrar.register();
             sparkProfilerMonitor.activate();
@@ -1835,16 +1861,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
 
         private void closeProfilerSubscriptions() {
-            for (Map.Entry<String, com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription> entry
-                    : profilerSubscriptions.entrySet()) {
-                if (!profilerSubscriptions.remove(entry.getKey(), entry.getValue())) {
-                    continue;
-                }
-                try {
-                    entry.getValue().close();
-                } catch (RuntimeException | LinkageError ignored) {
-                    // Keep provider shutdown safe when a consumer closes badly.
-                }
+            List<com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription> subscriptions;
+            synchronized (profilerSubscriptionLock) {
+                profilerSubscriptionsOpen = false;
+                subscriptions = List.copyOf(profilerSubscriptions.values());
+                profilerSubscriptions.clear();
+            }
+            for (com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription : subscriptions) {
+                closeProfilerSubscription(subscription);
+            }
+        }
+
+        private void closeProfilerSubscription(
+                @Nonnull com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription) {
+            try {
+                subscription.close();
+            } catch (RuntimeException | LinkageError ignored) {
+                // Keep provider shutdown safe when a consumer closes badly.
             }
         }
 

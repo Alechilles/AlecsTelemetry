@@ -5,18 +5,25 @@ import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
 import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.AbstractMap;
+import java.util.AbstractSet;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCoordinatorRegistryTest {
+    private static final int MAX_INSPECTED_TREE_ENTRIES = 128;
 
     @AfterEach
     void clearRegistry() {
@@ -97,6 +105,60 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals(7, ((Number) active.profilerLatest("mod-a").get("windowKey")).intValue());
         assertTrue(active.profilerLatest("mod-a").values().stream()
                 .noneMatch(value -> value instanceof com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot));
+    }
+
+    @Test
+    void reflectiveProfilerCallbackIsSanitizedToBoundedImmutableJdkTree() {
+        CapableForeignBridge provider = capableForeignBridge();
+        provider.callbackPayload = snapshotPayload(7, "a".repeat(32));
+        provider.callbackPayload.put("projectId", "p".repeat(121));
+        provider.callbackPayload.put("foreign", new MutableForeignValue());
+        TelemetryCoordinatorRegistry.register(provider);
+
+        AtomicReference<Map<String, Object>> received = new AtomicReference<>();
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertNotNull(active);
+        assertEquals(
+                "foreign-subscription",
+                active.subscribeProfiler("mod-a", received::set)
+        );
+
+        Map<String, Object> payload = received.get();
+        assertNotNull(payload);
+        Object projectId = payload.get("projectId");
+        assertTrue(!(projectId instanceof String) || ((String) projectId).length() <= 120);
+        assertThrows(UnsupportedOperationException.class, () -> payload.put("mutated", true));
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> ((List<?>) payload.get("paths")).clear()
+        );
+        assertTrue(maxStringLength(payload) <= TelemetryProfilerBridgePayload.MAX_DETAIL_LENGTH);
+        assertTrue(payload.values().stream().noneMatch(value -> value instanceof MutableForeignValue));
+    }
+
+    @Test
+    void malformedNestedMapsInspectOnlyTheBoundedEntryPrefix() {
+        CapableForeignBridge provider = capableForeignBridge();
+        CountingMalformedMap malformed = new CountingMalformedMap(1_000);
+        provider.latestPayload = snapshotPayloadWithContextCounts(7, malformed);
+        TelemetryCoordinatorRegistry.register(provider);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertNotNull(active);
+        active.profilerLatest("mod-a");
+
+        assertTrue(malformed.inspected.get() <= MAX_INSPECTED_TREE_ENTRIES);
+    }
+
+    @Test
+    void foreignSnapshotRejectsFingerprintThatIsNotExactlyThirtyTwoLowercaseHexCharacters() {
+        CapableForeignBridge provider = capableForeignBridge();
+        provider.latestPayload = snapshotPayload(7, "a".repeat(31));
+        TelemetryCoordinatorRegistry.register(provider);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertNotNull(active);
+        assertTrue(new RemoteTelemetryProfilerView(active, "mod-a").latest().isEmpty());
     }
 
     @Test
@@ -578,6 +640,9 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     private static final class CapableForeignBridge extends ForeignBridge {
+        private Map<String, Object> latestPayload = Map.of("windowKey", 7);
+        private Map<String, Object> callbackPayload = snapshotPayload(7, "a".repeat(32));
+
         private CapableForeignBridge(TelemetryRuntimeCandidate candidate) {
             super(candidate);
         }
@@ -587,7 +652,131 @@ class TelemetryCoordinatorRegistryTest {
         }
 
         public Map<String, Object> profilerLatest(String projectId) {
-            return Map.of("windowKey", 7);
+            return latestPayload;
+        }
+
+        public String subscribeProfiler(String projectId,
+                                        java.util.function.Consumer<Map<String, Object>> listener) {
+            listener.accept(callbackPayload);
+            return "foreign-subscription";
+        }
+    }
+
+    private static Map<String, Object> snapshotPayload(int windowKey, String fingerprint) {
+        Map<String, Object> path = new java.util.LinkedHashMap<>();
+        path.put("fingerprint", fingerprint);
+        path.put("attribution", "SELF");
+        path.put("ownedClassName", "com.example.Mod");
+        path.put("ownedMethodName", "tick");
+        path.put("ownedMethodDescriptor", "()V");
+        path.put("sampledMilliseconds", 1.0d);
+        path.put("selectedWorldThreadSharePercent", 2.0d);
+        path.put("qualification", "OBSERVED");
+        path.put("representativePath", new ArrayList<>(List.of("com.example.Mod#tick()V")));
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        context.put("observedAtMillis", 1L);
+        context.put("breadcrumbCategoryCounts", new java.util.LinkedHashMap<>());
+        Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("projectId", "mod-a");
+        payload.put("projectVersion", "1.0.0");
+        payload.put("sparkVersion", "spark-1");
+        payload.put("windowKey", windowKey);
+        payload.put("observedAtMillis", 1L);
+        payload.put("selectedWorldThreadSelfMilliseconds", 1.0d);
+        payload.put("qualificationRuleSet", "unqualified-v1");
+        payload.put("paths", new ArrayList<>(List.of(path)));
+        payload.put("context", context);
+        return payload;
+    }
+
+    private static Map<String, Object> snapshotPayloadWithContextCounts(int windowKey,
+                                                                          Map<?, ?> counts) {
+        Map<String, Object> path = Map.of(
+                "fingerprint", "a".repeat(32),
+                "attribution", "SELF",
+                "ownedClassName", "com.example.Mod",
+                "ownedMethodName", "tick",
+                "ownedMethodDescriptor", "()V",
+                "sampledMilliseconds", 1.0d,
+                "selectedWorldThreadSharePercent", 2.0d,
+                "qualification", "OBSERVED",
+                "representativePath", List.of("com.example.Mod#tick()V")
+        );
+        return Map.of(
+                "projectId", "mod-a",
+                "projectVersion", "1.0.0",
+                "sparkVersion", "spark-1",
+                "windowKey", windowKey,
+                "observedAtMillis", 1L,
+                "selectedWorldThreadSelfMilliseconds", 1.0d,
+                "qualificationRuleSet", "unqualified-v1",
+                "paths", List.of(path),
+                "context", Map.of(
+                        "observedAtMillis", 1L,
+                        "breadcrumbCategoryCounts", counts
+                )
+        );
+    }
+
+    private static int maxStringLength(Object value) {
+        if (value instanceof String string) {
+            return string.length();
+        }
+        if (value instanceof Map<?, ?> map) {
+            int maximum = 0;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                maximum = Math.max(maximum, maxStringLength(entry.getKey()));
+                maximum = Math.max(maximum, maxStringLength(entry.getValue()));
+            }
+            return maximum;
+        }
+        if (value instanceof List<?> list) {
+            int maximum = 0;
+            for (Object item : list) {
+                maximum = Math.max(maximum, maxStringLength(item));
+            }
+            return maximum;
+        }
+        return 0;
+    }
+
+    private static final class MutableForeignValue {
+    }
+
+    private static final class CountingMalformedMap extends AbstractMap<Object, Object> {
+        private final int size;
+        private final AtomicInteger inspected = new AtomicInteger();
+
+        private CountingMalformedMap(int size) {
+            this.size = size;
+        }
+
+        @Override
+        public Set<Entry<Object, Object>> entrySet() {
+            return new AbstractSet<>() {
+                @Override
+                public Iterator<Entry<Object, Object>> iterator() {
+                    return new Iterator<>() {
+                        private int index;
+
+                        @Override
+                        public boolean hasNext() {
+                            return index < size;
+                        }
+
+                        @Override
+                        public Entry<Object, Object> next() {
+                            inspected.incrementAndGet();
+                            return Map.entry("bad-" + index++, new MutableForeignValue());
+                        }
+                    };
+                }
+
+                @Override
+                public int size() {
+                    return size;
+                }
+            };
         }
     }
 

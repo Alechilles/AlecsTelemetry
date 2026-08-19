@@ -39,8 +39,10 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -394,6 +396,45 @@ class TelemetryRuntimeHostTest {
         assertTrue(callback.get());
         subscription.close();
         assertTrue(foreign.unsubscribed);
+    }
+
+    @Test
+    void providerRejectsProfilerSubscriptionsAfterShutdownAndCleansConcurrentRace() throws Exception {
+        ProviderFixture fixture = fixture(
+                "standalone:Alechilles:ShutdownSubscriptions",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3"
+        );
+        fixture.handle().start();
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertNotNull(active);
+
+        List<String> subscriptionIds = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch subscriberStarted = new CountDownLatch(1);
+        Thread subscriber = new Thread(() -> {
+            subscriberStarted.countDown();
+            for (int index = 0; index < 1_000; index++) {
+                subscriptionIds.add(active.subscribeProfiler("example-mod", payload -> {
+                }));
+            }
+        });
+        subscriber.start();
+        assertTrue(subscriberStarted.await(1, java.util.concurrent.TimeUnit.SECONDS));
+
+        Thread shutdown = new Thread(fixture.handle()::shutdown);
+        shutdown.start();
+        shutdown.join(2_000);
+        subscriber.join(2_000);
+
+        assertFalse(shutdown.isAlive());
+        assertFalse(subscriber.isAlive());
+        assertEquals("", active.subscribeProfiler("example-mod", payload -> {
+        }));
+        for (String subscriptionId : subscriptionIds) {
+            if (subscriptionId != null && !subscriptionId.isBlank()) {
+                assertFalse(active.unsubscribeProfiler(subscriptionId));
+            }
+        }
     }
 
     @Test

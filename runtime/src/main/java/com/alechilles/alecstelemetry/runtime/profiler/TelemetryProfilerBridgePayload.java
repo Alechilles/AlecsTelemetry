@@ -12,6 +12,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +28,7 @@ public final class TelemetryProfilerBridgePayload {
     public static final int MAX_METHOD_LENGTH = 512;
     public static final int MAX_FINGERPRINT_LENGTH = 32;
 
-    private static final Pattern FINGERPRINT = Pattern.compile("[0-9a-f]{1,32}");
+    private static final Pattern FINGERPRINT = Pattern.compile("[0-9a-f]{32}");
     private static final int MAX_TREE_DEPTH = 12;
     private static final int MAX_TREE_ENTRIES = 128;
     private static final int MAX_CONTEXT_ENTRIES = 32;
@@ -97,15 +98,28 @@ public final class TelemetryProfilerBridgePayload {
         summary.put("selectedWorldThreadSelfMilliseconds", snapshot.selectedWorldThreadSelfMilliseconds());
         summary.put("qualificationRuleSet", bounded(snapshot.qualificationRuleSet(), MAX_PROJECT_OR_VERSION_LENGTH));
         ArrayList<Map<String, Object>> paths = new ArrayList<>(MAX_PATHS);
-        int retained = 0;
-        for (TelemetryProfilerPathEvidence path : snapshot.paths()) {
-            if (path == null || retained >= MAX_PATHS) {
+        List<TelemetryProfilerPathEvidence> sourcePaths = snapshot.paths();
+        final int pathCount;
+        try {
+            pathCount = Math.min(sourcePaths.size(), MAX_PATHS);
+        } catch (RuntimeException | LinkageError ignored) {
+            summary.put("paths", List.of());
+            summary.put("context", contextSummary(snapshot.context()));
+            return immutableStringMap(summary);
+        }
+        for (int index = 0; index < pathCount; index++) {
+            final TelemetryProfilerPathEvidence path;
+            try {
+                path = sourcePaths.get(index);
+            } catch (RuntimeException | LinkageError ignored) {
                 break;
+            }
+            if (path == null) {
+                continue;
             }
             Map<String, Object> pathSummary = pathSummary(path);
             if (!pathSummary.isEmpty()) {
                 paths.add(pathSummary);
-                retained++;
             }
         }
         summary.put("paths", List.copyOf(paths));
@@ -138,6 +152,9 @@ public final class TelemetryProfilerBridgePayload {
                 throw new IllegalArgumentException("Invalid profiler context");
             }
             List<TelemetryProfilerPathEvidence> paths = pathsFromSummary(rawPaths);
+            if (paths == null) {
+                throw new IllegalArgumentException("Malformed profiler path");
+            }
             TelemetryProfilerContext context = contextFromSummary(rawContext);
             return new TelemetryProfilerSnapshot(
                     projectId,
@@ -215,12 +232,12 @@ public final class TelemetryProfilerBridgePayload {
             return Map.of();
         }
         LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
-        copyKnownScalar(map, copy, "state");
-        copyKnownScalar(map, copy, "detail");
+        copyKnownScalar(map, copy, "state", MAX_DETAIL_LENGTH);
+        copyKnownScalar(map, copy, "detail", MAX_DETAIL_LENGTH);
         copyKnownScalar(map, copy, "active");
         copyKnownScalar(map, copy, "circuitOpen");
-        copyKnownScalar(map, copy, "sparkVersion");
-        copyKnownScalar(map, copy, "runtimeVersion");
+        copyKnownScalar(map, copy, "sparkVersion", MAX_PROJECT_OR_VERSION_LENGTH);
+        copyKnownScalar(map, copy, "runtimeVersion", MAX_PROJECT_OR_VERSION_LENGTH);
         copyKnownScalar(map, copy, "nextCaptureAtMillis");
         copyKnownScalar(map, copy, "analysisDurationMillis");
         copyKnownScalar(map, copy, "omittedPathCount");
@@ -302,8 +319,19 @@ public final class TelemetryProfilerBridgePayload {
         summary.put("selectedWorldThreadSharePercent", path.selectedWorldThreadSharePercent());
         summary.put("qualification", path.qualification().name());
         ArrayList<String> frames = new ArrayList<>(MAX_FRAMES);
-        for (String frame : path.representativePath()) {
-            if (frames.size() >= MAX_FRAMES) {
+        List<String> sourceFrames = path.representativePath();
+        final int frameCount;
+        try {
+            frameCount = Math.min(sourceFrames.size(), MAX_FRAMES);
+        } catch (RuntimeException | LinkageError ignored) {
+            summary.put("representativePath", List.of());
+            return immutableStringMap(summary);
+        }
+        for (int index = 0; index < frameCount; index++) {
+            final String frame;
+            try {
+                frame = sourceFrames.get(index);
+            } catch (RuntimeException | LinkageError ignored) {
                 break;
             }
             if (frame != null) {
@@ -325,42 +353,49 @@ public final class TelemetryProfilerBridgePayload {
         putFiniteNonNegative(summary, "tps", safe.tps());
         putFiniteNonNegative(summary, "mspt", safe.mspt());
         LinkedHashMap<String, Object> counts = new LinkedHashMap<>();
-        int retained = 0;
-        for (Map.Entry<String, Integer> entry : safe.breadcrumbCategoryCounts().entrySet()) {
-            if (retained >= MAX_CONTEXT_ENTRIES || entry == null || entry.getKey() == null) {
-                break;
+        int inspected = 0;
+        try {
+            Iterator<Map.Entry<String, Integer>> entries = safe.breadcrumbCategoryCounts().entrySet().iterator();
+            while (inspected < MAX_CONTEXT_ENTRIES && entries.hasNext()) {
+                Map.Entry<String, Integer> entry = entries.next();
+                inspected++;
+                if (entry == null || entry.getKey() == null) {
+                    continue;
+                }
+                Integer count = entry.getValue();
+                if (count != null && count >= 0) {
+                    counts.put(bounded(entry.getKey(), MAX_DETAIL_LENGTH), count);
+                }
             }
-            Integer count = entry.getValue();
-            if (count != null && count >= 0) {
-                counts.put(bounded(entry.getKey(), MAX_DETAIL_LENGTH), count);
-                retained++;
-            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Keep the valid prefix when a foreign map fails during iteration.
         }
         summary.put("breadcrumbCategoryCounts", immutableStringMap(counts));
         return immutableStringMap(summary);
     }
 
-    @Nonnull
+    @Nullable
     private static List<TelemetryProfilerPathEvidence> pathsFromSummary(@Nullable Object raw) {
         if (!(raw instanceof List<?> list)) {
-            return List.of();
+            return null;
         }
         final int size;
         try {
             size = list.size();
         } catch (RuntimeException | LinkageError ignored) {
-            return List.of();
+            return null;
         }
         ArrayList<TelemetryProfilerPathEvidence> paths = new ArrayList<>(Math.min(size, MAX_PATHS));
         int end = Math.min(size, MAX_PATHS);
         for (int index = 0; index < end; index++) {
             try {
                 TelemetryProfilerPathEvidence path = pathFromSummary(list.get(index));
-                if (path != null) {
-                    paths.add(path);
+                if (path == null) {
+                    return null;
                 }
+                paths.add(path);
             } catch (RuntimeException | LinkageError ignored) {
-                break;
+                return null;
             }
         }
         return List.copyOf(paths);
@@ -399,6 +434,9 @@ public final class TelemetryProfilerBridgePayload {
                 throw new IllegalArgumentException("Invalid profiler representative path");
             }
             List<String> representativePath = framesFromSummary(rawFrames);
+            if (representativePath == null) {
+                throw new IllegalArgumentException("Malformed profiler representative path");
+            }
             return new TelemetryProfilerPathEvidence(
                     fingerprint,
                     attribution,
@@ -418,16 +456,16 @@ public final class TelemetryProfilerBridgePayload {
         }
     }
 
-    @Nonnull
+    @Nullable
     private static List<String> framesFromSummary(@Nullable Object raw) {
         if (!(raw instanceof List<?> list)) {
-            return List.of();
+            return null;
         }
         final int size;
         try {
             size = list.size();
         } catch (RuntimeException | LinkageError ignored) {
-            return List.of();
+            return null;
         }
         ArrayList<String> frames = new ArrayList<>(Math.min(size, MAX_FRAMES));
         int end = Math.min(size, MAX_FRAMES);
@@ -439,7 +477,7 @@ public final class TelemetryProfilerBridgePayload {
                 break;
             }
             if (!(value instanceof String frame) || frame.isBlank() || frame.length() > MAX_METHOD_LENGTH) {
-                continue;
+                return null;
             }
             frames.add(frame);
         }
@@ -461,19 +499,25 @@ public final class TelemetryProfilerBridgePayload {
             throw new IllegalArgumentException("Invalid profiler breadcrumb counts");
         }
         if (rawCounts instanceof Map<?, ?> countMap) {
-            int retained = 0;
-            for (Map.Entry<?, ?> entry : countMap.entrySet()) {
-                if (retained >= MAX_CONTEXT_ENTRIES || entry == null || !(entry.getKey() instanceof String key)) {
-                    break;
+            int inspected = 0;
+            try {
+                Iterator<? extends Map.Entry<?, ?>> entries = countMap.entrySet().iterator();
+                while (inspected < MAX_CONTEXT_ENTRIES && entries.hasNext()) {
+                    Map.Entry<?, ?> entry = entries.next();
+                    inspected++;
+                    if (entry == null || !(entry.getKey() instanceof String key)) {
+                        continue;
+                    }
+                    if (key.isBlank() || key.length() > MAX_DETAIL_LENGTH || !(entry.getValue() instanceof Number)) {
+                        continue;
+                    }
+                    int count = numberAsInt(entry.getValue());
+                    if (count >= 0) {
+                        counts.put(key, count);
+                    }
                 }
-                if (key.isBlank() || key.length() > MAX_DETAIL_LENGTH || !(entry.getValue() instanceof Number)) {
-                    continue;
-                }
-                int count = numberAsInt(entry.getValue());
-                if (count >= 0) {
-                    counts.put(key, count);
-                    retained++;
-                }
+            } catch (RuntimeException | LinkageError ignored) {
+                // Keep the valid prefix when a foreign map fails during iteration.
             }
         }
         return new TelemetryProfilerContext(observedAtMillis, playerCount, tps, mspt, counts);
@@ -482,13 +526,13 @@ public final class TelemetryProfilerBridgePayload {
     @Nonnull
     private static Map<String, Object> foreignSnapshotMap(@Nonnull Map<?, ?> map) {
         LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
-        copyKnownScalar(map, copy, "projectId");
-        copyKnownScalar(map, copy, "projectVersion");
-        copyKnownScalar(map, copy, "sparkVersion");
+        copyKnownScalar(map, copy, "projectId", MAX_PROJECT_OR_VERSION_LENGTH);
+        copyKnownScalar(map, copy, "projectVersion", MAX_PROJECT_OR_VERSION_LENGTH);
+        copyKnownScalar(map, copy, "sparkVersion", MAX_PROJECT_OR_VERSION_LENGTH);
         copyKnownScalar(map, copy, "windowKey");
         copyKnownScalar(map, copy, "observedAtMillis");
         copyKnownScalar(map, copy, "selectedWorldThreadSelfMilliseconds");
-        copyKnownScalar(map, copy, "qualificationRuleSet");
+        copyKnownScalar(map, copy, "qualificationRuleSet", MAX_DETAIL_LENGTH);
         Object rawPaths = valueOf(map, "paths");
         if (rawPaths instanceof List<?> paths) {
             copy.put("paths", foreignPathList(paths));
@@ -526,17 +570,17 @@ public final class TelemetryProfilerBridgePayload {
     @Nonnull
     private static Map<String, Object> foreignPathMap(@Nonnull Map<?, ?> path) {
         LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
-        copyKnownScalar(path, copy, "fingerprint");
-        copyKnownScalar(path, copy, "attribution");
-        copyKnownScalar(path, copy, "ownedClassName");
-        copyKnownScalar(path, copy, "ownedMethodName");
-        copyKnownScalar(path, copy, "ownedMethodDescriptor");
-        copyKnownScalar(path, copy, "firstExternalClassName");
-        copyKnownScalar(path, copy, "firstExternalMethodName");
-        copyKnownScalar(path, copy, "firstExternalMethodDescriptor");
+        copyKnownScalar(path, copy, "fingerprint", MAX_FINGERPRINT_LENGTH);
+        copyKnownScalar(path, copy, "attribution", MAX_DETAIL_LENGTH);
+        copyKnownScalar(path, copy, "ownedClassName", MAX_METHOD_LENGTH);
+        copyKnownScalar(path, copy, "ownedMethodName", MAX_METHOD_LENGTH);
+        copyKnownScalar(path, copy, "ownedMethodDescriptor", MAX_METHOD_LENGTH);
+        copyKnownScalar(path, copy, "firstExternalClassName", MAX_METHOD_LENGTH);
+        copyKnownScalar(path, copy, "firstExternalMethodName", MAX_METHOD_LENGTH);
+        copyKnownScalar(path, copy, "firstExternalMethodDescriptor", MAX_METHOD_LENGTH);
         copyKnownScalar(path, copy, "sampledMilliseconds");
         copyKnownScalar(path, copy, "selectedWorldThreadSharePercent");
-        copyKnownScalar(path, copy, "qualification");
+        copyKnownScalar(path, copy, "qualification", MAX_DETAIL_LENGTH);
         Object rawFrames = valueOf(path, "representativePath");
         if (rawFrames instanceof List<?> frames) {
             copy.put("representativePath", foreignFrameList(frames));
@@ -584,8 +628,18 @@ public final class TelemetryProfilerBridgePayload {
     private static void copyKnownScalar(@Nonnull Map<?, ?> source,
                                         @Nonnull Map<String, Object> target,
                                         @Nonnull String key) {
+        copyKnownScalar(source, target, key, MAX_DETAIL_LENGTH);
+    }
+
+    private static void copyKnownScalar(@Nonnull Map<?, ?> source,
+                                        @Nonnull Map<String, Object> target,
+                                        @Nonnull String key,
+                                        int maximumStringLength) {
         Object value = valueOf(source, key);
         Object copied = copyTree(value, 0, new IdentityHashMap<>());
+        if (copied instanceof String text && text.length() > maximumStringLength) {
+            return;
+        }
         if (copied != null && (copied instanceof String
                 || copied instanceof Boolean
                 || copied instanceof Number)) {
@@ -610,6 +664,9 @@ public final class TelemetryProfilerBridgePayload {
             return null;
         }
         if (value instanceof String || value instanceof Boolean) {
+            if (value instanceof String text && text.length() > MAX_DETAIL_LENGTH) {
+                return null;
+            }
             return value;
         }
         if (value instanceof Number number) {
@@ -620,8 +677,15 @@ public final class TelemetryProfilerBridgePayload {
         }
         try {
             if (value instanceof List<?> list) {
-                ArrayList<Object> copy = new ArrayList<>(Math.min(list.size(), MAX_TREE_ENTRIES));
-                for (int index = 0; index < list.size() && copy.size() < MAX_TREE_ENTRIES; index++) {
+                final int size;
+                try {
+                    size = list.size();
+                } catch (RuntimeException | LinkageError ignored) {
+                    return null;
+                }
+                int end = Math.min(size, MAX_TREE_ENTRIES);
+                ArrayList<Object> copy = new ArrayList<>(end);
+                for (int index = 0; index < end; index++) {
                     Object child;
                     try {
                         child = list.get(index);
@@ -637,16 +701,23 @@ public final class TelemetryProfilerBridgePayload {
             }
             if (value instanceof Map<?, ?> map) {
                 LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
-                int retained = 0;
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    if (retained >= MAX_TREE_ENTRIES || entry == null || !(entry.getKey() instanceof String key)) {
-                        break;
+                int inspected = 0;
+                try {
+                    Iterator<? extends Map.Entry<?, ?>> entries = map.entrySet().iterator();
+                    while (inspected < MAX_TREE_ENTRIES && entries.hasNext()) {
+                        Map.Entry<?, ?> entry = entries.next();
+                        inspected++;
+                        if (entry == null || !(entry.getKey() instanceof String key)
+                                || key.length() > MAX_DETAIL_LENGTH) {
+                            continue;
+                        }
+                        Object copied = copyTree(entry.getValue(), depth + 1, active);
+                        if (copied != null) {
+                            copy.put(key, copied);
+                        }
                     }
-                    Object copied = copyTree(entry.getValue(), depth + 1, active);
-                    if (copied != null) {
-                        copy.put(key, copied);
-                        retained++;
-                    }
+                } catch (RuntimeException | LinkageError ignored) {
+                    // Keep the valid prefix when a foreign map fails during iteration.
                 }
                 return immutableStringMap(copy);
             }
