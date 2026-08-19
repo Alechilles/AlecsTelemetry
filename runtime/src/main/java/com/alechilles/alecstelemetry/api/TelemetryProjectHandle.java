@@ -22,6 +22,15 @@ public interface TelemetryProjectHandle {
 
     boolean isEnabled();
 
+    /**
+     * Returns the local profiler view when the active runtime supports it.
+     * Legacy handle implementations inherit an unavailable view.
+     */
+    @Nonnull
+    default TelemetryProfilerView profiler() {
+        return TelemetryProfilerView.unavailable();
+    }
+
     void recordBreadcrumb(@Nonnull String category, @Nonnull String detail);
 
     /**
