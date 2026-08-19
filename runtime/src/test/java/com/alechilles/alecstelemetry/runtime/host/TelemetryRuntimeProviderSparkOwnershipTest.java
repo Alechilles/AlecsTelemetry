@@ -1,25 +1,42 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
+import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionBridge;
+import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeOrigin;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.function.Function;
+import java.util.stream.Stream;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,12 +50,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryRuntimeProviderSparkOwnershipTest {
+    private static final AtomicInteger ELIGIBLE_FIXTURE_SEQUENCE = new AtomicInteger();
+
     @TempDir
     Path tempDir;
 
     @AfterEach
     void clearRuntimeGlobals() {
         TelemetryCoordinatorRegistry.clearForTests();
+        TelemetryProjectContributionRegistry.clearForTests();
         TelemetryRuntimeLocator.clear();
     }
 
@@ -75,6 +95,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
             awaitReads(providerA.reader, 1);
             assertEquals(1, providerA.reader.reads.get());
             assertTrue(providerA.monitor.history().isEmpty());
+            assertTrue(providerA.handle.api().findProject("mod-a").profiler().history().isEmpty());
 
             assertTrue(providerB.reader.entered.await(2, TimeUnit.SECONDS));
             providerB.reader.release.countDown();
@@ -119,18 +140,178 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
         }
     }
 
+    @Test
+    void winningProviderPublishesOneCompletedProjectWindow() throws Exception {
+        ProviderFixture fixture = fixture(
+                "standalone:Alechilles:SparkProject",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1)
+        );
+        try {
+            fixture.publishAndAwait(1);
+
+            TelemetryProfilerView view = fixture.handle.api().findProject("mod-a").profiler();
+            assertEquals(List.of(1), view.history().stream()
+                    .map(TelemetryProfilerSnapshot::windowKey)
+                    .toList());
+        } finally {
+            fixture.close();
+        }
+    }
+
+    @Test
+    void disablingPerformanceConsentClearsProjectProfilerEvidenceImmediately() throws Exception {
+        ProviderFixture fixture = fixtureWithEligibleProject("mod-a");
+        try {
+            fixture.publishAndAwait(1);
+            TelemetryProfilerView view = fixture.handle.api().findProject("mod-a").profiler();
+            assertFalse(view.history().isEmpty());
+
+            assertTrue(activeBridge().setPerformanceEnabled("mod-a", false));
+
+            assertTrue(view.latest().isEmpty());
+            assertTrue(view.history().isEmpty());
+        } finally {
+            fixture.close();
+        }
+    }
+
+    @Test
+    void reEnablingPerformanceConsentDoesNotRestoreOldEvidence() throws Exception {
+        ProviderFixture fixture = fixtureWithEligibleProject("mod-a");
+        try {
+            fixture.publishAndAwait(1);
+            TelemetryProfilerView view = fixture.handle.api().findProject("mod-a").profiler();
+
+            assertTrue(activeBridge().setPerformanceEnabled("mod-a", false));
+            assertTrue(activeBridge().setPerformanceEnabled("mod-a", true));
+            assertTrue(view.history().isEmpty());
+
+            fixture.publishAndAwait(2);
+
+            assertEquals(List.of(2), view.history().stream()
+                    .map(TelemetryProfilerSnapshot::windowKey)
+                    .toList());
+        } finally {
+            fixture.close();
+        }
+    }
+
+    @Test
+    void providerShutdownClosesProfilerSubscriptionsAndMakesViewUnavailable() throws Exception {
+        ProviderFixture fixture = fixtureWithEligibleProject("mod-a");
+        TelemetryProfilerSubscription subscription = null;
+        try {
+            fixture.publishAndAwait(1);
+            TelemetryProfilerView view = fixture.handle.api().findProject("mod-a").profiler();
+            subscription = view.subscribe(snapshot -> {
+            });
+
+            fixture.handle.shutdown();
+
+            assertEquals(com.alechilles.alecstelemetry.api.TelemetryProfilerStatus.State.UNAVAILABLE,
+                    view.status().state());
+            assertTrue(view.latest().isEmpty());
+            assertTrue(view.history().isEmpty());
+        } finally {
+            if (subscription != null) {
+                subscription.close();
+            }
+            fixture.reader.release.countDown();
+            fixture.handle.shutdown();
+        }
+    }
+
+    @TestFactory
+    @Execution(ExecutionMode.SAME_THREAD)
+    Stream<DynamicTest> everyConsentMutationRouteInvalidatesProjectProfilerHistory() {
+        return profilerRevocationCases().map(revocation -> DynamicTest.dynamicTest(
+                revocation.name(),
+                () -> {
+                    ProviderFixture fixture = fixtureWithEligibleProject("mod-a");
+                    try {
+                        fixture.publishAndAwait(1);
+                        TelemetryProfilerView initialView = fixture.handle.api().findProject("mod-a").profiler();
+                        assertFalse(initialView.history().isEmpty(), initialView.status().toString());
+                        assertTrue(revocation.apply(fixture));
+                        assertTrue(fixture.handle.api().findProject("mod-a").profiler().history().isEmpty());
+                    } finally {
+                        fixture.close();
+                        TelemetryProjectContributionRegistry.clearForTests();
+                    }
+                }
+        ));
+    }
+
+    private static Stream<RevocationCase> profilerRevocationCases() {
+        return Stream.of(
+                revocation("project setter", f -> activeBridge().setProjectEnabled("mod-a", false)),
+                revocation("performance setter", f -> activeBridge().setPerformanceEnabled("mod-a", false)),
+                revocation("single apply", f -> f.handle.applyConsent("mod-a", disabledConsent())),
+                revocation("apply all", f -> f.handle.applyConsentToAll(disabledConsent())),
+                revocation("category apply all", f -> f.handle.applyConsentCategoryToAll("performance", false)),
+                revocation("project reconciliation", ProviderFixture::removeProjectAndReconcile)
+        );
+    }
+
+    private record RevocationCase(String name,
+                                  Function<ProviderFixture, Boolean> operation) {
+        boolean apply(ProviderFixture fixture) {
+            return operation.apply(fixture);
+        }
+
+        @Override
+        public String toString() {
+            return name;
+        }
+    }
+
+    private static RevocationCase revocation(String name,
+                                             Function<ProviderFixture, Boolean> operation) {
+        return new RevocationCase(name, operation);
+    }
+
     private ProviderFixture fixture(String providerId,
                                     TelemetryRuntimeOrigin origin,
                                     String runtimeVersion,
                                     BlockingReader reader) throws Exception {
+        return fixtureInternal(providerId, origin, runtimeVersion, reader, false);
+    }
+
+    private ProviderFixture fixtureWithEligibleProject(String projectId) throws Exception {
+        return fixtureInternal(
+                "standalone:Alechilles:SparkConsent-" + projectId + "-"
+                        + ELIGIBLE_FIXTURE_SEQUENCE.incrementAndGet(),
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1),
+                true
+        );
+    }
+
+    private ProviderFixture fixtureInternal(String providerId,
+                                             TelemetryRuntimeOrigin origin,
+                                             String runtimeVersion,
+                                             BlockingReader reader,
+                                             boolean contributionProject) throws Exception {
         Path root = tempDir.resolve(providerId.replace(':', '_'));
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings loaded = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryRuntimeSettings settings = withEnabledSparkProfiler(loaded);
+        TelemetryProjectRegistration project = project("mod-a", providerId, true);
+        TelemetryProjectRegistration runtimeProject = contributionProject
+                ? TelemetryProjectRegistration.passiveDescriptor(
+                project.descriptor(),
+                root.resolve("passive.jar"),
+                "Example:Host",
+                "1.0.0"
+        )
+                : project;
         TelemetryCoordinatorService service = new TelemetryCoordinatorService(
                 settings,
                 dataPaths,
-                List.of(),
+                List.of(runtimeProject),
                 List.of(),
                 List.of(),
                 new NoopClient(),
@@ -157,13 +338,15 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 root
         );
         AtomicReference<TelemetryRuntimeProviderHandle> handleReference = new AtomicReference<>();
+        AtomicReference<Object> projectProfilerService = new AtomicReference<>();
         SparkProfilerMonitor monitor = injectedMonitor(
                 settings.sparkProfiler(),
                 reader,
                 () -> {
                     TelemetryRuntimeProviderHandle handle = handleReference.get();
                     return handle != null && handle.ownsActiveCoordinator();
-                }
+                },
+                projectProfilerService
         );
         TelemetryRuntimeProviderHandle handle = new TelemetryRuntimeProviderHandle(
                 request,
@@ -171,7 +354,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 settings,
                 dataPaths,
                 service,
-                List.of(),
+                List.of(runtimeProject),
                 List.of(),
                 new TelemetryPlayerCounter(),
                 null,
@@ -180,7 +363,13 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 monitor
         );
         handleReference.set(handle);
-        return new ProviderFixture(handle, monitor, reader);
+        projectProfilerService.set(projectProfilerService(handle));
+        String contributionToken = contributionProject
+                ? TelemetryProjectContributionRegistry.register(new TestContributionBridge(
+                contribution(project, root.resolve("contribution.jar"))
+        ))
+                : null;
+        return new ProviderFixture(handle, monitor, reader, contributionToken);
     }
 
     private static TelemetryRuntimeSettings withEnabledSparkProfiler(TelemetryRuntimeSettings settings) {
@@ -204,7 +393,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
     private static SparkProfilerMonitor injectedMonitor(
             TelemetryRuntimeSettings.SparkProfilerSettings settings,
             BlockingReader reader,
-            BooleanSupplier owner) throws Exception {
+            BooleanSupplier owner,
+            AtomicReference<Object> projectProfilerService) throws Exception {
         Class<?> readerType = Class.forName(
                 "com.alechilles.alecstelemetry.runtime.profiler.SparkProfileReader"
         );
@@ -215,9 +405,41 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                         ? reader.readResult()
                         : null
         );
+        Class<?> sinkType = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor$SparkProfilePublicationSink"
+        );
+        Object publicationSink = Proxy.newProxyInstance(
+                sinkType.getClassLoader(),
+                new Class<?>[]{sinkType},
+                (proxy, method, args) -> {
+                    if (!"publish".equals(method.getName())) {
+                        return null;
+                    }
+                    Object service = projectProfilerService.get();
+                    if (service == null || args == null || args.length == 0) {
+                        return null;
+                    }
+                    for (Method candidate : service.getClass().getMethods()) {
+                        if (!"publish".equals(candidate.getName()) || candidate.getParameterCount() != 1) {
+                            continue;
+                        }
+                        try {
+                            candidate.invoke(service, args[0]);
+                            return null;
+                        } catch (java.lang.reflect.InvocationTargetException failure) {
+                            Throwable cause = failure.getCause();
+                            if (cause instanceof RuntimeException runtimeException) {
+                                throw runtimeException;
+                            }
+                            throw new IllegalStateException(cause);
+                        }
+                    }
+                    throw new NoSuchMethodException("project profiler publish method");
+                }
+        );
         Constructor<?> constructor = null;
         for (Constructor<?> candidate : SparkProfilerMonitor.class.getDeclaredConstructors()) {
-            if (candidate.getParameterCount() == 7) {
+            if (candidate.getParameterCount() == 8) {
                 constructor = candidate;
                 break;
             }
@@ -233,8 +455,16 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 readerProxy,
                 (java.util.function.LongSupplier) () -> Long.MAX_VALUE,
                 null,
-                null
+                null,
+                publicationSink
         );
+    }
+
+    private static Object projectProfilerService(TelemetryRuntimeProviderHandle handle) throws Exception {
+        java.lang.reflect.Field field = TelemetryRuntimeProviderHandle.class
+                .getDeclaredField("projectProfilerService");
+        field.setAccessible(true);
+        return field.get(handle);
     }
 
     private static Object completeResult(int windowKey) throws Exception {
@@ -256,9 +486,65 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
         Class<?> resultType = Class.forName(
                 "com.alechilles.alecstelemetry.runtime.profiler.SparkProfileReadResult"
         );
-        Method complete = resultType.getDeclaredMethod("complete", SparkProfileSnapshot.class);
+        Class<?> frameType = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.SparkProfileWindow$Frame"
+        );
+        Constructor<?> frameConstructor = frameType.getDeclaredConstructor(
+                int.class,
+                String.class,
+                String.class,
+                String.class,
+                String.class,
+                double.class
+        );
+        frameConstructor.setAccessible(true);
+        Object frame = frameConstructor.newInstance(
+                -1,
+                "example",
+                "example.ModA",
+                "tick",
+                "()V",
+                1.0d
+        );
+        Class<?> threadFramesType = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.SparkProfileWindow$ThreadFrames"
+        );
+        Constructor<?> threadFramesConstructor = threadFramesType.getDeclaredConstructor(
+                String.class,
+                List.class
+        );
+        threadFramesConstructor.setAccessible(true);
+        Object threadFrames = threadFramesConstructor.newInstance(
+                "WorldThread - default",
+                List.of(frame)
+        );
+        Class<?> windowType = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.SparkProfileWindow"
+        );
+        Constructor<?> windowConstructor = windowType.getDeclaredConstructor(
+                String.class,
+                int.class,
+                int.class,
+                int.class,
+                int.class,
+                int.class,
+                double.class,
+                List.class
+        );
+        windowConstructor.setAccessible(true);
+        Object window = windowConstructor.newInstance(
+                "1.10.172",
+                windowKey,
+                1,
+                1,
+                1,
+                1,
+                1.0d,
+                List.of(threadFrames)
+        );
+        Method complete = resultType.getDeclaredMethod("complete", SparkProfileSnapshot.class, windowType);
         complete.setAccessible(true);
-        return complete.invoke(null, snapshot);
+        return complete.invoke(null, snapshot, window);
     }
 
     private static TelemetryDataPaths dataPaths(Path root) {
@@ -273,6 +559,52 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 telemetryRoot.resolve("events"),
                 root.resolve("Mods")
         );
+    }
+
+    private static TelemetryCoordinatorBridge activeBridge() {
+        TelemetryCoordinatorBridge bridge = TelemetryCoordinatorRegistry.activeBridge();
+        if (bridge == null) {
+            throw new AssertionError("no active telemetry coordinator");
+        }
+        return bridge;
+    }
+
+    private static TelemetryConsentSnapshot disabledConsent() {
+        return new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false);
+    }
+
+    private static TelemetryProjectRegistration project(String projectId,
+                                                         String providerId,
+                                                         boolean performanceEnabled) {
+        String pluginIdentifier = "Example:" + providerId;
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"" + projectId + "\","
+                        + "\"projectVersion\":\"1.0.0\","
+                        + "\"displayName\":\"" + projectId + "\","
+                        + "\"ownerPluginIdentifiers\":[\"" + pluginIdentifier + "\"],"
+                        + "\"packagePrefixes\":[\"example\"],"
+                        + "\"telemetry\":{\"performance\":{\"supported\":true,\"defaultEnabled\":"
+                        + performanceEnabled + "}}}",
+                null
+        );
+        return new TelemetryProjectRegistration(descriptor, pluginIdentifier, "1.0.0", null);
+    }
+
+    private static Map<String, Object> contribution(TelemetryProjectRegistration project,
+                                                     Path sourcePath) {
+        LinkedHashMap<String, Object> values = new LinkedHashMap<>();
+        values.put("token", "test-token");
+        values.put("abiVersion", TelemetryProjectContributionRegistry.ABI_VERSION);
+        values.put("projectId", project.projectId());
+        values.put("logicalPluginIdentifier", project.pluginIdentifier());
+        values.put("logicalPluginVersion", project.pluginVersion());
+        values.put("origin", TelemetryProjectContributionRegistry.STANDALONE_ORIGIN);
+        values.put("hostPluginIdentifier", "Example:Host");
+        values.put("hostPluginVersion", "1.0.0");
+        values.put("sourcePath", sourcePath.toString());
+        values.put("descriptorJson", project.descriptor().toJson());
+        values.put("descriptorHash", project.descriptor().canonicalHash());
+        return Map.copyOf(values);
     }
 
     private static void awaitReads(BlockingReader reader, int expected) throws Exception {
@@ -294,7 +626,50 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
 
     private record ProviderFixture(TelemetryRuntimeProviderHandle handle,
                                    SparkProfilerMonitor monitor,
-                                   BlockingReader reader) {
+                                   BlockingReader reader,
+                                   String contributionToken) {
+        private void publishAndAwait(int expectedWindow) throws Exception {
+            if (!handle.ownsActiveCoordinator()) {
+                handle.start();
+            } else if (reader.reads.get() > 0) {
+                monitor.suspend();
+                monitor.activate();
+            }
+            reader.release.countDown();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (System.nanoTime() < deadline) {
+                if (handle.api().findProject("mod-a") != null
+                        && handle.api().findProject("mod-a").profiler().history().stream()
+                        .anyMatch(snapshot -> snapshot.windowKey() == expectedWindow)) {
+                    return;
+                }
+                Thread.sleep(10L);
+            }
+            TelemetryProfilerView view = handle.api().findProject("mod-a").profiler();
+            assertTrue(view.history().stream()
+                    .anyMatch(snapshot -> snapshot.windowKey() == expectedWindow),
+                    () -> "status=" + view.status()
+                            + ", history=" + view.history());
+        }
+
+        private boolean removeProjectAndReconcile() {
+            if (contributionToken == null) {
+                return false;
+            }
+            TelemetryProjectContributionRegistry.unregister(contributionToken);
+            return activeBridge().reconcileProjectContributions(
+                    TelemetryProjectContributionRegistry.revision(),
+                    TelemetryProjectContributionRegistry.activeContributions()
+            );
+        }
+
+        private void close() {
+            reader.release.countDown();
+            handle.shutdown();
+            if (contributionToken != null) {
+                TelemetryProjectContributionRegistry.unregister(contributionToken);
+            }
+        }
     }
 
     private static final class BlockingReader {
@@ -308,7 +683,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
         }
 
         private Object readResult() throws Exception {
-            reads.incrementAndGet();
+            int read = reads.incrementAndGet();
             entered.countDown();
             boolean interrupted = false;
             while (release.getCount() > 0) {
@@ -321,7 +696,33 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
-            return completeResult(windowKey);
+            return completeResult(windowKey + read - 1);
+        }
+    }
+
+    private static final class TestContributionBridge implements TelemetryProjectContributionBridge {
+        private final Map<String, Object> candidate;
+
+        private TestContributionBridge(Map<String, Object> candidate) {
+            this.candidate = candidate;
+        }
+
+        @Override
+        public int contributionAbiVersion() {
+            return TelemetryProjectContributionRegistry.ABI_VERSION;
+        }
+
+        @Override
+        public Map<String, Object> candidate() {
+            return candidate;
+        }
+
+        @Override
+        public Map<String, Object> dispatch(String token,
+                                            String operation,
+                                            Map<String, Object> payload,
+                                            Throwable throwable) {
+            return Map.of("accepted", false);
         }
     }
 

@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -99,6 +100,33 @@ class SparkProfilerMonitorTest {
             assertEquals(1, logs.stream().filter(message -> message.contains("window=2")).count());
             assertEquals(1, logs.stream().filter(message -> message.contains("window=3")).count());
         } finally {
+            monitor.close();
+        }
+    }
+
+    @Test
+    void projectSinkRunsAfterGlobalHistoryInsertionAndOutsideMonitorLock() throws Exception {
+        CountDownLatch sinkEntered = new CountDownLatch(1);
+        CountDownLatch releaseSink = new CountDownLatch(1);
+        SparkProfilerMonitor monitor = newMonitor(
+                settings(10, 5, 5),
+                (plugin, maxEntries) -> completeWithWindow(1),
+                new ArrayList<>(),
+                result -> {
+                    sinkEntered.countDown();
+                    await(releaseSink);
+                }
+        );
+        ExecutorService observer = Executors.newSingleThreadExecutor();
+        try {
+            monitor.activateNow();
+            assertTrue(sinkEntered.await(1, TimeUnit.SECONDS));
+            Future<List<SparkProfileSnapshot>> history = observer.submit(monitor::history);
+            assertEquals(1, history.get(250, TimeUnit.MILLISECONDS).size());
+        } finally {
+            releaseSink.countDown();
+            observer.shutdownNow();
+            assertTrue(observer.awaitTermination(1, TimeUnit.SECONDS));
             monitor.close();
         }
     }
@@ -475,6 +503,14 @@ class SparkProfilerMonitorTest {
             TelemetryRuntimeSettings.SparkProfilerSettings settings,
             SparkProfileReader reader,
             List<String> logs) {
+        return newMonitor(settings, reader, logs, null);
+    }
+
+    private static SparkProfilerMonitor newMonitor(
+            TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            SparkProfileReader reader,
+            List<String> logs,
+            SparkProfilerMonitor.SparkProfilePublicationSink publicationSink) {
         return new SparkProfilerMonitor(
                 settings,
                 Object::new,
@@ -482,7 +518,8 @@ class SparkProfilerMonitorTest {
                 reader,
                 () -> Long.MAX_VALUE,
                 null,
-                (level, message) -> logs.add(message)
+                (level, message) -> logs.add(message),
+                publicationSink
         );
     }
 
@@ -516,6 +553,45 @@ class SparkProfilerMonitorTest {
                         100.0d
                 ))
         ));
+    }
+
+    private static SparkProfileReadResult completeWithWindow(int windowKey) {
+        SparkProfileSnapshot snapshot = new SparkProfileSnapshot(
+                "1.10.172",
+                windowKey,
+                1,
+                1,
+                1,
+                1,
+                1.0d,
+                List.of(new SparkProfileSnapshot.HotPath(
+                        "example",
+                        "example.Mod.tick()",
+                        1.0d,
+                        100.0d
+                ))
+        );
+        SparkProfileWindow window = new SparkProfileWindow(
+                "1.10.172",
+                windowKey,
+                1,
+                1,
+                1,
+                1,
+                1.0d,
+                List.of(new SparkProfileWindow.ThreadFrames(
+                        "WorldThread - default",
+                        List.of(new SparkProfileWindow.Frame(
+                                -1,
+                                "example",
+                                "example.Mod",
+                                "tick",
+                                "()V",
+                                1.0d
+                        ))
+                ))
+        );
+        return SparkProfileReadResult.complete(snapshot, window);
     }
 
     private static void awaitHistorySize(SparkProfilerMonitor monitor,

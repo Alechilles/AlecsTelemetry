@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
@@ -41,6 +42,7 @@ import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProjectProfilerService;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
 import com.hypixel.hytale.component.Ref;
@@ -80,6 +82,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryProjectOverrideStore overrideStore;
     private final TelemetryConsentStateStore consentStateStore;
     private final HytaleLogger logger;
+    private final TelemetryProjectProfilerService projectProfilerService;
     private final SparkProfilerMonitor sparkProfilerMonitor;
     private final List<String> registrationWarnings;
     private List<TelemetryProjectRegistration> consentProjects;
@@ -263,15 +266,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.overrideStore = new TelemetryProjectOverrideStore(logger);
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.logger = logger;
+        this.consentProjects = List.copyOf(consentProjects);
+        this.projectProfilerService = new TelemetryProjectProfilerService(
+                this::localProfilerProjects,
+                this::isProfilerProjectEligible,
+                candidate.runtimeVersion(),
+                logger == null ? null : (level, message) -> logger.at(level).log(message)
+        );
         this.sparkProfilerMonitor = monitor == null
                 ? new SparkProfilerMonitor(
                         settings.sparkProfiler(),
                         () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
                         bridge::isActive,
-                        logger
+                        logger,
+                        SparkProfilerMonitor.publicationSink(projectProfilerService)
                 )
                 : monitor;
-        this.consentProjects = List.copyOf(consentProjects);
+        this.projectProfilerService.attachMonitorDiagnostics(sparkProfilerMonitor::diagnostics);
         this.registrationWarnings = List.copyOf(registrationWarnings);
         this.pluginEvents = new TelemetryRuntimePluginEvents(this, playerCounter, logger);
         commandRegistrar.initialize(request.plugin(), this, logger);
@@ -285,11 +296,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
     @Override
     public void shutdown() {
+        sparkProfilerMonitor.close();
         TelemetryCoordinatorRegistry.unregister(bridge.providerId());
         commandRegistrar.unregister();
+        projectProfilerService.deactivateProvider();
+        projectProfilerService.close();
         TelemetryRuntimeLocator.clearIfCurrent(api);
         pluginEvents.unregister();
-        sparkProfilerMonitor.close();
     }
 
     @Override
@@ -336,6 +349,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (reconciled) {
             consentProjects = mergedProjects(coordinator.projects(), discovery.consentProjects());
         }
+        projectProfilerService.refreshProjects();
     }
 
     void onWorldRemoved(@Nonnull RemoveWorldEvent event) {
@@ -372,6 +386,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         boolean reconciled = coordinator.ensureBaseProject(project);
         if (reconciled) {
             consentProjects = mergedProjects(coordinator.projects(), coordinator.manualReportProjects());
+            projectProfilerService.refreshProjects();
         }
         return reconciled;
     }
@@ -419,7 +434,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        return active == null ? coordinator.setProjectEnabled(projectId, enabled) : active.setProjectEnabled(projectId, enabled);
+        if (active != null) {
+            return active.setProjectEnabled(projectId, enabled);
+        }
+        boolean applied = coordinator.setProjectEnabled(projectId, enabled);
+        if (applied) {
+            invalidateProfilerIfIneligible(projectId);
+        }
+        return applied;
     }
 
     @Override
@@ -565,6 +587,9 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             replaceConsentProject(project.withOverride(override));
         }
         boolean applied = applyRuntimeConsent(project.projectId(), normalized);
+        if (applied) {
+            invalidateProfilerIfIneligible(project.projectId());
+        }
         if (applied && reviewed) {
             consentMetricReporter.recordConsentChange(project, previous, normalized, supported);
         }
@@ -675,6 +700,15 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public SparkProfilerDiagnostics sparkProfilerDiagnostics() {
         return sparkProfilerMonitor.diagnostics();
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryProfilerView profiler(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return usesLocalCoordinator(active)
+                ? projectProfilerService.view(projectId)
+                : TelemetryProfilerView.unavailable();
     }
 
     @Nonnull
@@ -1041,6 +1075,12 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         return overrideStore.saveConsentSnapshot(overrideFile, snapshot, supported);
     }
 
+    private void invalidateProfilerIfIneligible(@Nonnull String projectId) {
+        if (!isProfilerProjectEligible(projectId)) {
+            projectProfilerService.invalidate(projectId);
+        }
+    }
+
     private boolean applyRuntimeConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active != null) {
@@ -1323,6 +1363,16 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             }
         }
         return List.copyOf(projects.values());
+    }
+
+    @Nonnull
+    private List<TelemetryProjectRegistration> localProfilerProjects() {
+        return mergedProjects(coordinator.projects(), consentProjects);
+    }
+
+    private boolean isProfilerProjectEligible(@Nonnull String projectId) {
+        return coordinator.isProjectEnabled(projectId)
+                && coordinator.isPerformanceEnabled(projectId);
     }
 
 
@@ -1668,6 +1718,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public void start() {
             service.start();
+            projectProfilerService.activateProvider();
             TelemetryRuntimeLocator.register(api);
             commandRegistrar.register();
             sparkProfilerMonitor.activate();
@@ -1676,8 +1727,10 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public void shutdown() {
             sparkProfilerMonitor.suspend();
+            projectProfilerService.deactivateProvider();
             commandRegistrar.unregister();
             service.shutdown();
+            projectProfilerService.close();
             TelemetryRuntimeLocator.clearIfCurrent(api);
         }
 
@@ -1687,6 +1740,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             boolean reconciled = service.reconcileProjectContributions(revision, contributions);
             if (reconciled) {
                 consentProjects = mergedProjects(service.projects(), service.manualReportProjects());
+                projectProfilerService.refreshProjects();
             }
             return reconciled;
         }
@@ -1763,7 +1817,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
         @Override
         public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
-            return service.setProjectEnabled(projectId, enabled);
+            boolean applied = service.setProjectEnabled(projectId, enabled);
+            if (applied) {
+                invalidateProfilerIfIneligible(projectId);
+            }
+            return applied;
         }
 
         @Override
@@ -1783,7 +1841,11 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
         @Override
         public boolean setPerformanceEnabled(@Nonnull String projectId, boolean enabled) {
-            return service.setPerformanceEnabled(projectId, enabled);
+            boolean applied = service.setPerformanceEnabled(projectId, enabled);
+            if (applied) {
+                invalidateProfilerIfIneligible(projectId);
+            }
+            return applied;
         }
 
         @Override

@@ -32,6 +32,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     private final LongSupplier heapHeadroomBytes;
     private final HytaleLogger logger;
     private final BiConsumer<Level, String> logSink;
+    private final SparkProfilePublicationSink publicationSink;
     private final Object lifecycleLock = new Object();
     private final ArrayDeque<SparkProfileSnapshot> history = new ArrayDeque<>();
 
@@ -47,6 +48,17 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     private Integer lastCompletedWindowKey;
     private SparkProfilerDiagnostics.State lastLoggedState;
 
+    @FunctionalInterface
+    public interface SparkProfilePublicationSink {
+        void publish(@Nonnull SparkProfileReadResult result);
+    }
+
+    @Nonnull
+    public static SparkProfilePublicationSink publicationSink(
+            @Nonnull TelemetryProjectProfilerService service) {
+        return service::publish;
+    }
+
     public SparkProfilerMonitor(
             @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
             @Nonnull Supplier<?> sparkPluginLookup,
@@ -59,7 +71,26 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 new SparkProfileReflectionBridge(),
                 SparkProfilerMonitorSupport::currentHeapHeadroomBytes,
                 logger,
+                null,
                 null
+        );
+    }
+
+    public SparkProfilerMonitor(
+            @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            @Nonnull Supplier<?> sparkPluginLookup,
+            @Nonnull BooleanSupplier activeCoordinatorOwner,
+            @Nullable HytaleLogger logger,
+            @Nullable SparkProfilePublicationSink publicationSink) {
+        this(
+                settings,
+                sparkPluginLookup,
+                activeCoordinatorOwner,
+                new SparkProfileReflectionBridge(),
+                SparkProfilerMonitorSupport::currentHeapHeadroomBytes,
+                logger,
+                null,
+                publicationSink
         );
     }
 
@@ -77,6 +108,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 profileReader,
                 heapHeadroomBytes,
                 logger,
+                null,
                 null
         );
     }
@@ -89,6 +121,27 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             @Nonnull LongSupplier heapHeadroomBytes,
             @Nullable HytaleLogger logger,
             @Nullable BiConsumer<Level, String> logSink) {
+        this(
+                settings,
+                sparkPluginLookup,
+                activeCoordinatorOwner,
+                profileReader,
+                heapHeadroomBytes,
+                logger,
+                logSink,
+                null
+        );
+    }
+
+    SparkProfilerMonitor(
+            @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            @Nonnull Supplier<?> sparkPluginLookup,
+            @Nonnull BooleanSupplier activeCoordinatorOwner,
+            @Nonnull SparkProfileReader profileReader,
+            @Nonnull LongSupplier heapHeadroomBytes,
+            @Nullable HytaleLogger logger,
+            @Nullable BiConsumer<Level, String> logSink,
+            @Nullable SparkProfilePublicationSink publicationSink) {
         this.settings = settings;
         this.sparkPluginLookup = sparkPluginLookup;
         this.activeCoordinatorOwner = activeCoordinatorOwner;
@@ -96,6 +149,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         this.heapHeadroomBytes = heapHeadroomBytes;
         this.logger = logger;
         this.logSink = logSink;
+        this.publicationSink = publicationSink;
         this.diagnostics = settings.enabled()
                 ? SparkProfilerMonitorSupport.runtimeDiagnostics(
                 SparkProfilerDiagnostics.simple(
@@ -494,6 +548,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             return;
         }
         boolean publish = false;
+        boolean publishProject = false;
         SparkProfilerDiagnostics resultDiagnostics;
         synchronized (lifecycleLock) {
             if (inFlight != attempt || retireLateAttemptLocked(attempt)) {
@@ -533,6 +588,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                     history.removeFirst();
                 }
                 publish = true;
+                publishProject = publicationSink != null && result.window() != null;
             }
             if (!opensCircuit && active && !closed) {
                 scheduleCaptureLocked(settings.intervalSeconds(), "poll interval");
@@ -540,10 +596,45 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             }
         }
 
+        if (publishProject && !isCurrentOwnerForPublication(attempt.generation)) {
+            deactivateForLostOwnership(attempt.generation);
+            publishProject = false;
+        }
+        if (publishProject) {
+            try {
+                publicationSink.publish(result);
+            } catch (Throwable failure) {
+                SparkProfilerMonitorSupport.rethrowIfFatal(failure);
+                log(
+                        Level.WARNING,
+                        "Spark project publication failed: "
+                                + SparkProfilerMonitorSupport.bounded(failure.toString())
+                );
+            }
+        }
         if (publish) {
             logSnapshot(resultDiagnostics);
         } else if (shouldLogState(resultDiagnostics.state())) {
             logNonActionable(resultDiagnostics);
+        }
+    }
+
+    private boolean isCurrentOwnerForPublication(long admittedGeneration) {
+        synchronized (lifecycleLock) {
+            if (closed || !active || circuitOpen || lifecycleGeneration != admittedGeneration) {
+                return false;
+            }
+            try {
+                return activeCoordinatorOwner.getAsBoolean();
+            } catch (Throwable failure) {
+                SparkProfilerMonitorSupport.rethrowIfFatal(failure);
+                log(
+                        Level.WARNING,
+                        "Spark project publication owner check failed: "
+                                + SparkProfilerMonitorSupport.bounded(failure.toString())
+                );
+                return false;
+            }
         }
     }
 
