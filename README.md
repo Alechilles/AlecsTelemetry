@@ -46,8 +46,8 @@ backend, the same runtime can target custom endpoints instead.
 - Optional Spark hot-path monitor: server owners can opt in to recurring,
   bounded local summaries of Java self-time hot paths from Spark's passive
   background profile. An exact official-artifact gate isolates the unsupported
-  private integration, and raw Spark profiles are not uploaded or retained by
-  Telemetry.
+  private integration. The monitor does not directly queue or upload profiler
+  data, and it does not write raw Spark profiles to a log or profile file.
 - Consent and overrides: descriptor defaults seed the first-run consent UI, while
   server owners keep final control through runtime settings and per-project
   overrides.
@@ -394,8 +394,12 @@ same stable `telemetry.command.telemetry.*` prefix.
   attachments are controlled by runtime settings.
 - The optional Spark hot-path monitor is off by default. It reads completed
   passive Spark background windows, keeps bounded summaries and history in
-  memory, writes bounded summaries to the local server log, and does not retain
-  or upload raw Spark profile data.
+  memory, and writes bounded summaries to the local server log. The monitor
+  does not directly queue or upload profiler data. A user-submitted manual
+  report can include those ordinary log lines when current or previous log
+  attachments pass the manual-report settings, project descriptor, review,
+  redaction, and clipping controls; raw Spark profile data is not written by
+  the monitor to the log or a profile file.
 
 For the full runtime, web portal, and ModStats.io policy, see
 [Alec's Telemetry Privacy Policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md).

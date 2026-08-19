@@ -93,8 +93,12 @@ Alec's Telemetry is designed to avoid player identity data by default.
   enables it, the runtime reads completed passive Spark background windows,
   computes the loaded Spark JAR's SHA-256 in memory, and writes bounded
   WorldThread hot-path summaries to the local server log. It keeps only bounded
-  summaries and history in memory. It does not retain or upload the JAR hash or
-  raw Spark profile, or send the summaries to a telemetry endpoint.
+  summaries and history in memory. It does not directly queue or upload
+  profiler data. Ordinary log summary lines can be included if a user submits
+  a manual report with current or previous server-log attachments and the
+  manual-report settings, project descriptor, review, redaction, and clipping
+  controls allow them. The monitor does not write raw Spark profile data to the
+  log or a profile file, and does not upload that raw data.
 - The hosted platform may use IP addresses and request metadata for rate
   limiting, abuse prevention, server-country derivation, security logging, and
   normal hosting operations.
@@ -139,10 +143,15 @@ settings and behavior; that retention is separate from Alec's Telemetry.
 Local summaries can contain Spark-reported source or mod labels, Java class and
 method names, timing values, and bounded thread/frame counts.
 
-The Spark hot-path monitor does not queue or send its raw profile, hot-path
-summary, status, capture duration, or heap delta to Alec's hosted platform or a
-custom telemetry endpoint. A supported Spark window with no usable WorldThread
-Java samples produces no actionable ranking.
+The Spark hot-path monitor does not directly queue or send its raw profile,
+hot-path summary, status, capture duration, or heap delta to Alec's hosted
+platform or a custom telemetry endpoint. Its ordinary log summary lines can be
+part of a user-submitted manual report when current or previous server-log
+attachments are enabled by runtime settings and the project descriptor, pass
+any required local review, and receive configured redaction and byte clipping.
+Raw Spark profile data is not written to the server log or a profile file by the
+monitor, and the monitor does not upload it. A supported Spark window with no
+usable WorldThread Java samples produces no actionable ranking.
 
 ## Telemetry Sent To The Hosted Platform
 

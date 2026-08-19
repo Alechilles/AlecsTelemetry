@@ -152,18 +152,25 @@ server.
 The active Telemetry coordinator starts the monitor after its service starts.
 The monitor reads only completed Spark `ASYNC` `EXECUTION` background windows; it
 does not read a profile started by a user. It checks the latest completed window
-after `initialDelaySeconds`, then polls every `intervalSeconds`. Each window is
-summarized once. A completed window can be behind current server activity by the
-Spark background-profiler interval.
+after `initialDelaySeconds`. After a capture attempt resolves without opening
+the circuit, the next poll is scheduled `intervalSeconds` later. A poll can
+read and summarize the same latest completed window again. The monitor retains
+and logs a completed actionable window key once, but `NO_ACTIONABLE_DATA` can be
+processed again on later polls. A completed window can be behind current server
+activity by the Spark background-profiler interval.
 
 The ranking uses Java self time from Hytale thread names containing
 `WorldThread`. Native frames and Java work from other thread names do not enter
 the ranking. Telemetry keeps only bounded immutable summaries and history in
-memory, and writes up to `maxSummaryEntries` hot paths for each new actionable
-window to the ordinary server log. It does not retain raw Spark profile data,
-create a raw profile file, or send profile data or summaries to Alec's hosted
-platform or a custom endpoint. Spark may retain its own profiler data under its
-own settings.
+memory, and writes up to `maxSummaryEntries` hot paths when it first retains and
+logs an actionable window key in the ordinary server log. The monitor does not
+directly queue or upload profiler data. Its ordinary log summary lines can be
+included if a user submits
+a manual report with current or previous server-log attachments and the
+manual-report settings, project descriptor, review, redaction, and clipping
+controls allow them. The monitor does not write raw Spark profile data to the
+log or a profile file, and does not upload that raw data. Spark may retain its
+own profiler data under its own settings.
 
 ### Settings
 
@@ -206,8 +213,10 @@ value, which uses safe canonical defaults instead of the legacy block.
   discarded if Spark ignores interruption. Spark absence, no active background
   sampler, no completed window, no actionable WorldThread data, and low heap do
   not open the circuit; the monitor can poll again.
-- The monitor reads only while its provider owns the active Telemetry
-  coordinator. Ownership loss suspends future work and fences late results.
+- A new read starts only while its provider owns the active Telemetry
+  coordinator. Ownership loss requests cancellation, stops future polls, and
+  fences late results. A Spark export that ignores interruption may continue in
+  its daemon worker until it returns; the late result is not published.
   Coordinator shutdown suspends the monitor before service shutdown, and the
   provider handle closes it on permanent shutdown.
 

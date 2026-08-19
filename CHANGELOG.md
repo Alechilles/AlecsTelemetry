@@ -7,7 +7,9 @@
   passive background windows from fingerprinted official Spark Hytale builds,
   ranks Java self time on Hytale WorldThread threads, keeps bounded summaries
   and history in memory, logs local hot paths, and fails closed on unsupported
-  or incompatible Spark artifacts.
+  or incompatible Spark artifacts. The monitor does not directly queue or
+  upload profiler data; ordinary log lines remain subject to the manual-report
+  attachment controls if a user submits a report.
 
 ### Fixed
 - Corrected the embedded-runtime packaging guide and example manifest so hosts

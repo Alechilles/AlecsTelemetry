@@ -50,18 +50,24 @@ settings, compatibility gate, and safety limits.
 ```
 
 - `profiler status` shows the monitor state, active-owner and circuit flags,
-  Spark version, next capture time, latest window, capture timing, heap delta,
-  thread/frame counts, and hot-path count.
-- `profiler top` shows up to 10 ranked hot paths from the latest actionable
-  window. It reports a disabled or no-actionable-data state when no ranking is
-  available.
+  Spark version, next capture time, current completed window when available,
+  capture timing, heap delta, thread/frame counts, and hot-path count from
+  current diagnostics. It does not show the retained history view.
+- `profiler top` shows up to 10 ranked hot paths from the current actionable
+  diagnostics result. It can report no data while the monitor is `CAPTURING` or
+  after a later non-actionable state, even when history contains an earlier
+  completed window.
 - `profiler history` shows the newest retained completed windows, limited by
   `maxHistorySnapshots` and by the command's 10-entry output bound.
 
 The monitor keeps summaries and history in memory and writes bounded summary
-lines to the ordinary server log. It does not retain or upload raw Spark profile
-data. These text commands use the root Telemetry permission and accept server
-console senders.
+lines to the ordinary server log. It does not directly queue or upload
+profiler data. Ordinary log summary lines can be included if a user submits a
+manual report with current or previous server-log attachments and the
+manual-report settings, project descriptor, review, redaction, and clipping
+controls allow them. The monitor does not write raw Spark profile data to the
+log or a profile file, and does not upload that raw data. These text commands
+use the root Telemetry permission and accept server console senders.
 
 ## Consent
 
