@@ -5,6 +5,8 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -12,6 +14,9 @@ import java.util.concurrent.TimeUnit;
  */
 final class SparkProfilerMonitorSupport {
     static final long MIN_HEAP_HEADROOM_BYTES = 256L * 1024L * 1024L;
+    private static final String JVM_CAPTURE_GATE_KEY =
+            "com.alechilles.alecstelemetry.runtime.profiler.spark.capture.gate.v1";
+    private static final long JVM_CAPTURE_RETRY_SECONDS = 1L;
     private static final int MAX_DETAIL_LENGTH = 240;
 
     private SparkProfilerMonitorSupport() {
@@ -116,6 +121,37 @@ final class SparkProfilerMonitorSupport {
 
     static long elapsedMillis(long startedAtNanos) {
         return TimeUnit.NANOSECONDS.toMillis(Math.max(0L, System.nanoTime() - startedAtNanos));
+    }
+
+    static boolean tryAcquireJvmCapture(@Nonnull Object token) {
+        return jvmCaptureGate().compareAndSet(null, token);
+    }
+
+    static void releaseJvmCapture(@Nonnull Object token) {
+        jvmCaptureGate().compareAndSet(token, null);
+    }
+
+    static long jvmCaptureRetrySeconds() {
+        return JVM_CAPTURE_RETRY_SECONDS;
+    }
+
+    @Nonnull
+    @SuppressWarnings("unchecked")
+    private static AtomicReference<Object> jvmCaptureGate() {
+        Properties properties = System.getProperties();
+        Object existing = properties.get(JVM_CAPTURE_GATE_KEY);
+        if (existing instanceof AtomicReference<?> reference) {
+            return (AtomicReference<Object>) reference;
+        }
+        synchronized (properties) {
+            existing = properties.get(JVM_CAPTURE_GATE_KEY);
+            if (existing instanceof AtomicReference<?> reference) {
+                return (AtomicReference<Object>) reference;
+            }
+            AtomicReference<Object> created = new AtomicReference<>();
+            properties.put(JVM_CAPTURE_GATE_KEY, created);
+            return created;
+        }
     }
 
     @Nonnull

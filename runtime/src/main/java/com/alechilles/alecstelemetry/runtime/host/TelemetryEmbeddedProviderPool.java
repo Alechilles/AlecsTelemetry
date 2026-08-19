@@ -18,7 +18,8 @@ import java.util.Map;
  *
  * <p>A physical plugin host gets one provider handle even when it exposes a conventional
  * descriptor and several logical contribution services. Leases are the only objects that
- * callers retain; releasing the last started lease shuts the provider down.</p>
+ * callers retain; the delegate stays reusable while any lease remains and shuts down when the
+ * final lease closes.</p>
  */
 public final class TelemetryEmbeddedProviderPool {
     private static final Object LOCK = new Object();
@@ -88,12 +89,12 @@ public final class TelemetryEmbeddedProviderPool {
             if (lease.started) {
                 lease.started = false;
                 entry.startedLeaseCount = Math.max(0, entry.startedLeaseCount - 1);
-                if (entry.startedLeaseCount == 0) {
+            }
+            if (entry.leaseCount == 0) {
+                if (entry.started) {
                     entry.started = false;
                     entry.delegate.shutdown();
                 }
-            }
-            if (entry.leaseCount == 0) {
                 ENTRIES.remove(entry.key, entry);
             }
         }

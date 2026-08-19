@@ -346,46 +346,80 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 SparkProfilerMonitorSupport.usedHeapBytes(),
                 sparkPlugin
         );
+        if (!SparkProfilerMonitorSupport.tryAcquireJvmCapture(attempt)) {
+            deferBusyCapture();
+            return;
+        }
         FutureTask<Void> task = new FutureTask<>(() -> {
             capture(attempt);
             return null;
         });
         attempt.task = task;
+        boolean submitted = false;
 
+        try {
+            synchronized (lifecycleLock) {
+                if (closed || !active || circuitOpen || attempt.generation != lifecycleGeneration
+                        || inFlight != null) {
+                    return;
+                }
+                inFlight = attempt;
+                diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
+                        SparkProfilerDiagnostics.simple(
+                                SparkProfilerDiagnostics.State.CAPTURING,
+                                null,
+                                "Reading Spark's latest completed background window."
+                        ),
+                        true,
+                        false,
+                        0L
+                );
+                try {
+                    ScheduledThreadPoolExecutor currentExecutor = executorLocked();
+                    attempt.timeoutTask = currentExecutor.schedule(
+                            () -> timeOut(attempt),
+                            settings.timeoutSeconds(),
+                            TimeUnit.SECONDS
+                    );
+                    currentExecutor.execute(task);
+                    submitted = true;
+                } catch (RuntimeException failure) {
+                    if (attempt.timeoutTask != null) {
+                        attempt.timeoutTask.cancel(false);
+                    }
+                    if (inFlight == attempt) {
+                        inFlight = null;
+                    }
+                    task.cancel(true);
+                    failLocked("Spark capture scheduling failed", failure);
+                }
+            }
+        } finally {
+            if (!submitted) {
+                SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+            }
+        }
+    }
+
+    private void deferBusyCapture() {
         synchronized (lifecycleLock) {
-            if (closed || !active || circuitOpen || attempt.generation != lifecycleGeneration
-                    || inFlight != null) {
+            if (closed || !active || circuitOpen || inFlight != null) {
                 return;
             }
-            inFlight = attempt;
             diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
-                            SparkProfilerDiagnostics.State.CAPTURING,
-                            null,
-                            "Reading Spark's latest completed background window."
+                            SparkProfilerDiagnostics.State.WAITING,
+                            diagnostics.sparkVersion(),
+                            "Another Telemetry runtime is reading Spark; capture will retry."
                     ),
                     true,
-                    false,
+                    circuitOpen,
                     0L
             );
-            try {
-                ScheduledThreadPoolExecutor currentExecutor = executorLocked();
-                attempt.timeoutTask = currentExecutor.schedule(
-                        () -> timeOut(attempt),
-                        settings.timeoutSeconds(),
-                        TimeUnit.SECONDS
-                );
-                currentExecutor.execute(task);
-            } catch (RuntimeException failure) {
-                if (attempt.timeoutTask != null) {
-                    attempt.timeoutTask.cancel(false);
-                }
-                if (inFlight == attempt) {
-                    inFlight = null;
-                }
-                task.cancel(true);
-                failLocked("Spark capture scheduling failed", failure);
-            }
+            scheduleCaptureLocked(
+                    SparkProfilerMonitorSupport.jvmCaptureRetrySeconds(),
+                    "shared Spark capture gate"
+            );
         }
     }
 
@@ -393,15 +427,25 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         synchronized (lifecycleLock) {
             if (inFlight != attempt || !isCurrentAttemptLocked(attempt)) {
                 retireLateAttemptLocked(attempt);
+                SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
                 return;
             }
             attempt.started = true;
         }
+        SparkProfileReadResult result = null;
+        Throwable failure = null;
         try {
-            publishCapture(attempt, profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries()));
-        } catch (Throwable failure) {
-            SparkProfilerMonitorSupport.rethrowIfFatal(failure);
+            result = profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries());
+        } catch (Throwable caught) {
+            SparkProfilerMonitorSupport.rethrowIfFatal(caught);
+            failure = caught;
+        } finally {
+            SparkProfilerMonitorSupport.releaseJvmCapture(attempt);
+        }
+        if (failure != null) {
             handleCaptureFailure(attempt, failure);
+        } else {
+            publishCapture(attempt, result);
         }
     }
 

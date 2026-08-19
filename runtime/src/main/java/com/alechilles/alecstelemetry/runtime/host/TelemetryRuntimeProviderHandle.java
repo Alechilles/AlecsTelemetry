@@ -266,7 +266,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 ? new SparkProfilerMonitor(
                         settings.sparkProfiler(),
                         () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
-                        this::ownsActiveCoordinator,
+                        bridge::isActive,
                         logger
                 )
                 : monitor;

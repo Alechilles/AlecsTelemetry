@@ -66,13 +66,17 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
             assertEquals("embedded:Alechilles:SparkB", TelemetryCoordinatorRegistry.activeBridge().providerId());
             assertFalse(providerA.handle.ownsActiveCoordinator());
             assertTrue(providerB.handle.ownsActiveCoordinator());
-            assertTrue(providerB.reader.entered.await(2, TimeUnit.SECONDS));
+            assertFalse(
+                    providerB.reader.entered.await(250, TimeUnit.MILLISECONDS),
+                    "the winning provider must wait while the losing Spark reader is still running"
+            );
 
             providerA.reader.release.countDown();
             awaitReads(providerA.reader, 1);
             assertEquals(1, providerA.reader.reads.get());
             assertTrue(providerA.monitor.history().isEmpty());
 
+            assertTrue(providerB.reader.entered.await(2, TimeUnit.SECONDS));
             providerB.reader.release.countDown();
             awaitHistory(providerB.monitor, 1);
             assertEquals(1, providerB.reader.reads.get());
