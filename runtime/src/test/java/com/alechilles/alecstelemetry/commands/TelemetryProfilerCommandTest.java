@@ -244,6 +244,40 @@ class TelemetryProfilerCommandTest {
     }
 
     @Test
+    void longProjectPathKeepsRequiredDownstreamFieldsAndFullFingerprintWithinLineBudget()
+            throws Exception {
+        String fingerprint = "ffeeddccbbaa99887766554433221100";
+        TelemetryProfilerSnapshot snapshot = snapshot(longDownstreamPath(fingerprint));
+        List<String> logLines = new ArrayList<>();
+        TelemetryCommandRuntime runtime = runtimeWithProjectSnapshot(
+                "mod-a",
+                snapshot,
+                logLines
+        );
+
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtime),
+                "top",
+                "/telemetry profiler top mod-a"
+        );
+
+        String pathLine = sender.messages.stream()
+                .map(Message::getRawText)
+                .filter(line -> line.contains("DOWNSTREAM"))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(pathLine.contains("attribution=DOWNSTREAM"));
+        assertTrue(pathLine.contains("sampledMs=25.00 ms"));
+        assertTrue(pathLine.contains("worldThreadShare=25.00%"));
+        assertTrue(pathLine.contains("ownedMethod="));
+        assertTrue(pathLine.contains("externalMethod="));
+        assertTrue(pathLine.contains("qualification=OBSERVED"));
+        assertTrue(pathLine.contains("fingerprint=" + fingerprint));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
     void unavailableProjectDoesNotLeakGlobalPaths() throws Exception {
         SparkProfileSnapshot.HotPath globalPath = new SparkProfileSnapshot.HotPath(
                 "OtherMod", "com.example.OtherMod#tick()V", 12.0, 100.0
@@ -507,6 +541,23 @@ class TelemetryProfilerCommandTest {
                 sampledMilliseconds,
                 TelemetryProfilerQualification.OBSERVED,
                 List.of("com.example.Mod#tick()V", "com.example.Other#call()V")
+        );
+    }
+
+    private static TelemetryProfilerPathEvidence longDownstreamPath(String fingerprint) {
+        return new TelemetryProfilerPathEvidence(
+                fingerprint,
+                TelemetryProfilerAttribution.DOWNSTREAM,
+                "owned-class-".repeat(12),
+                "owned-method-".repeat(12),
+                "(owned-descriptor-".repeat(8) + ")V",
+                "external-class-".repeat(12),
+                "external-method-".repeat(12),
+                "(external-descriptor-".repeat(8) + ")V",
+                25.0,
+                25.0,
+                TelemetryProfilerQualification.OBSERVED,
+                List.of()
         );
     }
 

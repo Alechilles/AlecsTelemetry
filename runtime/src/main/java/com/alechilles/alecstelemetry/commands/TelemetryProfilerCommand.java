@@ -25,6 +25,8 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static final int MAX_PROJECT_TOP_ENTRIES = 5;
     private static final int MAX_HISTORY_ENTRIES = 10;
     private static final int MAX_PROJECT_ID_LENGTH = 120;
+    private static final int MAX_PROJECT_METHOD_TEXT = 72;
+    private static final int MAX_PROJECT_MEASUREMENT_TEXT = 12;
     private static final int MAX_OUTPUT_TEXT = 320;
 
     public TelemetryProfilerCommand(@Nonnull TelemetryCommandRuntime runtime) {
@@ -289,22 +291,23 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         StringBuilder line = new StringBuilder()
                 .append(rank)
                 .append(". attribution=").append(path.attribution().name())
-                .append(", sampledMs=").append(formatNumber(path.sampledMilliseconds())).append(" ms")
-                .append(", worldThreadShare=").append(formatNumber(path.selectedWorldThreadSharePercent()))
+                .append(", sampledMs=").append(measurement(path.sampledMilliseconds())).append(" ms")
+                .append(", worldThreadShare=").append(measurement(path.selectedWorldThreadSharePercent()))
                 .append('%')
                 .append(", ownedMethod=").append(projectMethod(path.ownedClassName(),
-                        path.ownedMethodName(), path.ownedMethodDescriptor()))
-                .append(", qualification=").append(path.qualification().name())
-                .append(", fingerprint=").append(bounded(path.fingerprint(), 32));
+                        path.ownedMethodName(), path.ownedMethodDescriptor(), MAX_PROJECT_METHOD_TEXT));
         if (path.firstExternalClassName() != null
                 || path.firstExternalMethodName() != null
                 || path.firstExternalMethodDescriptor() != null) {
             line.append(", externalMethod=").append(projectMethod(
                     path.firstExternalClassName(),
                     path.firstExternalMethodName(),
-                    path.firstExternalMethodDescriptor()
+                    path.firstExternalMethodDescriptor(),
+                    MAX_PROJECT_METHOD_TEXT
             ));
         }
+        line.append(", qualification=").append(path.qualification().name())
+                .append(", fingerprint=").append(bounded(path.fingerprint(), 32));
         return bounded(line.toString());
     }
 
@@ -324,16 +327,22 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     @Nonnull
     private static String projectMethod(@Nullable String className,
                                         @Nullable String methodName,
-                                        @Nullable String descriptor) {
+                                        @Nullable String descriptor,
+                                        int maxLength) {
         String safeClass = bounded(className, 56);
         String safeMethod = bounded(methodName, 56);
         String safeDescriptor = bounded(descriptor, 56);
-        return safeClass + "#" + safeMethod + safeDescriptor;
+        return bounded(safeClass + "#" + safeMethod + safeDescriptor, maxLength);
     }
 
     @Nonnull
     private static String formatNumber(double value) {
         return String.format(Locale.ROOT, "%.2f", value);
+    }
+
+    @Nonnull
+    private static String measurement(double value) {
+        return bounded(formatNumber(value), MAX_PROJECT_MEASUREMENT_TEXT);
     }
 
     @Nonnull
