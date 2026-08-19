@@ -6,9 +6,7 @@ import com.hypixel.hytale.logger.HytaleLogger;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
@@ -28,9 +26,6 @@ import java.util.logging.Level;
  * remain in the in-memory history.</p>
  */
 public final class SparkProfilerMonitor implements AutoCloseable {
-    private static final long MIN_HEAP_HEADROOM_BYTES = 256L * 1024L * 1024L;
-    private static final int MAX_DETAIL_LENGTH = 240;
-
     private final TelemetryRuntimeSettings.SparkProfilerSettings settings;
     private final Supplier<?> sparkPluginLookup;
     private final BooleanSupplier activeCoordinatorOwner;
@@ -40,16 +35,17 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     private final BiConsumer<Level, String> logSink;
     private final Object lifecycleLock = new Object();
     private final ArrayDeque<SparkProfileSnapshot> history = new ArrayDeque<>();
-    private final Set<Integer> seenWindowKeys = new HashSet<>();
 
     private volatile SparkProfilerDiagnostics diagnostics;
     private ScheduledThreadPoolExecutor executor;
     private ScheduledFuture<?> scheduledTask;
-    private CaptureAttempt inFlight;
+    private SparkProfilerCaptureAttempt inFlight;
     private long lifecycleGeneration;
     private boolean active;
     private boolean circuitOpen;
     private boolean closed;
+    private boolean immediateAfterStaleExport;
+    private Integer lastCompletedWindowKey;
     private SparkProfilerDiagnostics.State lastLoggedState;
 
     public SparkProfilerMonitor(
@@ -62,7 +58,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 sparkPluginLookup,
                 activeCoordinatorOwner,
                 new SparkProfileReflectionBridge(),
-                SparkProfilerMonitor::currentHeapHeadroomBytes,
+                SparkProfilerMonitorSupport::currentHeapHeadroomBytes,
                 logger,
                 null
         );
@@ -102,7 +98,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         this.logger = logger;
         this.logSink = logSink;
         this.diagnostics = settings.enabled()
-                ? runtimeDiagnostics(
+                ? SparkProfilerMonitorSupport.runtimeDiagnostics(
                 SparkProfilerDiagnostics.simple(
                         SparkProfilerDiagnostics.State.READY,
                         null,
@@ -138,9 +134,9 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             active = false;
             lifecycleGeneration++;
             cancelScheduledTaskLocked();
-            cancelInFlightLocked();
+            invalidateInFlightLocked();
             shutdownExecutorLocked(true);
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.READY,
                             diagnostics.sparkVersion(),
@@ -166,9 +162,9 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             active = false;
             lifecycleGeneration++;
             cancelScheduledTaskLocked();
-            cancelInFlightLocked();
+            invalidateInFlightLocked();
             shutdownExecutorLocked(true);
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.SHUTDOWN,
                             diagnostics.sparkVersion(),
@@ -252,7 +248,8 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             }
             active = true;
             lifecycleGeneration++;
-            diagnostics = runtimeDiagnostics(
+            immediateAfterStaleExport = immediate && inFlight != null;
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.WAITING,
                             diagnostics.sparkVersion(),
@@ -328,7 +325,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             fail("Heap headroom check failed", failure);
             return;
         }
-        if (headroom < MIN_HEAP_HEADROOM_BYTES) {
+        if (headroom < SparkProfilerMonitorSupport.MIN_HEAP_HEADROOM_BYTES) {
             finishWithoutCapture(
                     SparkProfilerDiagnostics.State.LOW_HEAP,
                     "Capture was skipped because JVM heap headroom was below 256 MiB.",
@@ -338,12 +335,15 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             return;
         }
 
+        startCapture(sparkPlugin);
+    }
+
+    private void startCapture(@Nonnull Object sparkPlugin) {
         long startedAtNanos = System.nanoTime();
-        long heapBefore = usedHeapBytes();
-        CaptureAttempt attempt = new CaptureAttempt(
+        SparkProfilerCaptureAttempt attempt = new SparkProfilerCaptureAttempt(
                 lifecycleGeneration(),
                 startedAtNanos,
-                heapBefore,
+                SparkProfilerMonitorSupport.usedHeapBytes(),
                 sparkPlugin
         );
         FutureTask<Void> task = new FutureTask<>(() -> {
@@ -358,7 +358,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 return;
             }
             inFlight = attempt;
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.CAPTURING,
                             null,
@@ -389,39 +389,54 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
-    private void capture(@Nonnull CaptureAttempt attempt) {
-        SparkProfileReadResult result;
-        try {
-            result = profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries());
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            boolean report;
-            synchronized (lifecycleLock) {
-                report = isCurrentAttemptLocked(attempt);
-                if (report) {
-                    inFlight = null;
-                    cancelTimeoutLocked(attempt);
-                    failLocked("Spark snapshot failed", failure);
-                }
-            }
-            return;
-        }
-
-        long durationMillis = elapsedMillis(attempt.startedAtNanos);
-        long heapDelta = usedHeapBytes() - attempt.heapBefore;
+    private void capture(@Nonnull SparkProfilerCaptureAttempt attempt) {
         synchronized (lifecycleLock) {
-            if (!isCurrentAttemptLocked(attempt)) {
+            if (inFlight != attempt || !isCurrentAttemptLocked(attempt)) {
+                retireLateAttemptLocked(attempt);
+                return;
+            }
+            attempt.started = true;
+        }
+        try {
+            publishCapture(attempt, profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries()));
+        } catch (Throwable failure) {
+            SparkProfilerMonitorSupport.rethrowIfFatal(failure);
+            handleCaptureFailure(attempt, failure);
+        }
+    }
+
+    private void handleCaptureFailure(@Nonnull SparkProfilerCaptureAttempt attempt,
+                                      @Nonnull Throwable failure) {
+        synchronized (lifecycleLock) {
+            if (inFlight != attempt || retireLateAttemptLocked(attempt)) {
+                return;
+            }
+            inFlight = null;
+            cancelTimeoutLocked(attempt);
+            failLocked("Spark snapshot failed", failure);
+        }
+    }
+
+    private void publishCapture(@Nonnull SparkProfilerCaptureAttempt attempt,
+                                @Nullable SparkProfileReadResult result) {
+        long durationMillis = SparkProfilerMonitorSupport.elapsedMillis(attempt.startedAtNanos);
+        long heapDelta = SparkProfilerMonitorSupport.usedHeapBytes() - attempt.heapBefore;
+        synchronized (lifecycleLock) {
+            if (inFlight != attempt || retireLateAttemptLocked(attempt)) {
                 return;
             }
         }
         if (!isActiveOwner()) {
             deactivateForLostOwnership();
+            synchronized (lifecycleLock) {
+                retireLateAttemptLocked(attempt);
+            }
             return;
         }
         boolean publish = false;
         SparkProfilerDiagnostics resultDiagnostics;
         synchronized (lifecycleLock) {
-            if (!isCurrentAttemptLocked(attempt)) {
+            if (inFlight != attempt || retireLateAttemptLocked(attempt)) {
                 return;
             }
             inFlight = null;
@@ -433,7 +448,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 );
                 return;
             }
-            SparkProfilerDiagnostics completed = diagnosticsFrom(result, durationMillis, heapDelta);
+            SparkProfilerDiagnostics completed = SparkProfilerMonitorSupport.diagnosticsFrom(result, durationMillis, heapDelta);
             boolean opensCircuit = opensCircuit(result.status());
             if (opensCircuit) {
                 circuitOpen = true;
@@ -442,7 +457,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 cancelScheduledTaskLocked();
                 shutdownExecutorLocked(true);
             }
-            resultDiagnostics = runtimeDiagnostics(
+            resultDiagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     completed,
                     active && !closed,
                     circuitOpen,
@@ -451,7 +466,8 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             diagnostics = resultDiagnostics;
             if (completed.state() == SparkProfilerDiagnostics.State.COMPLETE
                     && result.snapshot() != null
-                    && seenWindowKeys.add(result.snapshot().windowKey())) {
+                    && !Integer.valueOf(result.snapshot().windowKey()).equals(lastCompletedWindowKey)) {
+                lastCompletedWindowKey = result.snapshot().windowKey();
                 history.addLast(result.snapshot());
                 while (history.size() > Math.max(1, settings.maxHistorySnapshots())) {
                     history.removeFirst();
@@ -471,64 +487,26 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
-    @Nonnull
-    private static SparkProfilerDiagnostics diagnosticsFrom(@Nonnull SparkProfileReadResult result,
-                                                             long durationMillis,
-                                                             long heapDeltaBytes) {
-        SparkProfileSnapshot snapshot = result.snapshot();
-        if (result.status() == SparkProfileReadResult.Status.COMPLETE && snapshot != null) {
-            return new SparkProfilerDiagnostics(
-                    SparkProfilerDiagnostics.State.COMPLETE,
-                    snapshot.sparkVersion(),
-                    "Raw Spark profile data was not retained.",
-                    durationMillis,
-                    heapDeltaBytes,
-                    snapshot.windowKey(),
-                    snapshot.threadCount(),
-                    snapshot.frameCount(),
-                    snapshot.hotPaths()
-            );
-        }
-        SparkProfilerDiagnostics.State state = switch (result.status()) {
-            case ABSENT -> SparkProfilerDiagnostics.State.ABSENT;
-            case NOT_RUNNING, NOT_BACKGROUND -> SparkProfilerDiagnostics.State.NOT_RUNNING;
-            case UNSUPPORTED_PLUGIN, UNSUPPORTED_VERSION, UNSUPPORTED_ARTIFACT, UNSUPPORTED_SAMPLER ->
-                    SparkProfilerDiagnostics.State.UNSUPPORTED;
-            case NO_DATA, NO_ACTIONABLE_DATA -> SparkProfilerDiagnostics.State.NO_DATA;
-            case TOO_COMPLEX -> SparkProfilerDiagnostics.State.TOO_COMPLEX;
-            case INCOMPATIBLE -> SparkProfilerDiagnostics.State.INCOMPATIBLE;
-            case COMPLETE -> SparkProfilerDiagnostics.State.NO_DATA;
-        };
-        return new SparkProfilerDiagnostics(
-                state,
-                result.sparkVersion(),
-                bounded(result.detail()),
-                durationMillis,
-                heapDeltaBytes,
-                0,
-                0,
-                0,
-                List.of()
-        );
-    }
-
-    private void timeOut(@Nonnull CaptureAttempt attempt) {
+    private void timeOut(@Nonnull SparkProfilerCaptureAttempt attempt) {
         synchronized (lifecycleLock) {
             if (!isCurrentAttemptLocked(attempt)) {
                 return;
             }
-            inFlight = null;
             lifecycleGeneration++;
             circuitOpen = true;
             active = false;
+            cancelTimeoutLocked(attempt);
             cancelScheduledTaskLocked();
             attempt.task.cancel(true);
-            diagnostics = runtimeDiagnostics(
+            if (!attempt.started) {
+                inFlight = null;
+            }
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     new SparkProfilerDiagnostics(
                             SparkProfilerDiagnostics.State.TIMED_OUT,
                             null,
                             "Spark snapshot exceeded the time limit. Late results will be discarded; export work may continue until Spark returns.",
-                            elapsedMillis(attempt.startedAtNanos),
+                            SparkProfilerMonitorSupport.elapsedMillis(attempt.startedAtNanos),
                             0L,
                             0,
                             0,
@@ -560,7 +538,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 cancelScheduledTaskLocked();
                 shutdownExecutorLocked(true);
             }
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(state, null, detail),
                     active,
                     circuitOpen,
@@ -575,7 +553,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             }
         }
         if (logWarning) {
-            log(Level.WARNING, bounded(warning));
+            log(Level.WARNING, SparkProfilerMonitorSupport.bounded(warning));
         }
     }
 
@@ -596,9 +574,9 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             active = false;
             lifecycleGeneration++;
             cancelScheduledTaskLocked();
-            cancelInFlightLocked();
+            invalidateInFlightLocked();
             shutdownExecutorLocked(true);
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.NOT_OWNER,
                             diagnostics.sparkVersion(),
@@ -612,7 +590,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     }
 
     private void fail(@Nonnull String operation, @Nonnull Throwable failure) {
-        rethrowIfFatal(failure);
+        SparkProfilerMonitorSupport.rethrowIfFatal(failure);
         synchronized (lifecycleLock) {
             if (closed) {
                 return;
@@ -622,7 +600,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     }
 
     private void failLocked(@Nonnull String operation, @Nonnull Throwable failure) {
-        rethrowIfFatal(failure);
+        SparkProfilerMonitorSupport.rethrowIfFatal(failure);
         inFlight = null;
         lifecycleGeneration++;
         circuitOpen = true;
@@ -630,11 +608,11 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         cancelScheduledTaskLocked();
         cancelTimeoutLocked(null);
         shutdownExecutorLocked(true);
-        String detail = bounded(operation + ": " + failure.getClass().getSimpleName()
+        String detail = SparkProfilerMonitorSupport.bounded(operation + ": " + failure.getClass().getSimpleName()
                 + (failure.getMessage() == null || failure.getMessage().isBlank()
                 ? ""
                 : ": " + failure.getMessage()));
-        diagnostics = runtimeDiagnostics(
+        diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                 SparkProfilerDiagnostics.simple(SparkProfilerDiagnostics.State.FAILED, null, detail),
                 false,
                 true,
@@ -669,27 +647,17 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     }
 
     private void logSnapshot(@Nonnull SparkProfilerDiagnostics result) {
-        log(Level.INFO, "Spark profiler monitor completed: " + result.commandSummary());
-        int rank = 1;
-        for (SparkProfileSnapshot.HotPath hotPath : result.hotPaths()) {
-            log(Level.INFO, String.format(
-                    java.util.Locale.ROOT,
-                    "Spark hot path #%d: selfShare=%.2f%%, selfMs=%.3f, source=%s, frame=%s",
-                    rank++,
-                    hotPath.selfSharePercent(),
-                    hotPath.selfMilliseconds(),
-                    hotPath.source(),
-                    hotPath.frame()
-            ));
+        for (String line : SparkProfilerMonitorSupport.snapshotLogLines(result)) {
+            log(Level.INFO, line);
         }
     }
 
     private void logNonActionable(@Nonnull SparkProfilerDiagnostics result) {
-        log(Level.WARNING, "Spark profiler monitor: " + result.commandSummary());
+        log(Level.WARNING, SparkProfilerMonitorSupport.nonActionableLogMessage(result));
     }
 
     private void log(@Nonnull Level level, @Nonnull String message) {
-        String safe = bounded(message);
+        String safe = SparkProfilerMonitorSupport.bounded(message);
         if (logSink != null) {
             try {
                 logSink.accept(level, safe);
@@ -714,7 +682,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                     Math.max(0L, delaySeconds),
                     TimeUnit.SECONDS
             );
-            diagnostics = runtimeDiagnostics(
+            diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     diagnostics,
                     true,
                     false,
@@ -748,16 +716,19 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
     }
 
-    private void cancelInFlightLocked() {
+    private void invalidateInFlightLocked() {
         if (inFlight == null) {
             return;
         }
-        cancelTimeoutLocked(inFlight);
-        inFlight.task.cancel(true);
-        inFlight = null;
+        SparkProfilerCaptureAttempt attempt = inFlight;
+        cancelTimeoutLocked(attempt);
+        attempt.task.cancel(true);
+        if (!attempt.started) {
+            inFlight = null;
+        }
     }
 
-    private void cancelTimeoutLocked(@Nullable CaptureAttempt attempt) {
+    private void cancelTimeoutLocked(@Nullable SparkProfilerCaptureAttempt attempt) {
         if (attempt == null) {
             if (inFlight != null && inFlight.timeoutTask != null) {
                 inFlight.timeoutTask.cancel(false);
@@ -782,7 +753,23 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         executor = null;
     }
 
-    private boolean isCurrentAttemptLocked(@Nonnull CaptureAttempt attempt) {
+    private boolean retireLateAttemptLocked(@Nonnull SparkProfilerCaptureAttempt attempt) {
+        if (isCurrentAttemptLocked(attempt)) {
+            return false;
+        }
+        cancelTimeoutLocked(attempt);
+        if (inFlight == attempt) {
+            inFlight = null;
+        }
+        if (active && !closed && !circuitOpen && scheduledTask == null) {
+            long delaySeconds = immediateAfterStaleExport ? 0L : settings.intervalSeconds();
+            immediateAfterStaleExport = false;
+            scheduleCaptureLocked(delaySeconds, "poll interval after stale export");
+        }
+        return true;
+    }
+
+    private boolean isCurrentAttemptLocked(@Nonnull SparkProfilerCaptureAttempt attempt) {
         return !closed
                 && active
                 && inFlight == attempt
@@ -792,83 +779,6 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     private long lifecycleGeneration() {
         synchronized (lifecycleLock) {
             return lifecycleGeneration;
-        }
-    }
-
-    @Nonnull
-    private static SparkProfilerDiagnostics runtimeDiagnostics(
-            @Nonnull SparkProfilerDiagnostics base,
-            boolean active,
-            boolean circuitOpen,
-            long nextCaptureAtMillis) {
-        return new SparkProfilerDiagnostics(
-                base.state(),
-                base.sparkVersion(),
-                base.detail(),
-                base.captureDurationMillis(),
-                base.heapDeltaBytes(),
-                base.windowKey(),
-                base.threadCount(),
-                base.frameCount(),
-                base.hotPaths(),
-                active,
-                circuitOpen,
-                nextCaptureAtMillis
-        );
-    }
-
-    private static long currentHeapHeadroomBytes() {
-        Runtime runtime = Runtime.getRuntime();
-        return runtime.maxMemory() - usedHeapBytes();
-    }
-
-    private static long usedHeapBytes() {
-        Runtime runtime = Runtime.getRuntime();
-        return runtime.totalMemory() - runtime.freeMemory();
-    }
-
-    private static long elapsedMillis(long startedAtNanos) {
-        return TimeUnit.NANOSECONDS.toMillis(Math.max(0L, System.nanoTime() - startedAtNanos));
-    }
-
-    @Nonnull
-    private static String bounded(@Nullable String text) {
-        if (text == null) {
-            return "";
-        }
-        StringBuilder safe = new StringBuilder(Math.min(text.length(), MAX_DETAIL_LENGTH));
-        for (int index = 0; index < text.length() && safe.length() < MAX_DETAIL_LENGTH; index++) {
-            char character = text.charAt(index);
-            safe.append(Character.isISOControl(character) ? ' ' : character);
-        }
-        return safe.toString().trim();
-    }
-
-    private static void rethrowIfFatal(@Nonnull Throwable failure) {
-        if (failure instanceof VirtualMachineError virtualMachineError) {
-            throw virtualMachineError;
-        }
-        if ("java.lang.ThreadDeath".equals(failure.getClass().getName())) {
-            throw (Error) failure;
-        }
-    }
-
-    private static final class CaptureAttempt {
-        private final long generation;
-        private final long startedAtNanos;
-        private final long heapBefore;
-        private final Object sparkPlugin;
-        private FutureTask<Void> task;
-        private ScheduledFuture<?> timeoutTask;
-
-        private CaptureAttempt(long generation,
-                               long startedAtNanos,
-                               long heapBefore,
-                               @Nonnull Object sparkPlugin) {
-            this.generation = generation;
-            this.startedAtNanos = startedAtNanos;
-            this.heapBefore = heapBefore;
-            this.sparkPlugin = sparkPlugin;
         }
     }
 

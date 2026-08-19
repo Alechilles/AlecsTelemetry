@@ -116,6 +116,43 @@ class SparkProfileReflectionBridgeTest {
     }
 
     @Test
+    void acceptsWorldThreadNamesThatContainTheWorldThreadMarker() {
+        SamplerData data = new SamplerData(
+                List.of(701),
+                List.of(new ThreadNode(
+                        "Hytale-WorldThread-1",
+                        List.of(new StackNode(
+                                "com.example.WorldWork",
+                                "tick",
+                                "()V",
+                                List.of(125.0d),
+                                List.of()
+                        )),
+                        List.of()
+                )),
+                Map.of("com.example.WorldWork", "ExampleMod"),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
+        assertNotNull(result.snapshot());
+        assertEquals(1, result.snapshot().selectedThreadCount());
+        assertEquals(125.0d, result.snapshot().totalSelfMilliseconds(), 0.001d);
+    }
+
+    @Test
     void skipsAnUntestedSparkVersionBeforeReadingItsProfile() {
         FakeSampler sampler = new FakeSampler(
                 true,

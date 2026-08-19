@@ -133,6 +133,108 @@ class SparkProfilerMonitorTest {
     }
 
     @Test
+    void suspensionDoesNotAllowASecondExportWhileTheFirstIgnoresInterruption() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger reads = new AtomicInteger();
+        AtomicInteger activeReads = new AtomicInteger();
+        AtomicInteger maxConcurrentReads = new AtomicInteger();
+        SparkProfilerMonitor monitor = newMonitor(
+                settings(10, 5, 5),
+                (plugin, maxEntries) -> {
+                    int read = reads.incrementAndGet();
+                    int concurrent = activeReads.incrementAndGet();
+                    maxConcurrentReads.accumulateAndGet(concurrent, Math::max);
+                    try {
+                        if (read == 1) {
+                            entered.countDown();
+                            awaitIgnoringInterrupt(release);
+                        }
+                        return complete(read);
+                    } finally {
+                        activeReads.decrementAndGet();
+                    }
+                },
+                new ArrayList<>()
+        );
+        try {
+            monitor.activateNow();
+            assertTrue(entered.await(1, TimeUnit.SECONDS));
+
+            monitor.suspend();
+            monitor.activateNow();
+            Thread.sleep(100L);
+
+            assertEquals(1, reads.get());
+            assertEquals(1, maxConcurrentReads.get());
+
+            release.countDown();
+            awaitReads(reads, 2, Duration.ofSeconds(2));
+            assertEquals(1, maxConcurrentReads.get());
+        } finally {
+            release.countDown();
+            monitor.close();
+        }
+    }
+
+    @Test
+    void boundedDedupeRetainsOnlyTheLatestWindowAcrossHistoryRollAndReactivation() throws Exception {
+        Queue<SparkProfileReadResult> results = new ConcurrentLinkedQueue<>(List.of(
+                complete(20),
+                complete(21),
+                complete(22),
+                complete(20),
+                complete(22)
+        ));
+        List<String> logs = new ArrayList<>();
+        SparkProfilerMonitor monitor = newMonitor(
+                settings(10, 2, 5),
+                (plugin, maxEntries) -> results.remove(),
+                logs
+        );
+        try {
+            monitor.activateNow();
+            awaitLatestWindow(monitor, 20, Duration.ofSeconds(2));
+            monitor.pollNow();
+            awaitLatestWindow(monitor, 21, Duration.ofSeconds(2));
+            monitor.pollNow();
+            awaitLatestWindow(monitor, 22, Duration.ofSeconds(2));
+            monitor.suspend();
+            monitor.activateNow();
+            awaitLatestWindow(monitor, 20, Duration.ofSeconds(2));
+
+            assertEquals(List.of(22, 20), monitor.history().stream()
+                    .map(SparkProfileSnapshot::windowKey)
+                    .toList());
+            assertEquals(2, logs.stream().filter(message -> message.contains("window=20")).count());
+            assertEquals(1, logs.stream().filter(message -> message.contains("window=22")).count());
+        } finally {
+            monitor.close();
+        }
+    }
+
+    @Test
+    void reportsNoActionableDataAsDistinctDiagnosticsState() throws Exception {
+        SparkProfilerMonitor monitor = newMonitor(
+                settings(10, 5, 5),
+                (plugin, maxEntries) -> SparkProfileReadResult.noActionableData(
+                        "1.10.172",
+                        "completed window has no WorldThread samples"
+                ),
+                new ArrayList<>()
+        );
+        try {
+            monitor.activateNow();
+            awaitState(monitor, SparkProfilerDiagnostics.State.NO_ACTIONABLE_DATA, Duration.ofSeconds(2));
+
+            assertFalse(monitor.diagnostics().circuitOpen());
+            assertTrue(monitor.history().isEmpty());
+        } finally {
+            monitor.close();
+        }
+    }
+
+    @Test
     void timeoutOpensCircuitAndPreventsLaterCaptures() throws Exception {
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -377,6 +479,20 @@ class SparkProfilerMonitorTest {
                 Thread.currentThread().interrupt();
                 return;
             }
+        }
+    }
+
+    private static void awaitIgnoringInterrupt(CountDownLatch latch) {
+        boolean interrupted = false;
+        while (latch.getCount() > 0) {
+            try {
+                latch.await(50, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 }

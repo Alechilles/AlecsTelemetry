@@ -360,7 +360,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
     }
 
     private static boolean isWorldThread(@Nonnull String threadName) {
-        return threadName.startsWith("WorldThread");
+        return threadName.contains("WorldThread");
     }
 
     private static boolean isJavaFrame(@Nonnull String className) {
