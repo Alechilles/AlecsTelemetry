@@ -86,6 +86,11 @@ class/method/descriptor, sampled milliseconds, selected WorldThread share, a
 32-character fingerprint, and a representative path of at most eight frames.
 Phase 1 uses qualification `OBSERVED` and rule set `unqualified-v1`.
 
+The project scope is an attribution scope, not an authorization boundary. The
+local runtime API is not an authorization boundary: server-side code with API
+access can request another registered project by ID. Consumer integrations
+control later handling of snapshots they receive.
+
 Attribution values have different meanings:
 
 - `SELF`: the sampled self time belongs to the project's owned method.
