@@ -12,6 +12,17 @@
   attachment controls if a user submits a report.
 - Added server-log copies of every `/telemetry profiler status`, `top`, and
   `history` reply so operators can retain and compare command results.
+- Added the local project profiler API (`profiler-api-v1`). Enabled projects
+  can read immutable bounded `SELF` and `DOWNSTREAM` summaries and subscribe
+  to later snapshots. Phase 1 emits `OBSERVED` evidence only; `signals` remains
+  Phase 2 work. Older elected providers return an unavailable view safely.
+- Added project-filtered `/telemetry profiler top <project-id>` and
+  `/telemetry profiler history <project-id>` commands. Project replies remain
+  bounded and are copied to the ordinary server log.
+- Documented that project summaries require the global Spark monitor and
+  project performance consent, use at most 32 profiler package prefixes, and
+  remain local. Telemetry does not upload raw profiles, frame trees, player
+  data, or server identity for this feature.
 
 ### Fixed
 - Excluded async-profiler native-library frames with invalid JVM method

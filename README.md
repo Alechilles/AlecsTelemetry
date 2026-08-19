@@ -48,6 +48,10 @@ backend, the same runtime can target custom endpoints instead.
   background profile. An exact official-artifact gate isolates the unsupported
   private integration. The monitor does not directly queue or upload profiler
   data, and it does not write raw Spark profiles to a log or profile file.
+- Local project profiler API: enabled projects can expose immutable `SELF` and
+  `DOWNSTREAM` summaries from completed passive WorldThread windows. The
+  `profiler-api-v1` capability is safe across mixed runtime versions; an older
+  provider returns an unavailable view.
 - Consent and overrides: descriptor defaults seed the first-run consent UI, while
   server owners keep final control through runtime settings and per-project
   overrides.
@@ -360,6 +364,45 @@ project.recordPerformanceWithContext(
 The runtime ignores events that are disabled by consent, descriptor defaults,
 runtime overrides, sampling, or descriptor allowlists.
 
+### Local project profiler (Phase 1)
+
+The project profiler is local only. It requires the global Spark monitor and
+the project's performance consent. It reads completed passive Spark `ASYNC`
+`EXECUTION` windows and exposes bounded immutable summaries through the project
+handle:
+
+```java
+TelemetryProjectHandle project = api.findProject("example-mod");
+TelemetryProfilerView profiler = project.profiler();
+TelemetryProfilerStatus status = profiler.status();
+Optional<TelemetryProfilerSnapshot> latest = profiler.latest();
+List<TelemetryProfilerSnapshot> history = profiler.history();
+TelemetryProfilerSubscription subscription = profiler.subscribe(snapshot ->
+        snapshot.paths().forEach(path -> logger.info(
+                path.attribution() + " " + path.sampledMilliseconds() + " ms "
+                        + path.ownedClassName() + "#" + path.ownedMethodName())));
+```
+
+`TelemetryProfilerView.CAPABILITY` is `profiler-api-v1`. A legacy handle or an
+older elected provider returns status `UNAVAILABLE`, empty latest/history, and
+a closed subscription. This avoids a mixed-version linkage error. `SELF`
+means sampled self time in an owned method. `DOWNSTREAM` means sampled work
+below the nearest owned method, with the first external method as context. It
+is not an exact blame result. Phase 1 emits only `OBSERVED`; `signals` belongs
+to the later Phase 2 `hot-path-v1` work.
+
+Each snapshot keeps at most five paths. History keeps at most ten snapshots per
+project and 500 project-path entries globally. The runtime accepts at most four
+listener workers per project and 32 globally. Profiler attribution matches an
+exact plugin identifier first, then the longest complete package prefix, with
+at most 32 normalized prefixes per project. A project view clears when
+performance consent is disabled; only later windows can repopulate it.
+
+The API exposes class/method names, sampled timing, fingerprints, and bounded
+representative paths. It does not expose raw Spark profiles, frame trees, player
+data, or server identity, and Telemetry does not upload these summaries. Spark
+may retain or upload its own profiles under Spark's separate settings.
+
 ## Useful Commands
 
 ```text
@@ -367,6 +410,8 @@ runtime overrides, sampling, or descriptor allowlists.
 /telemetry profiler status
 /telemetry profiler top
 /telemetry profiler history
+/telemetry profiler top <project-id>
+/telemetry profiler history <project-id>
 /telemetry projects
 /telemetry project <project-id>
 /telemetry consent
@@ -400,6 +445,11 @@ same stable `telemetry.command.telemetry.*` prefix.
   attachments pass the manual-report settings, project descriptor, review,
   redaction, and clipping controls; raw Spark profile data is not written by
   the monitor to the log or a profile file.
+- Profiler command replies are copied to ordinary server logs. A manually
+  attached server log can include those lines when the existing manual-report
+  controls allow it. The local profiler API is not an authorization boundary;
+  server-side consumer code with API access can request another registered
+  project, and the consumer controls later handling of a snapshot.
 
 For the full runtime, web portal, and ModStats.io policy, see
 [Alec's Telemetry Privacy Policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md).

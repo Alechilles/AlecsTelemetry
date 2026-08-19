@@ -252,6 +252,46 @@ Passive descriptor discovery uses the same physical-host values only to elect a
 single candidate. It never proves that the library code executed and never
 grants a richer write capability merely because its resource is present.
 
+## Local project profiler (Phase 1)
+
+An active contribution can expose its own local profiler view when its
+descriptor supports performance and the server owner enables performance
+consent. Passive descriptor discovery remains Stats-only; it does not activate
+the profiler or any other richer category.
+
+Consumer code uses the elected project's normal handle:
+
+```java
+TelemetryProjectHandle project = api.findProject("example-mod");
+TelemetryProfilerView profiler = project.profiler();
+TelemetryProfilerStatus status = profiler.status();
+Optional<TelemetryProfilerSnapshot> latest = profiler.latest();
+List<TelemetryProfilerSnapshot> history = profiler.history();
+TelemetryProfilerSubscription subscription = profiler.subscribe(snapshot ->
+        snapshot.paths().forEach(path -> logger.info(
+                path.attribution() + " " + path.sampledMilliseconds() + " ms "
+                        + path.ownedClassName() + "#" + path.ownedMethodName())));
+```
+
+The capability is `profiler-api-v1`. A legacy or older elected provider returns
+an unavailable view with empty data and a closed subscription. Cross-classloader
+transport uses only bounded JDK maps and strings, so a mixed-version provider
+does not cause a linkage or class-cast failure. The API is not an authorization
+boundary: server-side code with API access can request another registered
+project by ID. Consumer code controls any later handling of a snapshot.
+
+The monitor reads only completed passive Spark `ASYNC` `EXECUTION` windows. It
+publishes bounded local summaries with `SELF` or `DOWNSTREAM` attribution and
+Phase 1 qualification `OBSERVED`. It does not upload profiler summaries, raw
+profiles, frame trees, player data, or server identity. Spark's own profile
+retention and upload settings are separate. A project retains at most five
+paths per snapshot and ten snapshots; the runtime caps retained project-path
+entries at 500, listeners at four per project and 32 globally. Performance
+consent revocation clears that project's history and does not restore it when
+consent is enabled again. Attribution matches an exact logical plugin
+identifier, then the longest complete package prefix, with at most 32
+normalized prefixes per project.
+
 ## Heartbeats and live changes
 
 The active coordinator emits aggregate stats heartbeats for the current live

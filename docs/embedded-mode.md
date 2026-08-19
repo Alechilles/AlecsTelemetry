@@ -244,6 +244,46 @@ attach standardized fields such as `subsystem`, `phase`, `featureKey`,
 `detail(key, value)` entries are filtered by the descriptor allowlist before
 upload.
 
+## Local project profiler (Phase 1)
+
+An embedded consumer can read the local project profiler through the same
+project handle as a standalone consumer:
+
+```java
+TelemetryProjectHandle project = api.findProject("example-mod");
+TelemetryProfilerView profiler = project.profiler();
+TelemetryProfilerStatus status = profiler.status();
+Optional<TelemetryProfilerSnapshot> latest = profiler.latest();
+List<TelemetryProfilerSnapshot> history = profiler.history();
+TelemetryProfilerSubscription subscription = profiler.subscribe(snapshot ->
+        snapshot.paths().forEach(path -> logger.info(
+                path.attribution() + " " + path.sampledMilliseconds() + " ms "
+                        + path.ownedClassName() + "#" + path.ownedMethodName())));
+```
+
+The active coordinator advertises capability `profiler-api-v1`. An older
+elected embedded or standalone provider returns an unavailable view with empty
+data and a closed subscription. It does not throw a linkage error. The local
+API is not an authorization boundary: server-side consumer code with API access
+can request another registered project by ID. Consumer code controls later
+handling of snapshots.
+
+Publication requires the global Spark monitor, the project, and project
+performance consent to be enabled. The monitor reads only completed passive
+Spark `ASYNC` `EXECUTION` windows and produces immutable local summaries. It
+does not upload profiler summaries, raw profiles, frame trees, player data, or
+server identity. Spark's own profile retention or upload settings remain
+separate.
+
+Phase 1 paths use `SELF` or `DOWNSTREAM` attribution and qualification
+`OBSERVED`; `signals` belongs to the later Phase 2 `hot-path-v1` work. The
+service retains at most five paths per snapshot, ten snapshots per project,
+and 500 project-path entries globally. It accepts at most four listener workers
+per project and 32 globally. Disabling performance consent clears that
+project's retained summaries; re-enabling consent allows only later windows.
+Attribution uses an exact plugin identifier, then the longest complete package
+prefix, with at most 32 normalized prefixes per project.
+
 ## Storage Layout
 
 The elected active coordinator stores runtime settings, project overrides,

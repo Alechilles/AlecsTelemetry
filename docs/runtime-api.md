@@ -45,9 +45,71 @@ methods directly.
 - `recordStats(...)` and `recordStatsWithContext(...)`
 - `openReportPage(...)`
 - `requestFlush()`
+- `profiler()` for the local Phase 1 project profiler view
 
 The runtime ignores events that are disabled by project consent, descriptor
 defaults, runtime overrides, sampling, or descriptor allowlists.
+
+## Local project profiler API (Phase 1)
+
+The profiler API reads completed passive Spark `ASYNC` `EXECUTION` windows. It
+does not read a profile started by a user. The global Spark monitor and the
+project performance consent must both be enabled. The result is a local,
+bounded summary. It is not a raw profile and it is not uploaded by Telemetry.
+
+Use the view from a project handle:
+
+```java
+TelemetryProjectHandle project = api.findProject("example-mod");
+TelemetryProfilerView profiler = project.profiler();
+TelemetryProfilerStatus status = profiler.status();
+Optional<TelemetryProfilerSnapshot> latest = profiler.latest();
+List<TelemetryProfilerSnapshot> history = profiler.history();
+TelemetryProfilerSubscription subscription = profiler.subscribe(snapshot ->
+        snapshot.paths().forEach(path -> logger.info(
+                path.attribution() + " " + path.sampledMilliseconds() + " ms "
+                        + path.ownedClassName() + "#" + path.ownedMethodName())));
+```
+
+`TelemetryProfilerView` advertises capability `profiler-api-v1`. Its public
+values are immutable defensive copies. `TelemetryProjectHandle.profiler()` is
+a binary-compatible default method. On a legacy handle or an older elected
+provider, it returns an unavailable view: status `UNAVAILABLE`, empty
+`latest()` and `history()`, and a closed subscription. The consumer can keep
+running without a linkage error.
+
+Each snapshot is for one project. It can contain the project ID and logical
+version, Spark window key, observation time, selected WorldThread self-time,
+qualification rule set, and at most five path entries. A path contains an
+attribution, owned class/method/descriptor, optional first external
+class/method/descriptor, sampled milliseconds, selected WorldThread share, a
+32-character fingerprint, and a representative path of at most eight frames.
+Phase 1 uses qualification `OBSERVED` and rule set `unqualified-v1`.
+
+Attribution values have different meanings:
+
+- `SELF`: the sampled self time belongs to the project's owned method.
+- `DOWNSTREAM`: the sampled self time is below the nearest owned method. The
+  first external method is shown as context. This is evidence of downstream
+  work, not an exact blame decision.
+
+The ownership index matches an exact normalized plugin identifier first. If
+that is not available, it uses the longest complete normalized package prefix.
+It never uses a partial string match. The profiler index accepts at most 32
+normalized package prefixes per project. Extra prefixes are omitted and the
+status reports the truncation.
+
+The local service retains at most ten snapshots per project and 500 retained
+project-path entries globally. It accepts at most four listener workers per
+project and 32 across the runtime. Each listener has one pending snapshot; a
+slow listener receives the newest pending value. Close a subscription when it
+is no longer needed. A project view is cleared when performance consent is
+disabled, and only later completed windows can repopulate it.
+
+The view never exposes Spark protobufs, reflection objects, source maps, raw
+frame trees, player data, or server identity. Spark's own retention or upload
+settings remain separate. A consumer integration controls how it handles a
+snapshot after it receives it.
 
 ## Event Context
 

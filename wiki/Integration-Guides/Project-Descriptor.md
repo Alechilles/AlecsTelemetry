@@ -136,6 +136,19 @@ Identity fields are optional overrides:
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
+### Profiler attribution
+
+The local Spark profiler matches an exact normalized plugin identifier first.
+When that is not available, it uses the longest complete normalized package
+prefix. Partial strings are not matches, and equal-best project matches remain
+unattributed.
+
+The profiler accepts at most 32 normalized package prefixes per project. It
+trims values, replaces `/` with `.`, removes trailing dots, and removes
+duplicates in descriptor order. Extra prefixes remain valid for other
+Telemetry behavior but do not enter the profiler index; local diagnostics
+report the truncation.
+
 ## Category Fields
 
 Crash supports `supported`, `defaultEnabled`, `uncaughtExceptions`, `setupFailures`, `startFailures`, and `exceptionalWorldRemovals`.
@@ -143,6 +156,11 @@ Crash supports `supported`, `defaultEnabled`, `uncaughtExceptions`, `setupFailur
 Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, and `automatic`.
 
 Performance supports `supported`, `defaultEnabled`, `sampleRate`, `thresholdMs`, and `details`.
+
+The local project profiler requires `performance.supported: true`, current
+performance consent, and the server owner's global Spark monitor setting. This
+consent gate enables local summaries only; it does not grant profiler upload
+permission.
 
 Usage supports `supported`, `defaultEnabled`, `allowedEvents`, and `details`.
 

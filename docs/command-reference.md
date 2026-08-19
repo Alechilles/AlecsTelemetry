@@ -47,6 +47,8 @@ settings, compatibility gate, and safety limits.
 /telemetry profiler status
 /telemetry profiler top
 /telemetry profiler history
+/telemetry profiler top <project-id>
+/telemetry profiler history <project-id>
 ```
 
 - `profiler status` shows the monitor state, active-owner and circuit flags,
@@ -60,6 +62,19 @@ settings, compatibility gate, and safety limits.
 - `profiler history` shows the newest retained completed windows, limited by
   `maxHistorySnapshots` and by the command's 10-entry output bound.
 
+The project forms read the local project profiler view. `top <project-id>`
+shows the latest snapshot and at most five paths. `history <project-id>` shows
+the newest ten retained snapshots in oldest-to-newest order. Each project path
+line includes `SELF` or `DOWNSTREAM`, sampled milliseconds, selected
+WorldThread share, the owned method, an optional first external method, and the
+32-character fingerprint. Phase 1 paths use `OBSERVED`; it does not provide a
+`signals` command. Signals belong to the later Phase 2 `hot-path-v1` work.
+
+Project IDs are unquoted and trimmed. One project ID is allowed. An extra
+argument returns one usage line. If the project is unavailable, the command
+does not fall back to global paths. A project filter is also unavailable when
+the elected runtime does not advertise `profiler-api-v1`.
+
 The monitor keeps summaries and history in memory and writes bounded summary
 lines to the ordinary server log. It does not directly queue or upload
 profiler data. Ordinary log summary lines can be included if a user submits a
@@ -71,6 +86,7 @@ use the root Telemetry permission and accept server console senders. Every line
 returned by `profiler status`, `profiler top`, and `profiler history` is also
 written at `INFO` to the ordinary server log with a `Spark profiler command
 output` prefix.
+The same log copy applies to project-filtered replies.
 
 ## Consent
 

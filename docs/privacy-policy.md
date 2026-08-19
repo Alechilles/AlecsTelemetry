@@ -157,6 +157,43 @@ Raw Spark profile data is not written to the server log or a profile file by the
 monitor, and the monitor does not upload it. A supported Spark window with no
 usable WorldThread Java samples produces no actionable ranking.
 
+### Phase 1 local profiler summaries
+
+With the Spark monitor and a project's performance consent enabled, Telemetry
+creates bounded local summaries of completed passive WorldThread windows. A
+consumer mod can read one project's immutable view through
+`TelemetryProjectHandle.profiler()` or receive later snapshots through its
+subscription. A snapshot can identify the project's owned Java methods and
+downstream Java methods called through them. It can contain class names, method
+names and descriptors, sampled milliseconds, selected WorldThread share,
+fingerprints, and a bounded representative path.
+
+Each view contains only one project's attributed immutable summary. The local
+runtime API is not an authorization boundary. Server-side code that can access
+the API can request another registered project by ID. Do not promise that
+consumer integrations cannot log a snapshot, store it, or send it somewhere
+else. The consumer integration controls its later handling of any value it
+receives.
+
+Phase 1 is local only. It does not upload profiler summaries, raw Spark
+profiles, frame trees, player data, or server identity for this feature. Spark
+protobufs, reflection objects, source maps, and raw profile trees are transient
+and are not retained after analysis. Telemetry retains only bounded immutable
+summaries and history in memory. Spark can retain or upload its own profiles
+under Spark's separate settings; that is separate behavior from Alec's
+Telemetry.
+
+Profiler command replies are copied to ordinary server logs. A manually
+attached current or previous server log can contain those command lines when
+the existing manual-report settings, project descriptor, review, redaction, and
+clipping controls allow the attachment. The monitor does not write raw profile
+data to that log.
+
+Disabling a project's performance consent makes its local profiler history
+unavailable and clears the retained summaries for that project. This does not
+require the global Spark monitor to stop. Re-enabling consent allows only later
+completed windows to appear; cleared summaries are not restored.
+
 ## Telemetry Sent To The Hosted Platform
 
 The exact payload depends on the telemetry category enabled for a project.

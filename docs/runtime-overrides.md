@@ -179,6 +179,57 @@ status values, ranked hot paths, and retained-window summary lines shown by the
 commands. Command logging failure does not prevent the reply from reaching the
 operator.
 
+### Project profiler views
+
+Phase 1 also publishes a local project view after a completed passive window.
+Publication requires all three gates:
+
+- the global `sparkProfiler.enabled` setting is `true`;
+- the project is enabled; and
+- the project's performance consent is enabled.
+
+The view contains immutable summaries, not raw Spark data. It can expose owned
+Java class and method names, downstream Java method names, sampled timing,
+WorldThread share, fingerprints, and bounded representative paths. It never
+exposes Spark protobufs, reflection objects, raw frame trees, player data, or
+server identity. Spark can retain or upload its own profiles under Spark's
+separate settings.
+
+Consumer code reads the view with `TelemetryProjectHandle.profiler()` and can
+subscribe to later snapshots. The capability is `profiler-api-v1`. A legacy
+handle or older elected provider returns an unavailable view with empty data
+and a closed subscription instead of throwing a linkage error. The API is not
+an authorization boundary: server-side code with API access can request another
+registered project by ID, and consumer integrations control later handling of a
+snapshot.
+
+The local service retains at most five paths per snapshot, ten snapshots per
+project, and 500 retained project-path entries globally. It accepts at most
+four listener workers per project and 32 globally. A listener has one pending
+snapshot and receives the newest pending value when it is slow. A project view
+is cleared when performance consent is disabled; re-enabling consent does not
+restore old summaries.
+
+Project commands are optional filters on the existing commands:
+
+```text
+/telemetry profiler top <project-id>
+/telemetry profiler history <project-id>
+```
+
+`top` shows at most five paths from the latest project snapshot. `history`
+shows the newest ten snapshots. Path lines include `SELF` or `DOWNSTREAM`,
+sampled milliseconds, selected WorldThread share, the owned method, an optional
+first external method, and a 32-character fingerprint. Phase 1 emits only
+`OBSERVED`; `signals` belongs to the later Phase 2 `hot-path-v1` work. Every
+project-filtered reply also copies to the ordinary server log. A manually
+attached server log can contain those lines when the normal manual-report
+settings and review controls allow the attachment.
+
+Profiler attribution matches exact plugin identifiers first, then the longest
+complete package prefix. The profiler index accepts at most 32 normalized
+package prefixes per project and reports omitted prefixes in diagnostics.
+
 ### Settings
 
 The canonical `sparkProfiler` fields are:

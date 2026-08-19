@@ -78,6 +78,33 @@ the exact tested-artifact gate and does not retain that hash. See [Runtime
 Overrides](/mod/alecs-telemetry/integration-guides/runtime-overrides) for
 settings, bounds, and fail-closed behavior.
 
+With the monitor and project performance consent enabled, Telemetry creates
+bounded local summaries of completed passive WorldThread windows. The public
+local view and subscription can expose one project's immutable attributed
+summary, including owned and downstream Java class/method names, sampled
+timing, fingerprints, and bounded representative paths. Phase 1 uses `SELF`,
+`DOWNSTREAM`, and `OBSERVED` only.
+
+The local API is not an authorization boundary. Server-side code with API
+access can request another registered project by ID. Consumer integrations
+control later handling of values they receive; this guide does not promise
+that consumer code cannot log, store, or send a snapshot elsewhere.
+
+Phase 1 does not upload profiler summaries, raw Spark profiles, frame trees,
+player data, or server identity. Spark protobufs, reflection objects, source
+maps, and raw profile trees are transient. Spark may retain or upload its own
+profiles under Spark's separate settings. Disabling project performance consent
+makes the local project history unavailable and clears retained summaries; the
+global monitor can continue running.
+
+The `profiler-api-v1` view keeps at most five paths per snapshot, ten snapshots
+per project, 500 retained project-path entries globally, four listener workers
+per project, and 32 globally. The profiler index accepts at most 32 normalized
+package prefixes per project. Older elected providers return an unavailable
+view without a mixed-version linkage error. Project command replies are copied
+to ordinary logs, and a manual server-log attachment can contain those lines
+when the existing report settings and review controls allow it.
+
 ## Privacy Rules For Mod Authors
 
 - Use stable reason codes instead of raw player data.

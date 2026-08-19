@@ -173,6 +173,42 @@ server log with a `Spark profiler command output` prefix. This includes status,
 ranked hot paths, and retained-window summaries shown by the commands. A logging
 failure does not prevent the operator reply.
 
+### Project profiler views (Phase 1)
+
+The local project view is available only when the global Spark monitor, the
+project, and project performance consent are enabled. It exposes immutable
+bounded class/method/timing/fingerprint/path summaries. It does not upload
+profiler data or expose raw Spark profiles, frame trees, player data, or server
+identity. Spark's own retention and upload settings are separate.
+
+Consumer code uses `TelemetryProjectHandle.profiler()`. The capability is
+`profiler-api-v1`; a legacy handle or older elected provider returns an
+unavailable view with empty data and a closed subscription. The API is not an
+authorization boundary: server-side code with API access can request another
+registered project by ID, and consumer code controls later handling of a
+snapshot.
+
+The view retains at most five paths per snapshot, ten snapshots per project,
+and 500 project-path entries globally. It accepts at most four listener workers
+per project and 32 globally. Project commands are:
+
+```text
+/telemetry profiler top <project-id>
+/telemetry profiler history <project-id>
+```
+
+`top` shows at most five paths. `history` shows the newest ten snapshots.
+Paths use `SELF` or `DOWNSTREAM` and Phase 1 qualification `OBSERVED`.
+`signals` belongs to Phase 2 `hot-path-v1`. Project-filtered replies are copied
+to the ordinary log, and a manual log attachment can include those lines when
+the normal report settings and review controls allow it. Disabling performance
+consent clears the project's retained view; re-enabling consent does not
+restore old summaries.
+
+Profiler attribution matches an exact plugin identifier, then the longest
+complete package prefix. The profiler index accepts at most 32 normalized
+prefixes per project and reports omitted prefixes.
+
 ### Spark monitor settings
 
 | Field | Default | Accepted range |

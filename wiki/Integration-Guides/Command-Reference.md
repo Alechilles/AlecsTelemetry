@@ -31,6 +31,8 @@ passive Spark background windows and ranks Java self time from Hytale
 /telemetry profiler status
 /telemetry profiler top
 /telemetry profiler history
+/telemetry profiler top <project-id>
+/telemetry profiler history <project-id>
 ```
 
 - `profiler status` shows current diagnostics, including monitor state, active
@@ -44,6 +46,18 @@ passive Spark background windows and ranks Java self time from Hytale
 - `profiler history` shows the newest retained completed windows, limited by
   `maxHistorySnapshots` and the command's 10-entry output bound.
 
+The project forms read the local `profiler-api-v1` view. `top <project-id>`
+shows at most five paths from the latest project snapshot. `history
+<project-id>` shows the newest ten retained snapshots in oldest-to-newest
+order. Path lines include `SELF` or `DOWNSTREAM`, sampled milliseconds,
+selected WorldThread share, the owned method, an optional first external
+method, and a 32-character fingerprint. Phase 1 uses `OBSERVED`; it has no
+`signals` command. Signals belong to Phase 2 `hot-path-v1`.
+
+Project IDs are unquoted and trimmed. One project ID is allowed. An unavailable
+project does not fall back to global paths. An older elected provider returns
+an unavailable project view without a linkage error.
+
 These text commands use the root Telemetry permission and accept server-console
 senders. The monitor keeps bounded summaries and history in memory and writes
 bounded summary lines to the ordinary server log. It does not directly queue or
@@ -54,6 +68,9 @@ them. Raw Spark profile data is not written by the monitor to the log or a
 profile file and is not uploaded by it. Every line returned by `profiler
 status`, `profiler top`, and `profiler history` is also written at `INFO` to the
 ordinary server log with a `Spark profiler command output` prefix.
+Project-filtered replies use the same log copy. A manual log attachment can
+include these lines when the normal report settings and review controls allow
+it.
 
 ## Consent
 

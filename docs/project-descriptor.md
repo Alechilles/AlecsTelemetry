@@ -252,6 +252,21 @@ Identity fields are optional overrides.
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
+### Profiler attribution
+
+The optional local Spark profiler uses the same project identity metadata. It
+matches an exact normalized plugin identifier first. If no exact source label is
+available, it matches the longest complete normalized package prefix. A
+partial package string is not a match, and equal-best matches remain
+unattributed.
+
+The profiler accepts at most 32 normalized package prefixes per project. It
+trims values, replaces `/` with `.`, removes trailing dots, and removes
+duplicates in descriptor order. Extra prefixes remain valid for other
+Telemetry behavior but do not enter the profiler index; the local status
+reports the truncation. A profiler summary is local and bounded. It does not
+make the descriptor a profiler upload contract.
+
 For an anchored contribution, the logical plugin identifier and logical semantic
 version come from the contribution builder. They are the project attribution in
 telemetry envelopes; the physical host plugin remains local provider/election
@@ -289,6 +304,11 @@ Performance:
 - `sampleRate`
 - `thresholdMs`
 - `details`
+
+The local project profiler uses the project's performance consent gate. It
+requires `performance.supported: true` and current performance consent, plus
+the server owner's global Spark monitor setting. It does not turn performance
+consent into profiler upload permission.
 
 Usage:
 
