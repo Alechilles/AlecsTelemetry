@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 /**
- * Current local state of the optional Spark profiler canary.
+ * Current local state of the optional local Spark profiler monitor.
  */
 public record SparkProfilerDiagnostics(@Nonnull State state,
                                        @Nullable String sparkVersion,
@@ -15,7 +15,10 @@ public record SparkProfilerDiagnostics(@Nonnull State state,
                                        int windowKey,
                                        int threadCount,
                                        int frameCount,
-                                       @Nonnull List<SparkProfileSnapshot.HotPath> hotPaths) {
+                                       @Nonnull List<SparkProfileSnapshot.HotPath> hotPaths,
+                                       boolean active,
+                                       boolean circuitOpen,
+                                       long nextCaptureAtMillis) {
 
     public enum State {
         DISABLED,
@@ -39,6 +42,31 @@ public record SparkProfilerDiagnostics(@Nonnull State state,
     public SparkProfilerDiagnostics {
         detail = detail == null ? "" : detail;
         hotPaths = hotPaths == null ? List.of() : List.copyOf(hotPaths);
+    }
+
+    public SparkProfilerDiagnostics(@Nonnull State state,
+                                    @Nullable String sparkVersion,
+                                    @Nonnull String detail,
+                                    long captureDurationMillis,
+                                    long heapDeltaBytes,
+                                    int windowKey,
+                                    int threadCount,
+                                    int frameCount,
+                                    @Nonnull List<SparkProfileSnapshot.HotPath> hotPaths) {
+        this(
+                state,
+                sparkVersion,
+                detail,
+                captureDurationMillis,
+                heapDeltaBytes,
+                windowKey,
+                threadCount,
+                frameCount,
+                hotPaths,
+                false,
+                false,
+                0L
+        );
     }
 
     @Nonnull
@@ -76,6 +104,11 @@ public record SparkProfilerDiagnostics(@Nonnull State state,
                     .append(", threads=").append(threadCount)
                     .append(", frames=").append(frameCount)
                     .append(", hotPaths=").append(hotPaths.size());
+        }
+        summary.append(", active=").append(active)
+                .append(", circuitOpen=").append(circuitOpen);
+        if (nextCaptureAtMillis > 0L) {
+            summary.append(", nextCaptureAtMillis=").append(nextCaptureAtMillis);
         }
         if (!detail.isBlank()) {
             summary.append(", detail=").append(detail);

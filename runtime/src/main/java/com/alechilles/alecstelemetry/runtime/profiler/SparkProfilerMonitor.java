@@ -1,0 +1,886 @@
+package com.alechilles.alecstelemetry.runtime.profiler;
+
+import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
+import com.hypixel.hytale.logger.HytaleLogger;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.util.ArrayDeque;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
+import java.util.logging.Level;
+
+/**
+ * Reads bounded summaries from Spark's passive background profiler.
+ *
+ * <p>The monitor keeps all raw profile work transient. Only immutable summaries
+ * remain in the in-memory history.</p>
+ */
+public final class SparkProfilerMonitor implements AutoCloseable {
+    private static final long MIN_HEAP_HEADROOM_BYTES = 256L * 1024L * 1024L;
+    private static final int MAX_DETAIL_LENGTH = 240;
+
+    private final TelemetryRuntimeSettings.SparkProfilerSettings settings;
+    private final Supplier<?> sparkPluginLookup;
+    private final BooleanSupplier activeCoordinatorOwner;
+    private final SparkProfileReader profileReader;
+    private final LongSupplier heapHeadroomBytes;
+    private final HytaleLogger logger;
+    private final BiConsumer<Level, String> logSink;
+    private final Object lifecycleLock = new Object();
+    private final ArrayDeque<SparkProfileSnapshot> history = new ArrayDeque<>();
+    private final Set<Integer> seenWindowKeys = new HashSet<>();
+
+    private volatile SparkProfilerDiagnostics diagnostics;
+    private ScheduledThreadPoolExecutor executor;
+    private ScheduledFuture<?> scheduledTask;
+    private CaptureAttempt inFlight;
+    private long lifecycleGeneration;
+    private boolean active;
+    private boolean circuitOpen;
+    private boolean closed;
+    private SparkProfilerDiagnostics.State lastLoggedState;
+
+    public SparkProfilerMonitor(
+            @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            @Nonnull Supplier<?> sparkPluginLookup,
+            @Nonnull BooleanSupplier activeCoordinatorOwner,
+            @Nullable HytaleLogger logger) {
+        this(
+                settings,
+                sparkPluginLookup,
+                activeCoordinatorOwner,
+                new SparkProfileReflectionBridge(),
+                SparkProfilerMonitor::currentHeapHeadroomBytes,
+                logger,
+                null
+        );
+    }
+
+    SparkProfilerMonitor(
+            @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            @Nonnull Supplier<?> sparkPluginLookup,
+            @Nonnull BooleanSupplier activeCoordinatorOwner,
+            @Nonnull SparkProfileReader profileReader,
+            @Nonnull LongSupplier heapHeadroomBytes,
+            @Nullable HytaleLogger logger) {
+        this(
+                settings,
+                sparkPluginLookup,
+                activeCoordinatorOwner,
+                profileReader,
+                heapHeadroomBytes,
+                logger,
+                null
+        );
+    }
+
+    SparkProfilerMonitor(
+            @Nonnull TelemetryRuntimeSettings.SparkProfilerSettings settings,
+            @Nonnull Supplier<?> sparkPluginLookup,
+            @Nonnull BooleanSupplier activeCoordinatorOwner,
+            @Nonnull SparkProfileReader profileReader,
+            @Nonnull LongSupplier heapHeadroomBytes,
+            @Nullable HytaleLogger logger,
+            @Nullable BiConsumer<Level, String> logSink) {
+        this.settings = settings;
+        this.sparkPluginLookup = sparkPluginLookup;
+        this.activeCoordinatorOwner = activeCoordinatorOwner;
+        this.profileReader = profileReader;
+        this.heapHeadroomBytes = heapHeadroomBytes;
+        this.logger = logger;
+        this.logSink = logSink;
+        this.diagnostics = settings.enabled()
+                ? runtimeDiagnostics(
+                SparkProfilerDiagnostics.simple(
+                        SparkProfilerDiagnostics.State.READY,
+                        null,
+                        "Waiting for coordinator activation."
+                ),
+                false,
+                false,
+                0L
+        )
+                : SparkProfilerDiagnostics.disabled();
+    }
+
+    /**
+     * Activates the monitor. Activation is safe to repeat and can resume after
+     * suspension. A permanent compatibility circuit cannot be reopened.
+     */
+    public void activate() {
+        if (!activateInternal(false)) {
+            return;
+        }
+        verifyOwnerBeforeScheduling();
+    }
+
+    /**
+     * Suspends future work and invalidates any result that is still returning.
+     * History and window de-duplication remain available for a later activation.
+     */
+    public void suspend() {
+        synchronized (lifecycleLock) {
+            if (closed || !active) {
+                return;
+            }
+            active = false;
+            lifecycleGeneration++;
+            cancelScheduledTaskLocked();
+            cancelInFlightLocked();
+            shutdownExecutorLocked(true);
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(
+                            SparkProfilerDiagnostics.State.READY,
+                            diagnostics.sparkVersion(),
+                            "Monitor is suspended."
+                    ),
+                    false,
+                    circuitOpen,
+                    0L
+            );
+        }
+    }
+
+    /**
+     * Closes the monitor permanently. Calls after close are no-ops.
+     */
+    @Override
+    public void close() {
+        synchronized (lifecycleLock) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            active = false;
+            lifecycleGeneration++;
+            cancelScheduledTaskLocked();
+            cancelInFlightLocked();
+            shutdownExecutorLocked(true);
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(
+                            SparkProfilerDiagnostics.State.SHUTDOWN,
+                            diagnostics.sparkVersion(),
+                            "Monitor executor is shut down."
+                    ),
+                    false,
+                    circuitOpen,
+                    0L
+            );
+        }
+    }
+
+    /**
+     * Returns the current immutable local diagnostics.
+     */
+    @Nonnull
+    public SparkProfilerDiagnostics diagnostics() {
+        return diagnostics;
+    }
+
+    /**
+     * Returns immutable summaries in oldest-to-newest order.
+     */
+    @Nonnull
+    public List<SparkProfileSnapshot> history() {
+        synchronized (lifecycleLock) {
+            return List.copyOf(history);
+        }
+    }
+
+    /**
+     * Returns whether a permanent session circuit is open.
+     */
+    public boolean isCircuitOpen() {
+        synchronized (lifecycleLock) {
+            return circuitOpen;
+        }
+    }
+
+    /**
+     * Returns whether the monitor is currently active.
+     */
+    public boolean isActive() {
+        synchronized (lifecycleLock) {
+            return active;
+        }
+    }
+
+    /**
+     * Starts one capture immediately. This package-private operation keeps
+     * focused tests independent of the production startup delay.
+     */
+    void activateNow() {
+        if (!activateInternal(true)) {
+            return;
+        }
+        verifyOwnerBeforeCapture();
+    }
+
+    /**
+     * Requests one poll immediately. The normal recurring scheduler uses the
+     * same capture path, so this is also useful for deterministic tests.
+     */
+    void pollNow() {
+        synchronized (lifecycleLock) {
+            if (closed || !active || circuitOpen) {
+                return;
+            }
+            cancelScheduledTaskLocked();
+        }
+        beginCapture();
+    }
+
+    private boolean activateInternal(boolean immediate) {
+        synchronized (lifecycleLock) {
+            if (!settings.enabled()) {
+                return false;
+            }
+            if (closed || circuitOpen || active) {
+                return false;
+            }
+            active = true;
+            lifecycleGeneration++;
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(
+                            SparkProfilerDiagnostics.State.WAITING,
+                            diagnostics.sparkVersion(),
+                            immediate
+                                    ? "Capture is starting now."
+                                    : "Capture is scheduled after the startup delay."
+                    ),
+                    true,
+                    false,
+                    0L
+            );
+            if (!immediate) {
+                scheduleCaptureLocked(settings.initialDelaySeconds(), "startup delay");
+            }
+            return true;
+        }
+    }
+
+    private void verifyOwnerBeforeScheduling() {
+        if (!isActiveOwner()) {
+            deactivateForLostOwnership();
+            return;
+        }
+        synchronized (lifecycleLock) {
+            if (closed || !active || circuitOpen || scheduledTask != null) {
+                return;
+            }
+            scheduleCaptureLocked(settings.initialDelaySeconds(), "startup delay");
+        }
+    }
+
+    private void verifyOwnerBeforeCapture() {
+        if (!isActiveOwner()) {
+            deactivateForLostOwnership();
+            return;
+        }
+        beginCapture();
+    }
+
+    private void beginCapture() {
+        synchronized (lifecycleLock) {
+            if (closed || !active || circuitOpen || inFlight != null) {
+                return;
+            }
+            scheduledTask = null;
+        }
+        if (!isActiveOwner()) {
+            deactivateForLostOwnership();
+            return;
+        }
+
+        Object sparkPlugin;
+        try {
+            sparkPlugin = sparkPluginLookup.get();
+        } catch (Throwable failure) {
+            fail("Spark plugin lookup failed", failure);
+            return;
+        }
+        if (sparkPlugin == null) {
+            finishWithoutCapture(
+                    SparkProfilerDiagnostics.State.ABSENT,
+                    "Spark is not loaded.",
+                    false,
+                    null
+            );
+            return;
+        }
+
+        long headroom;
+        try {
+            headroom = heapHeadroomBytes.getAsLong();
+        } catch (Throwable failure) {
+            fail("Heap headroom check failed", failure);
+            return;
+        }
+        if (headroom < MIN_HEAP_HEADROOM_BYTES) {
+            finishWithoutCapture(
+                    SparkProfilerDiagnostics.State.LOW_HEAP,
+                    "Capture was skipped because JVM heap headroom was below 256 MiB.",
+                    false,
+                    "Spark profiler monitor skipped a capture because JVM heap headroom was below 256 MiB."
+            );
+            return;
+        }
+
+        long startedAtNanos = System.nanoTime();
+        long heapBefore = usedHeapBytes();
+        CaptureAttempt attempt = new CaptureAttempt(
+                lifecycleGeneration(),
+                startedAtNanos,
+                heapBefore,
+                sparkPlugin
+        );
+        FutureTask<Void> task = new FutureTask<>(() -> {
+            capture(attempt);
+            return null;
+        });
+        attempt.task = task;
+
+        synchronized (lifecycleLock) {
+            if (closed || !active || circuitOpen || attempt.generation != lifecycleGeneration
+                    || inFlight != null) {
+                return;
+            }
+            inFlight = attempt;
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(
+                            SparkProfilerDiagnostics.State.CAPTURING,
+                            null,
+                            "Reading Spark's latest completed background window."
+                    ),
+                    true,
+                    false,
+                    0L
+            );
+            try {
+                ScheduledThreadPoolExecutor currentExecutor = executorLocked();
+                attempt.timeoutTask = currentExecutor.schedule(
+                        () -> timeOut(attempt),
+                        settings.timeoutSeconds(),
+                        TimeUnit.SECONDS
+                );
+                currentExecutor.execute(task);
+            } catch (RuntimeException failure) {
+                if (attempt.timeoutTask != null) {
+                    attempt.timeoutTask.cancel(false);
+                }
+                if (inFlight == attempt) {
+                    inFlight = null;
+                }
+                task.cancel(true);
+                failLocked("Spark capture scheduling failed", failure);
+            }
+        }
+    }
+
+    private void capture(@Nonnull CaptureAttempt attempt) {
+        SparkProfileReadResult result;
+        try {
+            result = profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries());
+        } catch (Throwable failure) {
+            rethrowIfFatal(failure);
+            boolean report;
+            synchronized (lifecycleLock) {
+                report = isCurrentAttemptLocked(attempt);
+                if (report) {
+                    inFlight = null;
+                    cancelTimeoutLocked(attempt);
+                    failLocked("Spark snapshot failed", failure);
+                }
+            }
+            return;
+        }
+
+        long durationMillis = elapsedMillis(attempt.startedAtNanos);
+        long heapDelta = usedHeapBytes() - attempt.heapBefore;
+        synchronized (lifecycleLock) {
+            if (!isCurrentAttemptLocked(attempt)) {
+                return;
+            }
+        }
+        if (!isActiveOwner()) {
+            deactivateForLostOwnership();
+            return;
+        }
+        boolean publish = false;
+        SparkProfilerDiagnostics resultDiagnostics;
+        synchronized (lifecycleLock) {
+            if (!isCurrentAttemptLocked(attempt)) {
+                return;
+            }
+            inFlight = null;
+            cancelTimeoutLocked(attempt);
+            if (result == null) {
+                failLocked(
+                        "Spark snapshot failed",
+                        new IllegalStateException("Spark returned no read result.")
+                );
+                return;
+            }
+            SparkProfilerDiagnostics completed = diagnosticsFrom(result, durationMillis, heapDelta);
+            boolean opensCircuit = opensCircuit(result.status());
+            if (opensCircuit) {
+                circuitOpen = true;
+                active = false;
+                lifecycleGeneration++;
+                cancelScheduledTaskLocked();
+                shutdownExecutorLocked(true);
+            }
+            resultDiagnostics = runtimeDiagnostics(
+                    completed,
+                    active && !closed,
+                    circuitOpen,
+                    0L
+            );
+            diagnostics = resultDiagnostics;
+            if (completed.state() == SparkProfilerDiagnostics.State.COMPLETE
+                    && result.snapshot() != null
+                    && seenWindowKeys.add(result.snapshot().windowKey())) {
+                history.addLast(result.snapshot());
+                while (history.size() > Math.max(1, settings.maxHistorySnapshots())) {
+                    history.removeFirst();
+                }
+                publish = true;
+            }
+            if (!opensCircuit && active && !closed) {
+                scheduleCaptureLocked(settings.intervalSeconds(), "poll interval");
+                resultDiagnostics = diagnostics;
+            }
+        }
+
+        if (publish) {
+            logSnapshot(resultDiagnostics);
+        } else if (shouldLogState(resultDiagnostics.state())) {
+            logNonActionable(resultDiagnostics);
+        }
+    }
+
+    @Nonnull
+    private static SparkProfilerDiagnostics diagnosticsFrom(@Nonnull SparkProfileReadResult result,
+                                                             long durationMillis,
+                                                             long heapDeltaBytes) {
+        SparkProfileSnapshot snapshot = result.snapshot();
+        if (result.status() == SparkProfileReadResult.Status.COMPLETE && snapshot != null) {
+            return new SparkProfilerDiagnostics(
+                    SparkProfilerDiagnostics.State.COMPLETE,
+                    snapshot.sparkVersion(),
+                    "Raw Spark profile data was not retained.",
+                    durationMillis,
+                    heapDeltaBytes,
+                    snapshot.windowKey(),
+                    snapshot.threadCount(),
+                    snapshot.frameCount(),
+                    snapshot.hotPaths()
+            );
+        }
+        SparkProfilerDiagnostics.State state = switch (result.status()) {
+            case ABSENT -> SparkProfilerDiagnostics.State.ABSENT;
+            case NOT_RUNNING, NOT_BACKGROUND -> SparkProfilerDiagnostics.State.NOT_RUNNING;
+            case UNSUPPORTED_PLUGIN, UNSUPPORTED_VERSION, UNSUPPORTED_ARTIFACT, UNSUPPORTED_SAMPLER ->
+                    SparkProfilerDiagnostics.State.UNSUPPORTED;
+            case NO_DATA, NO_ACTIONABLE_DATA -> SparkProfilerDiagnostics.State.NO_DATA;
+            case TOO_COMPLEX -> SparkProfilerDiagnostics.State.TOO_COMPLEX;
+            case INCOMPATIBLE -> SparkProfilerDiagnostics.State.INCOMPATIBLE;
+            case COMPLETE -> SparkProfilerDiagnostics.State.NO_DATA;
+        };
+        return new SparkProfilerDiagnostics(
+                state,
+                result.sparkVersion(),
+                bounded(result.detail()),
+                durationMillis,
+                heapDeltaBytes,
+                0,
+                0,
+                0,
+                List.of()
+        );
+    }
+
+    private void timeOut(@Nonnull CaptureAttempt attempt) {
+        synchronized (lifecycleLock) {
+            if (!isCurrentAttemptLocked(attempt)) {
+                return;
+            }
+            inFlight = null;
+            lifecycleGeneration++;
+            circuitOpen = true;
+            active = false;
+            cancelScheduledTaskLocked();
+            attempt.task.cancel(true);
+            diagnostics = runtimeDiagnostics(
+                    new SparkProfilerDiagnostics(
+                            SparkProfilerDiagnostics.State.TIMED_OUT,
+                            null,
+                            "Spark snapshot exceeded the time limit. Late results will be discarded; export work may continue until Spark returns.",
+                            elapsedMillis(attempt.startedAtNanos),
+                            0L,
+                            0,
+                            0,
+                            0,
+                            List.of()
+                    ),
+                    false,
+                    true,
+                    0L
+            );
+            shutdownExecutorLocked(true);
+            log(Level.WARNING, "Spark profiler monitor timed out. Late results will be discarded; export work may continue until Spark returns.");
+        }
+    }
+
+    private void finishWithoutCapture(@Nonnull SparkProfilerDiagnostics.State state,
+                                      @Nonnull String detail,
+                                      boolean openCircuit,
+                                      @Nullable String warning) {
+        boolean logWarning = false;
+        synchronized (lifecycleLock) {
+            if (closed || !active) {
+                return;
+            }
+            if (openCircuit) {
+                circuitOpen = true;
+                active = false;
+                lifecycleGeneration++;
+                cancelScheduledTaskLocked();
+                shutdownExecutorLocked(true);
+            }
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(state, null, detail),
+                    active,
+                    circuitOpen,
+                    0L
+            );
+            if (!openCircuit && active) {
+                scheduleCaptureLocked(settings.intervalSeconds(), "poll interval");
+            }
+            if (warning != null && lastLoggedState != state) {
+                lastLoggedState = state;
+                logWarning = true;
+            }
+        }
+        if (logWarning) {
+            log(Level.WARNING, bounded(warning));
+        }
+    }
+
+    private boolean isActiveOwner() {
+        try {
+            return activeCoordinatorOwner.getAsBoolean();
+        } catch (Throwable failure) {
+            fail("Active coordinator check failed", failure);
+            return false;
+        }
+    }
+
+    private void deactivateForLostOwnership() {
+        synchronized (lifecycleLock) {
+            if (closed || !active) {
+                return;
+            }
+            active = false;
+            lifecycleGeneration++;
+            cancelScheduledTaskLocked();
+            cancelInFlightLocked();
+            shutdownExecutorLocked(true);
+            diagnostics = runtimeDiagnostics(
+                    SparkProfilerDiagnostics.simple(
+                            SparkProfilerDiagnostics.State.NOT_OWNER,
+                            diagnostics.sparkVersion(),
+                            "This runtime does not own the active Telemetry coordinator."
+                    ),
+                    false,
+                    circuitOpen,
+                    0L
+            );
+        }
+    }
+
+    private void fail(@Nonnull String operation, @Nonnull Throwable failure) {
+        rethrowIfFatal(failure);
+        synchronized (lifecycleLock) {
+            if (closed) {
+                return;
+            }
+            failLocked(operation, failure);
+        }
+    }
+
+    private void failLocked(@Nonnull String operation, @Nonnull Throwable failure) {
+        rethrowIfFatal(failure);
+        inFlight = null;
+        lifecycleGeneration++;
+        circuitOpen = true;
+        active = false;
+        cancelScheduledTaskLocked();
+        cancelTimeoutLocked(null);
+        shutdownExecutorLocked(true);
+        String detail = bounded(operation + ": " + failure.getClass().getSimpleName()
+                + (failure.getMessage() == null || failure.getMessage().isBlank()
+                ? ""
+                : ": " + failure.getMessage()));
+        diagnostics = runtimeDiagnostics(
+                SparkProfilerDiagnostics.simple(SparkProfilerDiagnostics.State.FAILED, null, detail),
+                false,
+                true,
+                0L
+        );
+        log(Level.WARNING, "Spark profiler monitor failed safely: " + detail);
+    }
+
+    private boolean opensCircuit(@Nonnull SparkProfileReadResult.Status status) {
+        return switch (status) {
+            case UNSUPPORTED_PLUGIN, UNSUPPORTED_VERSION, UNSUPPORTED_ARTIFACT,
+                    UNSUPPORTED_SAMPLER, TOO_COMPLEX, INCOMPATIBLE -> true;
+            default -> false;
+        };
+    }
+
+    private boolean shouldLogState(@Nonnull SparkProfilerDiagnostics.State state) {
+        if (state == SparkProfilerDiagnostics.State.COMPLETE
+                || state == SparkProfilerDiagnostics.State.ABSENT
+                || state == SparkProfilerDiagnostics.State.NOT_RUNNING
+                || state == SparkProfilerDiagnostics.State.NO_DATA
+                || state == SparkProfilerDiagnostics.State.NOT_OWNER) {
+            return false;
+        }
+        synchronized (lifecycleLock) {
+            if (lastLoggedState == state) {
+                return false;
+            }
+            lastLoggedState = state;
+            return true;
+        }
+    }
+
+    private void logSnapshot(@Nonnull SparkProfilerDiagnostics result) {
+        log(Level.INFO, "Spark profiler monitor completed: " + result.commandSummary());
+        int rank = 1;
+        for (SparkProfileSnapshot.HotPath hotPath : result.hotPaths()) {
+            log(Level.INFO, String.format(
+                    java.util.Locale.ROOT,
+                    "Spark hot path #%d: selfShare=%.2f%%, selfMs=%.3f, source=%s, frame=%s",
+                    rank++,
+                    hotPath.selfSharePercent(),
+                    hotPath.selfMilliseconds(),
+                    hotPath.source(),
+                    hotPath.frame()
+            ));
+        }
+    }
+
+    private void logNonActionable(@Nonnull SparkProfilerDiagnostics result) {
+        log(Level.WARNING, "Spark profiler monitor: " + result.commandSummary());
+    }
+
+    private void log(@Nonnull Level level, @Nonnull String message) {
+        String safe = bounded(message);
+        if (logSink != null) {
+            try {
+                logSink.accept(level, safe);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        if (logger != null) {
+            try {
+                logger.at(level).log(safe);
+            } catch (RuntimeException ignored) {
+            }
+        }
+    }
+
+    private void scheduleCaptureLocked(long delaySeconds, @Nonnull String reason) {
+        if (closed || !active || circuitOpen || inFlight != null) {
+            return;
+        }
+        try {
+            scheduledTask = executorLocked().schedule(
+                    this::beginCapture,
+                    Math.max(0L, delaySeconds),
+                    TimeUnit.SECONDS
+            );
+            diagnostics = runtimeDiagnostics(
+                    diagnostics,
+                    true,
+                    false,
+                    System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(Math.max(0L, delaySeconds))
+            );
+        } catch (RejectedExecutionException failure) {
+            failLocked("Spark monitor scheduling failed while " + reason, failure);
+        } catch (RuntimeException failure) {
+            failLocked("Spark monitor scheduling failed while " + reason, failure);
+        }
+    }
+
+    @Nonnull
+    private ScheduledThreadPoolExecutor executorLocked() {
+        if (closed) {
+            throw new IllegalStateException("Spark profiler monitor is closed.");
+        }
+        if (executor == null || executor.isShutdown()) {
+            executor = new ScheduledThreadPoolExecutor(2, new MonitorThreadFactory());
+            executor.setRemoveOnCancelPolicy(true);
+            executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+            executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
+        }
+        return executor;
+    }
+
+    private void cancelScheduledTaskLocked() {
+        if (scheduledTask != null) {
+            scheduledTask.cancel(false);
+            scheduledTask = null;
+        }
+    }
+
+    private void cancelInFlightLocked() {
+        if (inFlight == null) {
+            return;
+        }
+        cancelTimeoutLocked(inFlight);
+        inFlight.task.cancel(true);
+        inFlight = null;
+    }
+
+    private void cancelTimeoutLocked(@Nullable CaptureAttempt attempt) {
+        if (attempt == null) {
+            if (inFlight != null && inFlight.timeoutTask != null) {
+                inFlight.timeoutTask.cancel(false);
+            }
+            return;
+        }
+        if (attempt.timeoutTask != null) {
+            attempt.timeoutTask.cancel(false);
+            attempt.timeoutTask = null;
+        }
+    }
+
+    private void shutdownExecutorLocked(boolean interrupt) {
+        if (executor == null) {
+            return;
+        }
+        if (interrupt) {
+            executor.shutdownNow();
+        } else {
+            executor.shutdown();
+        }
+        executor = null;
+    }
+
+    private boolean isCurrentAttemptLocked(@Nonnull CaptureAttempt attempt) {
+        return !closed
+                && active
+                && inFlight == attempt
+                && attempt.generation == lifecycleGeneration;
+    }
+
+    private long lifecycleGeneration() {
+        synchronized (lifecycleLock) {
+            return lifecycleGeneration;
+        }
+    }
+
+    @Nonnull
+    private static SparkProfilerDiagnostics runtimeDiagnostics(
+            @Nonnull SparkProfilerDiagnostics base,
+            boolean active,
+            boolean circuitOpen,
+            long nextCaptureAtMillis) {
+        return new SparkProfilerDiagnostics(
+                base.state(),
+                base.sparkVersion(),
+                base.detail(),
+                base.captureDurationMillis(),
+                base.heapDeltaBytes(),
+                base.windowKey(),
+                base.threadCount(),
+                base.frameCount(),
+                base.hotPaths(),
+                active,
+                circuitOpen,
+                nextCaptureAtMillis
+        );
+    }
+
+    private static long currentHeapHeadroomBytes() {
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.maxMemory() - usedHeapBytes();
+    }
+
+    private static long usedHeapBytes() {
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
+    }
+
+    private static long elapsedMillis(long startedAtNanos) {
+        return TimeUnit.NANOSECONDS.toMillis(Math.max(0L, System.nanoTime() - startedAtNanos));
+    }
+
+    @Nonnull
+    private static String bounded(@Nullable String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder safe = new StringBuilder(Math.min(text.length(), MAX_DETAIL_LENGTH));
+        for (int index = 0; index < text.length() && safe.length() < MAX_DETAIL_LENGTH; index++) {
+            char character = text.charAt(index);
+            safe.append(Character.isISOControl(character) ? ' ' : character);
+        }
+        return safe.toString().trim();
+    }
+
+    private static void rethrowIfFatal(@Nonnull Throwable failure) {
+        if (failure instanceof VirtualMachineError virtualMachineError) {
+            throw virtualMachineError;
+        }
+        if ("java.lang.ThreadDeath".equals(failure.getClass().getName())) {
+            throw (Error) failure;
+        }
+    }
+
+    private static final class CaptureAttempt {
+        private final long generation;
+        private final long startedAtNanos;
+        private final long heapBefore;
+        private final Object sparkPlugin;
+        private FutureTask<Void> task;
+        private ScheduledFuture<?> timeoutTask;
+
+        private CaptureAttempt(long generation,
+                               long startedAtNanos,
+                               long heapBefore,
+                               @Nonnull Object sparkPlugin) {
+            this.generation = generation;
+            this.startedAtNanos = startedAtNanos;
+            this.heapBefore = heapBefore;
+            this.sparkPlugin = sparkPlugin;
+        }
+    }
+
+    private static final class MonitorThreadFactory implements ThreadFactory {
+        private int sequence;
+
+        @Override
+        public synchronized Thread newThread(@Nonnull Runnable task) {
+            Thread thread = new Thread(task, "AlecsTelemetry-SparkMonitor-" + ++sequence);
+            thread.setDaemon(true);
+            thread.setPriority(Thread.NORM_PRIORITY);
+            return thread;
+        }
+    }
+}

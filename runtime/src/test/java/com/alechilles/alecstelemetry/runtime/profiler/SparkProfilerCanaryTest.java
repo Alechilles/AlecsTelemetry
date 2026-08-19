@@ -4,6 +4,7 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -13,6 +14,36 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SparkProfilerCanaryTest {
+
+    @Test
+    void compatibilityFacadeDelegatesToRecurringMonitorAndExposesHistory() throws Exception {
+        SparkProfilerCanary canary = new SparkProfilerCanary(
+                enabledSettings(5),
+                Object::new,
+                () -> true,
+                (plugin, maxEntries) -> SparkProfileReadResult.complete(new SparkProfileSnapshot(
+                        "1.10.172",
+                        12,
+                        2,
+                        1,
+                        4,
+                        1,
+                        8.0d,
+                        List.of()
+                )),
+                () -> Long.MAX_VALUE,
+                null
+        );
+        try {
+            canary.startNow();
+            awaitState(canary, SparkProfilerDiagnostics.State.COMPLETE, Duration.ofSeconds(2));
+
+            assertEquals(1, canary.history().size());
+            assertEquals(12, canary.history().get(0).windowKey());
+        } finally {
+            canary.close();
+        }
+    }
 
     @Test
     void aSparkLinkageFailureOpensTheCircuitAndDoesNotEscape() throws Exception {
