@@ -1,5 +1,8 @@
 package com.alechilles.alecstelemetry.coordinator;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.lang.reflect.Method;
@@ -9,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * JVM-wide coordinator registry shared by standalone and embedded telemetry copies.
@@ -559,6 +563,107 @@ public final class TelemetryCoordinatorRegistry {
                 return TelemetryCoordinatorBridge.super.consentDiagnostics();
             } catch (ReflectiveOperationException ex) {
                 return TelemetryCoordinatorBridge.super.consentDiagnostics();
+            }
+        }
+
+        @Nonnull
+        @Override
+        public List<String> capabilities() {
+            try {
+                Object value = invoke(delegate, "capabilities");
+                if (!(value instanceof List<?> list)) {
+                    return TelemetryCoordinatorBridge.super.capabilities();
+                }
+                for (Object capability : list) {
+                    if (TelemetryProfilerView.CAPABILITY.equals(capability)) {
+                        return List.of(TelemetryProfilerView.CAPABILITY);
+                    }
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            }
+            return TelemetryCoordinatorBridge.super.capabilities();
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> profilerStatus(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "profilerStatus",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                return TelemetryProfilerBridgePayload.foreignStatusMap(value);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return TelemetryCoordinatorBridge.super.profilerStatus(projectId);
+            }
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> profilerLatest(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "profilerLatest",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                return TelemetryProfilerBridgePayload.foreignSnapshotMap(value);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return TelemetryCoordinatorBridge.super.profilerLatest(projectId);
+            }
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> profilerHistory(@Nonnull String projectId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "profilerHistory",
+                        new Class<?>[]{String.class},
+                        projectId
+                );
+                return TelemetryProfilerBridgePayload.foreignHistoryMaps(value);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return TelemetryCoordinatorBridge.super.profilerHistory(projectId);
+            }
+        }
+
+        @Nonnull
+        @Override
+        public String subscribeProfiler(@Nonnull String projectId,
+                                        @Nonnull Consumer<Map<String, Object>> listener) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "subscribeProfiler",
+                        new Class<?>[]{String.class, Consumer.class},
+                        projectId,
+                        listener
+                );
+                if (value instanceof String subscriptionId && !subscriptionId.isBlank()) {
+                    return subscriptionId;
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            }
+            return TelemetryCoordinatorBridge.super.subscribeProfiler(projectId, listener);
+        }
+
+        @Override
+        public boolean unsubscribeProfiler(@Nonnull String subscriptionId) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "unsubscribeProfiler",
+                        new Class<?>[]{String.class},
+                        subscriptionId
+                );
+                return value instanceof Boolean result && result;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return TelemetryCoordinatorBridge.super.unsubscribeProfiler(subscriptionId);
             }
         }
 

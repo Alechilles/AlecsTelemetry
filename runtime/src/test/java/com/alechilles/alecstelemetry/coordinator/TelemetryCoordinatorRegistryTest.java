@@ -1,8 +1,16 @@
 package com.alechilles.alecstelemetry.coordinator;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
+import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Path;
@@ -12,7 +20,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCoordinatorRegistryTest {
@@ -61,6 +72,73 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals("Alechilles:Alec's Tamework!", embedded.lastWorldFailurePluginIdentifier);
         assertFalse(embedded.projectEnabled);
         assertFalse(embedded.breadcrumbsEnabled);
+    }
+
+    @Test
+    void olderForeignProviderDefaultsToNoProfilerCapability() {
+        ForeignBridge legacy = foreignBridge("legacy", TelemetryRuntimeOrigin.EMBEDDED, "9.0.0");
+
+        TelemetryCoordinatorRegistry.register(legacy);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertTrue(active.capabilities().isEmpty());
+        assertTrue(active.profilerLatest("mod-a").isEmpty());
+        assertTrue(active.profilerHistory("mod-a").isEmpty());
+    }
+
+    @Test
+    void capableForeignProviderRoundTripsOnlyJdkPayloads() {
+        CapableForeignBridge provider = capableForeignBridge();
+
+        TelemetryCoordinatorRegistry.register(provider);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertTrue(active.capabilities().contains(TelemetryProfilerView.CAPABILITY));
+        assertEquals(7, ((Number) active.profilerLatest("mod-a").get("windowKey")).intValue());
+        assertTrue(active.profilerLatest("mod-a").values().stream()
+                .noneMatch(value -> value instanceof com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot));
+    }
+
+    @Test
+    void isolatedForeignProviderRoundTripsBoundedProfilerView() throws Exception {
+        URL classes = TelemetryCoordinatorRegistryTest.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation();
+        try (ProfilerFixtureClassLoader isolated = new ProfilerFixtureClassLoader(
+                classes,
+                TelemetryCoordinatorRegistryTest.class.getClassLoader()
+        )) {
+            Class<?> fixtureType = isolated.loadClass(IsolatedForeignProfilerBridge.class.getName());
+            assertSame(isolated, fixtureType.getClassLoader());
+            assertThrows(
+                    ClassNotFoundException.class,
+                    () -> isolated.loadClass("com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot")
+            );
+            Object foreign = fixtureType.getConstructor().newInstance();
+
+            TelemetryCoordinatorRegistry.register(foreign);
+
+            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+            assertNotNull(active);
+            RemoteTelemetryProfilerView view = new RemoteTelemetryProfilerView(active, "mod-a");
+            assertEquals(TelemetryProfilerStatus.State.COMPLETE, view.status().state());
+            assertEquals(20, view.latest().orElseThrow().windowKey());
+            assertEquals(
+                    List.of(11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
+                    view.history().stream().map(TelemetryProfilerSnapshot::windowKey).toList()
+            );
+
+            AtomicBoolean callback = new AtomicBoolean();
+            TelemetryProfilerSubscription subscription = view.subscribe(snapshot -> {
+                callback.set(snapshot.windowKey() == 20);
+            });
+            assertTrue(callback.get());
+            subscription.close();
+
+            Method unsubscribed = fixtureType.getMethod("unsubscribed");
+            assertTrue((Boolean) unsubscribed.invoke(foreign));
+        }
     }
 
     @Test
@@ -212,6 +290,15 @@ class TelemetryCoordinatorRegistryTest {
                                                String runtimeVersion,
                                                int protocolVersion) {
         return new ForeignBridge(candidate(providerId, origin, runtimeVersion, protocolVersion));
+    }
+
+    private static CapableForeignBridge capableForeignBridge() {
+        return new CapableForeignBridge(candidate(
+                "capable",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "9.0.0",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION
+        ));
     }
 
     private static TelemetryRuntimeCandidate candidate(String providerId,
@@ -385,7 +472,7 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     @SuppressWarnings("unused")
-    private static final class ForeignBridge {
+    private static class ForeignBridge {
         private final TelemetryRuntimeCandidate candidate;
         private boolean active;
         private String lastProjectId;
@@ -398,7 +485,7 @@ class TelemetryCoordinatorRegistryTest {
         private String lastWorldRemovalReason;
         private String lastWorldFailurePluginIdentifier;
 
-        private ForeignBridge(TelemetryRuntimeCandidate candidate) {
+        protected ForeignBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
         }
 
@@ -487,6 +574,169 @@ class TelemetryCoordinatorRegistryTest {
             lastWorldRemovalReason = removalReason;
             lastWorldFailurePluginIdentifier = possibleFailureCause;
             return true;
+        }
+    }
+
+    private static final class CapableForeignBridge extends ForeignBridge {
+        private CapableForeignBridge(TelemetryRuntimeCandidate candidate) {
+            super(candidate);
+        }
+
+        public List<String> capabilities() {
+            return List.of(TelemetryProfilerView.CAPABILITY);
+        }
+
+        public Map<String, Object> profilerLatest(String projectId) {
+            return Map.of("windowKey", 7);
+        }
+    }
+
+    /** Fixture source uses only JDK types and is loaded child-first by the boundary test. */
+    public static final class IsolatedForeignProfilerBridge {
+        private boolean unsubscribed;
+
+        public String providerId() {
+            return "isolated-profiler";
+        }
+
+        public String origin() {
+            return "EMBEDDED";
+        }
+
+        public String runtimeVersion() {
+            return "9.0.0";
+        }
+
+        public int coordinatorProtocolVersion() {
+            return 3;
+        }
+
+        public String providerPluginIdentifier() {
+            return "Example:Isolated";
+        }
+
+        public String providerPluginVersion() {
+            return "1.0.0";
+        }
+
+        public String sourcePath() {
+            return "isolated.jar";
+        }
+
+        public String sharedDataRoot() {
+            return "Telemetry";
+        }
+
+        public void activate() {
+        }
+
+        public void deactivate() {
+        }
+
+        public boolean isActive() {
+            return true;
+        }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
+        }
+
+        public List<String> capabilities() {
+            return List.of("profiler-api-v1");
+        }
+
+        public Map<String, Object> profilerStatus(String projectId) {
+            return Map.of(
+                    "state", "COMPLETE",
+                    "detail", "isolated",
+                    "active", true,
+                    "circuitOpen", false,
+                    "sparkVersion", "spark-1",
+                    "runtimeVersion", "9.0.0",
+                    "nextCaptureAtMillis", 0L,
+                    "analysisDurationMillis", 2L,
+                    "omittedPathCount", 0,
+                    "truncatedPrefixCount", 0
+            );
+        }
+
+        public Map<String, Object> profilerLatest(String projectId) {
+            return snapshot(20);
+        }
+
+        public List<Map<String, Object>> profilerHistory(String projectId) {
+            ArrayList<Map<String, Object>> history = new ArrayList<>();
+            for (int window = 1; window <= 20; window++) {
+                history.add(snapshot(window));
+            }
+            return history;
+        }
+
+        public String subscribeProfiler(String projectId,
+                                        java.util.function.Consumer<Map<String, Object>> listener) {
+            listener.accept(snapshot(20));
+            return "isolated-subscription";
+        }
+
+        public boolean unsubscribeProfiler(String subscriptionId) {
+            unsubscribed = "isolated-subscription".equals(subscriptionId);
+            return unsubscribed;
+        }
+
+        public boolean unsubscribed() {
+            return unsubscribed;
+        }
+
+        private static Map<String, Object> snapshot(int window) {
+            return Map.of(
+                    "projectId", "mod-a",
+                    "projectVersion", "1.0.0",
+                    "sparkVersion", "spark-1",
+                    "windowKey", window,
+                    "observedAtMillis", (long) window,
+                    "selectedWorldThreadSelfMilliseconds", 1.0d,
+                    "qualificationRuleSet", "unqualified-v1",
+                    "paths", List.of(),
+                    "context", Map.of(
+                            "observedAtMillis", (long) window,
+                            "breadcrumbCategoryCounts", Map.of()
+                    )
+            );
+        }
+    }
+
+    private static final class ProfilerFixtureClassLoader extends URLClassLoader {
+        private final String fixtureName = IsolatedForeignProfilerBridge.class.getName();
+
+        private ProfilerFixtureClassLoader(URL classes, ClassLoader parent) {
+            super(new URL[]{classes}, parent);
+        }
+
+        @Override
+        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+            if (name.startsWith("com.alechilles.alecstelemetry.api.TelemetryProfiler")) {
+                throw new ClassNotFoundException(name);
+            }
+            if (!fixtureName.equals(name)) {
+                return super.loadClass(name, resolve);
+            }
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> loaded = findLoadedClass(name);
+                if (loaded == null) {
+                    loaded = findClass(name);
+                }
+                if (resolve) {
+                    resolveClass(loaded);
+                }
+                return loaded;
+            }
         }
     }
 }

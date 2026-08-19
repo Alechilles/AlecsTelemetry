@@ -42,6 +42,8 @@ import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
+import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
 import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProjectProfilerService;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
@@ -63,7 +65,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 
 final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
@@ -706,9 +712,21 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public TelemetryProfilerView profiler(@Nonnull String projectId) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        return usesLocalCoordinator(active)
-                ? projectProfilerService.view(projectId)
-                : TelemetryProfilerView.unavailable();
+        if (usesLocalCoordinator(active)) {
+            return projectProfilerService.view(projectId);
+        }
+        if (active == null || !supportsProfilerCapability(active)) {
+            return TelemetryProfilerView.unavailable();
+        }
+        return new RemoteTelemetryProfilerView(active, projectId);
+    }
+
+    private static boolean supportsProfilerCapability(@Nonnull TelemetryCoordinatorBridge bridge) {
+        try {
+            return bridge.capabilities().contains(TelemetryProfilerView.CAPABILITY);
+        } catch (RuntimeException | LinkageError ignored) {
+            return false;
+        }
     }
 
     @Nonnull
@@ -1653,6 +1671,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryCoordinatorService service;
         private final AtomicBoolean active = new AtomicBoolean(false);
+        private final ConcurrentHashMap<String, com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription>
+                profilerSubscriptions = new ConcurrentHashMap<>();
 
         private ProviderBridge(@Nonnull TelemetryRuntimeCandidate candidate,
                                @Nonnull TelemetryCoordinatorService service) {
@@ -1715,6 +1735,86 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             return active.get();
         }
 
+        @Nonnull
+        @Override
+        public List<String> capabilities() {
+            return List.of(TelemetryProfilerView.CAPABILITY);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> profilerStatus(@Nonnull String projectId) {
+            return TelemetryProfilerBridgePayload.statusSummary(projectProfilerService.view(projectId).status());
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> profilerLatest(@Nonnull String projectId) {
+            return projectProfilerService.view(projectId)
+                    .latest()
+                    .map(TelemetryProfilerBridgePayload::snapshotSummary)
+                    .orElseGet(Map::of);
+        }
+
+        @Nonnull
+        @Override
+        public List<Map<String, Object>> profilerHistory(@Nonnull String projectId) {
+            return TelemetryProfilerBridgePayload.historySummaries(
+                    projectProfilerService.view(projectId).history()
+            );
+        }
+
+        @Nonnull
+        @Override
+        public String subscribeProfiler(@Nonnull String projectId,
+                                        @Nonnull Consumer<Map<String, Object>> listener) {
+            Objects.requireNonNull(listener, "listener");
+            final com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription;
+            try {
+                subscription = projectProfilerService.view(projectId).subscribe(snapshot -> {
+                    Map<String, Object> payload;
+                    try {
+                        payload = TelemetryProfilerBridgePayload.snapshotSummary(snapshot);
+                    } catch (RuntimeException | LinkageError ignored) {
+                        return;
+                    }
+                    try {
+                        listener.accept(payload);
+                    } catch (RuntimeException | LinkageError ignored) {
+                        // A foreign listener must not affect local profiler delivery.
+                    }
+                });
+            } catch (RuntimeException | LinkageError ignored) {
+                return "";
+            }
+            if (subscription == null) {
+                return "";
+            }
+            String subscriptionId;
+            do {
+                subscriptionId = UUID.randomUUID().toString();
+            } while (profilerSubscriptions.putIfAbsent(subscriptionId, subscription) != null);
+            return subscriptionId;
+        }
+
+        @Override
+        public boolean unsubscribeProfiler(@Nonnull String subscriptionId) {
+            if (subscriptionId == null || subscriptionId.isBlank()) {
+                return false;
+            }
+            com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription =
+                    profilerSubscriptions.remove(subscriptionId);
+            if (subscription == null) {
+                return false;
+            }
+            try {
+                subscription.close();
+            } catch (RuntimeException | LinkageError ignored) {
+                // The local service is already closing during provider handoff.
+            }
+            return true;
+        }
+
         @Override
         public void start() {
             service.start();
@@ -1727,10 +1827,25 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public void shutdown() {
             sparkProfilerMonitor.suspend();
+            closeProfilerSubscriptions();
             projectProfilerService.deactivateProvider();
             commandRegistrar.unregister();
             service.shutdown();
             TelemetryRuntimeLocator.clearIfCurrent(api);
+        }
+
+        private void closeProfilerSubscriptions() {
+            for (Map.Entry<String, com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription> entry
+                    : profilerSubscriptions.entrySet()) {
+                if (!profilerSubscriptions.remove(entry.getKey(), entry.getValue())) {
+                    continue;
+                }
+                try {
+                    entry.getValue().close();
+                } catch (RuntimeException | LinkageError ignored) {
+                    // Keep provider shutdown safe when a consumer closes badly.
+                }
+            }
         }
 
         @Override
