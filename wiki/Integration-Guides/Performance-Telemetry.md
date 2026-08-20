@@ -31,8 +31,9 @@ The service keeps at most five paths per snapshot and ten snapshots per
 project, with 500 project-path entries globally. It accepts four listener
 workers per project and 32 globally. Attribution uses an exact plugin
 identifier, then the longest complete package prefix, with at most 32
-normalized prefixes per project and 512 characters per prefix. Longer
-prefixes are omitted and reported as truncated.
+normalized prefixes per project. Each package-prefix value is limited to 512
+characters before normalization. Longer values are omitted and reported as
+truncated.
 
 An older elected runtime returns an unavailable view with empty data and a
 closed subscription. Disabling performance consent clears the project's local

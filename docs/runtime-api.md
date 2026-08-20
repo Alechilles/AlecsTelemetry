@@ -102,8 +102,9 @@ The ownership index matches an exact normalized plugin identifier first. If
 that is not available, it uses the longest complete normalized package prefix.
 It never uses a partial string match. The profiler index accepts at most 32
 normalized package prefixes per project. Extra prefixes are omitted and the
-status reports the truncation. Each normalized prefix is limited to 512
-characters. Longer prefixes are also omitted and reported as truncated.
+status reports the truncation. Each package-prefix value is limited to 512
+characters before normalization. Longer values are also omitted and reported
+as truncated.
 
 The local service retains at most ten snapshots per project and 500 retained
 project-path entries globally. It accepts at most four listener workers per

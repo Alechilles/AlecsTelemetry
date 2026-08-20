@@ -290,8 +290,9 @@ entries at 500, listeners at four per project and 32 globally. Performance
 consent revocation clears that project's history and does not restore it when
 consent is enabled again. Attribution matches an exact logical plugin
 identifier, then the longest complete package prefix, with at most 32
-normalized prefixes per project and 512 characters per prefix. Longer
-prefixes are omitted and reported as truncated.
+normalized prefixes per project. Each package-prefix value is limited to 512
+characters before normalization. Longer values are omitted and reported as
+truncated.
 
 ## Heartbeats and live changes
 

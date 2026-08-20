@@ -58,9 +58,9 @@ class ProfilerProjectOwnershipIndexTest {
     }
 
     @Test
-    void profilerSkipsExcessivelyLongPrefixWithoutBuildingUnboundedTrie() {
+    void profilerSkipsExcessivelyLongRawPrefixBeforeNormalization() {
         ProfilerProjectOwnershipIndex.BuildResult built = build(
-                project("long-prefix", "Example:Long Prefix", "x".repeat(50_000))
+                project("long-prefix", "Example:Long Prefix", ".".repeat(10_000))
         );
 
         assertEquals(1, built.truncatedPrefixCount());

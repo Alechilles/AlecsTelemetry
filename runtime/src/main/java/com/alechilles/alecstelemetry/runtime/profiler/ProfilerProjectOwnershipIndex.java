@@ -51,6 +51,10 @@ final class ProfilerProjectOwnershipIndex {
 
             LinkedHashSet<String> normalizedPrefixes = new LinkedHashSet<>();
             for (String prefix : registration.packagePrefixes()) {
+                if (prefix != null && prefix.length() > MAX_PREFIX_LENGTH) {
+                    truncatedPrefixCount++;
+                    continue;
+                }
                 String normalizedPrefix = normalizePrefix(prefix);
                 if (normalizedPrefix == null) {
                     continue;

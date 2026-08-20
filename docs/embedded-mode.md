@@ -283,8 +283,8 @@ per project and 32 globally. Disabling performance consent clears that
 project's retained summaries; re-enabling consent allows only later windows.
 Attribution uses an exact plugin identifier, then the longest complete package
 prefix, with at most 32 normalized prefixes per project.
-Each normalized prefix is limited to 512 characters. Longer prefixes are
-omitted and reported as truncated.
+Each package-prefix value is limited to 512 characters before normalization.
+Longer values are omitted and reported as truncated.
 
 ## Storage Layout
 

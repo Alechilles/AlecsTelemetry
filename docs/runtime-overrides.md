@@ -228,8 +228,8 @@ settings and review controls allow the attachment.
 
 Profiler attribution matches exact plugin identifiers first, then the longest
 complete package prefix. The profiler index accepts at most 32 normalized
-package prefixes per project and 512 characters per prefix. It reports omitted
-prefixes in diagnostics.
+package prefixes per project. Each package-prefix value is limited to 512
+characters before normalization. It reports omitted prefixes in diagnostics.
 
 ### Settings
 

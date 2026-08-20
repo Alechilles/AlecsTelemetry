@@ -817,7 +817,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 key.append(keyPart(identifier));
             }
             for (String prefix : registration.packagePrefixes()) {
-                key.append(keyPart(prefix));
+                key.append(profilerPrefixKeyPart(prefix));
             }
             key.append(';');
         }
@@ -836,6 +836,14 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private static String keyPart(@Nullable String value) {
         String normalized = value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT);
         return normalized.length() + ":" + normalized + "|";
+    }
+
+    @Nonnull
+    private static String profilerPrefixKeyPart(@Nullable String value) {
+        if (value != null && value.length() > ProfilerProjectOwnershipIndex.MAX_PREFIX_LENGTH) {
+            return "P!overlong|";
+        }
+        return keyPart(value);
     }
 
     @Nonnull
