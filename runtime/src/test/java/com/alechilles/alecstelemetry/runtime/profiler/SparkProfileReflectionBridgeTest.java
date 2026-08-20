@@ -241,6 +241,22 @@ class SparkProfileReflectionBridgeTest {
     }
 
     @Test
+    void treatsSparkWindowRotationDuringExportAsRetryableNoData() {
+        WindowRotationSampler sampler = new WindowRotationSampler();
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.NO_DATA, result.status());
+        assertNull(result.snapshot());
+        assertEquals("1.10.172-SNAPSHOT", result.sparkVersion());
+        assertEquals("Spark window changed during export; capture will retry.", result.detail());
+    }
+
+    @Test
     void doesNotReadAUserStartedForegroundProfile() {
         FakeSampler sampler = new FakeSampler(
                 false,
@@ -556,6 +572,31 @@ class SparkProfileReflectionBridgeTest {
             props.classSourceLookup().get();
             toProtoCalls++;
             return data;
+        }
+    }
+
+    public static final class WindowRotationSampler {
+        public boolean isRunningInBackground() {
+            return true;
+        }
+
+        public Sampler.SamplerType getType() {
+            return Sampler.SamplerType.ASYNC;
+        }
+
+        public Sampler.SamplerMode getMode() {
+            return Sampler.SamplerMode.EXECUTION;
+        }
+
+        public Object toProto(SparkPlatform platform, Sampler.ExportProps props) {
+            RuntimeException failure = new RuntimeException("No index for key 29786489 in [29786488]");
+            failure.setStackTrace(new StackTraceElement[]{new StackTraceElement(
+                    "me.lucko.spark.common.sampler.window.ProtoTimeEncoder",
+                    "lambda$encode$0",
+                    "ProtoTimeEncoder.java",
+                    89
+            )});
+            throw failure;
         }
     }
 

@@ -444,6 +444,8 @@ same stable `telemetry.command.telemetry.*` prefix.
 - The optional Spark hot-path monitor is off by default. It reads completed
   passive Spark background windows, keeps bounded summaries and history in
   memory, and writes bounded summaries to the local server log. The monitor
+  retries after Spark rotates a passive window during export. It does not treat
+  that transient race as an incompatible Spark runtime. The monitor
   does not directly queue or upload profiler data. A user-submitted manual
   report can include those ordinary log lines when current or previous log
   attachments pass the manual-report settings, project descriptor, review,

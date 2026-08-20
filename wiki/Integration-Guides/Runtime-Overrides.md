@@ -236,8 +236,9 @@ headroom is required. A window with more than 25,000 distinct frames is
 discarded without a partial ranking. Unsupported or incompatible Spark,
 excessive complexity, a failed read, or a timeout opens the session circuit;
 the monitor does not retry after that. Spark absence, no active background
-sampler, no completed window, no actionable WorldThread data, and low heap do
-not open the circuit. Ownership loss requests cancellation, stops future polls,
+sampler, no completed window, no actionable WorldThread data, low heap, and
+Spark's transient window-rotation export race do not open the circuit. Ownership
+loss requests cancellation, stops future polls,
 and fences late results, but an export that ignores interruption can continue
 until Spark returns. See the repository's [runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
 for the complete tested Spark version and JAR hash matrix.

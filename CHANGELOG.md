@@ -26,6 +26,9 @@
   data, or server identity for this feature.
 
 ### Fixed
+- Treated Spark's transient window-rotation export race as retryable no-data
+  instead of an incompatible runtime, so the monitor does not open its circuit
+  when Spark advances a passive window during export.
 - Excluded async-profiler native-library frames with invalid JVM method
   descriptors from WorldThread rankings, preventing native waits from
   displacing actionable Java hot paths.

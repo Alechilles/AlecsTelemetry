@@ -82,6 +82,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         }
 
         String version = null;
+        String testedRelease = null;
         try {
             version = safeText(String.valueOf(invokeNoArgs(sparkPlugin, "getVersion")));
             if (!TESTED_VERSIONS.contains(baseVersion(version))) {
@@ -91,7 +92,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                         "Spark " + version + " is outside the tested compatibility set."
                 );
             }
-            String testedRelease = artifactVerifier.testedRelease(sparkPlugin.getClass(), version);
+            testedRelease = artifactVerifier.testedRelease(sparkPlugin.getClass(), version);
             if (testedRelease == null) {
                 return SparkProfileReadResult.of(
                         SparkProfileReadResult.Status.UNSUPPORTED_ARTIFACT,
@@ -102,6 +103,13 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             return readTestedVersion(sparkPlugin, testedRelease, Math.max(1, Math.min(10, maxEntries)));
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
+            if (isWindowRotationExportRace(failure)) {
+                return SparkProfileReadResult.of(
+                        SparkProfileReadResult.Status.NO_DATA,
+                        testedRelease == null ? version : testedRelease,
+                        "Spark window changed during export; capture will retry."
+                );
+            }
             return SparkProfileReadResult.of(
                     SparkProfileReadResult.Status.INCOMPATIBLE,
                     version,
@@ -676,6 +684,21 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         private String frame() {
             return safeText(className + "#" + methodName + methodDesc);
         }
+    }
+
+    private static boolean isWindowRotationExportRace(@Nonnull Throwable failure) {
+        String message = failure.getMessage();
+        if (message == null
+                || !message.startsWith("No index for key ")
+                || !message.contains(" in [")) {
+            return false;
+        }
+        for (StackTraceElement frame : failure.getStackTrace()) {
+            if ("me.lucko.spark.common.sampler.window.ProtoTimeEncoder".equals(frame.getClassName())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private record DecodedFrame(@Nonnull String source,

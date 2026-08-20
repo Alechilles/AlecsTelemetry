@@ -270,8 +270,9 @@ value, which uses safe canonical defaults instead of the legacy block.
   failed read, or a timeout opens the monitor circuit for the process. The
   monitor does not retry after the circuit opens. A late export result is
   discarded if Spark ignores interruption. Spark absence, no active background
-  sampler, no completed window, no actionable WorldThread data, and low heap do
-  not open the circuit; the monitor can poll again.
+  sampler, no completed window, no actionable WorldThread data, low heap, and
+  Spark's transient window-rotation export race do not open the circuit; the
+  monitor can poll again.
 - A new read starts only while its provider owns the active Telemetry
   coordinator. Ownership loss requests cancellation, stops future polls, and
   fences late results. A Spark export that ignores interruption may continue in
