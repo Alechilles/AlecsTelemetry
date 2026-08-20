@@ -18,7 +18,8 @@
   Phase 2 work. Older elected providers return an unavailable view safely.
 - Added project-filtered `/telemetry profiler top <project-id>` and
   `/telemetry profiler history <project-id>` commands. Project replies remain
-  bounded and are copied to the ordinary server log.
+  bounded and are copied to the ordinary server log. The project `top` header
+  includes analysis duration, omitted-path count, and truncated-prefix count.
 - Documented that project summaries require the global Spark monitor and
   project performance consent, use at most 32 profiler package prefixes, and
   remain local. Telemetry does not upload raw profiles, frame trees, player

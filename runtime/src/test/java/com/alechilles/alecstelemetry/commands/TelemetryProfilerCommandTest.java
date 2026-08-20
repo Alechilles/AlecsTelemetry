@@ -232,6 +232,9 @@ class TelemetryProfilerCommandTest {
         );
 
         assertTrue(sender.text().contains("project=mod-a"));
+        assertTrue(sender.text().contains("analysisDurationMs=7"));
+        assertTrue(sender.text().contains("omittedPaths=3"));
+        assertTrue(sender.text().contains("truncatedPrefixes=2"));
         assertTrue(sender.text().contains("SELF"));
         assertTrue(sender.text().contains("DOWNSTREAM"));
         assertTrue(sender.text().contains("sampledMs=40.00"));
@@ -458,9 +461,9 @@ class TelemetryProfilerCommandTest {
                         latest.sparkVersion(),
                         "runtime",
                         0L,
-                        1L,
-                        0,
-                        0
+                        7L,
+                        3,
+                        2
                 );
             }
 

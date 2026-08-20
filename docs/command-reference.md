@@ -63,12 +63,14 @@ settings, compatibility gate, and safety limits.
   `maxHistorySnapshots` and by the command's 10-entry output bound.
 
 The project forms read the local project profiler view. `top <project-id>`
-shows the latest snapshot and at most five paths. `history <project-id>` shows
-the newest ten retained snapshots in oldest-to-newest order. Each project path
-line includes `SELF` or `DOWNSTREAM`, sampled milliseconds, selected
-WorldThread share, the owned method, an optional first external method, and the
-32-character fingerprint. Phase 1 paths use `OBSERVED`; it does not provide a
-`signals` command. Signals belong to the later Phase 2 `hot-path-v1` work.
+shows the latest snapshot and at most five paths. Its header includes analysis
+duration, omitted-path count, and truncated-prefix count. `history
+<project-id>` shows the newest ten retained snapshots in oldest-to-newest
+order. Each project path line includes `SELF` or `DOWNSTREAM`, sampled
+milliseconds, selected WorldThread share, the owned method, an optional first
+external method, and the 32-character fingerprint. Phase 1 paths use
+`OBSERVED`; it does not provide a `signals` command. Signals belong to the later
+Phase 2 `hot-path-v1` work.
 
 Project IDs are unquoted and trimmed. One project ID is allowed. An extra
 argument returns one usage line. If the project is unavailable, the command

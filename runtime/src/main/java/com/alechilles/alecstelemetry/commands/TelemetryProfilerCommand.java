@@ -196,16 +196,21 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         }
 
         TelemetryProfilerSnapshot snapshot = latest.get();
+        TelemetryProfilerStatus status = projectStatus(view);
         List<TelemetryProfilerPathEvidence> paths = snapshot.paths();
         int count = Math.min(MAX_PROJECT_TOP_ENTRIES, paths.size());
         send(commandContext, runtime, bounded(String.format(
                 Locale.ROOT,
-                "Spark profiler top: project=%s, window=%d, sparkVersion=%s, showing=%d of %d",
+                "Spark profiler top: project=%s, window=%d, sparkVersion=%s, showing=%d of %d, "
+                        + "analysisDurationMs=%d, omittedPaths=%d, truncatedPrefixes=%d",
                 bounded(projectId, MAX_PROJECT_ID_LENGTH),
                 snapshot.windowKey(),
                 safeValue(snapshot.sparkVersion()),
                 count,
-                paths.size()
+                paths.size(),
+                status.analysisDurationMillis(),
+                status.omittedPathCount(),
+                status.truncatedPrefixCount()
         )));
         for (int index = 0; index < count; index++) {
             send(commandContext, runtime, formatProjectPath(index + 1, paths.get(index)));
@@ -257,14 +262,19 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     }
 
     private static boolean isUnavailable(@Nullable TelemetryProfilerView view) {
+        return projectStatus(view).state() == TelemetryProfilerStatus.State.UNAVAILABLE;
+    }
+
+    @Nonnull
+    private static TelemetryProfilerStatus projectStatus(@Nullable TelemetryProfilerView view) {
         if (view == null) {
-            return true;
+            return TelemetryProfilerStatus.unavailable();
         }
         try {
             TelemetryProfilerStatus status = view.status();
-            return status == null || status.state() == TelemetryProfilerStatus.State.UNAVAILABLE;
+            return status == null ? TelemetryProfilerStatus.unavailable() : status;
         } catch (RuntimeException | LinkageError ignored) {
-            return true;
+            return TelemetryProfilerStatus.unavailable();
         }
     }
 
@@ -272,14 +282,7 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static String projectNoData(@Nonnull String command,
                                         @Nonnull String projectId,
                                         @Nonnull TelemetryProfilerView view) {
-        String state = "UNAVAILABLE";
-        try {
-            TelemetryProfilerStatus status = view.status();
-            if (status != null && status.state() != null) {
-                state = status.state().name();
-            }
-        } catch (RuntimeException | LinkageError ignored) {
-        }
+        String state = projectStatus(view).state().name();
         return "Spark profiler " + command + ": project="
                 + bounded(projectId, MAX_PROJECT_ID_LENGTH)
                 + " has no completed data (state=" + state + ").";

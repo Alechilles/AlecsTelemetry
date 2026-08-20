@@ -47,7 +47,8 @@ passive Spark background windows and ranks Java self time from Hytale
   `maxHistorySnapshots` and the command's 10-entry output bound.
 
 The project forms read the local `profiler-api-v1` view. `top <project-id>`
-shows at most five paths from the latest project snapshot. `history
+shows at most five paths from the latest project snapshot. Its header includes
+analysis duration, omitted-path count, and truncated-prefix count. `history
 <project-id>` shows the newest ten retained snapshots in oldest-to-newest
 order. Path lines include `SELF` or `DOWNSTREAM`, sampled milliseconds,
 selected WorldThread share, the owned method, an optional first external

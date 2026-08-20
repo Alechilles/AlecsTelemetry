@@ -404,6 +404,8 @@ The API exposes class/method names, sampled timing, fingerprints, and bounded
 representative paths. It does not expose raw Spark profiles, frame trees, player
 data, or server identity, and Telemetry does not upload these summaries. Spark
 may retain or upload its own profiles under Spark's separate settings.
+The project `profiler top` header also reports analysis duration, omitted-path
+count, and truncated-prefix count for local operator checks.
 
 ## Useful Commands
 
