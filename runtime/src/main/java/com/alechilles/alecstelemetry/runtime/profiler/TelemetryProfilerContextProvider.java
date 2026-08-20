@@ -235,7 +235,8 @@ public final class TelemetryProfilerContextProvider {
                     "Telemetry profiler context source " + source.label
                             + " failed safely: " + failureSummary(failure)
             );
-        } catch (RuntimeException ignored) {
+        } catch (Throwable sinkFailure) {
+            rethrowIfFatal(sinkFailure);
             // A diagnostic sink must not affect publication.
         }
     }

@@ -21,6 +21,8 @@ public final class SparkPublicMetricsAdapter {
             "me.lucko.spark.api.statistic.StatisticWindow$TicksPerSecond";
     private static final String MSPT_WINDOW =
             "me.lucko.spark.api.statistic.StatisticWindow$MillisPerTick";
+    private static final String DOUBLE_AVERAGE_INFO =
+            "me.lucko.spark.api.statistic.misc.DoubleAverageInfo";
 
     private final Supplier<Object> sparkPlugin;
 
@@ -41,7 +43,13 @@ public final class SparkPublicMetricsAdapter {
             return SparkPublicMetrics.unavailable();
         }
 
-        ClassLoader sparkClassLoader = plugin.getClass().getClassLoader();
+        ClassLoader sparkClassLoader;
+        try {
+            sparkClassLoader = plugin.getClass().getClassLoader();
+        } catch (Throwable failure) {
+            rethrowIfFatal(failure);
+            return SparkPublicMetrics.unavailable();
+        }
         if (sparkClassLoader == null) {
             return SparkPublicMetrics.unavailable();
         }
@@ -100,7 +108,20 @@ public final class SparkPublicMetricsAdapter {
             if (average == null) {
                 return null;
             }
-            Object raw = invokePublicNoArgs(average, "mean");
+            Class<?> averageInfoType = Class.forName(DOUBLE_AVERAGE_INFO, false, sparkClassLoader);
+            if (!Modifier.isPublic(averageInfoType.getModifiers())
+                    || !averageInfoType.isInterface()
+                    || !averageInfoType.isInstance(average)) {
+                return null;
+            }
+            Method mean = averageInfoType.getMethod("mean");
+            if (!Modifier.isPublic(mean.getModifiers())
+                    || !Modifier.isPublic(mean.getDeclaringClass().getModifiers())
+                    || Modifier.isStatic(mean.getModifiers())
+                    || mean.getParameterCount() != 0) {
+                return null;
+            }
+            Object raw = mean.invoke(average);
             if (!(raw instanceof Number number)) {
                 return null;
             }
@@ -125,11 +146,20 @@ public final class SparkPublicMetricsAdapter {
     private static Object minutesOne(@Nonnull ClassLoader sparkClassLoader,
                                      @Nonnull String enumClassName) throws Throwable {
         Class<?> windowClass = Class.forName(enumClassName, false, sparkClassLoader);
+        if (!windowClass.isEnum()) {
+            throw new NoSuchFieldException(enumClassName + " is not an enum");
+        }
         Field minutesOne = windowClass.getField("MINUTES_1");
         if (!Modifier.isStatic(minutesOne.getModifiers())) {
             throw new NoSuchFieldException(enumClassName + ".MINUTES_1");
         }
-        return minutesOne.get(null);
+        Object value = minutesOne.get(null);
+        if (!(value instanceof Enum<?> enumValue)
+                || enumValue.getDeclaringClass() != windowClass
+                || !"MINUTES_1".equals(enumValue.name())) {
+            throw new NoSuchFieldException(enumClassName + ".MINUTES_1 is not its enum constant");
+        }
+        return value;
     }
 
     @Nonnull
@@ -163,12 +193,11 @@ public final class SparkPublicMetricsAdapter {
                 if (!method.getName().equals(methodName)
                         || method.getParameterCount() != parameterCount
                         || !Modifier.isPublic(method.getModifiers())
-                        || !Modifier.isPublic(method.getDeclaringClass().getModifiers())
                         || Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
                 if (argumentType == null
-                        || method.getParameterTypes()[0].isAssignableFrom(argumentType)) {
+                        || method.getParameterTypes()[0].equals(argumentType)) {
                     return method;
                 }
             }

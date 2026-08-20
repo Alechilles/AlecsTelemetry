@@ -118,6 +118,39 @@ class TelemetryProfilerContextProviderTest {
         ), context);
     }
 
+    // Regression: a non-fatal diagnostic sink failure must not suppress an otherwise publishable context.
+    @Test
+    void nonFatalDiagnosticSinkFailureDoesNotSuppressPublication() {
+        SparkProvider.set(new Spark(
+                new TpsStatistic(29.5d),
+                new MsptStatistic(new AverageInfo(12.25d))
+        ));
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = registeredCounter();
+        breadcrumbs.record(PROJECT_ID, CATEGORY);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> {
+                    throw new IllegalStateException("players unavailable");
+                },
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> new SparkPlugin()),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                (level, message) -> {
+                    throw new AssertionError("diagnostic sink failed");
+                }
+        );
+
+        assertEquals(new TelemetryProfilerContext(
+                1000L,
+                "0.5.9",
+                null,
+                29.5d,
+                12.25d,
+                Map.of(CATEGORY, 1)
+        ), provider.snapshot(PROJECT_ID));
+    }
+
     // Regression: a failing Spark supplier must leave player and breadcrumb sources present.
     @Test
     void sparkFailureIsolatedFromOtherSources() {

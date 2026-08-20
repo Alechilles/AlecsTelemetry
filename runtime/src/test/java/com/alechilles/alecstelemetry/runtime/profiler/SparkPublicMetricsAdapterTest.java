@@ -3,10 +3,13 @@ package com.alechilles.alecstelemetry.runtime.profiler;
 import me.lucko.spark.api.AverageInfo;
 import me.lucko.spark.api.MsptStatistic;
 import me.lucko.spark.api.NoPollStatistic;
+import me.lucko.spark.api.ObjectMsptStatistic;
+import me.lucko.spark.api.ObjectPollStatistic;
 import me.lucko.spark.api.Spark;
 import me.lucko.spark.api.SparkPlugin;
 import me.lucko.spark.api.SparkProvider;
 import me.lucko.spark.api.TpsStatistic;
+import me.lucko.spark.api.UnrelatedMeanCarrier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,6 +75,34 @@ class SparkPublicMetricsAdapterTest {
 
         assertEquals(
                 new SparkPublicMetrics(29.5d, 12.25d),
+                new SparkPublicMetricsAdapter(() -> plugin).snapshot()
+        );
+    }
+
+    // Regression: a broad poll(Object) method must not be treated as the typed TPS API.
+    @Test
+    void rejectsBroadPollParameterWithoutErasingMspt() {
+        SparkProvider.set(new Spark(
+                new ObjectPollStatistic(29.5d),
+                new MsptStatistic(new AverageInfo(12.25d))
+        ));
+
+        assertEquals(
+                new SparkPublicMetrics(null, 12.25d),
+                new SparkPublicMetricsAdapter(() -> plugin).snapshot()
+        );
+    }
+
+    // Regression: an unrelated carrier mean() must not be treated as DoubleAverageInfo.
+    @Test
+    void rejectsUnrelatedMeanCarrierWithoutErasingTps() {
+        SparkProvider.set(new Spark(
+                new TpsStatistic(29.5d),
+                new ObjectMsptStatistic(new UnrelatedMeanCarrier())
+        ));
+
+        assertEquals(
+                new SparkPublicMetrics(29.5d, null),
                 new SparkPublicMetricsAdapter(() -> plugin).snapshot()
         );
     }
