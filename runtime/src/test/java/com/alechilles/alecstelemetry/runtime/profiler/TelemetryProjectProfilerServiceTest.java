@@ -1085,6 +1085,228 @@ class TelemetryProjectProfilerServiceTest {
         }
     }
 
+    // Regression: a failed provider refresh must keep changed and new
+    // registrations closed until the latest complete set is confirmed.
+    @Test
+    void failedProviderRefreshKeepsChangedAndNewProjectsClosedUntilRetry() {
+        AtomicBoolean failRefresh = new AtomicBoolean();
+        AtomicReference<List<TelemetryProjectRegistration>> registrations =
+                new AtomicReference<>(List.of(projectWithBreadcrumb("1.0.0", "version-1")));
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                null,
+                next -> {
+                    if (failRefresh.get()) {
+                        throw new IllegalStateException("refresh failed");
+                    }
+                    breadcrumbs.refreshProjects(next);
+                },
+                breadcrumbs::clear,
+                breadcrumbs::clearAll
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                registrations::get,
+                ignored -> true,
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider
+        );
+        service.activateProvider();
+        try {
+            provider.recordBreadcrumb("mod-a", "version-1");
+            service.publish(qualifyingResult(1, 40.0d));
+
+            failRefresh.set(true);
+            registrations.set(List.of(
+                    projectWithBreadcrumb("2.0.0", "version-2"),
+                    projectWithBreadcrumb("mod-b", "1.0.0", "new")
+            ));
+            service.refreshProjects();
+            service.publish(qualifyingResult(2, 40.0d));
+
+            assertTrue(service.view("mod-a").history().isEmpty());
+            assertTrue(service.view("mod-b").history().isEmpty());
+
+            failRefresh.set(false);
+            service.publish(qualifyingResult(3, 40.0d));
+            provider.recordBreadcrumb("mod-a", "version-2");
+            provider.recordBreadcrumb("mod-b", "new");
+            service.publish(qualifyingResult(4, 40.0d));
+
+            assertEquals(Map.of("version-2", 1), service.view("mod-a").latest()
+                    .orElseThrow().context().breadcrumbCategoryCounts());
+            assertEquals(Map.of("new", 1), service.view("mod-b").latest()
+                    .orElseThrow().context().breadcrumbCategoryCounts());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: a failed refresh retry must never apply an older captured
+    // registration set after a newer refresh has succeeded.
+    @Test
+    void failedRefreshRetryUsesNewestRegistrationSet() {
+        AtomicReference<List<TelemetryProjectRegistration>> registrations =
+                new AtomicReference<>(List.of(projectWithBreadcrumb("1.0.0", "version-1")));
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        AtomicInteger refreshCalls = new AtomicInteger();
+        List<List<TelemetryProjectRegistration>> refreshSets = new ArrayList<>();
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                null,
+                next -> {
+                    refreshSets.add(List.copyOf(next));
+                    if (refreshCalls.incrementAndGet() == 2) {
+                        throw new IllegalStateException("first changed refresh failed");
+                    }
+                    breadcrumbs.refreshProjects(next);
+                },
+                breadcrumbs::clear,
+                breadcrumbs::clearAll
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                registrations::get,
+                ignored -> true,
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider
+        );
+        service.activateProvider();
+        try {
+            registrations.set(List.of(projectWithBreadcrumb("2.0.0", "version-2")));
+            service.refreshProjects();
+            registrations.set(List.of(projectWithBreadcrumb("3.0.0", "version-3")));
+            service.refreshProjects();
+            service.publish(qualifyingResult(1, 40.0d));
+
+            assertEquals(3, refreshCalls.get());
+            assertEquals(List.of("3.0.0"), refreshSets.get(2).stream()
+                    .map(registration -> registration.descriptor().projectVersion())
+                    .toList());
+            provider.recordBreadcrumb("mod-a", "version-3");
+            provider.recordBreadcrumb("mod-a", "version-2");
+            assertEquals(Map.of("version-3", 1), provider.snapshot("mod-a")
+                    .breadcrumbCategoryCounts());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: a successful clear must reopen its project for the same
+    // actionable window even when another project's clear still fails.
+    @Test
+    void mixedClearResultsPublishProjectsThatReopened() {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> eligible.get(),
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                projectId -> {
+                    if ("mod-b".equals(projectId)) {
+                        throw new IllegalStateException("project B clear failed");
+                    }
+                    breadcrumbs.clear(projectId);
+                    eligible.set(true);
+                },
+                breadcrumbs::clearAll
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(
+                        projectWithBreadcrumb("1.0.0", "companion.ai.tick"),
+                        projectWithBreadcrumb("mod-b", "1.0.0", "new")
+                ),
+                ignored -> eligible.get(),
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider
+        );
+        service.activateProvider();
+        try {
+            eligible.set(false);
+            service.publish(qualifyingResult(7, 40.0d));
+
+            assertEquals(List.of(7), service.view("mod-a").history().stream()
+                    .map(TelemetryProfilerSnapshot::windowKey).toList());
+            assertTrue(service.view("mod-b").history().isEmpty());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: persistent provider refresh failure must make bounded
+    // progress per lifecycle trigger and must not spin inside publication.
+    @Test
+    void persistentProviderRefreshFailureDoesNotBusyLoop() {
+        AtomicBoolean failRefresh = new AtomicBoolean();
+        AtomicInteger refreshCalls = new AtomicInteger();
+        AtomicReference<List<TelemetryProjectRegistration>> registrations =
+                new AtomicReference<>(List.of(projectWithBreadcrumb("1.0.0")));
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                null,
+                next -> {
+                    refreshCalls.incrementAndGet();
+                    if (failRefresh.get()) {
+                        throw new IllegalStateException("persistent refresh failure");
+                    }
+                    breadcrumbs.refreshProjects(next);
+                },
+                breadcrumbs::clear,
+                breadcrumbs::clearAll
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                registrations::get,
+                ignored -> true,
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider
+        );
+        service.activateProvider();
+        try {
+            failRefresh.set(true);
+            registrations.set(List.of(projectWithBreadcrumb("2.0.0")));
+            service.refreshProjects();
+            int callsBeforePublish = refreshCalls.get();
+            service.publish(qualifyingResult(2, 40.0d));
+
+            assertTrue(service.view("mod-a").history().isEmpty());
+            assertTrue(refreshCalls.get() <= callsBeforePublish + 2);
+        } finally {
+            service.close();
+        }
+    }
+
     // Regression: a failed clear must not prevent terminal shutdown.
     @Test
     void failedContextClearDoesNotBlockTerminalShutdown() throws Exception {
@@ -1520,12 +1742,21 @@ class TelemetryProjectProfilerServiceTest {
     private static TelemetryProjectRegistration projectWithBreadcrumb(
             String projectVersion,
             String category) {
+        return projectWithBreadcrumb("mod-a", projectVersion, category);
+    }
+
+    private static TelemetryProjectRegistration projectWithBreadcrumb(
+            String projectId,
+            String projectVersion,
+            String category) {
+        String pluginIdentifier = "mod-a".equals(projectId) ? "ModA" : "ModB";
+        String packagePrefix = "mod-a".equals(projectId) ? "example.a" : "example.b";
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
-                "{\"projectId\":\"mod-a\","
+                "{\"projectId\":\"" + projectId + "\","
                         + "\"projectVersion\":\"" + projectVersion + "\","
-                        + "\"displayName\":\"mod-a\","
-                        + "\"ownerPluginIdentifiers\":[\"ModA\"],"
-                        + "\"packagePrefixes\":[\"example.a\"],"
+                        + "\"displayName\":\"" + projectId + "\","
+                        + "\"ownerPluginIdentifiers\":[\"" + pluginIdentifier + "\"],"
+                        + "\"packagePrefixes\":[\"" + packagePrefix + "\"],"
                         + "\"telemetry\":{"
                         + "\"performance\":{\"supported\":true,\"defaultEnabled\":true},"
                         + "\"events\":{\"breadcrumbs\":{"
@@ -1534,7 +1765,7 @@ class TelemetryProjectProfilerServiceTest {
                         + "}}}}",
                 null
         );
-        return new TelemetryProjectRegistration(descriptor, "ModA", "1.0.0", null);
+        return new TelemetryProjectRegistration(descriptor, pluginIdentifier, "1.0.0", null);
     }
 
     private static void awaitValue(AtomicInteger value, int expected) throws Exception {

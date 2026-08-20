@@ -83,6 +83,8 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private long lastHistoryWarningNanos;
     private Supplier<SparkProfilerDiagnostics> monitorDiagnostics;
     private long providerGeneration;
+    private long contextRefreshGeneration;
+    private ContextRefreshRequest pendingContextRefresh;
     private long publicationSequence;
     private boolean providerActive;
     private boolean closed;
@@ -247,6 +249,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
 
         PublishCapture capture;
+        boolean recapturedAfterDrain = false;
         while (true) {
             synchronized (lock) {
                 if (closed || !providerActive) {
@@ -254,9 +257,19 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 }
                 capture = captureForPublishLocked();
             }
-            if (!drainPendingContextClears()) {
+            if (recapturedAfterDrain) {
                 break;
             }
+            ContextDrainResult drainResult = drainPendingContextClears();
+            if (drainResult == ContextDrainResult.BLOCKED) {
+                break;
+            }
+            if (drainResult == ContextDrainResult.PROGRESSED
+                    || capture.projects().isEmpty()) {
+                recapturedAfterDrain = true;
+                continue;
+            }
+            break;
         }
         if (capture.projects().isEmpty()) {
             return;
@@ -479,6 +492,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             List<TelemetryProjectRegistration> registrations = normalizeRegistrations(supplied);
             String nextOwnershipKey = ownershipKey(registrations);
             List<Subscription> closeAfterUnlock = new ArrayList<>();
+            long refreshGeneration;
             synchronized (lock) {
                 if (closed) {
                     return;
@@ -569,13 +583,24 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                     projects.put(state.projectId, state);
                     currentViews.put(state.projectId, new ProjectView(state));
                 }
+
+                refreshGeneration = ++contextRefreshGeneration;
+                pendingContextRefresh = new ContextRefreshRequest(
+                        refreshGeneration,
+                        registrations
+                );
             }
 
-            refreshContextProjectsSafely(registrations);
+            boolean refreshConfirmed = refreshContextProjectsSafely(registrations);
+            if (refreshConfirmed) {
+                acknowledgeContextRefresh(refreshGeneration);
+            }
             for (Subscription subscription : closeAfterUnlock) {
                 subscription.stop();
             }
-            drainPendingContextClears();
+            if (refreshConfirmed) {
+                drainPendingContextClears();
+            }
         }
     }
 
@@ -666,13 +691,16 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     }
 
     private PublishCapture captureForPublishLocked() {
+        if (pendingContextRefresh != null) {
+            return new PublishCapture(providerGeneration, ownership, List.of());
+        }
         List<ProjectCapture> captures = new ArrayList<>();
         for (ProjectState state : projects.values()) {
-            if (!state.available || pendingContextClears.containsKey(state.projectId)) {
+            if (!state.available || contextAccessBlockedLocked(state)) {
                 continue;
             }
             if (!observeEligibilityLocked(state)
-                    || pendingContextClears.containsKey(state.projectId)) {
+                    || contextAccessBlockedLocked(state)) {
                 continue;
             }
             int start = Math.max(0, state.history.size() - (ProfilerSignalEngine.MAX_WINDOWS - 1));
@@ -741,9 +769,15 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private boolean isInsertStillAuthorizedLocked(ProjectState state, ProjectCapture capture) {
         return state != null
                 && state.available
+                && pendingContextRefresh == null
                 && !pendingContextClears.containsKey(state.projectId)
                 && state.authorizationGeneration == capture.authorizationGeneration()
                 && observeEligibilityLocked(state);
+    }
+
+    private boolean contextAccessBlockedLocked(ProjectState state) {
+        return pendingContextRefresh != null
+                || pendingContextClears.containsKey(state.projectId);
     }
 
     private void markContextClearPendingLocked(ProjectState state) {
@@ -788,48 +822,80 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         return requiredText(projectVersion);
     }
 
-    private void refreshContextProjectsSafely(List<TelemetryProjectRegistration> registrations) {
+    private boolean refreshContextProjectsSafely(List<TelemetryProjectRegistration> registrations) {
         try {
             if (!contextProvider.refreshProjectsConfirmed(registrations)) {
                 log(Level.WARNING, "Profiler context project refresh was not confirmed.");
+                return false;
             }
+            return true;
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
             log(Level.WARNING, "Profiler context project refresh failed: " + bounded(failure.toString()));
+            return false;
         }
     }
 
-    private boolean drainPendingContextClears() {
+    private ContextDrainResult drainPendingContextClears() {
         beforeContextDrainHook.run();
         boolean hadPending;
         synchronized (lock) {
-            hadPending = !pendingContextClears.isEmpty();
+            hadPending = pendingContextRefresh != null || !pendingContextClears.isEmpty();
         }
         if (!hadPending) {
-            return false;
+            return ContextDrainResult.NO_WORK;
         }
 
         synchronized (contextLifecycleLock) {
+            boolean progressed = false;
+            ContextRefreshRequest refreshRequest;
+            synchronized (lock) {
+                refreshRequest = pendingContextRefresh;
+            }
+            if (refreshRequest != null) {
+                if (!refreshContextProjectsSafely(refreshRequest.registrations())) {
+                    return ContextDrainResult.BLOCKED;
+                }
+                acknowledgeContextRefresh(refreshRequest.generation());
+                progressed = true;
+            }
+
             List<ContextClearRequest> requests;
             synchronized (lock) {
                 requests = List.copyOf(pendingContextClears.values());
             }
             if (requests.isEmpty()) {
-                return true;
+                return progressed
+                        ? ContextDrainResult.PROGRESSED
+                        : ContextDrainResult.NO_WORK;
             }
 
-            boolean allConfirmed = true;
             List<ContextClearRequest> confirmed = new ArrayList<>();
             for (ContextClearRequest request : requests) {
                 if (clearContextSafely(request.state().projectId)) {
                     confirmed.add(request);
-                } else {
-                    allConfirmed = false;
+                    progressed = true;
                 }
             }
             acknowledgeContextClears(confirmed);
             synchronized (lock) {
-                return allConfirmed && pendingContextClears.isEmpty();
+                if (pendingContextRefresh != null || !pendingContextClears.isEmpty()) {
+                    return progressed
+                            ? ContextDrainResult.PROGRESSED
+                            : ContextDrainResult.BLOCKED;
+                }
+                return progressed
+                        ? ContextDrainResult.PROGRESSED
+                        : ContextDrainResult.NO_WORK;
+            }
+        }
+    }
+
+    private void acknowledgeContextRefresh(long generation) {
+        synchronized (lock) {
+            if (pendingContextRefresh != null
+                    && pendingContextRefresh.generation() == generation) {
+                pendingContextRefresh = null;
             }
         }
     }
@@ -975,7 +1041,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             if (!state.available) {
                 return TelemetryProfilerStatus.unavailable();
             }
-            if (pendingContextClears.containsKey(state.projectId)
+            if (contextAccessBlockedLocked(state)
                     || !observeEligibilityLocked(state)) {
                 disabled = true;
             } else {
@@ -1288,7 +1354,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                     || projects.get(state.projectId) != state) {
                 return null;
             }
-            if (pendingContextClears.containsKey(state.projectId)
+            if (contextAccessBlockedLocked(state)
                     || !observeEligibilityLocked(state)) {
                 drainContext = true;
             } else if (state.subscriptionCount >= MAX_PROJECT_SUBSCRIPTIONS
@@ -1336,7 +1402,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 if (!state.available) {
                     return latest;
                 }
-                if (pendingContextClears.containsKey(state.projectId)
+                if (contextAccessBlockedLocked(state)
                         || !observeEligibilityLocked(state)) {
                     drainContext = true;
                 } else if (!state.history.isEmpty()) {
@@ -1358,7 +1424,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 if (!state.available) {
                     return history;
                 }
-                if (pendingContextClears.containsKey(state.projectId)
+                if (contextAccessBlockedLocked(state)
                         || !observeEligibilityLocked(state)) {
                     drainContext = true;
                 } else if (!state.history.isEmpty()) {
@@ -1479,7 +1545,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                         && providerGeneration == delivery.providerGeneration()
                         && state.available
                         && state.authorizationGeneration == delivery.authorizationGeneration()
-                        && !pendingContextClears.containsKey(state.projectId)
+                        && !contextAccessBlockedLocked(state)
                         && observeEligibilityLocked(state);
             }
             if (!current) {
@@ -1504,6 +1570,19 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     }
 
     private record ContextClearRequest(ProjectState state, long authorizationGeneration) {
+    }
+
+    private record ContextRefreshRequest(long generation,
+                                         List<TelemetryProjectRegistration> registrations) {
+        private ContextRefreshRequest {
+            registrations = List.copyOf(registrations);
+        }
+    }
+
+    private enum ContextDrainResult {
+        NO_WORK,
+        PROGRESSED,
+        BLOCKED
     }
 
     private record ProjectCapture(String projectId,
