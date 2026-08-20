@@ -45,8 +45,8 @@ public final class TelemetryCoordinatorRegistry {
                     RECONCILED_REVISIONS.remove(candidate.providerId());
                     return;
                 }
-                previousBridge.shutdown();
                 previousBridge.deactivate();
+                previousBridge.shutdown();
             }
         }
         elect();
@@ -58,8 +58,8 @@ public final class TelemetryCoordinatorRegistry {
         if (removed != null) {
             ReflectiveBridge bridge = new ReflectiveBridge(removed, candidateFrom(removed));
             if (bridge.isActive()) {
-                bridge.shutdown();
                 bridge.deactivate();
+                bridge.shutdown();
             }
         }
         elect();
@@ -105,8 +105,8 @@ public final class TelemetryCoordinatorRegistry {
             TelemetryRuntimeCandidate candidate = candidateFrom(entry.getValue());
             ReflectiveBridge bridge = new ReflectiveBridge(entry.getValue(), candidate);
             if (bridge.isActive()) {
-                bridge.shutdown();
                 bridge.deactivate();
+                bridge.shutdown();
             }
         }
         existing.clear();
@@ -166,8 +166,8 @@ public final class TelemetryCoordinatorRegistry {
             }
             ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
             if (bridge.isActive()) {
-                bridge.shutdown();
                 bridge.deactivate();
+                bridge.shutdown();
             }
         }
     }
@@ -181,8 +181,8 @@ public final class TelemetryCoordinatorRegistry {
             }
             ReflectiveBridge fallback = new ReflectiveBridge(value, candidate);
             if (fallback.isActive()) {
-                fallback.shutdown();
                 fallback.deactivate();
+                fallback.shutdown();
             }
         }
         if (!winningBridge.isActive()) {

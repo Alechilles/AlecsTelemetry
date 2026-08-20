@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -375,6 +376,79 @@ class TelemetryProfilerContextProviderTest {
             assertTrue(projectBClearEntered.await(1, TimeUnit.SECONDS));
             projectBSnapshot.get(1, TimeUnit.SECONDS);
 
+            projectBEligible.set(true);
+            assertEquals(Map.of(), provider.snapshot(PROJECT_B_ID).breadcrumbCategoryCounts());
+        } finally {
+            releaseProjectAClear.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
+    }
+
+    // Regression: an interrupted public clear remains a committed privacy clear
+    // and restores the caller's interrupt status after it completes.
+    @Test
+    void interruptedPublicClearWaitsForActiveClearAndRestoresInterruptStatus() throws Exception {
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter(() -> 0L);
+        breadcrumbs.refreshProjects(List.of(
+                registration(PROJECT_A_ID, List.of(CATEGORY)),
+                registration(PROJECT_B_ID, List.of(CATEGORY))
+        ));
+        breadcrumbs.record(PROJECT_B_ID, CATEGORY);
+        AtomicBoolean projectBEligible = new AtomicBoolean(false);
+        CountDownLatch projectAClearEntered = new CountDownLatch(1);
+        CountDownLatch releaseProjectAClear = new CountDownLatch(1);
+        CountDownLatch projectBClearEntered = new CountDownLatch(1);
+        CountDownLatch projectBClearRequested = new CountDownLatch(1);
+        AtomicReference<Thread> projectBClearThread = new AtomicReference<>();
+        AtomicBoolean projectBThreadWasInterrupted = new AtomicBoolean(false);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                projectId -> !PROJECT_B_ID.equals(projectId) || projectBEligible.get(),
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                projectId -> {
+                    if (PROJECT_A_ID.equals(projectId)) {
+                        breadcrumbs.clear(projectId);
+                        projectAClearEntered.countDown();
+                        awaitLatch(releaseProjectAClear);
+                    } else if (PROJECT_B_ID.equals(projectId)) {
+                        breadcrumbs.clear(projectId);
+                        projectBClearEntered.countDown();
+                    } else {
+                        breadcrumbs.clear(projectId);
+                    }
+                },
+                breadcrumbs::clearAll
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> projectAClear = executor.submit(() -> provider.clear(PROJECT_A_ID));
+            assertTrue(projectAClearEntered.await(1, TimeUnit.SECONDS));
+
+            Future<?> projectBClear = executor.submit(() -> {
+                projectBClearThread.set(Thread.currentThread());
+                projectBClearRequested.countDown();
+                provider.clear(PROJECT_B_ID);
+                projectBThreadWasInterrupted.set(Thread.currentThread().isInterrupted());
+            });
+            assertTrue(projectBClearRequested.await(1, TimeUnit.SECONDS));
+            Thread clearThread = projectBClearThread.get();
+            assertTrue(clearThread != null);
+            clearThread.interrupt();
+            assertThrows(TimeoutException.class, () -> projectBClear.get(1, TimeUnit.SECONDS));
+            assertEquals(1L, projectBClearEntered.getCount());
+
+            releaseProjectAClear.countDown();
+            projectAClear.get(1, TimeUnit.SECONDS);
+            assertTrue(projectBClearEntered.await(1, TimeUnit.SECONDS));
+            projectBClear.get(1, TimeUnit.SECONDS);
+
+            assertTrue(projectBThreadWasInterrupted.get());
             projectBEligible.set(true);
             assertEquals(Map.of(), provider.snapshot(PROJECT_B_ID).breadcrumbCategoryCounts());
         } finally {

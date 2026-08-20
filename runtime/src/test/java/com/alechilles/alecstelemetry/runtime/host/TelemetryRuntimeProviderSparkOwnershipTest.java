@@ -32,6 +32,7 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.file.Path;
@@ -41,7 +42,12 @@ import java.util.LinkedHashMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
@@ -206,6 +212,68 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
             providerB.reader.release.countDown();
             providerA.handle.shutdown();
             providerB.handle.shutdown();
+        }
+    }
+
+    @Test
+    void registryHandoffRevokesBreadcrumbRecordBeforeFallbackReactivation() throws Exception {
+        HandoffClearBarrier barrier = new HandoffClearBarrier();
+        ProviderFixture providerA = fixtureWithHandoffClearBarrier(
+                "standalone:Alechilles:SparkBreadcrumbHandoffA",
+                barrier
+        );
+        ProviderFixture providerB = fixture(
+                "embedded:Alechilles:SparkBreadcrumbHandoffB",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                new BlockingReader(2)
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            providerA.handle.start();
+            TelemetryCoordinatorBridge oldBridge = TelemetryCoordinatorRegistry.activeBridge();
+            assertTrue(oldBridge != null);
+            assertEquals(providerA.handle.activeCoordinatorProviderId(), oldBridge.providerId());
+            assertTrue(oldBridge.recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "seed"));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 1),
+                    providerA.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+
+            barrier.blockNextEligibility();
+            Future<?> handoff = executor.submit(providerB.handle::start);
+            assertTrue(barrier.clearEntered.await(2, TimeUnit.SECONDS));
+
+            Future<?> waitingRecord = executor.submit(() -> oldBridge.recordBreadcrumb(
+                    "mod-a",
+                    PROFILER_BREADCRUMB_CATEGORY,
+                    "waiting"
+            ));
+            assertThrows(TimeoutException.class, () -> waitingRecord.get(250, TimeUnit.MILLISECONDS));
+
+            barrier.releaseClear();
+            assertTrue(barrier.eligibilityEntered.await(2, TimeUnit.SECONDS));
+            handoff.get(2, TimeUnit.SECONDS);
+
+            barrier.releaseEligibility();
+            waitingRecord.get(2, TimeUnit.SECONDS);
+
+            providerB.handle.shutdown();
+            assertEquals(providerA.handle.activeCoordinatorProviderId(), TelemetryCoordinatorRegistry.activeBridge().providerId());
+            assertEquals(
+                    Map.of(),
+                    providerA.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+        } finally {
+            barrier.releaseClear();
+            barrier.releaseEligibility();
+            providerA.reader.release.countDown();
+            providerB.reader.release.countDown();
+            providerA.handle.shutdown();
+            providerB.handle.shutdown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
         }
     }
 
@@ -437,7 +505,20 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                                     TelemetryRuntimeOrigin origin,
                                     String runtimeVersion,
                                     BlockingReader reader) throws Exception {
-        return fixtureInternal(providerId, origin, runtimeVersion, reader, false, false);
+        return fixtureInternal(providerId, origin, runtimeVersion, reader, false, false, null);
+    }
+
+    private ProviderFixture fixtureWithHandoffClearBarrier(String providerId,
+                                                           HandoffClearBarrier barrier) throws Exception {
+        return fixtureInternal(
+                providerId,
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1),
+                false,
+                true,
+                barrier
+        );
     }
 
     private ProviderFixture fixtureWithEligibleProject(String projectId) throws Exception {
@@ -448,7 +529,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 "0.1.3",
                 new BlockingReader(1),
                 true,
-                false
+                false,
+                null
         );
     }
 
@@ -460,7 +542,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 "0.1.3",
                 new BlockingReader(1),
                 false,
-                true
+                true,
+                null
         );
     }
 
@@ -469,7 +552,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                                              String runtimeVersion,
                                              BlockingReader reader,
                                              boolean contributionProject,
-                                             boolean breadcrumbProject) throws Exception {
+                                             boolean breadcrumbProject,
+                                             HandoffClearBarrier handoffBarrier) throws Exception {
         Path root = tempDir.resolve(providerId.replace(':', '_'));
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings loaded = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
@@ -524,7 +608,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 projectProfilerService
         );
         TelemetryProfilerBreadcrumbCounter breadcrumbCounter = new TelemetryProfilerBreadcrumbCounter();
-        TelemetryProfilerContextProvider contextProvider = new TelemetryProfilerContextProvider(
+        TelemetryProfilerContextProvider contextProvider = handoffBarrier == null
+                ? new TelemetryProfilerContextProvider(
                 () -> 0,
                 "0.5.9",
                 new SparkPublicMetricsAdapter(() -> null),
@@ -533,6 +618,12 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                         && service.isBreadcrumbsEnabled(projectId),
                 System::currentTimeMillis,
                 null
+        )
+                : blockingHandoffContextProvider(
+                service,
+                breadcrumbCounter,
+                handleReference,
+                handoffBarrier
         );
         TelemetryRuntimeProviderHandle handle = new TelemetryRuntimeProviderHandle(
                 request,
@@ -652,6 +743,105 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 .getDeclaredField("projectProfilerService");
         field.setAccessible(true);
         return field.get(handle);
+    }
+
+    private static boolean providerBridgeIsActive(
+            AtomicReference<TelemetryRuntimeProviderHandle> handleReference) {
+        TelemetryRuntimeProviderHandle handle = handleReference.get();
+        if (handle == null) {
+            return false;
+        }
+        try {
+            Field bridgeField = TelemetryRuntimeProviderHandle.class.getDeclaredField("bridge");
+            bridgeField.setAccessible(true);
+            Object bridge = bridgeField.get(handle);
+            Method isActive = bridge.getClass().getDeclaredMethod("isActive");
+            isActive.setAccessible(true);
+            return Boolean.TRUE.equals(isActive.invoke(bridge));
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TelemetryProfilerContextProvider blockingHandoffContextProvider(
+            TelemetryCoordinatorService service,
+            TelemetryProfilerBreadcrumbCounter breadcrumbs,
+            AtomicReference<TelemetryRuntimeProviderHandle> handleReference,
+            HandoffClearBarrier barrier) throws Exception {
+        Class<?> providerType = TelemetryProfilerContextProvider.class;
+        Class<?> refreshOperation = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerContextProvider$RefreshOperation"
+        );
+        Class<?> clearOperation = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerContextProvider$ClearOperation"
+        );
+        Class<?> clearAllOperation = Class.forName(
+                "com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerContextProvider$ClearAllOperation"
+        );
+        Constructor<?> constructor = providerType.getDeclaredConstructor(
+                java.util.function.IntSupplier.class,
+                String.class,
+                SparkPublicMetricsAdapter.class,
+                TelemetryProfilerBreadcrumbCounter.class,
+                java.util.function.Predicate.class,
+                java.util.function.LongSupplier.class,
+                java.util.function.BiConsumer.class,
+                refreshOperation,
+                clearOperation,
+                clearAllOperation
+        );
+        constructor.setAccessible(true);
+        Object refresh = Proxy.newProxyInstance(
+                refreshOperation.getClassLoader(),
+                new Class<?>[]{refreshOperation},
+                (proxy, method, args) -> {
+                    breadcrumbs.refreshProjects((List<TelemetryProjectRegistration>) args[0]);
+                    return null;
+                }
+        );
+        Object clear = Proxy.newProxyInstance(
+                clearOperation.getClassLoader(),
+                new Class<?>[]{clearOperation},
+                (proxy, method, args) -> {
+                    breadcrumbs.clear((String) args[0]);
+                    return null;
+                }
+        );
+        Object clearAll = Proxy.newProxyInstance(
+                clearAllOperation.getClassLoader(),
+                new Class<?>[]{clearAllOperation},
+                (proxy, method, args) -> {
+                    breadcrumbs.clearAll();
+                    barrier.clearEntered.countDown();
+                    barrier.awaitReleaseClear();
+                    return null;
+                }
+        );
+        java.util.function.Predicate<String> eligible = projectId -> {
+            boolean active = providerBridgeIsActive(handleReference)
+                    && service.isProjectEnabled(projectId)
+                    && service.isBreadcrumbsEnabled(projectId);
+            if (barrier.blockEligibility.compareAndSet(true, false)) {
+                barrier.eligibilityResult.set(active);
+                barrier.eligibilityEntered.countDown();
+                barrier.awaitReleaseEligibility();
+                return barrier.eligibilityResult.get();
+            }
+            return active;
+        };
+        return (TelemetryProfilerContextProvider) constructor.newInstance(
+                (java.util.function.IntSupplier) () -> 0,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                eligible,
+                (java.util.function.LongSupplier) System::currentTimeMillis,
+                null,
+                refresh,
+                clear,
+                clearAll
+        );
     }
 
     private static Object completeResult(int windowKey) throws Exception {
@@ -911,6 +1101,46 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 Thread.currentThread().interrupt();
             }
             return completeResult(windowKey + read - 1);
+        }
+    }
+
+    private static final class HandoffClearBarrier {
+        private final CountDownLatch clearEntered = new CountDownLatch(1);
+        private final CountDownLatch releaseClear = new CountDownLatch(1);
+        private final CountDownLatch eligibilityEntered = new CountDownLatch(1);
+        private final CountDownLatch releaseEligibility = new CountDownLatch(1);
+        private final AtomicBoolean blockEligibility = new AtomicBoolean();
+        private final AtomicBoolean eligibilityResult = new AtomicBoolean();
+
+        private void blockNextEligibility() {
+            blockEligibility.set(true);
+        }
+
+        private void releaseClear() {
+            releaseClear.countDown();
+        }
+
+        private void releaseEligibility() {
+            releaseEligibility.countDown();
+        }
+
+        private void awaitReleaseClear() {
+            await(releaseClear, "clear callback");
+        }
+
+        private void awaitReleaseEligibility() {
+            await(releaseEligibility, "eligibility predicate");
+        }
+
+        private static void await(CountDownLatch latch, String operation) {
+            try {
+                if (!latch.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError(operation + " was not released");
+                }
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(operation + " was interrupted", interrupted);
+            }
         }
     }
 

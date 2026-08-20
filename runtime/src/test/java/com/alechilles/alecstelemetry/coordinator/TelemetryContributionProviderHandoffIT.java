@@ -52,7 +52,7 @@ class TelemetryContributionProviderHandoffIT {
         assertEquals(List.of("library"), providerB.replayedProjectIds());
         assertTrue(providerB.replayedBeforeStart);
         assertEquals(
-                List.of("activate", "start", "shutdown", "deactivate"),
+                List.of("activate", "start", "deactivate", "shutdown"),
                 providerA.lifecycleEvents()
         );
         assertEquals(List.of("activate", "start"), providerB.lifecycleEvents());

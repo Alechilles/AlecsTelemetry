@@ -197,21 +197,29 @@ public final class TelemetryProfilerContextProvider {
     }
 
     boolean clearConfirmed(@Nullable String projectId) {
-        ClearRequest clearRequest;
+        ClearReservation reservation;
         synchronized (breadcrumbLifecycleGate) {
-            clearRequest = beginClearLocked(
+            reservation = beginRequiredClearLocked(
                     new ClearRequest(projectId, false, safeNowForLog())
             );
         }
-        return executeClear(clearRequest);
+        try {
+            return executeClear(reservation.request());
+        } finally {
+            restoreInterruptStatus(reservation);
+        }
     }
 
     boolean clearAllConfirmed() {
-        ClearRequest clearRequest;
+        ClearReservation reservation;
         synchronized (breadcrumbLifecycleGate) {
-            clearRequest = beginClearLocked(new ClearRequest(null, true, safeNowForLog()));
+            reservation = beginRequiredClearLocked(new ClearRequest(null, true, safeNowForLog()));
         }
-        return executeClear(clearRequest);
+        try {
+            return executeClear(reservation.request());
+        } finally {
+            restoreInterruptStatus(reservation);
+        }
     }
 
     @Nullable
@@ -221,6 +229,26 @@ public final class TelemetryProfilerContextProvider {
         }
         activeClear = request;
         return request;
+    }
+
+    @Nonnull
+    private ClearReservation beginRequiredClearLocked(@Nonnull ClearRequest request) {
+        boolean interrupted = false;
+        while (activeClear != null) {
+            try {
+                breadcrumbLifecycleGate.wait();
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+            }
+        }
+        activeClear = request;
+        return new ClearReservation(request, interrupted);
+    }
+
+    private static void restoreInterruptStatus(@Nonnull ClearReservation reservation) {
+        if (reservation.interruptedWhileWaiting()) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private boolean awaitClearCompletionLocked() {
@@ -344,6 +372,9 @@ public final class TelemetryProfilerContextProvider {
     }
 
     private record ClearRequest(@Nullable String projectId, boolean clearAll, long nowMillis) {
+    }
+
+    private record ClearReservation(@Nonnull ClearRequest request, boolean interruptedWhileWaiting) {
     }
 
     private void logFailure(@Nonnull Source source,

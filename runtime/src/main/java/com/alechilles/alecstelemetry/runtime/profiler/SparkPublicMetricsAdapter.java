@@ -193,6 +193,7 @@ public final class SparkPublicMetricsAdapter {
                 if (!method.getName().equals(methodName)
                         || method.getParameterCount() != parameterCount
                         || !Modifier.isPublic(method.getModifiers())
+                        || !Modifier.isPublic(method.getDeclaringClass().getModifiers())
                         || Modifier.isStatic(method.getModifiers())) {
                     continue;
                 }
