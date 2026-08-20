@@ -256,8 +256,12 @@ value, which uses safe canonical defaults instead of the legacy block.
 
 - At least 256 MiB of JVM heap headroom is required before a Spark read. Low
   headroom skips that read and tries again at the next interval.
-- A window with more than 25,000 distinct frames is discarded as `TOO_COMPLEX`;
-  Telemetry does not keep a partial ranking.
+- A window with more than 25,000 active decoded nodes is discarded as
+  `TOO_COMPLEX`; Telemetry does not keep a partial ranking. Zero-time nodes
+  retained by Spark for older windows do not count toward this limit and are
+  not kept in project evidence. The complete retained Spark tree also has a
+  separate 100,000-node hard limit before Telemetry allocates per-node working
+  arrays.
 - A JVM-wide capture gate allows only one Telemetry Spark read at a time, even
   when standalone and embedded runtimes are present. Capture work uses daemon
   threads and does not run on Hytale's shared scheduler.

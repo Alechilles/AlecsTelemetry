@@ -412,6 +412,96 @@ class SparkProfileReflectionBridgeTest {
         assertEquals(1, sampler.toProtoCalls);
     }
 
+    @Test
+    void historicalNodesDoNotConsumeTheLatestWindowNodeLimit() {
+        List<StackNode> nodes = new ArrayList<>(25_001);
+        for (int index = 0; index < 25_000; index++) {
+            nodes.add(new StackNode(
+                    "example.Historical" + index,
+                    "run",
+                    "()V",
+                    List.of(1.0d, 0.0d),
+                    List.of()
+            ));
+        }
+        nodes.add(new StackNode(
+                "example.Active",
+                "run",
+                "()V",
+                List.of(0.0d, 100.0d),
+                List.of()
+        ));
+        SamplerData data = new SamplerData(
+                List.of(400, 401),
+                List.of(new ThreadNode("WorldThread - default", nodes, List.of(25_000))),
+                Map.of(),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
+        assertNotNull(result.window());
+        assertEquals(1, result.window().totalFrameCount());
+        assertEquals(1, result.window().selectedFrameCount());
+        assertEquals(List.of("example.Active"), result.window().threads().getFirst().frames().stream()
+                .map(SparkProfileWindow.Frame::className)
+                .toList());
+    }
+
+    @Test
+    void retainedTreeOverHardLimitFailsClosedEvenWhenLatestWindowIsSmall() {
+        StackNode historical = new StackNode(
+                "example.Historical",
+                "run",
+                "()V",
+                List.of(1.0d, 0.0d),
+                List.of()
+        );
+        List<StackNode> nodes = new ArrayList<>(100_002);
+        for (int index = 0; index < 100_001; index++) {
+            nodes.add(historical);
+        }
+        nodes.add(new StackNode(
+                "example.Active",
+                "run",
+                "()V",
+                List.of(0.0d, 100.0d),
+                List.of()
+        ));
+        SamplerData data = new SamplerData(
+                List.of(400, 401),
+                List.of(new ThreadNode("WorldThread - default", nodes, List.of(100_001))),
+                Map.of(),
+                Map.of()
+        );
+        FakeSampler sampler = new FakeSampler(
+                true,
+                Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION,
+                data
+        );
+        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
+                "1.10.172-SNAPSHOT",
+                new SparkPlatform(sampler)
+        );
+
+        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+
+        assertEquals(SparkProfileReadResult.Status.TOO_COMPLEX, result.status());
+        assertNull(result.snapshot());
+    }
+
     private static SparkProfileReflectionBridge trustedBridge() {
         return new SparkProfileReflectionBridge((pluginClass, reportedVersion) -> reportedVersion);
     }

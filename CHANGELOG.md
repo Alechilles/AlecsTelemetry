@@ -26,6 +26,9 @@
   data, or server identity for this feature.
 
 ### Fixed
+- Counted and retained only frames active in the newest completed Spark window.
+  Historical zero-time nodes in Spark's retained call tree no longer inflate
+  frame diagnostics or open the complexity circuit after several captures.
 - Treated Spark's transient window-rotation export race as retryable no-data
   instead of an incompatible runtime, so the monitor does not open its circuit
   when Spark advances a passive window during export.

@@ -397,7 +397,9 @@ listener workers per project and 32 globally. Profiler attribution matches an
 exact plugin identifier first, then the longest complete package prefix, with
 at most 32 normalized prefixes per project. Each package-prefix value is
 limited to 512 characters before normalization. Longer values are omitted and
-reported as truncated. A project view clears
+reported as truncated. Frame counts and project evidence include only frames
+active in the newest completed Spark window; zero-time nodes retained by Spark
+for older windows are not kept. A project view clears
 when performance consent is disabled; only later windows can repopulate it.
 
 The API exposes class/method names, sampled timing, fingerprints, and bounded

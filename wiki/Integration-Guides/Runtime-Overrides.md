@@ -232,8 +232,11 @@ The monitor checks Spark's reported base version and the SHA-256 of the complete
 loaded Spark JAR before reading private Spark state. Only the exact artifacts in
 the tested release matrix are accepted. A changed, repackaged, later, or
 otherwise incompatible artifact fails closed. At least 256 MiB of JVM heap
-headroom is required. A window with more than 25,000 distinct frames is
-discarded without a partial ranking. Unsupported or incompatible Spark,
+headroom is required. A window with more than 25,000 active decoded nodes is
+discarded without a partial ranking. Zero-time nodes retained by Spark for
+older windows do not count toward this limit and are not kept. The complete
+retained Spark tree has a separate 100,000-node hard limit before Telemetry
+allocates per-node working arrays. Unsupported or incompatible Spark,
 excessive complexity, a failed read, or a timeout opens the session circuit;
 the monitor does not retry after that. Spark absence, no active background
 sampler, no completed window, no actionable WorldThread data, low heap, and

@@ -51,6 +51,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             Map.entry("1c5806cdc276af608051b8fc6c3aee05ab184da28e81735ba9682e5950c5617a", "1.10.172-beta7")
     );
     private static final int MAX_DECODED_NODES = 25_000;
+    private static final int MAX_RETAINED_NODES = 100_000;
     private static final int MAX_TEXT_LENGTH = 240;
 
     private final SparkArtifactVerifier artifactVerifier;
@@ -230,16 +231,17 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         Map<?, ?> classSources = mapValue(invokeNoArgs(profileData, "getClassSourcesMap"));
         Map<?, ?> methodSources = mapValue(invokeNoArgs(profileData, "getMethodSourcesMap"));
 
-        int decodedNodeCount = 0;
+        int retainedNodeCount = 0;
         for (Object thread : threads) {
-            decodedNodeCount += listValue(invokeNoArgs(thread, "getChildrenList")).size();
-            if (decodedNodeCount > MAX_DECODED_NODES) {
+            int threadNodeCount = listValue(invokeNoArgs(thread, "getChildrenList")).size();
+            if (threadNodeCount > MAX_RETAINED_NODES - retainedNodeCount) {
                 return SparkProfileReadResult.of(
                         SparkProfileReadResult.Status.TOO_COMPLEX,
                         version,
-                        "Spark's latest completed window exceeded 25,000 decoded nodes. No partial summary was kept."
+                        "Spark's retained profile tree exceeded 100,000 nodes. No partial summary was kept."
                 );
             }
+            retainedNodeCount += threadNodeCount;
         }
 
         Map<FrameKey, MutableHotPath> aggregates = new HashMap<>();
@@ -250,21 +252,46 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         double totalSelfMilliseconds = 0.0d;
         for (Object thread : threads) {
             List<?> nodes = listValue(invokeNoArgs(thread, "getChildrenList"));
-            totalFrameCount += nodes.size();
             String threadName = safeText(String.valueOf(invokeNoArgs(thread, "getName")));
             boolean selectedThread = isWorldThread(threadName);
             if (selectedThread) {
                 selectedThreadCount++;
-                selectedFrameCount += nodes.size();
             }
+            double[] inclusiveTimes = new double[nodes.size()];
+            for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
+                double inclusive = timeAt(nodes.get(nodeIndex), latestIndex);
+                inclusiveTimes[nodeIndex] = inclusive;
+                if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
+                    continue;
+                }
+                totalFrameCount++;
+                if (selectedThread) {
+                    selectedFrameCount++;
+                }
+                if (totalFrameCount > MAX_DECODED_NODES) {
+                    return SparkProfileReadResult.of(
+                            SparkProfileReadResult.Status.TOO_COMPLEX,
+                            version,
+                            "Spark's latest completed window exceeded 25,000 decoded nodes. No partial summary was kept."
+                    );
+                }
+            }
+            if (!selectedThread) {
+                continue;
+            }
+
             int[] parentIndexes = validatedParentIndexes(thread, nodes);
-            List<DecodedFrame> decodedFrames = new ArrayList<>(nodes.size());
-            for (Object node : nodes) {
-                double inclusive = timeAt(node, latestIndex);
+            List<DecodedFrame> decodedFrames = Arrays.asList(new DecodedFrame[nodes.size()]);
+            for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
+                double inclusive = inclusiveTimes[nodeIndex];
+                if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
+                    continue;
+                }
+                Object node = nodes.get(nodeIndex);
                 double directChildren = 0.0d;
                 for (Object childRefValue : listValue(invokeNoArgs(node, "getChildrenRefsList"))) {
                     int childRef = numberValue(childRefValue).intValue();
-                    double childTime = timeAt(nodes.get(childRef), latestIndex);
+                    double childTime = inclusiveTimes[childRef];
                     if (Double.isFinite(childTime) && childTime > 0.0d) {
                         directChildren += childTime;
                     }
@@ -283,14 +310,18 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 String methodName = safeText(String.valueOf(invokeNoArgs(node, "getMethodName")));
                 String methodDesc = safeText(String.valueOf(invokeNoArgs(node, "getMethodDesc")));
                 String source = sourceFor(classSources, methodSources, className, methodName, methodDesc);
-                decodedFrames.add(new DecodedFrame(source, className, methodName, methodDesc, self));
+                decodedFrames.set(
+                        nodeIndex,
+                        new DecodedFrame(source, className, methodName, methodDesc, self)
+                );
             }
 
-            if (selectedThread) {
-                selectedThreads.add(selectedThreadFrames(threadName, decodedFrames, parentIndexes));
-            }
+            selectedThreads.add(selectedThreadFrames(threadName, decodedFrames, parentIndexes));
             for (int nodeIndex = 0; nodeIndex < decodedFrames.size(); nodeIndex++) {
                 DecodedFrame decoded = decodedFrames.get(nodeIndex);
+                if (decoded == null) {
+                    continue;
+                }
                 double self = decoded.selfMilliseconds();
                 if (self <= 0.0d) {
                     continue;
@@ -372,7 +403,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         ArrayList<Integer> originalIndexes = new ArrayList<>();
         for (int index = 0; index < decodedFrames.size(); index++) {
             DecodedFrame frame = decodedFrames.get(index);
-            if (isJavaFrame(frame.className(), frame.methodDescriptor())) {
+            if (frame != null && isJavaFrame(frame.className(), frame.methodDescriptor())) {
                 retainedIndexes[index] = originalIndexes.size();
                 originalIndexes.add(index);
             }
