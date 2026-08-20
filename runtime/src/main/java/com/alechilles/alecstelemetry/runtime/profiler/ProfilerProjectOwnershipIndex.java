@@ -17,12 +17,12 @@ final class ProfilerProjectOwnershipIndex {
     static final int MAX_PREFIXES_PER_PROJECT = 32;
 
     private final Map<String, List<Owner>> ownersByPluginIdentifier;
-    private final List<PrefixOwner> prefixOwners;
+    private final PrefixNode prefixRoot;
 
     private ProfilerProjectOwnershipIndex(Map<String, List<Owner>> ownersByPluginIdentifier,
-                                          List<PrefixOwner> prefixOwners) {
+                                          PrefixNode prefixRoot) {
         this.ownersByPluginIdentifier = immutableOwnerMap(ownersByPluginIdentifier);
-        this.prefixOwners = List.copyOf(prefixOwners);
+        this.prefixRoot = Objects.requireNonNull(prefixRoot, "prefixRoot");
     }
 
     static BuildResult build(List<TelemetryProjectRegistration> projects,
@@ -30,7 +30,7 @@ final class ProfilerProjectOwnershipIndex {
         Objects.requireNonNull(projects, "projects");
         String runtimeVersion = normalizedValue(physicalRuntimeVersion);
         LinkedHashMap<String, LinkedHashMap<String, Owner>> ownersByIdentifier = new LinkedHashMap<>();
-        ArrayList<PrefixOwner> prefixOwners = new ArrayList<>();
+        MutablePrefixNode prefixRoot = new MutablePrefixNode();
         int truncatedPrefixCount = 0;
 
         for (TelemetryProjectRegistration registration : projects) {
@@ -61,14 +61,14 @@ final class ProfilerProjectOwnershipIndex {
                     truncatedPrefixCount++;
                     continue;
                 }
-                prefixOwners.add(new PrefixOwner(prefix, owner));
+                addPrefix(prefixRoot, prefix, owner);
             }
         }
 
         return new BuildResult(
                 new ProfilerProjectOwnershipIndex(
                         flattenOwnersByIdentifier(ownersByIdentifier),
-                        prefixOwners
+                        freezePrefixNode(prefixRoot)
                 ),
                 truncatedPrefixCount
         );
@@ -89,22 +89,48 @@ final class ProfilerProjectOwnershipIndex {
         Owner best = null;
         int bestLength = -1;
         boolean ambiguous = false;
-        for (PrefixOwner candidate : prefixOwners) {
-            if (!matches(candidate.prefix(), className)) {
-                continue;
+        PrefixNode node = prefixRoot;
+        for (int index = 0; index < className.length(); index++) {
+            node = node.children().get(className.charAt(index));
+            if (node == null) {
+                break;
             }
-            int candidateLength = candidate.prefix().length();
-            if (candidateLength > bestLength) {
-                best = candidate.owner();
-                bestLength = candidateLength;
-                ambiguous = false;
-            } else if (candidateLength == bestLength
-                    && best != null
-                    && !best.projectId().equals(candidate.owner().projectId())) {
-                ambiguous = true;
+            int candidateLength = index + 1;
+            if (!node.owners().isEmpty()
+                    && (candidateLength == className.length()
+                    || className.charAt(candidateLength) == '.')) {
+                for (Owner candidate : node.owners()) {
+                    if (candidateLength > bestLength) {
+                        best = candidate;
+                        bestLength = candidateLength;
+                        ambiguous = false;
+                    } else if (candidateLength == bestLength
+                            && best != null
+                            && !best.projectId().equals(candidate.projectId())) {
+                        ambiguous = true;
+                    }
+                }
             }
         }
         return best == null || ambiguous ? Optional.empty() : Optional.of(best);
+    }
+
+    private static void addPrefix(MutablePrefixNode root,
+                                  String prefix,
+                                  Owner owner) {
+        MutablePrefixNode node = root;
+        for (int index = 0; index < prefix.length(); index++) {
+            node = node.children.computeIfAbsent(prefix.charAt(index), ignored -> new MutablePrefixNode());
+        }
+        node.owners.add(owner);
+    }
+
+    private static PrefixNode freezePrefixNode(MutablePrefixNode source) {
+        LinkedHashMap<Character, PrefixNode> children = new LinkedHashMap<>();
+        for (Map.Entry<Character, MutablePrefixNode> entry : source.children.entrySet()) {
+            children.put(entry.getKey(), freezePrefixNode(entry.getValue()));
+        }
+        return new PrefixNode(children, source.owners);
     }
 
     private static Owner ownerOf(TelemetryProjectRegistration registration,
@@ -158,10 +184,6 @@ final class ProfilerProjectOwnershipIndex {
         return Optional.of(first);
     }
 
-    private static boolean matches(String prefix, String className) {
-        return className.equals(prefix) || className.startsWith(prefix + ".");
-    }
-
     private static String normalizeIdentifier(String value) {
         if (value == null || value.isBlank()) {
             return null;
@@ -184,7 +206,17 @@ final class ProfilerProjectOwnershipIndex {
         return value == null || value.isBlank() ? "<unknown>" : value.trim();
     }
 
-    private record PrefixOwner(String prefix, Owner owner) {
+    private static final class MutablePrefixNode {
+        private final LinkedHashMap<Character, MutablePrefixNode> children = new LinkedHashMap<>();
+        private final ArrayList<Owner> owners = new ArrayList<>();
+    }
+
+    private record PrefixNode(Map<Character, PrefixNode> children,
+                              List<Owner> owners) {
+        private PrefixNode {
+            children = Collections.unmodifiableMap(new LinkedHashMap<>(children));
+            owners = List.copyOf(owners);
+        }
     }
 
     record Owner(String projectId,

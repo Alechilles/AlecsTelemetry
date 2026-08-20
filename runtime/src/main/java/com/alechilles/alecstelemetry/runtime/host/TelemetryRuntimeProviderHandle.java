@@ -74,6 +74,7 @@ import java.util.logging.Level;
 
 final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
     private static final PluginIdentifier SPARK_PLUGIN_IDENTIFIER = new PluginIdentifier("spark", "spark");
+    private static final int MAX_PROFILER_SUBSCRIPTIONS = 32;
 
     private final TelemetryRuntimeBootstrapRequest request;
     private final TelemetryRuntimeSettings settings;
@@ -1682,6 +1683,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         private final ConcurrentHashMap<String, com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription>
                 profilerSubscriptions = new ConcurrentHashMap<>();
         private boolean profilerSubscriptionsOpen;
+        private int profilerSubscriptionAdmissions;
 
         private ProviderBridge(@Nonnull TelemetryRuntimeCandidate candidate,
                                @Nonnull TelemetryCoordinatorService service) {
@@ -1782,13 +1784,17 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                         @Nonnull Consumer<Map<String, Object>> listener) {
             Objects.requireNonNull(listener, "listener");
             synchronized (profilerSubscriptionLock) {
-                if (!active.get() || !profilerSubscriptionsOpen) {
+                if (!active.get()
+                        || !profilerSubscriptionsOpen
+                        || profilerSubscriptions.size() + profilerSubscriptionAdmissions
+                        >= MAX_PROFILER_SUBSCRIPTIONS) {
                     return "";
                 }
+                profilerSubscriptionAdmissions++;
             }
-            final com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription;
+            com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription subscription = null;
             try {
-                subscription = projectProfilerService.view(projectId).subscribe(snapshot -> {
+                subscription = projectProfilerService.subscribeAccepted(projectId, snapshot -> {
                     Map<String, Object> payload;
                     try {
                         payload = TelemetryProfilerBridgePayload.snapshotSummary(snapshot);
@@ -1802,15 +1808,21 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                     }
                 });
             } catch (RuntimeException | LinkageError ignored) {
-                return "";
+                // The provider must not expose a partial subscription when the local API is unavailable.
             }
             if (subscription == null) {
+                synchronized (profilerSubscriptionLock) {
+                    profilerSubscriptionAdmissions--;
+                }
                 return "";
             }
             String subscriptionId = UUID.randomUUID().toString();
             boolean accepted;
             synchronized (profilerSubscriptionLock) {
-                accepted = active.get() && profilerSubscriptionsOpen;
+                profilerSubscriptionAdmissions--;
+                accepted = active.get()
+                        && profilerSubscriptionsOpen
+                        && profilerSubscriptions.size() < MAX_PROFILER_SUBSCRIPTIONS;
                 if (accepted) {
                     while (profilerSubscriptions.putIfAbsent(subscriptionId, subscription) != null) {
                         subscriptionId = UUID.randomUUID().toString();

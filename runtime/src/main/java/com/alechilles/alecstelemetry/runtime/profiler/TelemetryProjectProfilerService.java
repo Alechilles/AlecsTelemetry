@@ -51,6 +51,8 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private static final String NO_PROJECT_DATA_DETAIL =
             "The latest Spark window contained no actionable project data.";
     private static final String CLOSED_DETAIL = "Profiler service is shut down.";
+    private static final String UNKNOWN_MONITOR_STATE_DETAIL =
+            "Profiler monitor returned an unknown state.";
 
     private final Supplier<List<TelemetryProjectRegistration>> projectsSupplier;
     private final Predicate<String> currentlyPerformanceEligible;
@@ -677,11 +679,15 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
         if (diagnostics == null) {
             return new TelemetryProfilerStatus(
-                    base.state(),
-                    bounded(base.detail()),
+                    base.projectStatusAuthoritative()
+                            ? base.state()
+                            : TelemetryProfilerStatus.State.FAILED,
+                    bounded(base.projectStatusAuthoritative()
+                            ? base.detail()
+                            : UNKNOWN_MONITOR_STATE_DETAIL),
                     base.active(),
                     base.circuitOpen(),
-                    base.sparkVersion(),
+                    base.projectStatusAuthoritative() ? base.sparkVersion() : null,
                     physicalRuntimeVersion,
                     0L,
                     base.analysisDurationMillis(),
@@ -690,11 +696,14 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             );
         }
         boolean projectStatusAuthoritative = base.projectStatusAuthoritative();
+        boolean knownMonitorState = knownMonitorState(diagnostics.state());
         return new TelemetryProfilerStatus(
                 projectStatusAuthoritative
                         ? base.state()
                         : statusState(diagnostics.state()),
-                bounded(projectStatusAuthoritative ? base.detail() : diagnostics.detail()),
+                bounded(projectStatusAuthoritative
+                        ? base.detail()
+                        : knownMonitorState ? diagnostics.detail() : UNKNOWN_MONITOR_STATE_DETAIL),
                 diagnostics.active(),
                 diagnostics.circuitOpen(),
                 projectStatusAuthoritative ? base.sparkVersion() : diagnostics.sparkVersion(),
@@ -747,6 +756,18 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             case FAILED -> TelemetryProfilerStatus.State.FAILED;
             case SHUTDOWN -> TelemetryProfilerStatus.State.SHUTDOWN;
             default -> TelemetryProfilerStatus.State.FAILED;
+        };
+    }
+
+    private static boolean knownMonitorState(@Nullable SparkProfilerDiagnostics.State state) {
+        if (state == null) {
+            return false;
+        }
+        return switch (state) {
+            case DISABLED, READY, WAITING, CAPTURING, COMPLETE, ABSENT, NOT_OWNER,
+                    NOT_RUNNING, UNSUPPORTED, INCOMPATIBLE, NO_DATA, NO_ACTIONABLE_DATA,
+                    TOO_COMPLEX, LOW_HEAP, TIMED_OUT, FAILED, SHUTDOWN -> true;
+            default -> false;
         };
     }
 
@@ -860,14 +881,33 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
     }
 
-    private TelemetryProfilerSubscription subscribe(ProjectState state,
-                                                     Consumer<? super TelemetryProfilerSnapshot> listener) {
+    @Nullable
+    public TelemetryProfilerSubscription subscribeAccepted(
+            @Nonnull String projectId,
+            @Nonnull Consumer<? super TelemetryProfilerSnapshot> listener) {
+        Objects.requireNonNull(listener, "listener");
+        ProjectState state;
+        synchronized (lock) {
+            state = projects.get(requiredText(projectId));
+        }
+        return subscribeAccepted(state, listener);
+    }
+
+    @Nullable
+    private TelemetryProfilerSubscription subscribeAccepted(
+            @Nullable ProjectState state,
+            @Nonnull Consumer<? super TelemetryProfilerSnapshot> listener) {
         Objects.requireNonNull(listener, "listener");
         boolean limitReached = false;
         Subscription accepted = null;
         synchronized (lock) {
-            if (closed || !state.available || projects.get(state.projectId) != state) {
-                return TelemetryProfilerSubscription.closed();
+            if (closed
+                    || !providerActive
+                    || state == null
+                    || !state.available
+                    || projects.get(state.projectId) != state
+                    || !observeEligibilityLocked(state)) {
+                return null;
             }
             if (state.subscriptionCount >= MAX_PROJECT_SUBSCRIPTIONS
                     || subscriptions.size() >= MAX_GLOBAL_SUBSCRIPTIONS) {
@@ -883,7 +923,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         if (limitReached) {
             log(Level.WARNING, "Profiler listener subscription limit reached for "
                     + bounded(state.projectId));
-            return TelemetryProfilerSubscription.closed();
+            return null;
         }
         return accepted;
     }
@@ -927,7 +967,9 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         @Override
         public TelemetryProfilerSubscription subscribe(
                 @Nonnull Consumer<? super TelemetryProfilerSnapshot> listener) {
-            return TelemetryProjectProfilerService.this.subscribe(state, listener);
+            TelemetryProfilerSubscription accepted = TelemetryProjectProfilerService.this
+                    .subscribeAccepted(state, listener);
+            return accepted == null ? TelemetryProfilerSubscription.closed() : accepted;
         }
     }
 

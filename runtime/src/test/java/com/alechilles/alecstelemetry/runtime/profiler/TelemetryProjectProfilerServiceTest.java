@@ -331,6 +331,34 @@ class TelemetryProjectProfilerServiceTest {
     }
 
     @Test
+    void nullMonitorStateMapsToFailedWithGenericBoundedDetail() {
+        TelemetryProjectProfilerService service = service();
+        service.attachMonitorDiagnostics(() -> new SparkProfilerDiagnostics(
+                null,
+                "spark-1",
+                "supplied detail must not cross the public status boundary",
+                0L,
+                0L,
+                0,
+                0,
+                0,
+                List.of(),
+                true,
+                false,
+                0L
+        ));
+        try {
+            TelemetryProfilerStatus status = service.view("mod-a").status();
+            assertEquals(TelemetryProfilerStatus.State.FAILED, status.state());
+            assertEquals("Profiler monitor returned an unknown state.", status.detail());
+            assertFalse(status.detail().contains("supplied detail"));
+            assertTrue(status.detail().length() <= 240);
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
     void consentRevocationPreventsInFlightAnalysisFromReinsertingEvidence() throws Exception {
         CountDownLatch analyzed = new CountDownLatch(1);
         CountDownLatch allowInsert = new CountDownLatch(1);

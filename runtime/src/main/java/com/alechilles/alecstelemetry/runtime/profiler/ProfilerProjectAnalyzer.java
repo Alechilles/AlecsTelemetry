@@ -65,12 +65,17 @@ final class ProfilerProjectAnalyzer {
         Map<String, MutableProject> projects = new HashMap<>();
         for (SparkProfileWindow.ThreadFrames thread : window.threads()) {
             List<SparkProfileWindow.Frame> frames = thread.frames();
+            ThreadOwnership threadOwnership = resolveThreadOwnership(
+                    frames,
+                    ownership,
+                    currentlyEligible
+            );
             for (int index = 0; index < frames.size(); index++) {
                 SparkProfileWindow.Frame sampled = frames.get(index);
                 if (sampled.selfMilliseconds() <= 0.0d) {
                     continue;
                 }
-                FrameOwnership sampledOwner = ownerOf(sampled, ownership, currentlyEligible);
+                FrameOwnership sampledOwner = threadOwnership.ownership()[index];
                 if (sampledOwner.owner() != null) {
                     if (!sampledOwner.eligible()) {
                         continue;
@@ -90,35 +95,30 @@ final class ProfilerProjectAnalyzer {
                     continue;
                 }
 
-                int childIndex = index;
-                int parentIndex = frames.get(childIndex).parentIndex();
-                while (parentIndex >= 0) {
-                    SparkProfileWindow.Frame candidate = frames.get(parentIndex);
-                    FrameOwnership candidateOwner = ownerOf(candidate, ownership, currentlyEligible);
-                    if (candidateOwner.owner() != null) {
-                        if (!candidateOwner.eligible()) {
-                            break;
-                        }
-                        ProfilerProjectOwnershipIndex.Owner owner = candidateOwner.owner();
-                        SparkProfileWindow.Frame firstExternal = frames.get(childIndex);
-                        MutableProject project = projects.computeIfAbsent(
-                                owner.projectId(), ignored -> new MutableProject(owner));
-                        ProfilerPathIdentity identity = ProfilerPathIdentity.downstream(
-                                owner.projectId(),
-                                candidate.className(), candidate.methodName(), candidate.methodDescriptor(),
-                                firstExternal.className(), firstExternal.methodName(), firstExternal.methodDescriptor());
-                        project.add(
-                                identity,
-                                TelemetryProfilerAttribution.DOWNSTREAM,
-                                candidate,
-                                firstExternal,
-                                sampled.selfMilliseconds(),
-                                downstreamPath(frames, parentIndex, index));
-                        break;
-                    }
-                    childIndex = parentIndex;
-                    parentIndex = frames.get(childIndex).parentIndex();
+                AncestorInfo nearestOwner = threadOwnership.nearestOwners()[index];
+                if (nearestOwner.ownerIndex() < 0) {
+                    continue;
                 }
+                FrameOwnership candidateOwner = threadOwnership.ownership()[nearestOwner.ownerIndex()];
+                if (!candidateOwner.eligible()) {
+                    continue;
+                }
+                ProfilerProjectOwnershipIndex.Owner owner = candidateOwner.owner();
+                SparkProfileWindow.Frame candidate = frames.get(nearestOwner.ownerIndex());
+                SparkProfileWindow.Frame firstExternal = frames.get(nearestOwner.firstExternalIndex());
+                MutableProject project = projects.computeIfAbsent(
+                        owner.projectId(), ignored -> new MutableProject(owner));
+                ProfilerPathIdentity identity = ProfilerPathIdentity.downstream(
+                        owner.projectId(),
+                        candidate.className(), candidate.methodName(), candidate.methodDescriptor(),
+                        firstExternal.className(), firstExternal.methodName(), firstExternal.methodDescriptor());
+                project.add(
+                        identity,
+                        TelemetryProfilerAttribution.DOWNSTREAM,
+                        candidate,
+                        firstExternal,
+                        sampled.selfMilliseconds(),
+                        downstreamPath(frames, nearestOwner.representativeIndices()));
             }
         }
 
@@ -164,6 +164,66 @@ final class ProfilerProjectAnalyzer {
     }
 
     @Nonnull
+    private static ThreadOwnership resolveThreadOwnership(
+            @Nonnull List<SparkProfileWindow.Frame> frames,
+            @Nonnull ProfilerProjectOwnershipIndex ownership,
+            @Nonnull Predicate<String> currentlyEligible) {
+        int frameCount = frames.size();
+        FrameOwnership[] resolvedOwnership = new FrameOwnership[frameCount];
+        for (int index = 0; index < frameCount; index++) {
+            resolvedOwnership[index] = ownerOf(frames.get(index), ownership, currentlyEligible);
+        }
+
+        AncestorInfo[] nearestOwners = new AncestorInfo[frameCount];
+        int[] visitGeneration = new int[frameCount];
+        int generation = 0;
+        for (int index = 0; index < frameCount; index++) {
+            if (nearestOwners[index] != null) {
+                continue;
+            }
+            generation++;
+            ArrayList<Integer> pending = new ArrayList<>();
+            int current = index;
+            AncestorInfo base;
+            while (true) {
+                if (nearestOwners[current] != null) {
+                    base = nearestOwners[current];
+                    break;
+                }
+                if (visitGeneration[current] == generation) {
+                    throw new IllegalArgumentException("Spark frame parent chain contains a cycle.");
+                }
+                visitGeneration[current] = generation;
+                pending.add(current);
+                int parentIndex = frames.get(current).parentIndex();
+                if (parentIndex < 0) {
+                    base = AncestorInfo.NONE;
+                    break;
+                }
+                if (parentIndex >= frameCount) {
+                    throw new IllegalArgumentException("Spark frame parent index is outside the thread window.");
+                }
+                current = parentIndex;
+            }
+
+            for (int pendingIndex = pending.size() - 1; pendingIndex >= 0; pendingIndex--) {
+                int frameIndex = pending.get(pendingIndex);
+                FrameOwnership frameOwnership = resolvedOwnership[frameIndex];
+                if (frameOwnership.owner() != null) {
+                    nearestOwners[frameIndex] = AncestorInfo.owned(frameIndex);
+                    continue;
+                }
+                int parentIndex = frames.get(frameIndex).parentIndex();
+                AncestorInfo parent = parentIndex < 0
+                        ? base
+                        : nearestOwners[parentIndex];
+                nearestOwners[frameIndex] = parent.append(frameIndex, parentIndex);
+            }
+        }
+        return new ThreadOwnership(resolvedOwnership, nearestOwners);
+    }
+
+    @Nonnull
     private static List<String> selfPath(@Nonnull List<SparkProfileWindow.Frame> frames, int index) {
         ArrayList<String> path = new ArrayList<>();
         int current = index;
@@ -177,18 +237,11 @@ final class ProfilerProjectAnalyzer {
 
     @Nonnull
     private static List<String> downstreamPath(@Nonnull List<SparkProfileWindow.Frame> frames,
-                                               int ownerIndex,
-                                               int sampledIndex) {
-        ArrayList<String> reverse = new ArrayList<>();
-        int current = sampledIndex;
-        while (current >= 0 && current != ownerIndex && reverse.size() < MAX_REPRESENTATIVE_FRAMES - 1) {
-            reverse.add(frameText(frames.get(current)));
-            current = frames.get(current).parentIndex();
+                                               @Nonnull int[] representativeIndices) {
+        ArrayList<String> path = new ArrayList<>(representativeIndices.length);
+        for (int representativeIndex : representativeIndices) {
+            path.add(frameText(frames.get(representativeIndex)));
         }
-        ArrayList<String> path = new ArrayList<>(reverse.size() + 1);
-        path.add(frameText(frames.get(ownerIndex)));
-        java.util.Collections.reverse(reverse);
-        path.addAll(reverse);
         return path;
     }
 
@@ -253,6 +306,36 @@ final class ProfilerProjectAnalyzer {
     private record FrameOwnership(ProfilerProjectOwnershipIndex.Owner owner,
                                   boolean eligible) {
         private static final FrameOwnership UNOWNED = new FrameOwnership(null, false);
+    }
+
+    private record ThreadOwnership(@Nonnull FrameOwnership[] ownership,
+                                   @Nonnull AncestorInfo[] nearestOwners) {
+    }
+
+    private record AncestorInfo(int ownerIndex,
+                                int firstExternalIndex,
+                                @Nonnull int[] representativeIndices) {
+        private static final AncestorInfo NONE = new AncestorInfo(-1, -1, new int[0]);
+
+        private static AncestorInfo owned(int frameIndex) {
+            return new AncestorInfo(frameIndex, -1, new int[]{frameIndex});
+        }
+
+        private AncestorInfo append(int frameIndex, int parentIndex) {
+            if (ownerIndex < 0) {
+                return NONE;
+            }
+            int firstExternal = ownerIndex == parentIndex ? frameIndex : firstExternalIndex;
+            if (representativeIndices.length >= MAX_REPRESENTATIVE_FRAMES) {
+                return new AncestorInfo(ownerIndex, firstExternal, representativeIndices);
+            }
+            int[] extended = java.util.Arrays.copyOf(
+                    representativeIndices,
+                    representativeIndices.length + 1
+            );
+            extended[extended.length - 1] = frameIndex;
+            return new AncestorInfo(ownerIndex, firstExternal, extended);
+        }
     }
 
     private static final class MutableProject {

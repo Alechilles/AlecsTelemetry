@@ -438,6 +438,67 @@ class TelemetryRuntimeHostTest {
     }
 
     @Test
+    void providerDoesNotIssueIdsForRepeatedMissingProfilerProjects() {
+        ProviderFixture fixture = fixture(
+                "standalone:Alechilles:MissingProfilerProject",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3"
+        );
+        fixture.handle().start();
+        try {
+            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+            assertNotNull(active);
+            for (int attempt = 0; attempt < 100; attempt++) {
+                assertEquals("", active.subscribeProfiler("missing-project", payload -> {
+                }));
+            }
+        } finally {
+            fixture.handle().shutdown();
+        }
+    }
+
+    @Test
+    void providerCapsProfilerSubscriptionsAtThirtyTwoAndAllowsCleanup() {
+        List<TelemetryProjectRegistration> projects = new ArrayList<>();
+        for (int index = 0; index < 8; index++) {
+            String projectId = "profiler-project-" + index;
+            projects.add(registration(
+                    telemetryCategoryDescriptor(projectId, "Profiler Project " + index),
+                    "Example:Profiler Project " + index,
+                    "1.0.0",
+                    tempDir.resolve(projectId)
+            ));
+        }
+        ProviderFixture fixture = consentFixture(
+                "profiler-global-subscription-limit",
+                projects,
+                projects
+        );
+        fixture.handle().start();
+        List<String> subscriptionIds = new ArrayList<>();
+        try {
+            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+            assertNotNull(active);
+            for (TelemetryProjectRegistration project : projects) {
+                for (int subscription = 0; subscription < 4; subscription++) {
+                    String id = active.subscribeProfiler(project.projectId(), payload -> {
+                    });
+                    assertFalse(id.isBlank());
+                    subscriptionIds.add(id);
+                }
+            }
+            assertEquals(32, subscriptionIds.size());
+            assertEquals("", active.subscribeProfiler(projects.getFirst().projectId(), payload -> {
+            }));
+            for (String id : subscriptionIds) {
+                assertTrue(active.unsubscribeProfiler(id));
+            }
+        } finally {
+            fixture.handle().shutdown();
+        }
+    }
+
+    @Test
     void losingProviderConsentPathsUseActiveProviderViewAndRejectStaleLocalProjects() {
         TelemetryProjectRegistration loserProject = registration(
                 telemetryCategoryDescriptor("loser-mod", "Loser Mod"),

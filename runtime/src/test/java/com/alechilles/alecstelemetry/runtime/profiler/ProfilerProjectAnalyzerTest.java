@@ -7,7 +7,10 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -79,6 +82,48 @@ class ProfilerProjectAnalyzerTest {
     }
 
     @Test
+    void downstreamRepresentativePathKeepsOwnerAndFirstSevenDescendants() {
+        List<SparkProfileWindow.Frame> frames = new ArrayList<>();
+        frames.add(new SparkProfileWindow.Frame(
+                -1, "mod-a", "example.a.Owner", "owner", DESCRIPTOR, 0.0d));
+        for (int index = 1; index <= 9; index++) {
+            frames.add(new SparkProfileWindow.Frame(
+                    index - 1,
+                    "foreign",
+                    "foreign.Layer" + index,
+                    "run" + index,
+                    DESCRIPTOR,
+                    index == 9 ? 1.0d : 0.0d
+            ));
+        }
+
+        ProfilerProjectAnalyzer.Analysis analysis = ProfilerProjectAnalyzer.analyze(
+                window(1, "1.0.0", frames),
+                owners().index(),
+                id -> true,
+                5
+        );
+
+        ProfilerProjectWindow.Path path = analysis.projects().getFirst().paths().getFirst();
+        assertEquals(TelemetryProfilerAttribution.DOWNSTREAM, path.attribution());
+        assertEquals("example.a.Owner", path.ownedClassName());
+        assertEquals("foreign.Layer1", path.firstExternalClassName());
+        assertEquals(
+                List.of(
+                        "example.a.Owner#owner()V",
+                        "foreign.Layer1#run1()V",
+                        "foreign.Layer2#run2()V",
+                        "foreign.Layer3#run3()V",
+                        "foreign.Layer4#run4()V",
+                        "foreign.Layer5#run5()V",
+                        "foreign.Layer6#run6()V",
+                        "foreign.Layer7#run7()V"
+                ),
+                path.representativePath()
+        );
+    }
+
+    @Test
     void disabledNearestOwnerBlocksAttributionToFartherOwner() {
         SparkProfileWindow window = window(1, "1.0.0", List.of(
                 new SparkProfileWindow.Frame(-1, "mod-a", "example.a.Tick", "tick", DESCRIPTOR, 0.0d),
@@ -120,6 +165,50 @@ class ProfilerProjectAnalyzerTest {
         assertEquals(ProfilerProjectAnalyzer.Analysis.Status.COMPLETE, analysis.status());
         assertEquals(5, analysis.projects().getFirst().paths().size());
         assertEquals(1, analysis.omittedPathCount());
+    }
+
+    @Test
+    void analyzerProcessesTwentyFiveThousandFramesWithOneEligibilityCheckPerOwnedFrame() {
+        List<TelemetryProjectRegistration> registrations = IntStream.range(0, 100)
+                .mapToObj(ProfilerProjectAnalyzerTest::stressProject)
+                .toList();
+        ProfilerProjectOwnershipIndex.BuildResult ownership =
+                ProfilerProjectOwnershipIndex.build(registrations, "hytale-1");
+
+        List<SparkProfileWindow.Frame> frames = new ArrayList<>(25_000);
+        frames.add(new SparkProfileWindow.Frame(
+                -1, "Stress:0", "stress.owner.Root", "root", DESCRIPTOR, 0.0d));
+        for (int index = 1; index < 25_000; index++) {
+            frames.add(new SparkProfileWindow.Frame(
+                    index - 1,
+                    "<unknown>",
+                    "foreign.Layer" + index,
+                    "run",
+                    DESCRIPTOR,
+                    index == 24_999 ? 2.0d : 1.0d
+            ));
+        }
+
+        AtomicInteger eligibilityChecks = new AtomicInteger();
+        ProfilerProjectAnalyzer.Analysis analysis = ProfilerProjectAnalyzer.analyze(
+                window(1, "1.0.0", frames),
+                ownership.index(),
+                ignored -> {
+                    eligibilityChecks.incrementAndGet();
+                    return true;
+                },
+                5
+        );
+
+        assertEquals(ProfilerProjectAnalyzer.Analysis.Status.COMPLETE, analysis.status());
+        assertEquals(1, eligibilityChecks.get());
+        ProfilerProjectWindow project = project(analysis.projects(), "stress-0");
+        ProfilerProjectWindow.Path deepest = project.paths().stream()
+                .filter(path -> path.firstExternalClassName().equals("foreign.Layer1"))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(8, deepest.representativePath().size());
+        assertEquals("foreign.Layer7#run()V", deepest.representativePath().getLast());
     }
 
     private static List<ProfilerProjectWindow> analyze(SparkProfileWindow window,
@@ -181,6 +270,25 @@ class ProfilerProjectAnalyzerTest {
                 project("mod-a", "example.a", "ModA", version),
                 project("mod-b", "example.b", "ModB", version)
         ), "hytale-1");
+    }
+
+    private static TelemetryProjectRegistration stressProject(int index) {
+        StringBuilder packagePrefixes = new StringBuilder();
+        for (int prefix = 0; prefix < 32; prefix++) {
+            if (prefix > 0) {
+                packagePrefixes.append(',');
+            }
+            packagePrefixes.append("\"stress.").append(index).append(".p").append(prefix).append("\"");
+        }
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"stress-" + index + "\","
+                        + "\"projectVersion\":\"1.0.0\","
+                        + "\"displayName\":\"stress-" + index + "\","
+                        + "\"ownerPluginIdentifiers\":[\"Stress:" + index + "\"],"
+                        + "\"packagePrefixes\":[" + packagePrefixes + "]}",
+                null
+        );
+        return new TelemetryProjectRegistration(descriptor, "Stress:" + index, "1.0.0", null);
     }
 
     private static TelemetryProjectRegistration project(String projectId,
