@@ -160,6 +160,9 @@ public final class TelemetryProfilerContextProvider {
         }
         ClearRequest clearRequest = null;
         synchronized (breadcrumbLifecycleGate) {
+            if (!awaitRelevantClearCompletionLocked(projectId)) {
+                return;
+            }
             boolean eligible;
             try {
                 eligible = breadcrumbEligible.test(projectId);
@@ -170,8 +173,7 @@ public final class TelemetryProfilerContextProvider {
             }
             if (!eligible) {
                 clearRequest = beginClearLocked(
-                        new ClearRequest(projectId, false, safeNowForLog()),
-                        false
+                        new ClearRequest(projectId, false, safeNowForLog())
                 );
             } else {
                 try {
@@ -198,8 +200,7 @@ public final class TelemetryProfilerContextProvider {
         ClearRequest clearRequest;
         synchronized (breadcrumbLifecycleGate) {
             clearRequest = beginClearLocked(
-                    new ClearRequest(projectId, false, safeNowForLog()),
-                    true
+                    new ClearRequest(projectId, false, safeNowForLog())
             );
         }
         return executeClear(clearRequest);
@@ -208,17 +209,14 @@ public final class TelemetryProfilerContextProvider {
     boolean clearAllConfirmed() {
         ClearRequest clearRequest;
         synchronized (breadcrumbLifecycleGate) {
-            clearRequest = beginClearLocked(new ClearRequest(null, true, safeNowForLog()), true);
+            clearRequest = beginClearLocked(new ClearRequest(null, true, safeNowForLog()));
         }
         return executeClear(clearRequest);
     }
 
     @Nullable
-    private ClearRequest beginClearLocked(@Nonnull ClearRequest request, boolean waitForExisting) {
-        if (!waitForExisting && activeClear != null) {
-            return null;
-        }
-        if (waitForExisting && !awaitClearCompletionLocked()) {
+    private ClearRequest beginClearLocked(@Nonnull ClearRequest request) {
+        if (!awaitClearCompletionLocked()) {
             return null;
         }
         activeClear = request;
@@ -235,6 +233,24 @@ public final class TelemetryProfilerContextProvider {
             }
         }
         return true;
+    }
+
+    private boolean awaitRelevantClearCompletionLocked(@Nullable String projectId) {
+        while (activeClearAffectsProjectLocked(projectId)) {
+            try {
+                breadcrumbLifecycleGate.wait();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean activeClearAffectsProjectLocked(@Nullable String projectId) {
+        return activeClear != null
+                && (activeClear.clearAll()
+                || Objects.equals(activeClear.projectId(), projectId));
     }
 
     private boolean executeClear(@Nullable ClearRequest request) {
@@ -265,9 +281,7 @@ public final class TelemetryProfilerContextProvider {
                                                        long observedAtMillis) {
         ClearRequest clearRequest = null;
         synchronized (breadcrumbLifecycleGate) {
-            if (activeClear != null
-                    && (activeClear.clearAll()
-                    || Objects.equals(activeClear.projectId(), projectId))) {
+            if (activeClearAffectsProjectLocked(projectId)) {
                 return Map.of();
             }
             try {
@@ -276,15 +290,13 @@ public final class TelemetryProfilerContextProvider {
                     return supplied == null ? Map.of() : Map.copyOf(supplied);
                 }
                 clearRequest = beginClearLocked(
-                        new ClearRequest(projectId, false, observedAtMillis),
-                        false
+                        new ClearRequest(projectId, false, observedAtMillis)
                 );
             } catch (Throwable failure) {
                 rethrowIfFatal(failure);
                 logFailure(Source.BREADCRUMBS, failure, observedAtMillis);
                 clearRequest = beginClearLocked(
-                        new ClearRequest(projectId, false, observedAtMillis),
-                        false
+                        new ClearRequest(projectId, false, observedAtMillis)
                 );
             }
         }

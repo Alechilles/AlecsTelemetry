@@ -32,6 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProfilerContextProviderTest {
     private static final String PROJECT_ID = "example";
+    private static final String PROJECT_A_ID = "project-a";
+    private static final String PROJECT_B_ID = "project-b";
     private static final String CATEGORY = "companion.ai.tick";
     private static final String OTHER_CATEGORY = "companion.lease.scan";
 
@@ -307,6 +309,147 @@ class TelemetryProfilerContextProviderTest {
     @Test
     void clearAllWinsAgainstAnEligibleRecordThatStartedBeforeProviderDeactivation() throws Exception {
         assertClearWinsAgainstBlockedRecord(true);
+    }
+
+    // Regression: a record entering during a physical clear waits for the
+    // clear callback and re-checks consent before it can be recorded.
+    @Test
+    void recordDuringProjectClearWaitsAndRechecksEligibility() throws Exception {
+        assertRecordDuringActiveClearRechecksEligibility(false);
+    }
+
+    @Test
+    void recordDuringClearAllWaitsAndRechecksEligibility() throws Exception {
+        assertRecordDuringActiveClearRechecksEligibility(true);
+    }
+
+    // Regression: an ineligible project clear requested during another clear
+    // must wait and cannot be discarded by the active-clear fast path.
+    @Test
+    void ineligibleProjectSnapshotWaitsForAnActiveClearBeforeClearing() throws Exception {
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter(() -> 0L);
+        breadcrumbs.refreshProjects(List.of(
+                registration(PROJECT_A_ID, List.of(CATEGORY)),
+                registration(PROJECT_B_ID, List.of(CATEGORY))
+        ));
+        breadcrumbs.record(PROJECT_B_ID, CATEGORY);
+        AtomicBoolean projectBEligible = new AtomicBoolean(false);
+        CountDownLatch projectAClearEntered = new CountDownLatch(1);
+        CountDownLatch releaseProjectAClear = new CountDownLatch(1);
+        CountDownLatch projectBClearEntered = new CountDownLatch(1);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                projectId -> !PROJECT_B_ID.equals(projectId) || projectBEligible.get(),
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                projectId -> {
+                    if (PROJECT_A_ID.equals(projectId)) {
+                        breadcrumbs.clear(projectId);
+                        projectAClearEntered.countDown();
+                        awaitLatch(releaseProjectAClear);
+                    } else if (PROJECT_B_ID.equals(projectId)) {
+                        breadcrumbs.clear(projectId);
+                        projectBClearEntered.countDown();
+                    } else {
+                        breadcrumbs.clear(projectId);
+                    }
+                },
+                breadcrumbs::clearAll
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> projectAClear = executor.submit(() -> provider.clear(PROJECT_A_ID));
+            assertTrue(projectAClearEntered.await(1, TimeUnit.SECONDS));
+
+            Future<?> projectBSnapshot = executor.submit(
+                    () -> provider.snapshot(PROJECT_B_ID)
+            );
+            assertThrows(TimeoutException.class, () -> projectBSnapshot.get(1, TimeUnit.SECONDS));
+
+            releaseProjectAClear.countDown();
+            projectAClear.get(1, TimeUnit.SECONDS);
+            assertTrue(projectBClearEntered.await(1, TimeUnit.SECONDS));
+            projectBSnapshot.get(1, TimeUnit.SECONDS);
+
+            projectBEligible.set(true);
+            assertEquals(Map.of(), provider.snapshot(PROJECT_B_ID).breadcrumbCategoryCounts());
+        } finally {
+            releaseProjectAClear.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
+    }
+
+    private static void assertRecordDuringActiveClearRechecksEligibility(boolean clearAll)
+            throws Exception {
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = registeredCounter();
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        CountDownLatch clearEntered = new CountDownLatch(1);
+        CountDownLatch releaseClear = new CountDownLatch(1);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> eligible.get(),
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                projectId -> {
+                    breadcrumbs.clear(projectId);
+                    clearEntered.countDown();
+                    awaitLatch(releaseClear);
+                },
+                () -> {
+                    breadcrumbs.clearAll();
+                    clearEntered.countDown();
+                    awaitLatch(releaseClear);
+                }
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> clear = executor.submit(() -> {
+                if (clearAll) {
+                    provider.clearAll();
+                } else {
+                    provider.clear(PROJECT_ID);
+                }
+            });
+            assertTrue(clearEntered.await(1, TimeUnit.SECONDS));
+
+            eligible.set(false);
+            Future<?> record = executor.submit(
+                    () -> provider.recordBreadcrumb(PROJECT_ID, CATEGORY)
+            );
+            assertThrows(TimeoutException.class, () -> record.get(1, TimeUnit.SECONDS));
+
+            releaseClear.countDown();
+            clear.get(1, TimeUnit.SECONDS);
+            record.get(1, TimeUnit.SECONDS);
+
+            assertEquals(Map.of(), provider.snapshot(PROJECT_ID).breadcrumbCategoryCounts());
+            eligible.set(true);
+            assertEquals(Map.of(), provider.snapshot(PROJECT_ID).breadcrumbCategoryCounts());
+        } finally {
+            releaseClear.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
+    }
+
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("clear callback was not released");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("clear callback was interrupted", interrupted);
+        }
     }
 
     private static void assertClearWinsAgainstBlockedRecord(boolean clearAll) throws Exception {

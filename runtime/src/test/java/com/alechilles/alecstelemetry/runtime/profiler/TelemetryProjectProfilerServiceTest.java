@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,6 +30,7 @@ import java.util.stream.IntStream;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProjectProfilerServiceTest {
@@ -973,7 +975,7 @@ class TelemetryProjectProfilerServiceTest {
                 drainTriggeredTwice::countDown
         );
         provider.recordBreadcrumb("mod-a", "companion.ai.tick");
-        ExecutorService executor = Executors.newFixedThreadPool(2);
+        ExecutorService executor = Executors.newFixedThreadPool(3);
         Future<?> invalidation = null;
         Future<?> publication = null;
         try {
@@ -985,8 +987,12 @@ class TelemetryProjectProfilerServiceTest {
             assertTrue(drainTriggeredTwice.await(1, SECONDS));
 
             eligible.set(true);
-            provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+            Future<?> postReenableRecord = executor.submit(
+                    () -> provider.recordBreadcrumb("mod-a", "companion.ai.tick")
+            );
+            assertThrows(TimeoutException.class, () -> postReenableRecord.get(1, SECONDS));
             allowFirstReturn.countDown();
+            postReenableRecord.get(1, SECONDS);
             invalidation.get(1, SECONDS);
             allowSecondClear.countDown();
             publication.get(1, SECONDS);

@@ -319,7 +319,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                         ManifestUtil.getImplementationVersion(),
                         new SparkPublicMetricsAdapter(sparkPlugin),
                         new TelemetryProfilerBreadcrumbCounter(),
-                        projectId -> coordinator.isProjectEnabled(projectId)
+                        projectId -> bridge.isActive()
+                                && coordinator.isProjectEnabled(projectId)
                                 && coordinator.isBreadcrumbsEnabled(projectId),
                         System::currentTimeMillis,
                         logger == null ? null : (level, message) -> logger.at(level).log(message)
