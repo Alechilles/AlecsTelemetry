@@ -251,21 +251,19 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                 TelemetryProfilerPathEvidence path = signal.representative();
                 send(commandContext, runtime, formatSignal(index + 1, signal));
                 send(commandContext, runtime,
-                        bounded("ownedMethod=" + projectMethod(
+                        formatMethodEvidence("ownedMethod=",
                                 path.ownedClassName(),
                                 path.ownedMethodName(),
-                                path.ownedMethodDescriptor(),
-                                MAX_PROJECT_METHOD_TEXT)));
+                                path.ownedMethodDescriptor()));
                 if (path.attribution() == TelemetryProfilerAttribution.DOWNSTREAM
                         && (path.firstExternalClassName() != null
                         || path.firstExternalMethodName() != null
                         || path.firstExternalMethodDescriptor() != null)) {
                     send(commandContext, runtime,
-                            bounded("externalMethod=" + projectMethod(
+                            formatMethodEvidence("externalMethod=",
                                     path.firstExternalClassName(),
                                     path.firstExternalMethodName(),
-                                    path.firstExternalMethodDescriptor(),
-                                    MAX_PROJECT_METHOD_TEXT)));
+                                    path.firstExternalMethodDescriptor()));
                 }
             }
         }
@@ -430,10 +428,39 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                                         @Nullable String methodName,
                                         @Nullable String descriptor,
                                         int maxLength) {
-        String safeClass = bounded(className, 56);
-        String safeMethod = bounded(methodName, 56);
-        String safeDescriptor = bounded(descriptor, 56);
-        return bounded(safeClass + "#" + safeMethod + safeDescriptor, maxLength);
+        int tupleLength = Math.max(9, maxLength);
+        int componentBudget = tupleLength - 1;
+        int classLength = componentBudget / 3;
+        int methodLength = componentBudget / 3;
+        int descriptorLength = componentBudget - classLength - methodLength;
+        String safeClass = boundedComponent(className, classLength);
+        String safeMethod = boundedComponent(methodName, methodLength);
+        String safeDescriptor = boundedComponent(descriptor, descriptorLength);
+        return safeClass + "#" + safeMethod + safeDescriptor;
+    }
+
+    @Nonnull
+    private static String formatMethodEvidence(@Nonnull String label,
+                                                @Nullable String className,
+                                                @Nullable String methodName,
+                                                @Nullable String descriptor) {
+        int tupleLength = MAX_OUTPUT_TEXT - label.length();
+        return bounded(label + projectMethod(className, methodName, descriptor, tupleLength));
+    }
+
+    @Nonnull
+    private static String boundedComponent(@Nullable String value, int maxLength) {
+        String normalized = value == null || value.isBlank()
+                ? "<unknown>"
+                : value.replace('\n', ' ').replace('\r', ' ');
+        int limit = Math.max(1, maxLength);
+        if (normalized.length() <= limit) {
+            return normalized;
+        }
+        if (limit <= 3) {
+            return normalized.substring(0, limit);
+        }
+        return normalized.substring(0, limit - 3) + "...";
     }
 
     @Nonnull
@@ -461,15 +488,15 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         TelemetryProfilerPathEvidence path = signal.representative();
         return bounded(String.format(
                 Locale.ROOT,
-                "%d. severity=%s, qualification=%s, hits=%d/%d, medianShare=%.2f%%, "
-                        + "totalSampledMs=%.2f, attribution=%s, fingerprint=%s",
+                "%d. severity=%s, qualification=%s, hits=%d/%d, medianShare=%s%%, "
+                        + "totalSampledMs=%s, attribution=%s, fingerprint=%s",
                 rank,
                 signal.severity().name(),
                 signal.qualification().name(),
                 signal.qualifyingWindows(),
                 MAX_SIGNAL_WINDOWS,
-                signal.medianSharePercent(),
-                signal.totalSampledMilliseconds(),
+                measurement(signal.medianSharePercent()),
+                measurement(signal.totalSampledMilliseconds()),
                 path.attribution().name(),
                 bounded(path.fingerprint(), 32)
         ));

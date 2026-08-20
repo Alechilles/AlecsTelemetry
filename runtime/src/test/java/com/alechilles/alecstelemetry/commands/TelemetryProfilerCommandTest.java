@@ -425,6 +425,77 @@ class TelemetryProfilerCommandTest {
     }
 
     @Test
+    void signalsKeepLongOwnedAndExternalTameworkTuplesVisible() throws Exception {
+        String ownedClass = "com.alechilles.alecstamework.component.bonded.BondedCompanionLeaseRuntimeIndex$WorldActivity";
+        String ownedMethod = "refreshLeaseRuntimeIndexForWorldActivity";
+        String ownedDescriptor = "(Ljava/lang/String;Lcom/hypixel/hytale/component/Ref;)V";
+        String externalClass = "com.hypixel.hytale.server.core.universe.world.storage.ChunkStore";
+        String externalMethod = "getChunkReference";
+        String externalDescriptor = "(J)Lcom/hypixel/hytale/component/Ref;";
+        String fingerprint = "11223344556677889900aabbccddeeff";
+        TelemetryProfilerPathEvidence path = new TelemetryProfilerPathEvidence(
+                fingerprint,
+                TelemetryProfilerAttribution.DOWNSTREAM,
+                ownedClass,
+                ownedMethod,
+                ownedDescriptor,
+                externalClass,
+                externalMethod,
+                externalDescriptor,
+                100.0,
+                25.0,
+                TelemetryProfilerQualification.OBSERVED,
+                List.of()
+        );
+        List<String> logLines = new ArrayList<>();
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtimeWithProjectSnapshot(
+                        "example-mod",
+                        snapshot(1, path),
+                        logLines
+                )),
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+
+        assertTrue(sender.text().contains("ownedMethod=" + ownedClass + "#" + ownedMethod + ownedDescriptor));
+        assertTrue(sender.text().contains("externalMethod=" + externalClass + "#" + externalMethod + externalDescriptor));
+        assertTrue(sender.text().contains(fingerprint));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void signalsKeepRequiredSummaryFieldsForVeryLargeFiniteMeasurements() throws Exception {
+        String fingerprint = "aabbccddeeff00112233445566778899";
+        List<String> logLines = new ArrayList<>();
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtimeWithProjectSnapshot(
+                        "example-mod",
+                        snapshot(1, selfPath(fingerprint, Double.MAX_VALUE, Double.MAX_VALUE)),
+                        logLines
+                )),
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+
+        String summary = sender.messages.stream()
+                .map(Message::getRawText)
+                .filter(line -> line.startsWith("1."))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(summary.contains("severity="));
+        assertTrue(summary.contains("qualification="));
+        assertTrue(summary.contains("hits="));
+        assertTrue(summary.contains("medianShare="));
+        assertTrue(summary.contains("totalSampledMs="));
+        assertTrue(summary.contains("attribution="));
+        assertTrue(summary.contains("fingerprint=" + fingerprint));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
     void signalsRequiresOneProjectArgument() throws Exception {
         TestCommandSender sender = execute(
                 new TelemetryProfilerCommand(runtimeWithProjectView(
