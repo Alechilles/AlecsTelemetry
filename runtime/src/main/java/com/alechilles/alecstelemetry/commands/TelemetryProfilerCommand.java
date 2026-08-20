@@ -1,10 +1,13 @@
 package com.alechilles.alecstelemetry.commands;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerAttribution;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerPathEvidence;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.runtime.host.TelemetryCommandRuntime;
+import com.alechilles.alecstelemetry.runtime.profiler.ProfilerProjectSignal;
+import com.alechilles.alecstelemetry.runtime.profiler.ProfilerSignalEngine;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
 import com.hypixel.hytale.server.core.command.system.CommandContext;
@@ -23,6 +26,8 @@ import java.util.Optional;
 public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static final int MAX_TOP_ENTRIES = 10;
     private static final int MAX_PROJECT_TOP_ENTRIES = 5;
+    private static final int MAX_SIGNAL_ENTRIES = 5;
+    private static final int MAX_SIGNAL_WINDOWS = 5;
     private static final int MAX_HISTORY_ENTRIES = 10;
     private static final int MAX_PROJECT_ID_LENGTH = 120;
     private static final int MAX_PROJECT_METHOD_TEXT = 66;
@@ -35,6 +40,7 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
         addSubCommand(new StatusCommand(runtime));
         addSubCommand(new TopCommand(runtime));
         addSubCommand(new HistoryCommand(runtime));
+        addSubCommand(new SignalsCommand(runtime));
     }
 
     private static final class StatusCommand extends CommandBase {
@@ -169,6 +175,98 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
             );
             for (int index = start; index < history.size(); index++) {
                 send(commandContext, runtime, formatHistoryLine(history.get(index)));
+            }
+        }
+    }
+
+    private static final class SignalsCommand extends CommandBase {
+        private final TelemetryCommandRuntime runtime;
+
+        private SignalsCommand(@Nonnull TelemetryCommandRuntime runtime) {
+            super("signals", "Show rolling Spark profiler hot-path signals for a project.");
+            this.runtime = runtime;
+            setPermissionGroups(TelemetryCommandPermissions.adminGroups());
+            setAllowsExtraArguments(true);
+        }
+
+        @Override
+        protected void executeSync(@Nonnull CommandContext commandContext) {
+            if (runtime == null) {
+                send(commandContext, null, "Telemetry profiler is unavailable.");
+                return;
+            }
+            ProjectArgument projectArgument = projectArgument(commandContext, "signals");
+            if (!projectArgument.valid() || projectArgument.projectId() == null) {
+                send(commandContext, runtime, usageRequired("signals"));
+                return;
+            }
+
+            String projectId = projectArgument.projectId();
+            TelemetryProfilerView view = projectView(runtime, projectId);
+            if (isUnavailable(view)) {
+                send(commandContext, runtime,
+                        "Spark profiler signals: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                                + " unavailable.");
+                return;
+            }
+
+            List<TelemetryProfilerSnapshot> history;
+            try {
+                List<TelemetryProfilerSnapshot> source = view.history();
+                history = source == null ? List.of() : List.copyOf(source);
+            } catch (RuntimeException | LinkageError ignored) {
+                send(commandContext, runtime,
+                        "Spark profiler signals: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                                + " unavailable.");
+                return;
+            }
+            if (history.isEmpty()) {
+                send(commandContext, runtime, projectNoData("signals", projectId, view));
+                return;
+            }
+
+            List<ProfilerProjectSignal> signals;
+            try {
+                signals = new ProfilerSignalEngine().signals(history);
+            } catch (RuntimeException | LinkageError ignored) {
+                send(commandContext, runtime,
+                        "Spark profiler signals: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                                + " unavailable.");
+                return;
+            }
+            if (signals == null || signals.isEmpty()) {
+                send(commandContext, runtime,
+                        "Spark profiler signals: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                                + " has no active signals.");
+                return;
+            }
+
+            int count = Math.min(MAX_SIGNAL_ENTRIES, signals.size());
+            send(commandContext, runtime,
+                    "Spark profiler signals: project=" + bounded(projectId, MAX_PROJECT_ID_LENGTH)
+                            + ", ruleSet=" + ProfilerSignalEngine.RULE_SET
+                            + ", showing=" + count + " of " + signals.size());
+            for (int index = 0; index < count; index++) {
+                ProfilerProjectSignal signal = signals.get(index);
+                TelemetryProfilerPathEvidence path = signal.representative();
+                send(commandContext, runtime, formatSignal(index + 1, signal));
+                send(commandContext, runtime,
+                        bounded("ownedMethod=" + projectMethod(
+                                path.ownedClassName(),
+                                path.ownedMethodName(),
+                                path.ownedMethodDescriptor(),
+                                MAX_PROJECT_METHOD_TEXT)));
+                if (path.attribution() == TelemetryProfilerAttribution.DOWNSTREAM
+                        && (path.firstExternalClassName() != null
+                        || path.firstExternalMethodName() != null
+                        || path.firstExternalMethodDescriptor() != null)) {
+                    send(commandContext, runtime,
+                            bounded("externalMethod=" + projectMethod(
+                                    path.firstExternalClassName(),
+                                    path.firstExternalMethodName(),
+                                    path.firstExternalMethodDescriptor(),
+                                    MAX_PROJECT_METHOD_TEXT)));
+                }
             }
         }
     }
@@ -351,6 +449,30 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     @Nonnull
     private static String usage(@Nonnull String command) {
         return "Usage: /telemetry profiler " + command + " [project-id]";
+    }
+
+    @Nonnull
+    private static String usageRequired(@Nonnull String command) {
+        return "Usage: /telemetry profiler " + command + " <project-id>";
+    }
+
+    @Nonnull
+    private static String formatSignal(int rank, @Nonnull ProfilerProjectSignal signal) {
+        TelemetryProfilerPathEvidence path = signal.representative();
+        return bounded(String.format(
+                Locale.ROOT,
+                "%d. severity=%s, qualification=%s, hits=%d/%d, medianShare=%.2f%%, "
+                        + "totalSampledMs=%.2f, attribution=%s, fingerprint=%s",
+                rank,
+                signal.severity().name(),
+                signal.qualification().name(),
+                signal.qualifyingWindows(),
+                MAX_SIGNAL_WINDOWS,
+                signal.medianSharePercent(),
+                signal.totalSampledMilliseconds(),
+                path.attribution().name(),
+                bounded(path.fingerprint(), 32)
+        ));
     }
 
     @Nonnull

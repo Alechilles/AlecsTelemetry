@@ -375,6 +375,129 @@ class TelemetryProfilerCommandTest {
         assertTrue(oversized.text().contains("Usage: /telemetry profiler history [project-id]"));
     }
 
+    @Test
+    void signalsReportsRollingEvidenceAndMirrorsEveryLineToTheRuntimeLog() throws Exception {
+        String selfFingerprint = "00112233445566778899aabbccddeeff";
+        String downstreamFingerprint = "ffeeddccbbaa99887766554433221100";
+        List<TelemetryProfilerSnapshot> history = List.of(
+                snapshot(1, selfPath(selfFingerprint, 30.0, 10.0)),
+                snapshot(2, selfPath(selfFingerprint, 30.0, 10.0)),
+                snapshot(3, selfPath(selfFingerprint, 30.0, 10.0)),
+                snapshot(4),
+                snapshot(5,
+                        downstreamPath(downstreamFingerprint, 100.0, 25.0))
+        );
+        List<String> logLines = new ArrayList<>();
+        TelemetryCommandRuntime runtime = runtimeWithProjectView(
+                SparkProfilerDiagnostics.disabled(),
+                List.of(),
+                "example-mod",
+                projectView(history.getLast(), history),
+                logLines
+        );
+
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtime),
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+
+        assertTrue(sender.text().contains(
+                "Spark profiler signals: project=example-mod, ruleSet=hot-path-v1, showing=2 of 2"));
+        assertTrue(sender.text().contains("severity=SEVERE"));
+        assertTrue(sender.text().contains("qualification=PROVISIONAL"));
+        assertTrue(sender.text().contains("hits=1/5"));
+        assertTrue(sender.text().contains("medianShare=25.00%"));
+        assertTrue(sender.text().contains("totalSampledMs=100.00"));
+        assertTrue(sender.text().contains("attribution=DOWNSTREAM"));
+        assertTrue(sender.text().contains("ownedMethod=com.example.Mod#tick()V"));
+        assertTrue(sender.text().contains("externalMethod=com.example.Other#call()V"));
+        assertTrue(sender.text().contains("severity=HIGH"));
+        assertTrue(sender.text().contains("qualification=REPEATED"));
+        assertTrue(sender.text().contains("hits=3/5"));
+        assertTrue(sender.text().contains("medianShare=10.00%"));
+        assertTrue(sender.text().contains("totalSampledMs=90.00"));
+        assertTrue(sender.text().contains("attribution=SELF"));
+        assertTrue(sender.text().contains(selfFingerprint));
+        assertTrue(sender.text().contains(downstreamFingerprint));
+        assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void signalsRequiresOneProjectArgument() throws Exception {
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtimeWithProjectView(
+                        SparkProfilerDiagnostics.disabled(),
+                        List.of(),
+                        null,
+                        null,
+                        new ArrayList<>()
+                )),
+                "signals",
+                "/telemetry profiler signals"
+        );
+
+        assertEquals(1, sender.messages.size());
+        assertEquals("Usage: /telemetry profiler signals <project-id>", sender.text().trim());
+    }
+
+    @Test
+    void signalsExplainsEmptyUnavailableAndExpiredCandidates() throws Exception {
+        TelemetryProfilerCommand emptyProfiler = new TelemetryProfilerCommand(
+                runtimeWithProjectView(
+                        SparkProfilerDiagnostics.disabled(),
+                        List.of(),
+                        "example-mod",
+                        projectView(snapshot(1), List.of()),
+                        new ArrayList<>()
+                )
+        );
+        TestCommandSender empty = execute(
+                emptyProfiler,
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+        assertTrue(empty.text().contains("has no completed data"));
+
+        TelemetryProfilerCommand unavailableProfiler = new TelemetryProfilerCommand(
+                runtimeWithProjectView(
+                        SparkProfilerDiagnostics.disabled(),
+                        List.of(),
+                        "missing",
+                        TelemetryProfilerView.unavailable(),
+                        new ArrayList<>()
+                )
+        );
+        TestCommandSender unavailable = execute(
+                unavailableProfiler,
+                "signals",
+                "/telemetry profiler signals missing"
+        );
+        assertTrue(unavailable.text().contains("unavailable"));
+
+        List<TelemetryProfilerSnapshot> expiredHistory = List.of(
+                snapshot(1, selfPath("00112233445566778899aabbccddeeff", 30.0, 10.0)),
+                snapshot(2, selfPath(1.0)),
+                snapshot(3, selfPath(1.0)),
+                snapshot(4, selfPath(1.0)),
+                snapshot(5, selfPath(1.0)),
+                snapshot(6, selfPath(1.0))
+        );
+        TestCommandSender expired = execute(
+                new TelemetryProfilerCommand(runtimeWithProjectView(
+                        SparkProfilerDiagnostics.disabled(),
+                        List.of(),
+                        "example-mod",
+                        projectView(expiredHistory.getLast(), expiredHistory),
+                        new ArrayList<>()
+                )),
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+        assertTrue(expired.text().contains("no active signals"));
+    }
+
     private static TelemetryCommandRuntime runtime(SparkProfilerDiagnostics diagnostics,
                                                      List<SparkProfileSnapshot> history) {
         return runtime(diagnostics, history, new ArrayList<>());
@@ -500,6 +623,12 @@ class TelemetryProfilerCommandTest {
     }
 
     private static TelemetryProfilerSnapshot snapshot(int window) {
+        return snapshot(window, selfPath(1.0));
+    }
+
+    private static TelemetryProfilerSnapshot snapshot(
+            int window,
+            TelemetryProfilerPathEvidence... paths) {
         return new TelemetryProfilerSnapshot(
                 "mod-a",
                 "1.0.0",
@@ -508,14 +637,21 @@ class TelemetryProfilerCommandTest {
                 window,
                 100.0,
                 "observed-v1",
-                List.of(selfPath(1.0)),
+                List.of(paths),
                 TelemetryProfilerContext.unavailable()
         );
     }
 
     private static TelemetryProfilerPathEvidence selfPath(double sampledMilliseconds) {
+        return selfPath("00112233445566778899aabbccddeeff", sampledMilliseconds, sampledMilliseconds);
+    }
+
+    private static TelemetryProfilerPathEvidence selfPath(
+            String fingerprint,
+            double sampledMilliseconds,
+            double sharePercent) {
         return new TelemetryProfilerPathEvidence(
-                "00112233445566778899aabbccddeeff",
+                fingerprint,
                 TelemetryProfilerAttribution.SELF,
                 "com.example.Mod",
                 "tick",
@@ -524,15 +660,26 @@ class TelemetryProfilerCommandTest {
                 null,
                 null,
                 sampledMilliseconds,
-                sampledMilliseconds,
+                sharePercent,
                 TelemetryProfilerQualification.OBSERVED,
                 List.of("com.example.Mod#tick()V")
         );
     }
 
     private static TelemetryProfilerPathEvidence downstreamPath(double sampledMilliseconds) {
-        return new TelemetryProfilerPathEvidence(
+        return downstreamPath(
                 "ffeeddccbbaa99887766554433221100",
+                sampledMilliseconds,
+                sampledMilliseconds
+        );
+    }
+
+    private static TelemetryProfilerPathEvidence downstreamPath(
+            String fingerprint,
+            double sampledMilliseconds,
+            double sharePercent) {
+        return new TelemetryProfilerPathEvidence(
+                fingerprint,
                 TelemetryProfilerAttribution.DOWNSTREAM,
                 "com.example.Mod",
                 "tick",
@@ -541,7 +688,7 @@ class TelemetryProfilerCommandTest {
                 "call",
                 "()V",
                 sampledMilliseconds,
-                sampledMilliseconds,
+                sharePercent,
                 TelemetryProfilerQualification.OBSERVED,
                 List.of("com.example.Mod#tick()V", "com.example.Other#call()V")
         );
