@@ -32,6 +32,9 @@ public final class TelemetryProfilerContextProvider {
     private final RefreshOperation refreshOperation;
     private final ClearOperation clearOperation;
     private final ClearAllOperation clearAllOperation;
+    private final Object breadcrumbLifecycleGate = new Object();
+    @Nullable
+    private ClearRequest activeClear;
     private final EnumMap<Source, Long> lastFailureLogMillis = new EnumMap<>(Source.class);
 
     public TelemetryProfilerContextProvider(
@@ -118,20 +121,7 @@ public final class TelemetryProfilerContextProvider {
             logFailure(Source.SPARK_METRICS, failure, observedAtMillis);
         }
 
-        Map<String, Integer> categoryCounts = Map.of();
-        try {
-            if (breadcrumbEligible.test(projectId)) {
-                Map<String, Integer> supplied = breadcrumbs.snapshot(projectId);
-                categoryCounts = supplied == null ? Map.of() : Map.copyOf(supplied);
-            } else {
-                clearProject(projectId, observedAtMillis);
-            }
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            categoryCounts = Map.of();
-            logFailure(Source.BREADCRUMBS, failure, observedAtMillis);
-            clearProject(projectId, observedAtMillis);
-        }
+        Map<String, Integer> categoryCounts = snapshotBreadcrumbs(projectId, observedAtMillis);
 
         return new TelemetryProfilerContext(
                 observedAtMillis,
@@ -148,14 +138,19 @@ public final class TelemetryProfilerContextProvider {
     }
 
     boolean refreshProjectsConfirmed(@Nonnull List<TelemetryProjectRegistration> projects) {
-        try {
-            Objects.requireNonNull(projects, "projects");
-            refreshOperation.refresh(projects);
-            return true;
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure);
-            return false;
+        synchronized (breadcrumbLifecycleGate) {
+            if (!awaitClearCompletionLocked()) {
+                return false;
+            }
+            try {
+                Objects.requireNonNull(projects, "projects");
+                refreshOperation.refresh(projects);
+                return true;
+            } catch (Throwable failure) {
+                rethrowIfFatal(failure);
+                logFailure(Source.BREADCRUMBS, failure);
+                return false;
+            }
         }
     }
 
@@ -163,25 +158,32 @@ public final class TelemetryProfilerContextProvider {
         if (projectId == null || category == null) {
             return;
         }
-        boolean eligible;
-        try {
-            eligible = breadcrumbEligible.test(projectId);
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure);
-            clearProject(projectId);
-            return;
+        ClearRequest clearRequest = null;
+        synchronized (breadcrumbLifecycleGate) {
+            boolean eligible;
+            try {
+                eligible = breadcrumbEligible.test(projectId);
+            } catch (Throwable failure) {
+                rethrowIfFatal(failure);
+                logFailure(Source.BREADCRUMBS, failure);
+                eligible = false;
+            }
+            if (!eligible) {
+                clearRequest = beginClearLocked(
+                        new ClearRequest(projectId, false, safeNowForLog()),
+                        false
+                );
+            } else {
+                try {
+                    breadcrumbs.record(projectId, category);
+                } catch (Throwable failure) {
+                    rethrowIfFatal(failure);
+                    logFailure(Source.BREADCRUMBS, failure);
+                }
+                return;
+            }
         }
-        if (!eligible) {
-            clearProject(projectId);
-            return;
-        }
-        try {
-            breadcrumbs.record(projectId, category);
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure);
-        }
+        executeClear(clearRequest);
     }
 
     public void clear(@Nullable String projectId) {
@@ -193,37 +195,101 @@ public final class TelemetryProfilerContextProvider {
     }
 
     boolean clearConfirmed(@Nullable String projectId) {
-        return clearProjectConfirmed(projectId, safeNowForLog());
+        ClearRequest clearRequest;
+        synchronized (breadcrumbLifecycleGate) {
+            clearRequest = beginClearLocked(
+                    new ClearRequest(projectId, false, safeNowForLog()),
+                    true
+            );
+        }
+        return executeClear(clearRequest);
     }
 
     boolean clearAllConfirmed() {
+        ClearRequest clearRequest;
+        synchronized (breadcrumbLifecycleGate) {
+            clearRequest = beginClearLocked(new ClearRequest(null, true, safeNowForLog()), true);
+        }
+        return executeClear(clearRequest);
+    }
+
+    @Nullable
+    private ClearRequest beginClearLocked(@Nonnull ClearRequest request, boolean waitForExisting) {
+        if (!waitForExisting && activeClear != null) {
+            return null;
+        }
+        if (waitForExisting && !awaitClearCompletionLocked()) {
+            return null;
+        }
+        activeClear = request;
+        return request;
+    }
+
+    private boolean awaitClearCompletionLocked() {
+        while (activeClear != null) {
+            try {
+                breadcrumbLifecycleGate.wait();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean executeClear(@Nullable ClearRequest request) {
+        if (request == null) {
+            return false;
+        }
         try {
-            clearAllOperation.clearAll();
+            if (request.clearAll()) {
+                clearAllOperation.clearAll();
+            } else {
+                clearOperation.clear(request.projectId());
+            }
             return true;
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure);
+            logFailure(Source.BREADCRUMBS, failure, request.nowMillis());
             return false;
+        } finally {
+            synchronized (breadcrumbLifecycleGate) {
+                activeClear = null;
+                breadcrumbLifecycleGate.notifyAll();
+            }
         }
     }
 
-    private void clearProject(@Nullable String projectId) {
-        clearConfirmed(projectId);
-    }
-
-    private void clearProject(@Nullable String projectId, long nowMillis) {
-        clearProjectConfirmed(projectId, nowMillis);
-    }
-
-    private boolean clearProjectConfirmed(@Nullable String projectId, long nowMillis) {
-        try {
-            clearOperation.clear(projectId);
-            return true;
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure, nowMillis);
-            return false;
+    @Nonnull
+    private Map<String, Integer> snapshotBreadcrumbs(@Nullable String projectId,
+                                                       long observedAtMillis) {
+        ClearRequest clearRequest = null;
+        synchronized (breadcrumbLifecycleGate) {
+            if (activeClear != null
+                    && (activeClear.clearAll()
+                    || Objects.equals(activeClear.projectId(), projectId))) {
+                return Map.of();
+            }
+            try {
+                if (breadcrumbEligible.test(projectId)) {
+                    Map<String, Integer> supplied = breadcrumbs.snapshot(projectId);
+                    return supplied == null ? Map.of() : Map.copyOf(supplied);
+                }
+                clearRequest = beginClearLocked(
+                        new ClearRequest(projectId, false, observedAtMillis),
+                        false
+                );
+            } catch (Throwable failure) {
+                rethrowIfFatal(failure);
+                logFailure(Source.BREADCRUMBS, failure, observedAtMillis);
+                clearRequest = beginClearLocked(
+                        new ClearRequest(projectId, false, observedAtMillis),
+                        false
+                );
+            }
         }
+        executeClear(clearRequest);
+        return Map.of();
     }
 
     private long publicationTime() {
@@ -263,6 +329,9 @@ public final class TelemetryProfilerContextProvider {
             return null;
         }
         return value.trim();
+    }
+
+    private record ClearRequest(@Nullable String projectId, boolean clearAll, long nowMillis) {
     }
 
     private void logFailure(@Nonnull Source source,

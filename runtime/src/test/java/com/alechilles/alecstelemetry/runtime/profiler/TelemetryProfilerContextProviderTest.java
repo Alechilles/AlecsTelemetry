@@ -15,12 +15,19 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProfilerContextProviderTest {
@@ -288,6 +295,78 @@ class TelemetryProfilerContextProviderTest {
         assertTrue(provider.clearConfirmed(PROJECT_ID));
         assertEquals(Map.of(), provider.snapshot(PROJECT_ID)
                 .breadcrumbCategoryCounts());
+    }
+
+    // Regression: a consent/provider clear cannot be overtaken by a record
+    // that already passed the eligibility check.
+    @Test
+    void projectClearWinsAgainstAnEligibleRecordThatStartedBeforeConsentRevocation() throws Exception {
+        assertClearWinsAgainstBlockedRecord(false);
+    }
+
+    @Test
+    void clearAllWinsAgainstAnEligibleRecordThatStartedBeforeProviderDeactivation() throws Exception {
+        assertClearWinsAgainstBlockedRecord(true);
+    }
+
+    private static void assertClearWinsAgainstBlockedRecord(boolean clearAll) throws Exception {
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = registeredCounter();
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        AtomicBoolean blockFirstEligibility = new AtomicBoolean(true);
+        CountDownLatch eligibilityEntered = new CountDownLatch(1);
+        CountDownLatch releaseEligibility = new CountDownLatch(1);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> {
+                    boolean observed = eligible.get();
+                    if (blockFirstEligibility.compareAndSet(true, false)) {
+                        eligibilityEntered.countDown();
+                        try {
+                            if (!releaseEligibility.await(10, TimeUnit.SECONDS)) {
+                                throw new AssertionError("record eligibility was not released");
+                            }
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new AssertionError("record eligibility was interrupted", interrupted);
+                        }
+                    }
+                    return observed;
+                },
+                () -> 1000L,
+                null
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> record = executor.submit(() -> provider.recordBreadcrumb(PROJECT_ID, CATEGORY));
+            assertTrue(eligibilityEntered.await(1, TimeUnit.SECONDS));
+
+            eligible.set(false);
+            CountDownLatch clearRequested = new CountDownLatch(1);
+            Future<?> clear = executor.submit(() -> {
+                clearRequested.countDown();
+                if (clearAll) {
+                    provider.clearAll();
+                } else {
+                    provider.clear(PROJECT_ID);
+                }
+            });
+            assertTrue(clearRequested.await(1, TimeUnit.SECONDS));
+            assertThrows(TimeoutException.class, () -> clear.get(1, TimeUnit.SECONDS));
+
+            releaseEligibility.countDown();
+            record.get(1, TimeUnit.SECONDS);
+            clear.get(1, TimeUnit.SECONDS);
+
+            eligible.set(true);
+            assertEquals(Map.of(), provider.snapshot(PROJECT_ID).breadcrumbCategoryCounts());
+        } finally {
+            releaseEligibility.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(1, TimeUnit.SECONDS));
+        }
     }
 
     private static TelemetryProfilerContextProvider provider(
