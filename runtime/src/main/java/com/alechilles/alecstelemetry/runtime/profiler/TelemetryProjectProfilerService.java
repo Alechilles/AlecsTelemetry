@@ -70,6 +70,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private final Object lock = new Object();
     private final Map<String, ProjectState> projects = new LinkedHashMap<>();
     private final Map<String, ProjectView> currentViews = new HashMap<>();
+    private final Map<String, ContextClearRequest> pendingContextClears = new HashMap<>();
     private final Set<Subscription> subscriptions = new LinkedHashSet<>();
     private final ArrayDeque<HistoryEntry> retainedHistory = new ArrayDeque<>();
 
@@ -216,11 +217,16 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
 
         PublishCapture capture;
-        synchronized (lock) {
-            if (closed || !providerActive) {
-                return;
+        while (true) {
+            synchronized (lock) {
+                if (closed || !providerActive) {
+                    return;
+                }
+                capture = captureForPublishLocked();
             }
-            capture = captureForPublishLocked();
+            if (!drainPendingContextClears()) {
+                break;
+            }
         }
         if (capture.projects().isEmpty()) {
             return;
@@ -265,6 +271,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 }
                 updateAnalysisFailureLocked(capture, analysis.detail());
             }
+            drainPendingContextClears();
             return;
         }
 
@@ -353,7 +360,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 state.lastDetail = snapshot.paths().isEmpty()
                         ? EMPTY_PROJECT_DETAIL
                         : "Latest Spark project profile window was summarized locally.";
-                state.projectStatusAuthoritative = false;
+                state.projectStatusAuthoritative = snapshot.paths().isEmpty();
                 state.lastSparkVersion = snapshot.sparkVersion();
                 state.analysisDurationMillis = analysis.durationMillis();
                 state.omittedPathCount = Math.max(
@@ -373,6 +380,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 }
             }
         }
+        drainPendingContextClears();
         if (historyEvicted) {
             logHistoryEvictionIfNeeded();
         }
@@ -398,18 +406,18 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 state.analysisDurationMillis = 0L;
             }
         }
+        drainPendingContextClears();
     }
 
     public void invalidate(@Nonnull String projectId) {
         String normalizedProjectId = requiredText(projectId);
-        boolean clearContext = false;
         synchronized (lock) {
             ProjectState state = projects.get(normalizedProjectId);
             if (state == null) {
                 return;
             }
-            clearContext = true;
             state.authorizationGeneration++;
+            markContextClearPendingLocked(state);
             clearHistoryLocked(state);
             drainMailboxesLocked(state);
             boolean eligible = eligibleLocked(state.projectId);
@@ -423,9 +431,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             state.analysisDurationMillis = 0L;
             state.omittedPathCount = 0;
         }
-        if (clearContext) {
-            clearContextSafely(normalizedProjectId);
-        }
+        drainPendingContextClears();
     }
 
     public void refreshProjects() {
@@ -440,8 +446,6 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         List<TelemetryProjectRegistration> registrations = normalizeRegistrations(supplied);
         String nextOwnershipKey = ownershipKey(registrations);
         List<Subscription> closeAfterUnlock = new ArrayList<>();
-        Set<String> clearContextAfterUnlock = new LinkedHashSet<>();
-        refreshContextProjectsSafely(registrations);
         synchronized (lock) {
             if (closed) {
                 return;
@@ -464,13 +468,13 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             for (ProjectState state : new ArrayList<>(projects.values())) {
                 TelemetryProjectRegistration registration = incoming.get(state.projectId);
                 if (registration == null) {
+                    state.authorizationGeneration++;
+                    markContextClearPendingLocked(state);
                     projects.remove(state.projectId);
                     currentViews.remove(state.projectId);
                     state.available = false;
-                    state.authorizationGeneration++;
                     clearHistoryLocked(state);
                     drainMailboxesLocked(state);
-                    clearContextAfterUnlock.add(state.projectId);
                     state.lastState = TelemetryProfilerStatus.State.UNAVAILABLE;
                     state.lastDetail = "Project registration is no longer available.";
                     state.lastSparkVersion = null;
@@ -484,9 +488,9 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 if (!sameRegistration(state.registration, registration)) {
                     state.registration = registration;
                     state.authorizationGeneration++;
+                    markContextClearPendingLocked(state);
                     clearHistoryLocked(state);
                     drainMailboxesLocked(state);
-                    clearContextAfterUnlock.add(state.projectId);
                     state.lastSparkVersion = null;
                     state.analysisDurationMillis = 0L;
                     state.omittedPathCount = 0;
@@ -498,9 +502,9 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 boolean eligible = eligibleLocked(state.projectId);
                 if (state.lastEligibility && !eligible) {
                     state.authorizationGeneration++;
+                    markContextClearPendingLocked(state);
                     clearHistoryLocked(state);
                     drainMailboxesLocked(state);
-                    clearContextAfterUnlock.add(state.projectId);
                     state.lastSparkVersion = null;
                     state.analysisDurationMillis = 0L;
                     state.omittedPathCount = 0;
@@ -534,12 +538,11 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             }
 
         }
+        refreshContextProjectsSafely(registrations);
         for (Subscription subscription : closeAfterUnlock) {
             subscription.stop();
         }
-        for (String projectId : clearContextAfterUnlock) {
-            clearContextSafely(projectId);
-        }
+        drainPendingContextClears();
     }
 
     public void attachMonitorDiagnostics(@Nonnull Supplier<SparkProfilerDiagnostics> diagnostics) {
@@ -623,7 +626,11 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private PublishCapture captureForPublishLocked() {
         List<ProjectCapture> captures = new ArrayList<>();
         for (ProjectState state : projects.values()) {
-            if (!state.available || !observeEligibilityLocked(state)) {
+            if (!state.available || pendingContextClears.containsKey(state.projectId)) {
+                continue;
+            }
+            if (!observeEligibilityLocked(state)
+                    || pendingContextClears.containsKey(state.projectId)) {
                 continue;
             }
             int start = Math.max(0, state.history.size() - (ProfilerSignalEngine.MAX_WINDOWS - 1));
@@ -661,6 +668,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 project.projectStatusAuthoritative = state == TelemetryProfilerStatus.State.NO_DATA;
             }
         }
+        drainPendingContextClears();
     }
 
     private void publishAnalysisFailure(PublishCapture capture, RuntimeException failure) {
@@ -672,6 +680,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             }
             updateAnalysisFailureLocked(capture, bounded(failure.toString()));
         }
+        drainPendingContextClears();
     }
 
     private void updateAnalysisFailureLocked(PublishCapture capture, String detail) {
@@ -690,8 +699,16 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private boolean isInsertStillAuthorizedLocked(ProjectState state, ProjectCapture capture) {
         return state != null
                 && state.available
+                && !pendingContextClears.containsKey(state.projectId)
                 && state.authorizationGeneration == capture.authorizationGeneration()
                 && observeEligibilityLocked(state);
+    }
+
+    private void markContextClearPendingLocked(ProjectState state) {
+        pendingContextClears.put(
+                state.projectId,
+                new ContextClearRequest(state, state.authorizationGeneration)
+        );
     }
 
     private boolean providerCaptureStillCurrent(PublishCapture capture) {
@@ -736,6 +753,32 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             rethrowIfFatal(failure);
             log(Level.WARNING, "Profiler context project refresh failed: " + bounded(failure.toString()));
         }
+    }
+
+    private boolean drainPendingContextClears() {
+        List<ContextClearRequest> requests;
+        synchronized (lock) {
+            if (pendingContextClears.isEmpty()) {
+                return false;
+            }
+            requests = List.copyOf(pendingContextClears.values());
+        }
+
+        for (ContextClearRequest request : requests) {
+            clearContextSafely(request.state().projectId);
+        }
+
+        synchronized (lock) {
+            for (ContextClearRequest request : requests) {
+                ContextClearRequest pending = pendingContextClears.get(request.state().projectId);
+                if (pending != null
+                        && pending.state() == request.state()
+                        && pending.authorizationGeneration() == request.authorizationGeneration()) {
+                    pendingContextClears.remove(request.state().projectId);
+                }
+            }
+        }
+        return true;
     }
 
     private void clearContextSafely(String projectId) {
@@ -854,6 +897,7 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         boolean eligible = eligibleLocked(state.projectId);
         if (state.available && state.lastEligibility && !eligible) {
             state.authorizationGeneration++;
+            markContextClearPendingLocked(state);
             clearHistoryLocked(state);
             drainMailboxesLocked(state);
             state.lastState = TelemetryProfilerStatus.State.DISABLED;
@@ -868,38 +912,45 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
 
     @Nonnull
     private TelemetryProfilerStatus statusFor(ProjectState state) {
-        StatusData base;
-        Supplier<SparkProfilerDiagnostics> diagnosticsSupplier;
+        StatusData base = null;
+        Supplier<SparkProfilerDiagnostics> diagnosticsSupplier = null;
+        boolean disabled = false;
         synchronized (lock) {
             if (!state.available) {
                 return TelemetryProfilerStatus.unavailable();
             }
-            if (!observeEligibilityLocked(state)) {
-                return new TelemetryProfilerStatus(
-                        TelemetryProfilerStatus.State.DISABLED,
-                        DISABLED_DETAIL,
+            if (pendingContextClears.containsKey(state.projectId)
+                    || !observeEligibilityLocked(state)) {
+                disabled = true;
+            } else {
+                base = new StatusData(
+                        state.lastState,
+                        state.lastDetail,
+                        providerActive,
                         false,
-                        false,
-                        null,
-                        null,
-                        0L,
-                        0L,
-                        0,
-                        0
+                        state.lastSparkVersion,
+                        state.analysisDurationMillis,
+                        state.omittedPathCount,
+                        truncatedPrefixCount,
+                        state.projectStatusAuthoritative
                 );
+                diagnosticsSupplier = monitorDiagnostics;
             }
-            base = new StatusData(
-                    state.lastState,
-                    state.lastDetail,
-                    providerActive,
+        }
+        if (disabled) {
+            drainPendingContextClears();
+            return new TelemetryProfilerStatus(
+                    TelemetryProfilerStatus.State.DISABLED,
+                    DISABLED_DETAIL,
                     false,
-                    state.lastSparkVersion,
-                    state.analysisDurationMillis,
-                    state.omittedPathCount,
-                    truncatedPrefixCount,
-                    state.projectStatusAuthoritative
+                    false,
+                    null,
+                    null,
+                    0L,
+                    0L,
+                    0,
+                    0
             );
-            diagnosticsSupplier = monitorDiagnostics;
         }
 
         SparkProfilerDiagnostics diagnostics = null;
@@ -933,7 +984,6 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                     base.truncatedPrefixCount()
             );
         }
-        boolean projectStatusAuthoritative = base.projectStatusAuthoritative();
         boolean knownMonitorState = knownMonitorState(diagnostics.state());
         if (!knownMonitorState) {
             return new TelemetryProfilerStatus(
@@ -949,6 +999,8 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                     base.truncatedPrefixCount()
             );
         }
+        boolean projectStatusAuthoritative = base.projectStatusAuthoritative()
+                && !monitorOverridesAuthoritativeProjectStatus(diagnostics.state());
         return new TelemetryProfilerStatus(
                 projectStatusAuthoritative
                         ? base.state()
@@ -1020,6 +1072,17 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                     NOT_RUNNING, UNSUPPORTED, INCOMPATIBLE, NO_DATA, NO_ACTIONABLE_DATA,
                     TOO_COMPLEX, LOW_HEAP, TIMED_OUT, FAILED, SHUTDOWN -> true;
             default -> false;
+        };
+    }
+
+    private static boolean monitorOverridesAuthoritativeProjectStatus(
+            @Nullable SparkProfilerDiagnostics.State state) {
+        if (state == null) {
+            return true;
+        }
+        return switch (state) {
+            case READY, WAITING, CAPTURING, COMPLETE -> false;
+            default -> true;
         };
     }
 
@@ -1159,17 +1222,20 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
             @Nonnull Consumer<? super TelemetryProfilerSnapshot> listener) {
         Objects.requireNonNull(listener, "listener");
         boolean limitReached = false;
+        boolean drainContext = false;
         Subscription accepted = null;
         synchronized (lock) {
             if (closed
                     || !providerActive
                     || state == null
                     || !state.available
-                    || projects.get(state.projectId) != state
-                    || !observeEligibilityLocked(state)) {
+                    || projects.get(state.projectId) != state) {
                 return null;
             }
-            if (state.subscriptionCount >= MAX_PROJECT_SUBSCRIPTIONS
+            if (pendingContextClears.containsKey(state.projectId)
+                    || !observeEligibilityLocked(state)) {
+                drainContext = true;
+            } else if (state.subscriptionCount >= MAX_PROJECT_SUBSCRIPTIONS
                     || subscriptions.size() >= MAX_GLOBAL_SUBSCRIPTIONS) {
                 limitReached = true;
             } else {
@@ -1179,6 +1245,10 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
                 subscriptions.add(accepted);
                 accepted.start();
             }
+        }
+        if (drainContext) {
+            drainPendingContextClears();
+            return null;
         }
         if (limitReached) {
             log(Level.WARNING, "Profiler listener subscription limit reached for "
@@ -1204,23 +1274,45 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         @Nonnull
         @Override
         public java.util.Optional<TelemetryProfilerSnapshot> latest() {
+            java.util.Optional<TelemetryProfilerSnapshot> latest = java.util.Optional.empty();
+            boolean drainContext = false;
             synchronized (lock) {
-                if (!state.available || !observeEligibilityLocked(state) || state.history.isEmpty()) {
-                    return java.util.Optional.empty();
+                if (!state.available) {
+                    return latest;
                 }
-                return java.util.Optional.of(state.history.getLast().snapshot());
+                if (pendingContextClears.containsKey(state.projectId)
+                        || !observeEligibilityLocked(state)) {
+                    drainContext = true;
+                } else if (!state.history.isEmpty()) {
+                    latest = java.util.Optional.of(state.history.getLast().snapshot());
+                }
             }
+            if (drainContext) {
+                drainPendingContextClears();
+            }
+            return latest;
         }
 
         @Nonnull
         @Override
         public List<TelemetryProfilerSnapshot> history() {
+            List<TelemetryProfilerSnapshot> history = List.of();
+            boolean drainContext = false;
             synchronized (lock) {
-                if (!state.available || !observeEligibilityLocked(state) || state.history.isEmpty()) {
-                    return List.of();
+                if (!state.available) {
+                    return history;
                 }
-                return state.history.stream().map(HistoryEntry::snapshot).toList();
+                if (pendingContextClears.containsKey(state.projectId)
+                        || !observeEligibilityLocked(state)) {
+                    drainContext = true;
+                } else if (!state.history.isEmpty()) {
+                    history = state.history.stream().map(HistoryEntry::snapshot).toList();
+                }
             }
+            if (drainContext) {
+                drainPendingContextClears();
+            }
+            return history;
         }
 
         @Nonnull
@@ -1323,15 +1415,21 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
 
         private boolean deliveryCurrent(Delivery delivery) {
+            boolean current;
             synchronized (lock) {
-                return !closed.get()
+                current = !closed.get()
                         && !TelemetryProjectProfilerService.this.closed
                         && providerActive
                         && providerGeneration == delivery.providerGeneration()
                         && state.available
                         && state.authorizationGeneration == delivery.authorizationGeneration()
+                        && !pendingContextClears.containsKey(state.projectId)
                         && observeEligibilityLocked(state);
             }
+            if (!current) {
+                drainPendingContextClears();
+            }
+            return current;
         }
     }
 
@@ -1347,6 +1445,9 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
     private record PublishCapture(long providerGeneration,
                                   ProfilerProjectOwnershipIndex ownership,
                                   List<ProjectCapture> projects) {
+    }
+
+    private record ContextClearRequest(ProjectState state, long authorizationGeneration) {
     }
 
     private record ProjectCapture(String projectId,

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -705,6 +706,226 @@ class TelemetryProjectProfilerServiceTest {
         }
     }
 
+    // Regression: a public eligibility transition must clear breadcrumb
+    // context before a later false-to-true publication can reuse the project.
+    @Test
+    void eligibilityRevocationClearsContextBeforeReauthorization() {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                new AtomicInteger()
+        );
+        TelemetryProjectProfilerService service = serviceWithEligibility(
+                eligible,
+                provider,
+                projectWithBreadcrumb()
+        );
+        try {
+            provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+            service.publish(qualifyingResult(1, 40.0d));
+            assertEquals(Map.of("companion.ai.tick", 1),
+                    service.view("mod-a").latest().orElseThrow()
+                            .context().breadcrumbCategoryCounts());
+
+            eligible.set(false);
+            assertEquals(TelemetryProfilerStatus.State.DISABLED,
+                    service.view("mod-a").status().state());
+            assertTrue(service.view("mod-a").history().isEmpty());
+
+            eligible.set(true);
+            service.publish(qualifyingResult(2, 40.0d));
+            assertEquals(Map.of(),
+                    service.view("mod-a").latest().orElseThrow()
+                            .context().breadcrumbCategoryCounts());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: an explicit invalidation must fail closed while its
+    // outside-lock context clear is blocked, even if consent returns first.
+    @Test
+    void explicitInvalidationBlocksCaptureUntilContextClearCompletes() throws Exception {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        AtomicInteger contextReads = new AtomicInteger();
+        AtomicBoolean armAnalysis = new AtomicBoolean();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                contextReads
+        );
+        CountDownLatch ineligibleObserved = new CountDownLatch(1);
+        CountDownLatch analyzed = new CountDownLatch(1);
+        TelemetryProjectProfilerService service = serviceWithEligibilityAndHook(
+                eligible,
+                provider,
+                projectWithBreadcrumb(),
+                ignored -> {
+                    if (armAnalysis.get()) {
+                        analyzed.countDown();
+                    }
+                },
+                ineligibleObserved
+        );
+        provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+        service.publish(qualifyingResult(1, 40.0d));
+        contextReads.set(0);
+        armAnalysis.set(true);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> invalidation = null;
+        Future<?> publication = null;
+        try {
+            synchronized (breadcrumbs) {
+                eligible.set(false);
+                invalidation = executor.submit(() -> service.invalidate("mod-a"));
+                assertTrue(ineligibleObserved.await(1, SECONDS));
+
+                eligible.set(true);
+                publication = executor.submit(() -> service.publish(qualifyingResult(2, 40.0d)));
+
+                assertFalse(analyzed.await(150, TimeUnit.MILLISECONDS));
+                assertEquals(0, contextReads.get());
+                assertFalse(invalidation.isDone());
+            }
+
+            invalidation.get(1, SECONDS);
+            publication.get(1, SECONDS);
+            assertEquals(Map.of(),
+                    service.view("mod-a").latest().orElseThrow()
+                            .context().breadcrumbCategoryCounts());
+        } finally {
+            if (invalidation != null) {
+                invalidation.cancel(true);
+            }
+            if (publication != null) {
+                publication.cancel(true);
+            }
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    // Regression: a registration refresh must fail closed before its outside-
+    // lock context refresh and clear complete.
+    @Test
+    void registrationRefreshBlocksCaptureUntilContextClearCompletes() throws Exception {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        AtomicBoolean armEligibility = new AtomicBoolean();
+        AtomicBoolean armAnalysis = new AtomicBoolean();
+        AtomicReference<List<TelemetryProjectRegistration>> registrations =
+                new AtomicReference<>(List.of(projectWithBreadcrumb("1.0.0")));
+        CountDownLatch eligibilityObserved = new CountDownLatch(1);
+        CountDownLatch analyzed = new CountDownLatch(1);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        AtomicInteger contextReads = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                contextReads
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                registrations::get,
+                ignored -> {
+                    if (armEligibility.get()) {
+                        eligibilityObserved.countDown();
+                    }
+                    return eligible.get();
+                },
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider,
+                ignored -> {
+                    if (armAnalysis.get()) {
+                        analyzed.countDown();
+                    }
+                },
+                () -> {
+                }
+        );
+        service.activateProvider();
+        provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+        service.publish(qualifyingResult(1, 40.0d));
+        contextReads.set(0);
+        armEligibility.set(true);
+        armAnalysis.set(true);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> refresh = null;
+        Future<?> publication = null;
+        try {
+            synchronized (breadcrumbs) {
+                registrations.set(List.of(projectWithBreadcrumb("2.0.0")));
+                refresh = executor.submit(service::refreshProjects);
+                assertTrue(eligibilityObserved.await(1, SECONDS));
+
+                publication = executor.submit(() -> service.publish(qualifyingResult(2, 40.0d)));
+
+                assertFalse(analyzed.await(150, TimeUnit.MILLISECONDS));
+                assertEquals(0, contextReads.get());
+                assertFalse(refresh.isDone());
+            }
+
+            refresh.get(1, SECONDS);
+            publication.get(1, SECONDS);
+            TelemetryProfilerSnapshot latest = service.view("mod-a").latest().orElseThrow();
+            assertEquals("2.0.0", latest.projectVersion());
+            assertEquals(Map.of(), latest.context().breadcrumbCategoryCounts());
+        } finally {
+            if (refresh != null) {
+                refresh.cancel(true);
+            }
+            if (publication != null) {
+                publication.cancel(true);
+            }
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    // Regression: a completed empty project window remains visible while the
+    // monitor is transiently waiting, but later failure states remain visible.
+    @Test
+    void completedEmptyStatusRemainsAuthoritativeOverWaiting() {
+        AtomicReference<SparkProfilerDiagnostics> diagnostics = new AtomicReference<>(
+                SparkProfilerDiagnostics.simple(
+                        SparkProfilerDiagnostics.State.COMPLETE,
+                        "spark-1",
+                        "Spark completed."
+                )
+        );
+        TelemetryProjectProfilerService service = service();
+        service.attachMonitorDiagnostics(diagnostics::get);
+        try {
+            service.publish(emptyResult(41));
+            diagnostics.set(SparkProfilerDiagnostics.simple(
+                    SparkProfilerDiagnostics.State.WAITING,
+                    "spark-1",
+                    "A later capture is waiting."
+            ));
+
+            TelemetryProfilerStatus status = service.view("mod-a").status();
+            assertEquals(TelemetryProfilerStatus.State.COMPLETE, status.state());
+            assertEquals("Latest Spark project profile window completed with no owned paths.",
+                    status.detail());
+
+            diagnostics.set(SparkProfilerDiagnostics.simple(
+                    SparkProfilerDiagnostics.State.FAILED,
+                    "spark-1",
+                    "The later monitor failed."
+            ));
+            assertEquals(TelemetryProfilerStatus.State.FAILED,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
     private static TelemetryProjectProfilerService service() {
         return service(() -> List.of(project("mod-a", "example.a", "ModA")));
     }
@@ -782,6 +1003,67 @@ class TelemetryProjectProfilerServiceTest {
         );
         service.activateProvider();
         return service;
+    }
+
+    private static TelemetryProjectProfilerService serviceWithEligibility(
+            AtomicBoolean eligible,
+            TelemetryProfilerContextProvider contextProvider,
+            TelemetryProjectRegistration registration) {
+        return serviceWithEligibilityAndHook(
+                eligible,
+                contextProvider,
+                registration,
+                ignored -> {
+                },
+                null
+        );
+    }
+
+    private static TelemetryProjectProfilerService serviceWithEligibilityAndHook(
+            AtomicBoolean eligible,
+            TelemetryProfilerContextProvider contextProvider,
+            TelemetryProjectRegistration registration,
+            Consumer<ProfilerProjectAnalyzer.Analysis> beforeInsert,
+            CountDownLatch ineligibleObserved) {
+        performanceEnabled.set(true);
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(registration),
+                ignored -> {
+                    boolean current = eligible.get();
+                    if (!current && ineligibleObserved != null) {
+                        ineligibleObserved.countDown();
+                    }
+                    return current;
+                },
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                contextProvider,
+                beforeInsert,
+                () -> {
+                }
+        );
+        service.activateProvider();
+        return service;
+    }
+
+    private static TelemetryProfilerContextProvider breadcrumbContextProvider(
+            AtomicBoolean eligible,
+            TelemetryProfilerBreadcrumbCounter breadcrumbs,
+            AtomicInteger contextReads) {
+        return new TelemetryProfilerContextProvider(
+                () -> {
+                    contextReads.incrementAndGet();
+                    return 7;
+                },
+                "hytale-0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> eligible.get(),
+                () -> 1000L,
+                null
+        );
     }
 
     private static TelemetryProjectProfilerService serviceWithDeliveryOfferHook(
@@ -953,6 +1235,28 @@ class TelemetryProjectProfilerServiceTest {
                 null
         );
         return new TelemetryProjectRegistration(descriptor, pluginIdentifier, "1.0.0", null);
+    }
+
+    private static TelemetryProjectRegistration projectWithBreadcrumb() {
+        return projectWithBreadcrumb("1.0.0");
+    }
+
+    private static TelemetryProjectRegistration projectWithBreadcrumb(String projectVersion) {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"mod-a\","
+                        + "\"projectVersion\":\"" + projectVersion + "\","
+                        + "\"displayName\":\"mod-a\","
+                        + "\"ownerPluginIdentifiers\":[\"ModA\"],"
+                        + "\"packagePrefixes\":[\"example.a\"],"
+                        + "\"telemetry\":{"
+                        + "\"performance\":{\"supported\":true,\"defaultEnabled\":true},"
+                        + "\"events\":{\"breadcrumbs\":{"
+                        + "\"enabled\":true,"
+                        + "\"profilerCorrelationCategories\":[\"companion.ai.tick\"]"
+                        + "}}}}",
+                null
+        );
+        return new TelemetryProjectRegistration(descriptor, "ModA", "1.0.0", null);
     }
 
     private static void awaitValue(AtomicInteger value, int expected) throws Exception {
