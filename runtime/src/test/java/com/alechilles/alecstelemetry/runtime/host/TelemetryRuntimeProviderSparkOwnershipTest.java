@@ -165,6 +165,51 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
     }
 
     @Test
+    void fallbackProviderCapturesPromptlyAfterStaleInFlightCaptureRetires() throws Exception {
+        ProviderFixture providerA = fixture(
+                "standalone:Alechilles:SparkStaleFallbackA",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1)
+        );
+        ProviderFixture providerB = fixture(
+                "embedded:Alechilles:SparkStaleFallbackB",
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "0.1.4",
+                new BlockingReader(2)
+        );
+
+        try {
+            providerA.handle.start();
+            assertTrue(providerA.reader.entered.await(2, TimeUnit.SECONDS));
+
+            providerB.handle.start();
+            assertEquals(
+                    "embedded:Alechilles:SparkStaleFallbackB",
+                    TelemetryCoordinatorRegistry.activeBridge().providerId()
+            );
+
+            providerB.handle.shutdown();
+            assertEquals(
+                    "standalone:Alechilles:SparkStaleFallbackA",
+                    TelemetryCoordinatorRegistry.activeBridge().providerId()
+            );
+
+            providerA.reader.release.countDown();
+            assertTrue(
+                    providerA.reader.secondEntered.await(2, TimeUnit.SECONDS),
+                    "the reactivated fallback must start a new capture after the stale attempt retires"
+            );
+            assertEquals(2, providerA.reader.reads.get());
+        } finally {
+            providerA.reader.release.countDown();
+            providerB.reader.release.countDown();
+            providerA.handle.shutdown();
+            providerB.handle.shutdown();
+        }
+    }
+
+    @Test
     void bootDoesNotReactivateASuspendedMonitor() throws Exception {
         ProviderFixture provider = fixture(
                 "standalone:Alechilles:SparkBoot",
@@ -824,6 +869,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
         private final int windowKey;
         private final AtomicInteger reads = new AtomicInteger();
         private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch secondEntered = new CountDownLatch(1);
         private final CountDownLatch release = new CountDownLatch(1);
 
         private BlockingReader(int windowKey) {
@@ -833,6 +879,9 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
         private Object readResult() throws Exception {
             int read = reads.incrementAndGet();
             entered.countDown();
+            if (read >= 2) {
+                secondEntered.countDown();
+            }
             boolean interrupted = false;
             while (release.getCount() > 0) {
                 try {

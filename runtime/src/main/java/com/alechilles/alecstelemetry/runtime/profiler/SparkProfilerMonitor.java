@@ -301,7 +301,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
             }
             active = true;
             lifecycleGeneration++;
-            immediateAfterStaleExport = immediate && inFlight != null;
+            immediateAfterStaleExport = inFlight != null;
             diagnostics = SparkProfilerMonitorSupport.runtimeDiagnostics(
                     SparkProfilerDiagnostics.simple(
                             SparkProfilerDiagnostics.State.WAITING,
