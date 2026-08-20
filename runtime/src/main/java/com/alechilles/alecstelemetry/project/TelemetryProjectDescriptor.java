@@ -555,10 +555,13 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 excludedCount++;
                 continue;
             }
-            candidate = candidate.toLowerCase(Locale.ROOT);
             if (candidate.length() > MAX_PROFILER_CORRELATION_CATEGORY_LENGTH
-                    || !PROFILER_CORRELATION_CATEGORY_PATTERN.matcher(candidate).matches()
-                    || normalized.size() >= MAX_PROFILER_CORRELATION_CATEGORIES
+                    || !PROFILER_CORRELATION_CATEGORY_PATTERN.matcher(candidate).matches()) {
+                excludedCount++;
+                continue;
+            }
+            candidate = candidate.toLowerCase(Locale.ROOT);
+            if (normalized.size() >= MAX_PROFILER_CORRELATION_CATEGORIES
                     || normalized.putIfAbsent(candidate, Boolean.TRUE) != null) {
                 excludedCount++;
             }

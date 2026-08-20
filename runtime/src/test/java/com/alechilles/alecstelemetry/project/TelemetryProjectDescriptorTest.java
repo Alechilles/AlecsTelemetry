@@ -585,12 +585,12 @@ class TelemetryProjectDescriptorTest {
                       "breadcrumbs": {
                         "supported": true,
                         "profilerCorrelationCategories": [
-                          " Companion.AI.Tick ",
-                          "COMPANION.ai.tick",
-                          "Player-Count",
+                          " companion.ai.tick ",
+                          "companion.ai.tick",
+                          "player-count",
                           "bad category",
                           "%s",
-                          "TPS",
+                          "tps",
                           "mspt",
                           "tick-rate",
                           "world_1",
@@ -637,5 +637,25 @@ class TelemetryProjectDescriptorTest {
 
         TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(descriptor.toJson(), null);
         assertEquals(expected, roundTripped.events().breadcrumbs().profilerCorrelationCategories());
+    }
+
+    @Test
+    void excludesMixedCaseProfilerCorrelationCategoriesInsteadOfLowercasingThem() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "case-sensitive-correlation-mod",
+                  "displayName": "Case Sensitive Correlation Mod",
+                  "events": {
+                    "breadcrumbs": {
+                      "profilerCorrelationCategories": ["Companion.AI.Tick"]
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertEquals(List.of(), descriptor.events().breadcrumbs().profilerCorrelationCategories());
     }
 }

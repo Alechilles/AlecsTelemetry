@@ -234,7 +234,8 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                         breadcrumbsOverride == null || breadcrumbsOverride.enabled() == null
                                 ? defaults.breadcrumbs().enabled()
                                 : breadcrumbsOverride.enabled(),
-                        defaults.breadcrumbs().automatic()
+                        defaults.breadcrumbs().automatic(),
+                        defaults.breadcrumbs().profilerCorrelationCategories()
                 )
         );
     }

@@ -274,4 +274,45 @@ class TelemetryProjectRegistrationTest {
         assertEquals(List.of("stats"),
                 TelemetryConsentCapabilities.supportedCategoryNames(registration));
     }
+
+    @Test
+    void eventOverridePreservesDeclaredProfilerCorrelationCategories() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "correlation-override-mod",
+                  "displayName": "Correlation Override Mod",
+                  "events": {
+                    "errors": { "enabled": true },
+                    "breadcrumbs": {
+                      "enabled": true,
+                      "profilerCorrelationCategories": ["companion.ai.tick", "companion.lease.scan"]
+                    }
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectOverride override = TelemetryProjectOverride.fromJson(
+                """
+                {
+                  "events": {
+                    "errors": { "enabled": false }
+                  }
+                }
+                """
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Correlation Override Mod",
+                "1.0.0",
+                null,
+                override
+        );
+
+        assertEquals(
+                List.of("companion.ai.tick", "companion.lease.scan"),
+                registration.events().breadcrumbs().profilerCorrelationCategories()
+        );
+    }
 }
