@@ -15,6 +15,7 @@ import java.util.Optional;
 /** Immutable mapping from profiler labels and classes to registered projects. */
 final class ProfilerProjectOwnershipIndex {
     static final int MAX_PREFIXES_PER_PROJECT = 32;
+    static final int MAX_PREFIX_LENGTH = 512;
 
     private final Map<String, List<Owner>> ownersByPluginIdentifier;
     private final PrefixNode prefixRoot;
@@ -51,9 +52,14 @@ final class ProfilerProjectOwnershipIndex {
             LinkedHashSet<String> normalizedPrefixes = new LinkedHashSet<>();
             for (String prefix : registration.packagePrefixes()) {
                 String normalizedPrefix = normalizePrefix(prefix);
-                if (normalizedPrefix != null) {
-                    normalizedPrefixes.add(normalizedPrefix);
+                if (normalizedPrefix == null) {
+                    continue;
                 }
+                if (normalizedPrefix.length() > MAX_PREFIX_LENGTH) {
+                    truncatedPrefixCount++;
+                    continue;
+                }
+                normalizedPrefixes.add(normalizedPrefix);
             }
             int retained = 0;
             for (String prefix : normalizedPrefixes) {

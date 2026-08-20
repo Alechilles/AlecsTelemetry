@@ -145,9 +145,9 @@ unattributed.
 
 The profiler accepts at most 32 normalized package prefixes per project. It
 trims values, replaces `/` with `.`, removes trailing dots, and removes
-duplicates in descriptor order. Extra prefixes remain valid for other
-Telemetry behavior but do not enter the profiler index; local diagnostics
-report the truncation.
+duplicates in descriptor order. Each normalized prefix is limited to 512
+characters. Extra or longer prefixes remain valid for other Telemetry behavior
+but do not enter the profiler index; local diagnostics report the truncation.
 
 ## Category Fields
 

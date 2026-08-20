@@ -697,13 +697,27 @@ public final class TelemetryProjectProfilerService implements AutoCloseable {
         }
         boolean projectStatusAuthoritative = base.projectStatusAuthoritative();
         boolean knownMonitorState = knownMonitorState(diagnostics.state());
+        if (!knownMonitorState) {
+            return new TelemetryProfilerStatus(
+                    TelemetryProfilerStatus.State.FAILED,
+                    UNKNOWN_MONITOR_STATE_DETAIL,
+                    diagnostics.active(),
+                    diagnostics.circuitOpen(),
+                    null,
+                    physicalRuntimeVersion,
+                    Math.max(0L, diagnostics.nextCaptureAtMillis()),
+                    base.analysisDurationMillis(),
+                    base.omittedPathCount(),
+                    base.truncatedPrefixCount()
+            );
+        }
         return new TelemetryProfilerStatus(
                 projectStatusAuthoritative
                         ? base.state()
                         : statusState(diagnostics.state()),
                 bounded(projectStatusAuthoritative
                         ? base.detail()
-                        : knownMonitorState ? diagnostics.detail() : UNKNOWN_MONITOR_STATE_DETAIL),
+                        : diagnostics.detail()),
                 diagnostics.active(),
                 diagnostics.circuitOpen(),
                 projectStatusAuthoritative ? base.sparkVersion() : diagnostics.sparkVersion(),

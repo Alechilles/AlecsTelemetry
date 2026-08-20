@@ -65,7 +65,9 @@ The service keeps at most five paths per snapshot, ten snapshots per project,
 and 500 project-path entries globally. It accepts at most four listener workers
 per project and 32 globally. Attribution matches an exact plugin identifier,
 then the longest complete package prefix, with at most 32 normalized prefixes
-per project. Disabling performance consent clears the project's history.
+per project and 512 characters per prefix. Longer prefixes are omitted and
+reported as truncated. Disabling performance consent clears the project's
+history.
 
 The runtime ignores events that are disabled by project consent, descriptor defaults, runtime overrides, sampling, or descriptor allowlists.
 

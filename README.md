@@ -395,8 +395,9 @@ Each snapshot keeps at most five paths. History keeps at most ten snapshots per
 project and 500 project-path entries globally. The runtime accepts at most four
 listener workers per project and 32 globally. Profiler attribution matches an
 exact plugin identifier first, then the longest complete package prefix, with
-at most 32 normalized prefixes per project. A project view clears when
-performance consent is disabled; only later windows can repopulate it.
+at most 32 normalized prefixes per project and 512 characters per prefix.
+Longer prefixes are omitted and reported as truncated. A project view clears
+when performance consent is disabled; only later windows can repopulate it.
 
 The API exposes class/method names, sampled timing, fingerprints, and bounded
 representative paths. It does not expose raw Spark profiles, frame trees, player

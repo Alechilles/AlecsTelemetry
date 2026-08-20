@@ -57,6 +57,16 @@ class ProfilerProjectOwnershipIndexTest {
         assertTrue(built.index().resolve("<unknown>", "example.p32.Tick").isEmpty());
     }
 
+    @Test
+    void profilerSkipsExcessivelyLongPrefixWithoutBuildingUnboundedTrie() {
+        ProfilerProjectOwnershipIndex.BuildResult built = build(
+                project("long-prefix", "Example:Long Prefix", "x".repeat(50_000))
+        );
+
+        assertEquals(1, built.truncatedPrefixCount());
+        assertTrue(built.index().resolve("<unknown>", "x.Tick").isEmpty());
+    }
+
     private static ProfilerProjectOwnershipIndex.BuildResult build(TelemetryProjectRegistration... projects) {
         return ProfilerProjectOwnershipIndex.build(List.of(projects), "runtime-1");
     }

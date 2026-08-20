@@ -359,6 +359,47 @@ class TelemetryProjectProfilerServiceTest {
     }
 
     @Test
+    void nullMonitorStateOverridesEarlierAuthoritativeProjectDetail() {
+        AtomicReference<SparkProfilerDiagnostics> diagnostics = new AtomicReference<>(
+                SparkProfilerDiagnostics.simple(
+                        SparkProfilerDiagnostics.State.COMPLETE,
+                        "spark-1",
+                        "Global monitor completed a window."
+                )
+        );
+        TelemetryProjectProfilerService service = service();
+        service.attachMonitorDiagnostics(diagnostics::get);
+        try {
+            service.publish(SparkProfileReadResult.noData("previous internal no-data detail"));
+            assertEquals(TelemetryProfilerStatus.State.NO_DATA,
+                    service.view("mod-a").status().state());
+
+            diagnostics.set(new SparkProfilerDiagnostics(
+                    null,
+                    "spark-1",
+                    "supplied detail must not cross the public status boundary",
+                    0L,
+                    0L,
+                    0,
+                    0,
+                    0,
+                    List.of(),
+                    true,
+                    false,
+                    0L
+            ));
+
+            TelemetryProfilerStatus status = service.view("mod-a").status();
+            assertEquals(TelemetryProfilerStatus.State.FAILED, status.state());
+            assertEquals("Profiler monitor returned an unknown state.", status.detail());
+            assertFalse(status.detail().contains("previous internal no-data detail"));
+            assertFalse(status.detail().contains("supplied detail"));
+        } finally {
+            service.close();
+        }
+    }
+
+    @Test
     void consentRevocationPreventsInFlightAnalysisFromReinsertingEvidence() throws Exception {
         CountDownLatch analyzed = new CountDownLatch(1);
         CountDownLatch allowInsert = new CountDownLatch(1);

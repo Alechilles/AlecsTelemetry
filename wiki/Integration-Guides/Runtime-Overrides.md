@@ -207,7 +207,8 @@ restore old summaries.
 
 Profiler attribution matches an exact plugin identifier, then the longest
 complete package prefix. The profiler index accepts at most 32 normalized
-prefixes per project and reports omitted prefixes.
+prefixes per project and 512 characters per prefix. It reports omitted
+prefixes.
 
 ### Spark monitor settings
 

@@ -100,10 +100,11 @@ global monitor can continue running.
 The `profiler-api-v1` view keeps at most five paths per snapshot, ten snapshots
 per project, 500 retained project-path entries globally, four listener workers
 per project, and 32 globally. The profiler index accepts at most 32 normalized
-package prefixes per project. Older elected providers return an unavailable
-view without a mixed-version linkage error. Project command replies are copied
-to ordinary logs, and a manual server-log attachment can contain those lines
-when the existing report settings and review controls allow it.
+package prefixes per project and 512 characters per prefix. Longer prefixes
+are omitted and reported as truncated. Older elected providers return an
+unavailable view without a mixed-version linkage error. Project command replies
+are copied to ordinary logs, and a manual server-log attachment can contain
+those lines when the existing report settings and review controls allow it.
 
 ## Privacy Rules For Mod Authors
 
