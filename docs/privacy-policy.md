@@ -194,17 +194,18 @@ subscription. A snapshot can identify the project's owned Java methods and
 downstream Java methods called through them. It can contain class names, method
 names and descriptors, sampled milliseconds, selected WorldThread share,
 qualification, fingerprints, a bounded representative path, and publication
-context. The context can contain:
+context. `TelemetryProfilerContext` can contain:
 
 - `hytaleVersion`, when the server manifest provides it (the context field is
   nullable);
-- `playerCount`, as one aggregate non-negative number;
-- `tps` and `mspt`, from Spark's supported public one-minute metrics, when
-  available and finite;
-- `projectVersion`, a separate required snapshot field from the logical
-  registration; and
+- nullable aggregate `playerCount`;
+- nullable `tps` and `mspt`, from Spark's supported public one-minute metrics;
 - non-zero counts for only the project's declared, exact-match breadcrumb
   categories, summed over five one-minute buckets.
+
+`projectVersion` is not part of `TelemetryProfilerContext`. Separately, every
+`TelemetryProfilerSnapshot` has the required logical `projectVersion` snapshot
+field from the logical registration.
 
 Breadcrumb context stores category names and counts only. It never stores
 breadcrumb detail text, structured custom fields, raw Spark profiles, Spark

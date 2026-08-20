@@ -43,11 +43,14 @@ longest complete package prefix, with at most 32 normalized prefixes per
 project. Each package-prefix value is limited to 512 characters before
 normalization. Longer values are omitted and reported as truncated.
 
-Publication context can contain nullable `hytaleVersion`, nullable aggregate
-`playerCount`, nullable Spark public one-minute TPS/MSPT, non-zero counts for
-declared exact-match breadcrumb categories from five one-minute buckets, and the
-separate required logical `projectVersion` snapshot field. Breadcrumb counts
-require project enablement and breadcrumb consent.
+`TelemetryProfilerContext` can contain nullable `hytaleVersion`, nullable
+aggregate `playerCount`, nullable Spark public one-minute TPS/MSPT, and non-zero
+counts for declared exact-match breadcrumb categories from five one-minute
+buckets. Breadcrumb counts require project enablement and breadcrumb consent.
+
+`projectVersion` is not part of `TelemetryProfilerContext`. Separately, every
+`TelemetryProfilerSnapshot` has the required logical `projectVersion` snapshot
+field from the logical registration.
 
 An older elected runtime returns an unavailable view with empty data and a
 closed subscription. Disabling the project or performance consent clears the
