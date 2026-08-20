@@ -92,15 +92,21 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - The optional Spark hot-path monitor is off by default. When a server owner
   enables it, the runtime reads completed passive Spark background windows,
   computes the loaded Spark JAR's SHA-256 in memory, and writes bounded
-  WorldThread hot-path summaries to the local server log. Replies from the
-  local `profiler status`, `profiler top`, and `profiler history` commands are
-  also copied to that log. It keeps only bounded summaries and history in
-  memory. It does not directly queue or upload profiler data. Ordinary log
-  summary and command-output lines can be included if a user submits
-  a manual report with current or previous server-log attachments and the
-  manual-report settings, project descriptor, review, redaction, and clipping
-  controls allow them. The monitor does not write raw Spark profile data to the
-  log or a profile file, and does not upload that raw data.
+  WorldThread hot-path summaries to the local server log. With performance
+  consent, it qualifies each project over the latest five actionable windows
+  using the local `hot-path-v1` rules. A publication can also contain the
+  aggregate current player count, nullable Spark public one-minute TPS and
+  MSPT values, Hytale and project versions, and counts for declared breadcrumb
+  categories from the latest five minutes. These profiler summaries, signals,
+  and context values are local-only in Phase 2. They are not queued, uploaded,
+  or persisted to disk. Replies from the local `profiler status`, `profiler
+  top`, `profiler history`, and `profiler signals` commands are also copied to
+  the ordinary server log. Ordinary log summary and command-output lines can be
+  included if a user submits a manual report with current or previous
+  server-log attachments and the manual-report settings, project descriptor,
+  review, redaction, and clipping controls allow them. The monitor does not
+  write raw Spark profile data to the log or a profile file, and does not upload
+  that raw data.
 - The hosted platform may use IP addresses and request metadata for rate
   limiting, abuse prevention, server-country derivation, security logging, and
   normal hosting operations.
@@ -127,7 +133,8 @@ directory. These files can include:
 - local runtime settings for manual reports, attachments, endpoints, and related
   controls
 - when the optional Spark hot-path monitor is enabled, bounded hot-path
-  summary lines in the ordinary server log
+  summary and command-output lines in the ordinary server log. Phase 2 profiler
+  snapshots, signals, and context are not stored in local files.
 
 Local files stay on the server or local machine unless the configured telemetry
 category or report workflow uploads them.
@@ -147,52 +154,90 @@ Local summaries can contain Spark-reported source or mod labels, Java class and
 method names, timing values, and bounded thread/frame counts.
 
 The Spark hot-path monitor does not directly queue or send its raw profile,
-hot-path summary, status, capture duration, or heap delta to Alec's hosted
-platform or a custom telemetry endpoint. Its ordinary log summary and profiler
-command-output lines can be part of a user-submitted manual report when current
-or previous server-log attachments are enabled by runtime settings and the
-project descriptor, pass any required local review, and receive configured
-redaction and byte clipping.
+hot-path summary, rolling signal, context, status, capture duration, or heap
+delta to Alec's hosted platform or a custom telemetry endpoint. Its ordinary
+log summary and profiler command-output lines can be part of a user-submitted
+manual report when current or previous server-log attachments are enabled by
+runtime settings and the project descriptor, pass any required local review,
+and receive configured redaction and byte clipping.
 Raw Spark profile data is not written to the server log or a profile file by the
 monitor, and the monitor does not upload it. A supported Spark window with no
 usable WorldThread Java samples produces no actionable ranking.
 
-### Phase 1 local profiler summaries
+### Local profiler summaries and Phase 2 signals
 
 With the Spark monitor and a project's performance consent enabled, Telemetry
-creates bounded local summaries of completed passive WorldThread windows. A
-consumer mod can read one project's immutable view through
+creates bounded local summaries of completed passive WorldThread windows. The
+latest five actionable windows are the complete rolling qualification input for
+one project. An actionable window is a successful bounded Spark capture with
+usable selected WorldThread samples. A project with no attributed path still
+gets an empty `COMPLETE` window marker, so an old candidate can age and expire.
+Failed, incompatible, too-complex, timed-out, or sample-free windows do not
+advance qualification.
+
+For one stable path fingerprint, a window qualifies when sampled self time is at
+least 20 ms and at least 2% of selected WorldThread self time. `OBSERVED` is the
+normal early state. `PROVISIONAL` means one appearance reaches at least 100 ms
+and 20% share but the path is not yet present in three qualifying windows.
+`REPEATED` means the path qualifies in at least three of the latest five
+actionable windows. Signals expire when no qualifying appearance remains in
+those five windows. The local `signals` command ranks at most five active
+candidates.
+
+A consumer mod can read one project's immutable view through
 `TelemetryProjectHandle.profiler()` or receive later snapshots through its
 subscription. A snapshot can identify the project's owned Java methods and
 downstream Java methods called through them. It can contain class names, method
 names and descriptors, sampled milliseconds, selected WorldThread share,
-fingerprints, and a bounded representative path.
+qualification, fingerprints, a bounded representative path, and publication
+context. The context can contain:
+
+- `hytaleVersion`, when the server manifest provides it;
+- `playerCount`, as one aggregate non-negative number;
+- `tps` and `mspt`, from Spark's supported public one-minute metrics, when
+  available and finite;
+- `projectVersion`, which is a snapshot field from the logical registration; and
+- non-zero counts for only the project's declared, exact-match breadcrumb
+  categories, summed over five one-minute buckets.
+
+Breadcrumb context stores category names and counts only. It never stores
+breadcrumb detail text, structured custom fields, raw Spark profiles, Spark
+frame trees, player identifiers, or server identifiers. The Hytale version,
+player count, TPS, MSPT, and breadcrumb values are nullable or empty when their
+source is unavailable or not authorized.
 
 Each view contains only one project's attributed immutable summary. The local
 runtime API is not an authorization boundary. Server-side code that can access
 the API can request another registered project by ID. Do not promise that
 consumer integrations cannot log a snapshot, store it, or send it somewhere
 else. The consumer integration controls its later handling of any value it
-receives.
+receives, including any later handling by a third-party consumer.
 
-Phase 1 is local only. It does not upload profiler summaries, raw Spark
-profiles, frame trees, player data, or server identity for this feature. Spark
-protobufs, reflection objects, source maps, and raw profile trees are transient
-and are not retained after analysis. Telemetry retains only bounded immutable
-summaries and history in memory. Spark can retain or upload its own profiles
-under Spark's separate settings; that is separate behavior from Alec's
-Telemetry.
+Phase 2 is local only. It does not upload or persist profiler summaries,
+qualified signals, context, raw Spark profiles, frame trees, player data, or
+server identity for this feature. Spark protobufs, reflection objects, source
+maps, and raw profile trees are transient and are not retained after analysis.
+Telemetry retains only bounded immutable summaries and history in memory. Spark
+can retain or upload its own profiles under Spark's separate settings; that is
+separate behavior from Alec's Telemetry.
 
-Profiler command replies are copied to ordinary server logs. A manually
-attached current or previous server log can contain those command lines when
-the existing manual-report settings, project descriptor, review, redaction, and
-clipping controls allow the attachment. The monitor does not write raw profile
-data to that log.
+Profiler command replies are copied to ordinary server logs, including every
+line from `status`, `top`, `history`, and `signals`. A manually attached current
+or previous server log can contain those command lines when the existing
+manual-report settings, project descriptor, review, redaction, and clipping
+controls allow the attachment. This ordinary log path is separate from the
+profiler evidence store; the monitor does not write raw profile data to that
+log.
 
 Disabling a project's performance consent makes its local profiler history
-unavailable and clears the retained summaries for that project. This does not
-require the global Spark monitor to stop. Re-enabling consent allows only later
-completed windows to appear; cleared summaries are not restored.
+unavailable and clears the retained summaries, signals, and context for that
+project. This does not require the global Spark monitor to stop. Re-enabling
+performance consent allows only later completed windows to appear; cleared
+summaries are not restored. Breadcrumb consent is independent: disabling it
+clears only the five-minute approved-category buckets and leaves performance
+summaries and signals available. Future snapshots then contain an empty
+breadcrumb count map until breadcrumb consent is restored and new accepted
+categories are recorded.
 
 ## Telemetry Sent To The Hosted Platform
 

@@ -187,7 +187,11 @@ and cannot be compared retrospectively.
         }
       },
       "lifecycle": { "supported": true },
-      "breadcrumbs": { "supported": true, "automatic": true }
+      "breadcrumbs": {
+        "supported": true,
+        "automatic": true,
+        "profilerCorrelationCategories": ["companion.ai.tick"]
+      }
     },
     "performance": {
       "supported": true,
@@ -269,6 +273,40 @@ reports the truncation.
 A profiler summary is local and bounded. It does not make the descriptor a
 profiler upload contract.
 
+### Profiler breadcrumb correlation
+
+The optional `events.breadcrumbs.profilerCorrelationCategories` field allows
+small local context counts in profiler snapshots:
+
+```json
+{
+  "telemetry": {
+    "events": {
+      "breadcrumbs": {
+        "supported": true,
+        "profilerCorrelationCategories": [
+          "companion.ai.tick",
+          "companion.lease.scan"
+        ]
+      }
+    }
+  }
+}
+```
+
+The runtime accepts at most 16 categories. Each category must be no longer than
+40 characters and must match the exact lowercase pattern `[a-z0-9_.-]+`.
+Duplicates are removed in first-seen order. Invalid entries and entries after
+the first 16 are excluded and reported by a bounded local diagnostic. The
+project remains valid when entries are excluded.
+
+At publication, the profiler keeps only non-zero counts from five one-minute
+buckets. A breadcrumb is counted only when its trimmed static category exactly
+matches an accepted descriptor category. The detail text, structured custom
+fields, and undeclared or dynamically generated categories never enter profiler
+context. Breadcrumb consent is required for counting and publication; clearing
+breadcrumb consent clears these counts without clearing performance snapshots.
+
 For an anchored contribution, the logical plugin identifier and logical semantic
 version come from the contribution builder. They are the project attribution in
 telemetry envelopes; the physical host plugin remains local provider/election
@@ -298,6 +336,7 @@ Events:
 - `events.breadcrumbs.supported`
 - `events.breadcrumbs.defaultEnabled`
 - `events.breadcrumbs.automatic`
+- `events.breadcrumbs.profilerCorrelationCategories`
 
 Performance:
 

@@ -25,7 +25,11 @@ Add this block to the shared descriptor:
     "events": {
       "breadcrumbs": {
         "supported": true,
-        "automatic": true
+        "automatic": true,
+        "profilerCorrelationCategories": [
+          "companion.ai.tick",
+          "companion.lease.scan"
+        ]
       }
     }
   }
@@ -62,6 +66,25 @@ project.recordBreadcrumb(
 The runtime bounds every field and accepts only scalar custom attributes.
 Legacy category/detail calls remain supported. Correlation values should be
 randomized or hashed; do not send raw player, NPC, world, or save identifiers.
+
+## Profiler Correlation Categories
+
+The optional `profilerCorrelationCategories` list allows the local profiler to
+show small category counts with a project snapshot. It accepts at most 16
+entries. Each entry must be at most 40 characters and must match the exact
+lowercase pattern `[a-z0-9_.-]+`. Duplicate entries are removed in first-seen
+order. Invalid entries and entries after the first 16 are excluded. Exclusion
+does not disable the project.
+
+The profiler keeps only non-zero counts from five one-minute buckets. It counts
+an accepted breadcrumb only when its trimmed static category exactly matches a
+declared category. Dynamic or undeclared categories are ignored. Breadcrumb
+detail text and structured custom fields never enter profiler context.
+
+Breadcrumb consent controls these counts independently from performance
+consent. Clearing breadcrumb consent clears the five-minute buckets but does
+not clear performance snapshots or signals. Phase 2 profiler context is local
+only and is not uploaded or persisted.
 
 ## Good Breadcrumbs
 

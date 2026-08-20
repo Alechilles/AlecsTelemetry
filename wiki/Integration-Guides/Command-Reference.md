@@ -33,6 +33,7 @@ passive Spark background windows and ranks Java self time from Hytale
 /telemetry profiler history
 /telemetry profiler top <project-id>
 /telemetry profiler history <project-id>
+/telemetry profiler signals <project-id>
 ```
 
 - `profiler status` shows current diagnostics, including monitor state, active
@@ -52,22 +53,37 @@ analysis duration, omitted-path count, and truncated-prefix count. `history
 <project-id>` shows the newest ten retained snapshots in oldest-to-newest
 order. Path lines include `SELF` or `DOWNSTREAM`, sampled milliseconds,
 selected WorldThread share, the owned method, an optional first external
-method, and a 32-character fingerprint. Phase 1 uses `OBSERVED`; it has no
-`signals` command. Signals belong to Phase 2 `hot-path-v1`.
+method, qualification, and a 32-character fingerprint. Current paths use
+`OBSERVED`, `PROVISIONAL`, or `REPEATED` from `hot-path-v1`.
+
+`signals <project-id>` evaluates the latest five actionable project snapshots
+and shows at most five active candidates. A candidate can remain visible after
+it is absent from the newest window until it expires. Each candidate includes
+rank, `severity`, `qualification`, qualifying appearances as `hits/5`, median
+selected WorldThread share as `medianShare`, total sampled time as
+`totalSampledMs`, `SELF` or `DOWNSTREAM` attribution, and the stable
+fingerprint. The next line contains the owned method tuple. A `DOWNSTREAM`
+candidate can also include its first external method tuple.
+
+Severity is `NOTICE` from 2% to under 5%, `MODERATE` from 5% to under 10%,
+`HIGH` from 10% to under 20%, and `SEVERE` at 20% or more. Severity describes
+sampled impact. It does not prove that the mod caused lag or that the server
+was lagging. A project with no active candidates gets a clear local message.
+An unavailable or mixed-version provider returns stable unavailable text.
 
 Project IDs are unquoted and trimmed. One project ID is allowed. An unavailable
 project does not fall back to global paths. An older elected provider returns
 an unavailable project view without a linkage error.
 
 These text commands use the root Telemetry permission and accept server-console
-senders. The monitor keeps bounded summaries and history in memory and writes
-bounded summary lines to the ordinary server log. It does not directly queue or
-upload profiler data. A user-submitted manual report can include ordinary log
-summary lines through current or previous log attachments when the manual-report
-settings, project descriptor, review, redaction, and clipping controls allow
-them. Raw Spark profile data is not written by the monitor to the log or a
-profile file and is not uploaded by it. Every line returned by `profiler
-status`, `profiler top`, and `profiler history` is also written at `INFO` to the
+senders. The monitor keeps bounded summaries, rolling signals, and history in
+memory. Phase 2 does not queue, upload, or persist profiler evidence. A
+user-submitted manual report can include ordinary log summary lines through
+current or previous log attachments when the manual-report settings, project
+descriptor, review, redaction, and clipping controls allow them. Raw Spark
+profile data is not written by the monitor to the log or a profile file and is
+not uploaded by it. Every line returned by `profiler status`, `profiler top`,
+`profiler history`, and `profiler signals` is also written at `INFO` to the
 ordinary server log with a `Spark profiler command output` prefix.
 Project-filtered replies use the same log copy. A manual log attachment can
 include these lines when the normal report settings and review controls allow

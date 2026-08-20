@@ -63,18 +63,21 @@ Runtime settings and consent state also live under the same canonical root.
 The optional Spark hot-path monitor is a separate server-owner tool. It is off
 by default. When enabled, it reads completed passive Spark `ASYNC` `EXECUTION`
 windows and ranks Java self time from Hytale thread names containing
-`WorldThread`. It keeps bounded summaries and history in memory and writes
-bounded summary lines to the local server log. Replies from `/telemetry
-profiler status`, `/telemetry profiler top`, and `/telemetry profiler history`
-are also copied to that log.
+`WorldThread`. With project performance consent, `hot-path-v1` qualifies each
+project over the latest five actionable windows. A path qualifies at 20 ms and
+2% selected WorldThread share. `PROVISIONAL` requires one 100 ms and 20%
+appearance. `REPEATED` requires three qualifying appearances in those five
+windows. Empty actionable windows are retained so old candidates can expire.
+The service returns at most five active candidates.
 
-The monitor does not directly queue or upload profiler data. Ordinary log
-summary and command-output lines can be included if a user submits a manual
-report with current or previous server-log attachments and the manual-report
-settings, project descriptor, review, redaction, and clipping controls allow
-them. The monitor does not write raw Spark profile data to the log or a profile
-file, and does not upload that raw data. It computes the loaded Spark JAR's SHA-256 in memory for
-the exact tested-artifact gate and does not retain that hash. See [Runtime
+The monitor does not queue, upload, or persist Phase 2 profiler evidence.
+Ordinary log summary and command-output lines can be included if a user submits
+a manual report with current or previous server-log attachments and the
+manual-report settings, project descriptor, review, redaction, and clipping
+controls allow them. The monitor does not write raw Spark profile data to the
+log or a profile file, and does not upload that raw data. It computes the loaded
+Spark JAR's SHA-256 in memory for the exact tested-artifact gate and does not
+retain that hash. See [Runtime
 Overrides](/mod/alecs-telemetry/integration-guides/runtime-overrides) for
 settings, bounds, and fail-closed behavior.
 
@@ -82,30 +85,46 @@ With the monitor and project performance consent enabled, Telemetry creates
 bounded local summaries of completed passive WorldThread windows. The public
 local view and subscription can expose one project's immutable attributed
 summary, including owned and downstream Java class/method names, sampled
-timing, fingerprints, and bounded representative paths. Phase 1 uses `SELF`,
-`DOWNSTREAM`, and `OBSERVED` only.
+timing, fingerprints, bounded representative paths, and rolling qualification.
+Publication context can include nullable Hytale and project versions, aggregate
+player count, nullable Spark public one-minute TPS/MSPT, and non-zero counts for
+declared breadcrumb categories from five one-minute buckets.
 
 The local API is not an authorization boundary. Server-side code with API
 access can request another registered project by ID. Consumer integrations
 control later handling of values they receive; this guide does not promise
 that consumer code cannot log, store, or send a snapshot elsewhere.
 
-Phase 1 does not upload profiler summaries, raw Spark profiles, frame trees,
-player data, or server identity. Spark protobufs, reflection objects, source
-maps, and raw profile trees are transient. Spark may retain or upload its own
-profiles under Spark's separate settings. Disabling project performance consent
-makes the local project history unavailable and clears retained summaries; the
-global monitor can continue running.
+Phase 2 does not upload or persist profiler summaries, signals, context, raw
+Spark profiles, frame trees, player identifiers, or server identifiers. Spark
+protobufs, reflection objects, source maps, and raw profile trees are transient.
+Spark may retain or upload its own profiles under Spark's separate settings.
+Disabling project performance consent makes the local project history,
+qualification, signals, and context unavailable and clears them; the global
+monitor can continue running. Re-enabling performance consent admits only later
+completed actionable windows.
+
+Breadcrumb consent is independent. Counting and publication require current
+breadcrumb consent. Disabling breadcrumb consent clears only the five-minute
+approved-category buckets. Future performance snapshots remain available with
+an empty breadcrumb count map until new accepted breadcrumbs arrive.
+
+Profiler breadcrumb context contains only exact static category names and
+counts. It never contains breadcrumb detail text or structured custom fields.
+The local profiler API is not an authorization boundary: server-side code with
+API access can request another registered project by ID. A consumer, including
+a third-party integration, controls what it later logs, stores, or sends.
 
 The `profiler-api-v1` view keeps at most five paths per snapshot, ten snapshots
-per project, 500 retained project-path entries globally, four listener workers
-per project, and 32 globally. The profiler index accepts at most 32 normalized
-package prefixes per project. Each package-prefix value is limited to 512
-characters before normalization. Longer values are omitted and reported as
-truncated. Older elected providers return an
-unavailable view without a mixed-version linkage error. Project command replies
-are copied to ordinary logs, and a manual server-log attachment can contain
-those lines when the existing report settings and review controls allow it.
+per project, 500 snapshots globally, 500 retained project-path entries globally,
+four listener workers per project, and 32 globally. The profiler index accepts
+at most 32 normalized package prefixes per project. Each package-prefix value
+is limited to 512 characters before normalization. Longer values are omitted
+and reported as truncated. Older elected providers return an unavailable view
+without a mixed-version linkage error. Project command replies from `status`,
+`top`, `history`, and `signals` are copied to ordinary logs, and a manual
+server-log attachment can contain those lines when the existing report settings
+and review controls allow it.
 
 ## Privacy Rules For Mod Authors
 

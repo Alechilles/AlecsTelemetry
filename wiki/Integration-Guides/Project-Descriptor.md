@@ -101,7 +101,11 @@ Runtime override files still use `enabled`; those files store saved consent choi
     "events": {
       "errors": { "supported": true },
       "lifecycle": { "supported": true },
-      "breadcrumbs": { "supported": true, "automatic": true }
+      "breadcrumbs": {
+        "supported": true,
+        "automatic": true,
+        "profilerCorrelationCategories": ["companion.ai.tick"]
+      }
     },
     "performance": {
       "supported": true,
@@ -150,11 +154,45 @@ characters before normalization. Extra or longer values remain valid for other
 Telemetry behavior but do not enter the profiler index; local diagnostics
 report the truncation.
 
+### Profiler breadcrumb correlation
+
+The optional `events.breadcrumbs.profilerCorrelationCategories` field allows
+small local context counts in profiler snapshots:
+
+```json
+{
+  "telemetry": {
+    "events": {
+      "breadcrumbs": {
+        "supported": true,
+        "profilerCorrelationCategories": [
+          "companion.ai.tick",
+          "companion.lease.scan"
+        ]
+      }
+    }
+  }
+}
+```
+
+The runtime accepts at most 16 categories. Each category must be no longer than
+40 characters and must match the exact lowercase pattern `[a-z0-9_.-]+`.
+Duplicates are removed in first-seen order. Invalid entries and entries after
+the first 16 are excluded and reported by a bounded local diagnostic. The
+project remains valid when entries are excluded.
+
+At publication, the profiler keeps only non-zero counts from five one-minute
+buckets. A breadcrumb is counted only when its trimmed static category exactly
+matches an accepted descriptor category. The detail text, structured custom
+fields, and undeclared or dynamically generated categories never enter profiler
+context. Breadcrumb consent is required for counting and publication; clearing
+breadcrumb consent clears these counts without clearing performance snapshots.
+
 ## Category Fields
 
 Crash supports `supported`, `defaultEnabled`, `uncaughtExceptions`, `setupFailures`, `startFailures`, and `exceptionalWorldRemovals`.
 
-Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, and `automatic`.
+Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, `automatic`, and `profilerCorrelationCategories`.
 
 Performance supports `supported`, `defaultEnabled`, `sampleRate`, `thresholdMs`, and `details`.
 
