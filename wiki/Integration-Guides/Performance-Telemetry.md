@@ -11,37 +11,55 @@ Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/
 
 Performance telemetry records timing or numeric measurements for operations your plugin controls.
 
-## Local project profiler (Phase 1)
+## Local project profiler (Phase 2)
 
 The optional Spark monitor provides a separate local project view. It reads
 completed passive Spark `ASYNC` `EXECUTION` windows only. The global monitor,
 the project, and project performance consent must all be enabled.
 
 The view is available from `TelemetryProjectHandle.profiler()` and advertises
-`profiler-api-v1`. It publishes immutable summaries with class and method
-names, sampled timing, selected WorldThread share, fingerprints, and bounded
-representative paths. It does not upload profiler summaries or expose raw
-profiles, frame trees, player data, or server identity. Spark's own profile
-retention or upload settings remain separate.
+`profiler-api-v1`. It publishes bounded immutable in-memory summaries with class
+and method names, sampled timing, selected WorldThread share, fingerprints,
+rolling qualification, and bounded representative paths. Telemetry has no
+dedicated profiler evidence file and no structured Phase 2 profiler evidence
+queue or upload path. Ordinary monitor summaries and command output can be
+retained by the server log policy and can enter a manual current or previous
+log attachment under the normal report settings, review, redaction, and
+clipping controls. Raw Spark profiles and frame trees are not written to those
+logs or uploaded by Telemetry. Spark's own profile retention or upload settings
+remain separate.
 
 Paths use `SELF` for sampled self time in an owned method and `DOWNSTREAM` for
 work below the nearest owned method, with the first external method as context.
-Phase 1 emits only `OBSERVED`; `signals` belongs to Phase 2 `hot-path-v1`.
-The service keeps at most five paths per snapshot and ten snapshots per
-project, with 500 project-path entries globally. It accepts four listener
-workers per project and 32 globally. Attribution uses an exact plugin
-identifier, then the longest complete package prefix, with at most 32
-normalized prefixes per project. Each package-prefix value is limited to 512
-characters before normalization. Longer values are omitted and reported as
-truncated.
+`hot-path-v1` qualifies a path in a window at 20 ms and 2% selected WorldThread
+share. `OBSERVED` is the normal early state. `PROVISIONAL` requires one 100 ms
+and 20% appearance. `REPEATED` requires three qualifying appearances in the
+latest five actionable windows. An actionable empty window is retained as an
+empty `COMPLETE` snapshot so old candidates can age. The service keeps at most
+five paths per snapshot, ten snapshots per project, 500 snapshots globally,
+and 500 project-path entries globally. It accepts four listener workers per
+project and 32 globally. Attribution uses an exact plugin identifier, then the
+longest complete package prefix, with at most 32 normalized prefixes per
+project. Each package-prefix value is limited to 512 characters before
+normalization. Longer values are omitted and reported as truncated.
+
+Publication context can contain nullable `hytaleVersion`, nullable aggregate
+`playerCount`, nullable Spark public one-minute TPS/MSPT, non-zero counts for
+declared exact-match breadcrumb categories from five one-minute buckets, and the
+separate required logical `projectVersion` snapshot field. Breadcrumb counts
+require project enablement and breadcrumb consent.
 
 An older elected runtime returns an unavailable view with empty data and a
-closed subscription. Disabling performance consent clears the project's local
-history. Project-filtered operator commands are available as
-`/telemetry profiler top <project-id>` and
-`/telemetry profiler history <project-id>`; their replies are copied to the
+closed subscription. Disabling the project or performance consent clears the
+project's local history, signals, and context. Project-filtered operator
+commands are available as `/telemetry profiler top <project-id>`,
+`/telemetry profiler history <project-id>`, and
+`/telemetry profiler signals <project-id>`. The signals command shows at most
+five active candidates with severity, qualification, hits/5, median share,
+total sampled milliseconds, attribution, method tuples, and fingerprint. Their
+severity describes sampled impact, not causality. Replies are copied to the
 ordinary server log and may appear in a manual log attachment when the normal
-report controls allow it.
+report settings, review, redaction, and clipping controls allow it.
 
 ## Before This Page
 

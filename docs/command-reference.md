@@ -40,8 +40,10 @@ shown by local diagnostics is not added to uploaded envelopes.
 When enabled in `Settings/runtime.json`, the local Spark monitor reads completed
 passive Spark background windows and ranks Java self time from Hytale
 `WorldThread` threads. It does not read a profile started by a user. The output
-is local and bounded; see [Runtime Overrides](runtime-overrides.md) for the
-settings, compatibility gate, and safety limits.
+is bounded. Project snapshots and signals require the global monitor, the
+project, and project performance consent to be enabled. See [Runtime
+Overrides](runtime-overrides.md) for the settings, compatibility gate, and
+safety limits.
 
 ```text
 /telemetry profiler status
@@ -100,16 +102,19 @@ argument returns one usage line. If the project is unavailable, the command
 does not fall back to global paths. A project filter is also unavailable when
 the elected runtime does not advertise `profiler-api-v1`.
 
-The monitor keeps summaries, rolling signals, and history in memory. Phase 2
-does not queue, upload, or persist profiler evidence. Ordinary log summary lines
-can be included if a user submits a manual report with current or previous
-server-log attachments and the manual-report settings, project descriptor,
-review, redaction, and clipping controls allow them. The monitor does not write
-raw Spark profile data to the log or a profile file, and does not upload that
-raw data. These text commands use the root Telemetry permission and accept
-server console senders. Every line returned by `profiler status`, `profiler
-top`, `profiler history`, and `profiler signals` is also written at `INFO` to
-the ordinary server log with a `Spark profiler command output` prefix.
+The monitor keeps bounded summaries, rolling signals, history, and publication
+context in memory. It has no dedicated profiler evidence file and no structured
+Phase 2 profiler evidence queue or upload path. Ordinary summary and
+command-output text is
+written to the server log, which can retain it under the server log policy. A
+manual report can upload current or previous log text when the manual-report
+settings, project descriptor, review, redaction, and clipping controls allow
+it. The monitor does not write raw Spark profile or frame-tree data to the log
+or a profile file, and Telemetry does not upload that raw data. These text
+commands use the root Telemetry permission and accept server console senders.
+Every line returned by `profiler status`, `profiler top`, `profiler history`,
+and `profiler signals` is also written at `INFO` to the ordinary server log with
+a `Spark profiler command output` prefix.
 The same log copy applies to project-filtered replies.
 
 ## Consent

@@ -185,8 +185,9 @@ At publication, the profiler keeps only non-zero counts from five one-minute
 buckets. A breadcrumb is counted only when its trimmed static category exactly
 matches an accepted descriptor category. The detail text, structured custom
 fields, and undeclared or dynamically generated categories never enter profiler
-context. Breadcrumb consent is required for counting and publication; clearing
-breadcrumb consent clears these counts without clearing performance snapshots.
+context. Project enablement and breadcrumb consent are required for counting and
+publication; clearing breadcrumb consent clears these counts without clearing
+performance snapshots.
 
 ## Category Fields
 
@@ -196,10 +197,13 @@ Events support `supported`, `defaultEnabled`, and `details` for `errors` and `li
 
 Performance supports `supported`, `defaultEnabled`, `sampleRate`, `thresholdMs`, and `details`.
 
-The local project profiler requires `performance.supported: true`, current
-performance consent, and the server owner's global Spark monitor setting. This
-consent gate enables local summaries only; it does not grant profiler upload
-permission.
+The local project profiler requires `performance.supported: true`, an enabled
+project, current performance consent, and the server owner's global Spark
+monitor setting. These gates enable bounded in-memory summaries only. They do
+not create a dedicated profiler evidence file or structured profiler upload
+path; ordinary monitor and command-output text follows the server log policy
+and can enter manual current or previous log attachments under the normal
+report settings, review, redaction, and clipping controls.
 
 Usage supports `supported`, `defaultEnabled`, `allowedEvents`, and `details`.
 

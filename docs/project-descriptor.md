@@ -270,8 +270,11 @@ duplicates in descriptor order. Each package-prefix value is limited to 512
 characters before normalization. Extra or longer values remain valid for other
 Telemetry behavior but do not enter the profiler index; the local status
 reports the truncation.
-A profiler summary is local and bounded. It does not make the descriptor a
-profiler upload contract.
+A profiler summary is bounded and held in memory. The descriptor does not make
+it a profiler evidence file or structured upload contract. Ordinary monitor and
+command-output text follows the server log policy and can enter manual current
+or previous log attachments under the normal report settings, review,
+redaction, and clipping controls.
 
 ### Profiler breadcrumb correlation
 
@@ -304,8 +307,9 @@ At publication, the profiler keeps only non-zero counts from five one-minute
 buckets. A breadcrumb is counted only when its trimmed static category exactly
 matches an accepted descriptor category. The detail text, structured custom
 fields, and undeclared or dynamically generated categories never enter profiler
-context. Breadcrumb consent is required for counting and publication; clearing
-breadcrumb consent clears these counts without clearing performance snapshots.
+context. Project enablement and breadcrumb consent are required for counting and
+publication; clearing breadcrumb consent clears these counts without clearing
+performance snapshots.
 
 For an anchored contribution, the logical plugin identifier and logical semantic
 version come from the contribution builder. They are the project attribution in
@@ -347,9 +351,10 @@ Performance:
 - `details`
 
 The local project profiler uses the project's performance consent gate. It
-requires `performance.supported: true` and current performance consent, plus
-the server owner's global Spark monitor setting. It does not turn performance
-consent into profiler upload permission.
+requires `performance.supported: true`, an enabled project, current performance
+consent, and the server owner's global Spark monitor setting. These gates enable
+local profiler processing; they do not create a profiler evidence file or a
+structured upload permission.
 
 Usage:
 

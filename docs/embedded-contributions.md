@@ -252,12 +252,13 @@ Passive descriptor discovery uses the same physical-host values only to elect a
 single candidate. It never proves that the library code executed and never
 grants a richer write capability merely because its resource is present.
 
-## Local project profiler (Phase 1)
+## Local project profiler (Phase 2)
 
 An active contribution can expose its own local profiler view when its
-descriptor supports performance and the server owner enables performance
-consent. Passive descriptor discovery remains Stats-only; it does not activate
-the profiler or any other richer category.
+descriptor supports performance, the global Spark monitor is enabled, the
+logical project is enabled, and the server owner enables performance consent.
+Passive descriptor discovery remains Stats-only; it does not activate the
+profiler or any other richer category.
 
 Consumer code uses the elected project's normal handle:
 
@@ -281,18 +282,32 @@ boundary: server-side code with API access can request another registered
 project by ID. Consumer code controls any later handling of a snapshot.
 
 The monitor reads only completed passive Spark `ASYNC` `EXECUTION` windows. It
-publishes bounded local summaries with `SELF` or `DOWNSTREAM` attribution and
-Phase 1 qualification `OBSERVED`. It does not upload profiler summaries, raw
-profiles, frame trees, player data, or server identity. Spark's own profile
-retention and upload settings are separate. A project retains at most five
-paths per snapshot and ten snapshots; the runtime caps retained project-path
+publishes bounded in-memory summaries with `SELF` or `DOWNSTREAM` attribution
+and `hot-path-v1` qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`.
+An actionable empty window is retained so old candidates can age. It has no
+dedicated profiler evidence file and no structured Phase 2 profiler evidence
+queue or upload path. Ordinary summary and command-output text can be retained
+by the server log policy and can enter manual current or previous log
+attachments under the normal report settings, review, redaction, and clipping
+controls. Raw Spark profiles and frame trees are not written to logs or
+uploaded by Telemetry. Spark's own profile retention and upload settings are
+separate. A project retains at most five paths per snapshot and ten snapshots;
+the runtime caps retained snapshots at 500 globally and retained project-path
 entries at 500, listeners at four per project and 32 globally. Performance
-consent revocation clears that project's history and does not restore it when
-consent is enabled again. Attribution matches an exact logical plugin
-identifier, then the longest complete package prefix, with at most 32
-normalized prefixes per project. Each package-prefix value is limited to 512
-characters before normalization. Longer values are omitted and reported as
-truncated.
+consent or project disablement clears that project's history, signals, and
+context and does not restore them when the gates are enabled again.
+
+The project view can include nullable Hytale version, nullable aggregate player
+count, nullable Spark public one-minute TPS/MSPT, a separate logical project
+version field, and approved breadcrumb category counts from five one-minute
+buckets. Project enablement and breadcrumb consent are required for those
+counts. `/telemetry profiler signals <project-id>` shows at most five active
+candidates with severity, qualification, hits/5, median share, total sampled
+milliseconds, attribution, method tuples, and fingerprint. Attribution matches
+an exact logical plugin identifier, then the longest complete package prefix,
+with at most 32 normalized prefixes per project. Each package-prefix value is
+limited to 512 characters before normalization. Longer values are omitted and
+reported as truncated.
 
 ## Heartbeats and live changes
 

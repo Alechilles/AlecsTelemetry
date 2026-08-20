@@ -63,40 +63,47 @@ Runtime settings and consent state also live under the same canonical root.
 The optional Spark hot-path monitor is a separate server-owner tool. It is off
 by default. When enabled, it reads completed passive Spark `ASYNC` `EXECUTION`
 windows and ranks Java self time from Hytale thread names containing
-`WorldThread`. With project performance consent, `hot-path-v1` qualifies each
-project over the latest five actionable windows. A path qualifies at 20 ms and
-2% selected WorldThread share. `PROVISIONAL` requires one 100 ms and 20%
+`WorldThread`. When the global monitor is enabled, the project is enabled, and
+project performance consent is enabled, `hot-path-v1` qualifies each project
+over the latest five actionable windows. A path qualifies at 20 ms and 2%
+selected WorldThread share. `PROVISIONAL` requires one 100 ms and 20%
 appearance. `REPEATED` requires three qualifying appearances in those five
 windows. Empty actionable windows are retained so old candidates can expire.
 The service returns at most five active candidates.
 
-The monitor does not queue, upload, or persist Phase 2 profiler evidence.
-Ordinary log summary and command-output lines can be included if a user submits
-a manual report with current or previous server-log attachments and the
-manual-report settings, project descriptor, review, redaction, and clipping
-controls allow them. The monitor does not write raw Spark profile data to the
-log or a profile file, and does not upload that raw data. It computes the loaded
-Spark JAR's SHA-256 in memory for the exact tested-artifact gate and does not
-retain that hash. See [Runtime
+The monitor has no dedicated profiler evidence file and no structured Phase 2
+profiler evidence queue or upload path. It keeps bounded summaries, signals, and
+context in memory. Ordinary log summary and command-output lines can be retained
+under the server log policy. A manual report with current or previous
+server-log attachments can upload that text when the manual-report settings,
+project descriptor, review, redaction, and clipping controls allow it. The
+monitor does not write raw Spark profile or frame-tree data to the log or a
+profile file, and Telemetry does not upload that raw data. It computes the
+loaded Spark JAR's SHA-256 in memory for the exact tested-artifact gate and does
+not retain that hash. See [Runtime
 Overrides](/mod/alecs-telemetry/integration-guides/runtime-overrides) for
 settings, bounds, and fail-closed behavior.
 
-With the monitor and project performance consent enabled, Telemetry creates
-bounded local summaries of completed passive WorldThread windows. The public
+With the global monitor enabled, the project enabled, and project performance
+consent enabled, Telemetry creates bounded in-memory summaries of completed
+passive WorldThread windows. The public
 local view and subscription can expose one project's immutable attributed
 summary, including owned and downstream Java class/method names, sampled
 timing, fingerprints, bounded representative paths, and rolling qualification.
-Publication context can include nullable Hytale and project versions, aggregate
-player count, nullable Spark public one-minute TPS/MSPT, and non-zero counts for
-declared breadcrumb categories from five one-minute buckets.
+Publication context can include nullable `hytaleVersion`, nullable aggregate
+`playerCount`, nullable Spark public one-minute TPS/MSPT, and non-zero counts
+for declared breadcrumb categories from five one-minute buckets. The snapshot
+also contains the separate required logical `projectVersion` field.
 
 The local API is not an authorization boundary. Server-side code with API
 access can request another registered project by ID. Consumer integrations
 control later handling of values they receive; this guide does not promise
 that consumer code cannot log, store, or send a snapshot elsewhere.
 
-Phase 2 does not upload or persist profiler summaries, signals, context, raw
-Spark profiles, frame trees, player identifiers, or server identifiers. Spark
+Phase 2 has no dedicated profiler evidence file and no structured profiler
+evidence queue or upload path in Telemetry. It retains only bounded immutable
+summaries, signals, and context in memory. It does not retain raw Spark
+profiles, frame trees, player identifiers, or server identifiers. Spark
 protobufs, reflection objects, source maps, and raw profile trees are transient.
 Spark may retain or upload its own profiles under Spark's separate settings.
 Disabling project performance consent makes the local project history,
@@ -104,10 +111,11 @@ qualification, signals, and context unavailable and clears them; the global
 monitor can continue running. Re-enabling performance consent admits only later
 completed actionable windows.
 
-Breadcrumb consent is independent. Counting and publication require current
-breadcrumb consent. Disabling breadcrumb consent clears only the five-minute
-approved-category buckets. Future performance snapshots remain available with
-an empty breadcrumb count map until new accepted breadcrumbs arrive.
+Breadcrumb consent is independent. Counting and publication require the project
+to be enabled and breadcrumb consent to be enabled. Disabling breadcrumb
+consent clears only the five-minute approved-category buckets. Future
+performance snapshots remain available with an empty breadcrumb count map until
+new accepted breadcrumbs arrive.
 
 Profiler breadcrumb context contains only exact static category names and
 counts. It never contains breadcrumb detail text or structured custom fields.
@@ -122,9 +130,10 @@ at most 32 normalized package prefixes per project. Each package-prefix value
 is limited to 512 characters before normalization. Longer values are omitted
 and reported as truncated. Older elected providers return an unavailable view
 without a mixed-version linkage error. Project command replies from `status`,
-`top`, `history`, and `signals` are copied to ordinary logs, and a manual
-server-log attachment can contain those lines when the existing report settings
-and review controls allow it.
+`top`, `history`, and `signals` are copied to ordinary logs, which can retain
+those lines under the server log policy. A manual server-log attachment can
+upload those lines when the existing report settings, review, redaction, and
+clipping controls allow it.
 
 ## Privacy Rules For Mod Authors
 

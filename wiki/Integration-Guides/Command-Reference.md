@@ -26,6 +26,8 @@ Use these to inspect runtime enablement, active coordinator ownership, registere
 When the opt-in `sparkProfiler` setting is enabled, the monitor reads completed
 passive Spark background windows and ranks Java self time from Hytale
 `WorldThread` threads. It does not read a profile started by a user.
+Project snapshots and signals require the global monitor, the project, and
+project performance consent to be enabled.
 
 ```text
 /telemetry profiler status
@@ -76,18 +78,19 @@ project does not fall back to global paths. An older elected provider returns
 an unavailable project view without a linkage error.
 
 These text commands use the root Telemetry permission and accept server-console
-senders. The monitor keeps bounded summaries, rolling signals, and history in
-memory. Phase 2 does not queue, upload, or persist profiler evidence. A
-user-submitted manual report can include ordinary log summary lines through
-current or previous log attachments when the manual-report settings, project
-descriptor, review, redaction, and clipping controls allow them. Raw Spark
-profile data is not written by the monitor to the log or a profile file and is
-not uploaded by it. Every line returned by `profiler status`, `profiler top`,
-`profiler history`, and `profiler signals` is also written at `INFO` to the
-ordinary server log with a `Spark profiler command output` prefix.
-Project-filtered replies use the same log copy. A manual log attachment can
-include these lines when the normal report settings and review controls allow
-it.
+senders. The monitor keeps bounded summaries, rolling signals, history, and
+publication context in memory. It has no dedicated profiler evidence file and
+no structured Phase 2 profiler evidence queue or upload path. A user-submitted
+manual report can include ordinary log summary lines through current or previous
+log attachments
+when the manual-report settings, project descriptor, review, redaction, and
+clipping controls allow them. The server log policy can retain the summary and
+command-output text. Raw Spark profile or frame-tree data is not written by the
+monitor to the log or a profile file, and Telemetry does not upload that raw
+data. Every line returned by `profiler status`, `profiler top`, `profiler
+history`, and `profiler signals` is also written at `INFO` to the ordinary
+server log with a `Spark profiler command output` prefix. Project-filtered
+replies use the same log copy.
 
 ## Consent
 

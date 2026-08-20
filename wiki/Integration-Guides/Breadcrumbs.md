@@ -81,10 +81,14 @@ an accepted breadcrumb only when its trimmed static category exactly matches a
 declared category. Dynamic or undeclared categories are ignored. Breadcrumb
 detail text and structured custom fields never enter profiler context.
 
-Breadcrumb consent controls these counts independently from performance
-consent. Clearing breadcrumb consent clears the five-minute buckets but does
-not clear performance snapshots or signals. Phase 2 profiler context is local
-only and is not uploaded or persisted.
+Project enablement and breadcrumb consent control these counts independently
+from performance consent. Clearing breadcrumb consent clears the five-minute
+buckets but does not clear performance snapshots or signals. Phase 2 has no
+dedicated profiler evidence file or structured profiler evidence upload path;
+the bounded context counts remain in memory. Ordinary monitor summaries and
+command-output text can be retained by the server log policy and can enter a
+manual log attachment under the normal report controls. Raw Spark profile and
+frame-tree data are not written to logs or uploaded by Telemetry.
 
 ## Good Breadcrumbs
 

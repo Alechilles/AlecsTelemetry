@@ -160,26 +160,37 @@ the ranking. Telemetry keeps bounded summaries and history in memory and logs up
 to `maxSummaryEntries` hot paths when it first retains and logs an actionable
 window key.
 
-The monitor does not directly queue or upload profiler data. Ordinary log
-summary lines can be included if a user submits a manual report with current or
-previous server-log attachments and the manual-report settings, project
-descriptor, review, redaction, and clipping controls allow them. The monitor
-does not write raw Spark profile data to the log or a profile file, and does not
-upload that raw data. Spark may retain its own profiler data under its settings.
+The monitor has no dedicated profiler evidence file and no structured Phase 2
+profiler evidence queue or upload path. It keeps bounded summaries, signals, and
+context in memory. Ordinary log summary lines can be retained under the server
+log policy. A manual report can upload current or previous server-log text when
+the manual-report settings, project descriptor, review, redaction, and clipping
+controls allow it. The monitor does not write raw Spark profile or frame-tree
+data to the log or a profile file, and Telemetry does not upload that raw data.
+Spark may retain its own profiler data under its settings.
 
 Every line returned by `/telemetry profiler status`, `/telemetry profiler top`,
-and `/telemetry profiler history` is also written at `INFO` to the ordinary
-server log with a `Spark profiler command output` prefix. This includes status,
-ranked hot paths, and retained-window summaries shown by the commands. A logging
-failure does not prevent the operator reply.
+`/telemetry profiler history`, and `/telemetry profiler signals` is also written
+at `INFO` to the ordinary server log with a `Spark profiler command output`
+prefix. This includes status, ranked hot paths, retained-window summaries, and
+rolling signal lines shown by the commands. A logging failure does not prevent
+the operator reply.
 
-### Project profiler views (Phase 1)
+### Project profiler views (Phase 2)
 
 The local project view is available only when the global Spark monitor, the
-project, and project performance consent are enabled. It exposes immutable
-bounded class/method/timing/fingerprint/path summaries. It does not upload
-profiler data or expose raw Spark profiles, frame trees, player data, or server
-identity. Spark's own retention and upload settings are separate.
+project, and project performance consent are enabled. It exposes bounded
+immutable class/method/timing/fingerprint/path summaries and `hot-path-v1`
+qualification. An actionable empty window is retained as an empty `COMPLETE`
+snapshot so old candidates can age. It does not expose raw Spark profiles,
+frame trees, player identifiers, or server identifiers. Spark's own retention and upload
+settings are separate.
+
+Telemetry has no dedicated profiler evidence file and no structured Phase 2
+profiler evidence queue or upload path. Bounded summaries, signals, and context
+remain in memory. Ordinary log summaries and command output can be retained by
+the server log policy and can enter manual log attachments under the normal
+report controls.
 
 Consumer code uses `TelemetryProjectHandle.profiler()`. The capability is
 `profiler-api-v1`; a legacy handle or older elected provider returns an
@@ -189,21 +200,26 @@ registered project by ID, and consumer code controls later handling of a
 snapshot.
 
 The view retains at most five paths per snapshot, ten snapshots per project,
-and 500 project-path entries globally. It accepts at most four listener workers
-per project and 32 globally. Project commands are:
+500 snapshots globally, and 500 project-path entries globally. It accepts at
+most four listener workers per project and 32 globally. Project commands are:
 
 ```text
 /telemetry profiler top <project-id>
 /telemetry profiler history <project-id>
+/telemetry profiler signals <project-id>
 ```
 
 `top` shows at most five paths. `history` shows the newest ten snapshots.
-Paths use `SELF` or `DOWNSTREAM` and Phase 1 qualification `OBSERVED`.
-`signals` belongs to Phase 2 `hot-path-v1`. Project-filtered replies are copied
-to the ordinary log, and a manual log attachment can include those lines when
-the normal report settings and review controls allow it. Disabling performance
-consent clears the project's retained view; re-enabling consent does not
-restore old summaries.
+Paths use `SELF` or `DOWNSTREAM` and `OBSERVED`, `PROVISIONAL`, or `REPEATED`
+qualification under `hot-path-v1`. `signals` evaluates the latest five
+actionable snapshots and shows at most five active candidates with severity,
+qualification, hits/5, median share, total sampled milliseconds, attribution,
+method tuples, and fingerprint. A candidate can remain visible after it is
+absent from the newest window until it expires. Project-filtered replies are
+copied to the ordinary log, and a manual log attachment can include those lines
+when the normal report settings, review, redaction, and clipping controls allow
+it. Disabling the project or performance consent clears the project's retained
+view; re-enabling consent does not restore old summaries.
 
 Profiler attribution matches an exact plugin identifier, then the longest
 complete package prefix. The profiler index accepts at most 32 normalized

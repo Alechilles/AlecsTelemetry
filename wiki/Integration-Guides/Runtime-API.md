@@ -68,21 +68,28 @@ listener has one pending value, so a slow listener can receive the newest value
 after intermediate callbacks are coalesced; use `history()` for complete
 retention.
 
-Publication requires the global Spark monitor and the project's performance
-consent. The view exposes bounded class/method/timing/fingerprint/path data,
-not raw Spark profiles or frame trees. It does not upload or persist profiler
-data or expose player identifiers or server identifiers. The API is not an
-authorization boundary and server-side consumer code with API access can
-request another registered project by ID. Consumer code, including a
-third-party consumer, controls later handling of snapshots.
+Publication requires the global Spark monitor, the project, and the project's
+performance consent to be enabled. The view exposes bounded
+class/method/timing/fingerprint/path data, not raw Spark profiles or frame
+trees. Telemetry has no dedicated profiler evidence file and no structured
+Phase 2 profiler evidence queue or upload path. Monitor summaries and command
+output can still be retained by ordinary server logging and can enter a manual
+current or previous log attachment under the normal report settings, review,
+redaction, and clipping controls. The bounded snapshot, signal, and context
+values remain in memory. Raw Spark profile and frame-tree data are not written
+to ordinary logs or uploaded by Telemetry. The API is not an authorization
+boundary. Server-side consumer code with API access can request another
+registered project by ID. Consumer code, including a third-party consumer,
+controls later handling of snapshots.
 
 `TelemetryProfilerContext` captures publication-time `observedAtMillis`,
 `hytaleVersion` (nullable), aggregate `playerCount` (nullable), Spark public
 one-minute `tps` and `mspt` (nullable), and non-zero counts for approved
-breadcrumb categories from five one-minute buckets. The snapshot also contains
-the logical `projectVersion`. Missing sources remain unknown. Breadcrumb detail
-text and custom fields do not enter context. The profiler worker does not query
-Hytale World or ECS state.
+breadcrumb categories from five one-minute buckets. The snapshot separately
+contains the required logical `projectVersion` field. Missing context sources
+remain unknown. Breadcrumb counts require project enablement and breadcrumb
+consent. Breadcrumb detail text and custom fields do not enter context. The
+profiler worker does not query Hytale World or ECS state.
 
 The service keeps at most five paths per snapshot, ten snapshots per project,
 500 snapshots globally, and 500 project-path entries globally. It accepts at
@@ -91,8 +98,8 @@ receive the newest pending snapshot, so history remains the source of truth.
 Attribution matches an exact plugin identifier, then the longest complete
 package prefix, with at most 32 normalized prefixes per project. Each
 package-prefix value is limited to 512 characters before normalization. Longer
-values are omitted and reported as truncated. Disabling performance consent
-clears the project's history, signals, and context.
+values are omitted and reported as truncated. Disabling the project or
+performance consent clears the project's history, signals, and context.
 
 The runtime ignores events that are disabled by project consent, descriptor defaults, runtime overrides, sampling, or descriptor allowlists.
 

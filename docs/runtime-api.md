@@ -53,10 +53,15 @@ defaults, runtime overrides, sampling, or descriptor allowlists.
 ## Local project profiler API (Phase 2)
 
 The profiler API reads completed passive Spark `ASYNC` `EXECUTION` windows. It
-does not read a profile started by a user. The global Spark monitor and the
-project performance consent must both be enabled. The result is a local,
-bounded summary. It is not a raw profile and it is not uploaded or persisted by
-Telemetry.
+does not read a profile started by a user. Publication requires the global Spark
+monitor, the project, and the project performance consent to be enabled. The
+result is a bounded in-memory summary, not a raw profile. Telemetry has no
+dedicated profiler evidence file and no structured Phase 2 profiler evidence
+queue or upload path. Monitor summaries and command-output text can still be
+retained by ordinary server logging and can enter a manually shared current or
+previous log attachment under the normal report settings, review, redaction,
+and clipping controls. The bounded snapshot, signal, and context values remain
+in memory.
 
 Use the view from a project handle:
 
@@ -79,9 +84,9 @@ provider, it returns an unavailable view: status `UNAVAILABLE`, empty
 `latest()` and `history()`, and a closed subscription. The consumer can keep
 running without a linkage error.
 
-Each snapshot is for one project. It contains the project ID and logical
-project version, Spark window key, publication time, selected WorldThread
-self-time, qualification rule set, immutable publication context, and at most
+Each snapshot is for one project. It contains the project ID and required
+logical project version, Spark window key, publication time, selected
+WorldThread self-time, qualification rule set, immutable publication context, and at most
 five path entries. A path contains an attribution, owned
 class/method/descriptor, optional first external class/method/descriptor,
 sampled milliseconds, selected WorldThread share, a qualification, a
@@ -134,6 +139,10 @@ binary compatibility and sets `hytaleVersion` to unknown. A missing source is
 unknown. The profiler worker does not query Hytale World, Universe, Store,
 PlayerRef, components, or ECS state.
 
+Breadcrumb counts are populated only while the project is enabled and
+breadcrumb consent is enabled. Clearing breadcrumb consent clears only those
+five-minute counts; it does not clear performance snapshots or signals.
+
 The project scope is an attribution scope, not an authorization boundary. The
 local runtime API is not an authorization boundary: server-side code with API
 access can request another registered project by ID. Consumer integrations
@@ -159,15 +168,17 @@ globally, and 500 retained project-path entries globally. It accepts at most
 four listener workers per project and 32 across the runtime. Each listener has
 one pending snapshot; a slow listener can receive the newest pending value, so
 listeners must not be used as the history store. Close a subscription when it
-is no longer needed. A project view is cleared when performance consent is
-disabled, and only later completed actionable windows can repopulate it.
+is no longer needed. A project view is cleared when the project is disabled or
+performance consent is disabled, and only later completed actionable windows
+with all gates enabled can repopulate it.
 
 The view never exposes Spark protobufs, reflection objects, source maps, raw
 frame trees, player identifiers, or server identifiers. Breadcrumb context
 contains only approved static category names and five-minute counts. It does
-not contain breadcrumb detail text or custom fields. Spark's own retention or
-upload settings remain separate. A consumer integration controls how it
-handles a snapshot after it receives it.
+not contain breadcrumb detail text or custom fields. Raw Spark profile and
+frame-tree data are not written to ordinary logs or uploaded by Telemetry.
+Spark's own retention or upload settings remain separate. A consumer
+integration controls how it handles a snapshot after it receives it.
 
 ## Event Context
 

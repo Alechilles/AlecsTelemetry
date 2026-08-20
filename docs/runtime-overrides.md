@@ -161,39 +161,47 @@ activity by the Spark background-profiler interval.
 
 The ranking uses Java self time from Hytale thread names containing
 `WorldThread`. Native frames and Java work from other thread names do not enter
-the ranking. Telemetry keeps only bounded immutable summaries and history in
-memory, and writes up to `maxSummaryEntries` hot paths when it first retains and
-logs an actionable window key in the ordinary server log. The monitor does not
-directly queue or upload profiler data. Its ordinary log summary lines can be
-included if a user submits
-a manual report with current or previous server-log attachments and the
-manual-report settings, project descriptor, review, redaction, and clipping
-controls allow them. The monitor does not write raw Spark profile data to the
-log or a profile file, and does not upload that raw data. Spark may retain its
-own profiler data under its own settings.
+the ranking. Telemetry keeps bounded immutable summaries and history in memory,
+and writes up to `maxSummaryEntries` hot paths when it first retains and logs an
+actionable window key in the ordinary server log. There is no dedicated
+profiler evidence file and no structured Phase 2 profiler evidence queue or
+upload path. The server logging policy can retain summary text. That text can
+be included in a manual report with current or previous server-log attachments
+when the manual-report settings, project descriptor, review, redaction, and
+clipping controls allow it. The monitor does not write raw Spark profile or
+frame-tree data to the log or a profile file, and Telemetry does not upload that
+raw data. Spark may retain its own profiler data under its own settings.
 
 Every line returned by `/telemetry profiler status`, `/telemetry profiler top`,
-and `/telemetry profiler history` is also written at `INFO` to the ordinary
-server log with a `Spark profiler command output` prefix. This includes current
-status values, ranked hot paths, and retained-window summary lines shown by the
-commands. Command logging failure does not prevent the reply from reaching the
-operator.
+`/telemetry profiler history`, and `/telemetry profiler signals` is also written
+at `INFO` to the ordinary server log with a `Spark profiler command output`
+prefix. This includes current status values, ranked hot paths, retained-window
+summary lines, and rolling signal lines shown by the commands. Command logging
+failure does not prevent the reply from reaching the operator.
 
 ### Project profiler views
 
-Phase 1 also publishes a local project view after a completed passive window.
+Phase 2 also publishes a local project view after a completed passive window.
 Publication requires all three gates:
 
 - the global `sparkProfiler.enabled` setting is `true`;
 - the project is enabled; and
 - the project's performance consent is enabled.
 
-The view contains immutable summaries, not raw Spark data. It can expose owned
-Java class and method names, downstream Java method names, sampled timing,
-WorldThread share, fingerprints, and bounded representative paths. It never
-exposes Spark protobufs, reflection objects, raw frame trees, player data, or
-server identity. Spark can retain or upload its own profiles under Spark's
-separate settings.
+The view contains bounded immutable summaries, not raw Spark data. It applies
+`hot-path-v1` over the latest five actionable windows. An actionable empty
+window is retained as an empty `COMPLETE` snapshot so old candidates can age.
+It can expose owned Java class and method names, downstream Java method names,
+sampled timing, WorldThread share, rolling qualification, fingerprints, and
+bounded representative paths. It never exposes Spark protobufs, reflection
+objects, raw frame trees, player identifiers, or server identifiers. Spark can retain or
+upload its own profiles under Spark's separate settings.
+
+The view has no dedicated profiler evidence file or structured Phase 2 profiler
+evidence queue or upload path. Bounded summaries, signals, and context remain
+in memory. Ordinary log summaries and command output can be retained by the
+server log policy and can enter manual log attachments under the normal report
+controls.
 
 Consumer code reads the view with `TelemetryProjectHandle.profiler()` and can
 subscribe to later snapshots. The capability is `profiler-api-v1`. A legacy
@@ -204,27 +212,33 @@ registered project by ID, and consumer integrations control later handling of a
 snapshot.
 
 The local service retains at most five paths per snapshot, ten snapshots per
-project, and 500 retained project-path entries globally. It accepts at most
-four listener workers per project and 32 globally. A listener has one pending
-snapshot and receives the newest pending value when it is slow. A project view
-is cleared when performance consent is disabled; re-enabling consent does not
-restore old summaries.
+project, 500 snapshots globally, and 500 retained project-path entries globally.
+It accepts at most four listener workers per project and 32 globally. A listener
+has one pending snapshot and receives the newest pending value when it is slow.
+A project view is cleared when the project or performance consent is disabled;
+re-enabling the gates does not restore old summaries.
 
 Project commands are optional filters on the existing commands:
 
 ```text
 /telemetry profiler top <project-id>
 /telemetry profiler history <project-id>
+/telemetry profiler signals <project-id>
 ```
 
 `top` shows at most five paths from the latest project snapshot. `history`
 shows the newest ten snapshots. Path lines include `SELF` or `DOWNSTREAM`,
 sampled milliseconds, selected WorldThread share, the owned method, an optional
-first external method, and a 32-character fingerprint. Phase 1 emits only
-`OBSERVED`; `signals` belongs to the later Phase 2 `hot-path-v1` work. Every
-project-filtered reply also copies to the ordinary server log. A manually
-attached server log can contain those lines when the normal manual-report
-settings and review controls allow the attachment.
+first external method, qualification, and a 32-character fingerprint. The
+rolling qualification is `OBSERVED`, `PROVISIONAL`, or `REPEATED` under
+`hot-path-v1`. `signals` evaluates the latest five actionable snapshots and
+shows at most five active candidates with severity, qualification, hits/5,
+median share, total sampled milliseconds, attribution, method tuples, and
+fingerprint. A candidate can remain visible after it is absent from the newest
+window until it expires. Every project-filtered reply also copies to the
+ordinary server log. A manually attached server log can contain those lines
+when the normal manual-report settings, review, redaction, and clipping
+controls allow the attachment.
 
 Profiler attribution matches exact plugin identifiers first, then the longest
 complete package prefix. The profiler index accepts at most 32 normalized
