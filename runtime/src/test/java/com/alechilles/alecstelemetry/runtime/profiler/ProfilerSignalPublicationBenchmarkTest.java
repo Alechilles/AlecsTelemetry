@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -27,10 +28,11 @@ class ProfilerSignalPublicationBenchmarkTest {
     private static final int PROJECT_COUNT = 100;
     private static final int SNAPSHOTS_PER_PROJECT = 5;
     private static final int PATH_OCCURRENCES_PER_SNAPSHOT = 5;
+    private static final int PATH_RETAINING_PROJECT_COUNT = 20;
+    private static final int MAX_SIGNAL_PROJECT_COUNT = 9;
     private static final int BREADCRUMB_CATEGORIES_PER_PROJECT = 16;
     private static final int WARM_UP_COUNT = 50;
     private static final int MEASURED_COUNT = 200;
-    private static final int HIGH_WORK_PROJECT_COUNT = 10;
     private static final double P95_LIMIT_MILLIS = 25.0d;
 
     private static final List<String> CATEGORIES = IntStream.range(
@@ -78,18 +80,31 @@ class ProfilerSignalPublicationBenchmarkTest {
             for (SparkProfileReadResult fixtureResult : fixtureResults) {
                 service.publish(fixtureResult);
             }
+            assertFeasibleWorkload(service, registrations);
 
-            for (int iteration = 0; iteration < WARM_UP_COUNT; iteration++) {
-                service.publish(fixtureResults.get(iteration % fixtureResults.size()));
+            List<SparkProfileReadResult> warmupResults = IntStream.range(
+                            0,
+                            WARM_UP_COUNT
+                    )
+                    .mapToObj(iteration -> result(SNAPSHOTS_PER_PROJECT + iteration + 1))
+                    .toList();
+            List<SparkProfileReadResult> measuredResults = IntStream.range(
+                            0,
+                            MEASURED_COUNT
+                    )
+                    .mapToObj(iteration -> result(
+                            SNAPSHOTS_PER_PROJECT + WARM_UP_COUNT + iteration + 1
+                    ))
+                    .toList();
+
+            for (SparkProfileReadResult warmupResult : warmupResults) {
+                service.publish(warmupResult);
             }
 
             long[] durationsNanos = new long[MEASURED_COUNT];
             for (int iteration = 0; iteration < MEASURED_COUNT; iteration++) {
-                SparkProfileReadResult fixtureResult = fixtureResults.get(
-                        iteration % fixtureResults.size()
-                );
                 long startedAt = System.nanoTime();
-                service.publish(fixtureResult);
+                service.publish(measuredResults.get(iteration));
                 durationsNanos[iteration] = Math.max(0L, System.nanoTime() - startedAt);
             }
 
@@ -108,6 +123,7 @@ class ProfilerSignalPublicationBenchmarkTest {
                     retainedPathCount <= TelemetryProjectProfilerService.MAX_RETAINED_PATH_ENTRIES,
                     "retained path bound exceeded: " + retainedPathCount
             );
+            assertFeasibleWorkload(service, registrations);
             assertTrue(
                     registrations.stream().allMatch(registration ->
                             service.view(registration.projectId()).latest().isPresent()),
@@ -156,13 +172,15 @@ class ProfilerSignalPublicationBenchmarkTest {
 
     private static SparkProfileReadResult result(int windowKey) {
         List<SparkProfileWindow.Frame> frames = new ArrayList<>(
-                PROJECT_COUNT * PATH_OCCURRENCES_PER_SNAPSHOT
+                PATH_RETAINING_PROJECT_COUNT * PATH_OCCURRENCES_PER_SNAPSHOT
         );
-        for (int projectIndex = 0; projectIndex < PROJECT_COUNT; projectIndex++) {
+        for (int projectIndex = 0;
+             projectIndex < PATH_RETAINING_PROJECT_COUNT;
+             projectIndex++) {
             String projectId = projectId(projectIndex);
             for (int pathIndex = 0; pathIndex < PATH_OCCURRENCES_PER_SNAPSHOT; pathIndex++) {
-                double selfMilliseconds = projectIndex < HIGH_WORK_PROJECT_COUNT && pathIndex == 0
-                        ? 1_000.0d
+                double selfMilliseconds = projectIndex < MAX_SIGNAL_PROJECT_COUNT
+                        ? 100.0d
                         : 1.0d;
                 frames.add(new SparkProfileWindow.Frame(
                         -1,
@@ -193,6 +211,90 @@ class ProfilerSignalPublicationBenchmarkTest {
                 List.of()
         );
         return SparkProfileReadResult.complete(snapshot, window);
+    }
+
+    private static void assertFeasibleWorkload(
+            TelemetryProjectProfilerService service,
+            List<TelemetryProjectRegistration> registrations) {
+        int retainedSnapshotCount = registrations.stream()
+                .mapToInt(registration -> service.view(registration.projectId()).history().size())
+                .sum();
+        assertEquals(
+                PROJECT_COUNT * SNAPSHOTS_PER_PROJECT,
+                retainedSnapshotCount,
+                "all eligible projects must retain five snapshots"
+        );
+        assertTrue(
+                registrations.stream().allMatch(registration ->
+                        service.view(registration.projectId()).history().size()
+                                == SNAPSHOTS_PER_PROJECT),
+                "every project must retain exactly five snapshots"
+        );
+
+        int retainedPathCount = registrations.stream()
+                .mapToInt(registration -> service.view(registration.projectId())
+                        .history()
+                        .stream()
+                        .mapToInt(snapshot -> snapshot.paths().size())
+                        .sum())
+                .sum();
+        assertEquals(
+                PATH_RETAINING_PROJECT_COUNT
+                        * SNAPSHOTS_PER_PROJECT
+                        * PATH_OCCURRENCES_PER_SNAPSHOT,
+                retainedPathCount,
+                "feasible workload must retain exactly 500 paths"
+        );
+
+        for (int projectIndex = 0; projectIndex < MAX_SIGNAL_PROJECT_COUNT; projectIndex++) {
+            String projectId = projectId(projectIndex);
+            assertEquals(
+                    SNAPSHOTS_PER_PROJECT * PATH_OCCURRENCES_PER_SNAPSHOT,
+                    pathCount(service, projectId),
+                    "maximum-signal project must retain five paths in each window: " + projectId
+            );
+            assertEquals(
+                    PATH_OCCURRENCES_PER_SNAPSHOT,
+                    new ProfilerSignalEngine().signals(service.view(projectId).history()).size(),
+                    "maximum-signal project must return five active signals: " + projectId
+            );
+        }
+        for (int projectIndex = MAX_SIGNAL_PROJECT_COUNT;
+             projectIndex < PATH_RETAINING_PROJECT_COUNT;
+             projectIndex++) {
+            String projectId = projectId(projectIndex);
+            assertEquals(
+                    SNAPSHOTS_PER_PROJECT * PATH_OCCURRENCES_PER_SNAPSHOT,
+                    pathCount(service, projectId),
+                    "retained-only project must retain five paths in each window: " + projectId
+            );
+            assertEquals(
+                    0,
+                    new ProfilerSignalEngine().signals(service.view(projectId).history()).size(),
+                    "retained-only project must return no active signals: " + projectId
+            );
+        }
+        for (int projectIndex = PATH_RETAINING_PROJECT_COUNT;
+             projectIndex < PROJECT_COUNT;
+             projectIndex++) {
+            String projectId = projectId(projectIndex);
+            assertEquals(
+                    0,
+                    pathCount(service, projectId),
+                    "empty marker project must retain no paths: " + projectId
+            );
+            assertTrue(
+                    service.view(projectId).history().stream()
+                            .allMatch(snapshot -> snapshot.paths().isEmpty()),
+                    "empty marker project must retain empty snapshots: " + projectId
+            );
+        }
+    }
+
+    private static int pathCount(TelemetryProjectProfilerService service, String projectId) {
+        return service.view(projectId).history().stream()
+                .mapToInt(snapshot -> snapshot.paths().size())
+                .sum();
     }
 
     private static List<TelemetryProjectRegistration> registrations() {
