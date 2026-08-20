@@ -18,7 +18,10 @@ import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkPublicMetricsAdapter;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBreadcrumbCounter;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerContextProvider;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DynamicTest;
@@ -46,11 +49,13 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryRuntimeProviderSparkOwnershipTest {
     private static final AtomicInteger ELIGIBLE_FIXTURE_SEQUENCE = new AtomicInteger();
+    private static final String PROFILER_BREADCRUMB_CATEGORY = "companion.ai.tick";
 
     @TempDir
     Path tempDir;
@@ -243,6 +248,73 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
     }
 
     @Test
+    void acceptedBreadcrumbsAreCountedOnceAndConsentClearsOnlyBreadcrumbContext() throws Exception {
+        ProviderFixture fixture = fixtureWithBreadcrumbProject("mod-a");
+        try {
+            fixture.handle.recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "local");
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 1),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+
+            fixture.publishAndAwait(1);
+            TelemetryProfilerView view = fixture.handle.api().findProject("mod-a").profiler();
+            assertFalse(view.history().isEmpty());
+            assertNull(view.latest().orElseThrow().context().tps());
+            assertNull(view.latest().orElseThrow().context().mspt());
+
+            assertTrue(activeBridge().recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "bridge"));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 2),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+            assertTrue(activeBridge().recordBreadcrumb(
+                    "mod-a",
+                    PROFILER_BREADCRUMB_CATEGORY,
+                    "bridge-context",
+                    Map.of("source", "test")
+            ));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 3),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+            assertTrue(activeBridge().recordBreadcrumb("mod-a", "undeclared.category", "ignored"));
+            assertFalse(activeBridge().recordBreadcrumb("missing", PROFILER_BREADCRUMB_CATEGORY, "rejected"));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 3),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+
+            assertTrue(activeBridge().setBreadcrumbsEnabled("mod-a", false));
+            assertEquals(Map.of(), fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts());
+            assertFalse(view.history().isEmpty());
+            assertTrue(activeBridge().recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "disabled"));
+            assertEquals(Map.of(), fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts());
+
+            assertTrue(activeBridge().setBreadcrumbsEnabled("mod-a", true));
+            assertEquals(Map.of(), fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts());
+            assertTrue(activeBridge().recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "re-enabled"));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 1),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+
+            assertTrue(activeBridge().setPerformanceEnabled("mod-a", false));
+            assertTrue(view.history().isEmpty());
+            assertTrue(activeBridge().recordBreadcrumb("mod-a", PROFILER_BREADCRUMB_CATEGORY, "performance-off"));
+            assertEquals(
+                    Map.of(PROFILER_BREADCRUMB_CATEGORY, 1),
+                    fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts()
+            );
+
+            fixture.handle.shutdown();
+            assertEquals(Map.of(), fixture.contextProvider.snapshot("mod-a").breadcrumbCategoryCounts());
+        } finally {
+            fixture.close();
+        }
+    }
+
+    @Test
     void providerShutdownClosesProfilerSubscriptionsAndMakesViewUnavailable() throws Exception {
         ProviderFixture fixture = fixtureWithEligibleProject("mod-a");
         TelemetryProfilerSubscription subscription = null;
@@ -320,7 +392,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                                     TelemetryRuntimeOrigin origin,
                                     String runtimeVersion,
                                     BlockingReader reader) throws Exception {
-        return fixtureInternal(providerId, origin, runtimeVersion, reader, false);
+        return fixtureInternal(providerId, origin, runtimeVersion, reader, false, false);
     }
 
     private ProviderFixture fixtureWithEligibleProject(String projectId) throws Exception {
@@ -330,6 +402,19 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 TelemetryRuntimeOrigin.STANDALONE,
                 "0.1.3",
                 new BlockingReader(1),
+                true,
+                false
+        );
+    }
+
+    private ProviderFixture fixtureWithBreadcrumbProject(String projectId) throws Exception {
+        return fixtureInternal(
+                "standalone:Alechilles:SparkBreadcrumb-" + projectId + "-"
+                        + ELIGIBLE_FIXTURE_SEQUENCE.incrementAndGet(),
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                new BlockingReader(1),
+                false,
                 true
         );
     }
@@ -338,12 +423,13 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                                              TelemetryRuntimeOrigin origin,
                                              String runtimeVersion,
                                              BlockingReader reader,
-                                             boolean contributionProject) throws Exception {
+                                             boolean contributionProject,
+                                             boolean breadcrumbProject) throws Exception {
         Path root = tempDir.resolve(providerId.replace(':', '_'));
         TelemetryDataPaths dataPaths = dataPaths(root);
         TelemetryRuntimeSettings loaded = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryRuntimeSettings settings = withEnabledSparkProfiler(loaded);
-        TelemetryProjectRegistration project = project("mod-a", providerId, true);
+        TelemetryProjectRegistration project = project("mod-a", providerId, true, breadcrumbProject);
         TelemetryProjectRegistration runtimeProject = contributionProject
                 ? TelemetryProjectRegistration.passiveDescriptor(
                 project.descriptor(),
@@ -392,6 +478,17 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 },
                 projectProfilerService
         );
+        TelemetryProfilerBreadcrumbCounter breadcrumbCounter = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider contextProvider = new TelemetryProfilerContextProvider(
+                () -> 0,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbCounter,
+                projectId -> service.isProjectEnabled(projectId)
+                        && service.isBreadcrumbsEnabled(projectId),
+                System::currentTimeMillis,
+                null
+        );
         TelemetryRuntimeProviderHandle handle = new TelemetryRuntimeProviderHandle(
                 request,
                 candidate,
@@ -404,7 +501,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 null,
                 new TelemetryRuntimeCommandRegistrar(),
                 new NoopClient(),
-                monitor
+                monitor,
+                contextProvider
         );
         handleReference.set(handle);
         projectProfilerService.set(projectProfilerService(handle));
@@ -413,7 +511,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                 contribution(project, root.resolve("contribution.jar"))
         ))
                 : null;
-        return new ProviderFixture(handle, monitor, reader, contributionToken);
+        return new ProviderFixture(handle, monitor, reader, contributionToken, contextProvider);
     }
 
     private static TelemetryRuntimeSettings withEnabledSparkProfiler(TelemetryRuntimeSettings settings) {
@@ -619,8 +717,13 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
 
     private static TelemetryProjectRegistration project(String projectId,
                                                          String providerId,
-                                                         boolean performanceEnabled) {
+                                                         boolean performanceEnabled,
+                                                         boolean breadcrumbsEnabled) {
         String pluginIdentifier = "Example:" + providerId;
+        String breadcrumbs = breadcrumbsEnabled
+                ? ",\"events\":{\"breadcrumbs\":{\"enabled\":true,\"profilerCorrelationCategories\":[\""
+                        + PROFILER_BREADCRUMB_CATEGORY + "\"]}}"
+                : "";
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 "{\"projectId\":\"" + projectId + "\","
                         + "\"projectVersion\":\"1.0.0\","
@@ -628,7 +731,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                         + "\"ownerPluginIdentifiers\":[\"" + pluginIdentifier + "\"],"
                         + "\"packagePrefixes\":[\"example\"],"
                         + "\"telemetry\":{\"performance\":{\"supported\":true,\"defaultEnabled\":"
-                        + performanceEnabled + "}}}",
+                        + performanceEnabled + "}" + breadcrumbs + "}}",
                 null
         );
         return new TelemetryProjectRegistration(descriptor, pluginIdentifier, "1.0.0", null);
@@ -671,7 +774,8 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
     private record ProviderFixture(TelemetryRuntimeProviderHandle handle,
                                    SparkProfilerMonitor monitor,
                                    BlockingReader reader,
-                                   String contributionToken) {
+                                   String contributionToken,
+                                   TelemetryProfilerContextProvider contextProvider) {
         private void publishAndAwait(int expectedWindow) throws Exception {
             if (!handle.ownsActiveCoordinator()) {
                 handle.start();

@@ -39,14 +39,19 @@ import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryLoadedModSnapshotProvider;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscovery;
 import com.alechilles.alecstelemetry.runtime.discovery.TelemetryRuntimeDiscoveryResult;
+import com.alechilles.alecstelemetry.runtime.profiler.ProfilerSignalEngine;
+import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerMonitor;
 import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
-import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
+import com.alechilles.alecstelemetry.runtime.profiler.SparkPublicMetricsAdapter;
 import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBreadcrumbCounter;
+import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerContextProvider;
 import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProjectProfilerService;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerCounter;
 import com.hypixel.hytale.common.plugin.PluginIdentifier;
+import com.hypixel.hytale.common.util.java.ManifestUtil;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.logger.HytaleLogger;
@@ -70,6 +75,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 
 final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle, TelemetryRuntimeOperations, TelemetryConsentRuntime, TelemetryCommandRuntime {
@@ -90,6 +96,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private final TelemetryConsentStateStore consentStateStore;
     private final HytaleLogger logger;
     private final TelemetryProjectProfilerService projectProfilerService;
+    private final TelemetryProfilerContextProvider profilerContextProvider;
     private final SparkProfilerMonitor sparkProfilerMonitor;
     private final List<String> registrationWarnings;
     private List<TelemetryProjectRegistration> consentProjects;
@@ -245,6 +252,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 logger,
                 commandRegistrar,
                 consentMetricClient,
+                null,
                 null
         );
     }
@@ -261,6 +269,36 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                    @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar,
                                    @Nonnull CrashReportClient consentMetricClient,
                                    @Nullable SparkProfilerMonitor monitor) {
+        this(
+                request,
+                candidate,
+                settings,
+                dataPaths,
+                coordinator,
+                consentProjects,
+                registrationWarnings,
+                playerCounter,
+                logger,
+                commandRegistrar,
+                consentMetricClient,
+                monitor,
+                null
+        );
+    }
+
+    TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,
+                                   @Nonnull TelemetryRuntimeCandidate candidate,
+                                   @Nonnull TelemetryRuntimeSettings settings,
+                                   @Nonnull TelemetryDataPaths dataPaths,
+                                   @Nonnull TelemetryCoordinatorService coordinator,
+                                   @Nonnull List<TelemetryProjectRegistration> consentProjects,
+                                   @Nonnull List<String> registrationWarnings,
+                                   @Nonnull TelemetryPlayerCounter playerCounter,
+                                   @Nullable HytaleLogger logger,
+                                   @Nonnull TelemetryRuntimeCommandRegistrar commandRegistrar,
+                                   @Nonnull CrashReportClient consentMetricClient,
+                                   @Nullable SparkProfilerMonitor monitor,
+                                   @Nullable TelemetryProfilerContextProvider injectedProfilerContextProvider) {
         this.request = request;
         this.settings = settings;
         this.dataPaths = dataPaths;
@@ -274,16 +312,31 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         this.consentStateStore = new TelemetryConsentStateStore(logger);
         this.logger = logger;
         this.consentProjects = List.copyOf(consentProjects);
+        Supplier<Object> sparkPlugin = () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER);
+        this.profilerContextProvider = injectedProfilerContextProvider == null
+                ? new TelemetryProfilerContextProvider(
+                        playerCounter::onlinePlayers,
+                        ManifestUtil.getImplementationVersion(),
+                        new SparkPublicMetricsAdapter(sparkPlugin),
+                        new TelemetryProfilerBreadcrumbCounter(),
+                        projectId -> coordinator.isProjectEnabled(projectId)
+                                && coordinator.isBreadcrumbsEnabled(projectId),
+                        System::currentTimeMillis,
+                        logger == null ? null : (level, message) -> logger.at(level).log(message)
+                )
+                : injectedProfilerContextProvider;
         this.projectProfilerService = new TelemetryProjectProfilerService(
                 this::localProfilerProjects,
                 this::isProfilerProjectEligible,
                 candidate.runtimeVersion(),
-                logger == null ? null : (level, message) -> logger.at(level).log(message)
+                logger == null ? null : (level, message) -> logger.at(level).log(message),
+                new ProfilerSignalEngine(),
+                this.profilerContextProvider
         );
         this.sparkProfilerMonitor = monitor == null
                 ? new SparkProfilerMonitor(
                         settings.sparkProfiler(),
-                        () -> PluginManager.get().getPlugin(SPARK_PLUGIN_IDENTIFIER),
+                        sparkPlugin,
                         bridge::isActive,
                         logger,
                         SparkProfilerMonitor.publicationSink(projectProfilerService)
@@ -447,6 +500,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
         boolean applied = coordinator.setProjectEnabled(projectId, enabled);
         if (applied) {
+            clearProfilerContextIfIneligible(projectId);
             invalidateProfilerIfIneligible(projectId);
         }
         return applied;
@@ -455,7 +509,14 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     @Override
     public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        return active == null ? coordinator.setBreadcrumbsEnabled(projectId, enabled) : active.setBreadcrumbsEnabled(projectId, enabled);
+        if (active != null) {
+            return active.setBreadcrumbsEnabled(projectId, enabled);
+        }
+        boolean applied = coordinator.setBreadcrumbsEnabled(projectId, enabled);
+        if (applied) {
+            clearProfilerContextIfIneligible(projectId);
+        }
+        return applied;
     }
     @Nonnull
     @Override
@@ -596,6 +657,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         }
         boolean applied = applyRuntimeConsent(project.projectId(), normalized);
         if (applied) {
+            clearProfilerContextIfIneligible(project.projectId());
             invalidateProfilerIfIneligible(project.projectId());
         }
         if (applied && reviewed) {
@@ -907,7 +969,8 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         TelemetryBreadcrumbContext normalized = context.normalize();
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (active == null) {
-            coordinator.recordBreadcrumb(projectId, normalized);
+            boolean accepted = coordinator.recordBreadcrumb(projectId, normalized);
+            recordProfilerBreadcrumbIfEligible(projectId, normalized.category(), accepted);
         } else {
             active.recordBreadcrumb(
                     projectId,
@@ -1104,6 +1167,23 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     private void invalidateProfilerIfIneligible(@Nonnull String projectId) {
         if (!isProfilerProjectEligible(projectId)) {
             projectProfilerService.invalidate(projectId);
+        }
+    }
+
+    private void clearProfilerContextIfIneligible(@Nonnull String projectId) {
+        if (!coordinator.isProjectEnabled(projectId)
+                || !coordinator.isBreadcrumbsEnabled(projectId)) {
+            profilerContextProvider.clear(projectId);
+        }
+    }
+
+    private void recordProfilerBreadcrumbIfEligible(@Nonnull String projectId,
+                                                    @Nonnull String category,
+                                                    boolean accepted) {
+        if (accepted
+                && coordinator.isProjectEnabled(projectId)
+                && coordinator.isBreadcrumbsEnabled(projectId)) {
+            profilerContextProvider.recordBreadcrumb(projectId, category);
         }
     }
 
@@ -1984,6 +2064,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         public boolean setProjectEnabled(@Nonnull String projectId, boolean enabled) {
             boolean applied = service.setProjectEnabled(projectId, enabled);
             if (applied) {
+                clearProfilerContextIfIneligible(projectId);
                 invalidateProfilerIfIneligible(projectId);
             }
             return applied;
@@ -2025,14 +2106,20 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
 
         @Override
         public boolean setBreadcrumbsEnabled(@Nonnull String projectId, boolean enabled) {
-            return service.setBreadcrumbsEnabled(projectId, enabled);
+            boolean applied = service.setBreadcrumbsEnabled(projectId, enabled);
+            if (applied) {
+                clearProfilerContextIfIneligible(projectId);
+            }
+            return applied;
         }
 
         @Override
         public boolean recordBreadcrumb(@Nonnull String projectId,
                                         @Nonnull String category,
                                         @Nonnull String detail) {
-            return service.recordBreadcrumb(projectId, category, detail);
+            boolean accepted = service.recordBreadcrumb(projectId, category, detail);
+            recordProfilerBreadcrumbIfEligible(projectId, category, accepted);
+            return accepted;
         }
 
         @Override
@@ -2040,7 +2127,9 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                         @Nonnull String category,
                                         @Nonnull String detail,
                                         @Nonnull Map<String, Object> context) {
-            return service.recordBreadcrumb(projectId, category, detail, context);
+            boolean accepted = service.recordBreadcrumb(projectId, category, detail, context);
+            recordProfilerBreadcrumbIfEligible(projectId, category, accepted);
+            return accepted;
         }
 
         @Override
