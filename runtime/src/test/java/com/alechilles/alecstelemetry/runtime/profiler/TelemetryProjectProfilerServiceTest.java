@@ -1,9 +1,11 @@
 package com.alechilles.alecstelemetry.runtime.profiler;
 
+import com.alechilles.alecstelemetry.api.TelemetryProfilerContext;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
 import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
+import com.alechilles.alecstelemetry.api.TelemetryProfilerQualification;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import org.junit.jupiter.api.Test;
@@ -481,6 +483,228 @@ class TelemetryProjectProfilerServiceTest {
         service.close();
     }
 
+    // Regression: a path that remains above both signal thresholds in three
+    // analyzed windows must be published as a repeated signal on the third.
+    @Test
+    void threeQualifyingWindowsPublishRepeatedOnTheThirdPath() {
+        TelemetryProjectProfilerService service = service();
+        try {
+            service.publish(qualifyingResult(1, 40.0d));
+            service.publish(qualifyingResult(2, 40.0d));
+            service.publish(qualifyingResult(3, 40.0d));
+
+            TelemetryProfilerSnapshot latest = service.view("mod-a").latest().orElseThrow();
+            assertEquals(TelemetryProfilerQualification.REPEATED,
+                    latest.paths().getFirst().qualification());
+            assertEquals(TelemetryProfilerQualification.REPEATED,
+                    new ProfilerSignalEngine().signals(service.view("mod-a").history())
+                            .getFirst().qualification());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: one severe path must be visible as provisional evidence even
+    // before it repeats in a later Spark window.
+    @Test
+    void severeSingleWindowPublishesProvisional() {
+        TelemetryProjectProfilerService service = service();
+        try {
+            service.publish(qualifyingResult(1, 100.0d));
+
+            assertEquals(TelemetryProfilerQualification.PROVISIONAL,
+                    service.view("mod-a").latest().orElseThrow()
+                            .paths().getFirst().qualification());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: actionable empty windows must advance the rolling history so
+    // an old candidate expires from the signal engine's five-window horizon.
+    @Test
+    void fiveActionableEmptyWindowsExpireAnOldCandidate() {
+        TelemetryProjectProfilerService service = service();
+        try {
+            service.publish(qualifyingResult(1, 40.0d));
+            service.publish(qualifyingResult(2, 40.0d));
+            service.publish(qualifyingResult(3, 40.0d));
+            for (int window = 4; window <= 8; window++) {
+                service.publish(emptyResult(window));
+            }
+
+            assertTrue(new ProfilerSignalEngine().signals(service.view("mod-a").history()).isEmpty());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: a completed window with samples but no owned path still
+    // publishes a zero-path snapshot with the window metadata and context.
+    @Test
+    void actionableEmptyWindowRetainsCompleteSnapshotAndContext() {
+        AtomicInteger contextCalls = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = contextProvider(
+                () -> {
+                    contextCalls.incrementAndGet();
+                    return 7;
+                },
+                "hytale-0.5.9",
+                () -> 1234L
+        );
+        TelemetryProjectProfilerService service = service(provider);
+        service.attachMonitorDiagnostics(() -> SparkProfilerDiagnostics.simple(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "spark-1",
+                "Spark completed."
+        ));
+        try {
+            service.publish(emptyResult(37));
+
+            TelemetryProfilerSnapshot snapshot = service.view("mod-a").latest().orElseThrow();
+            assertEquals(37, snapshot.windowKey());
+            assertEquals("spark-1", snapshot.sparkVersion());
+            assertEquals(0, snapshot.paths().size());
+            assertEquals(ProfilerSignalEngine.RULE_SET, snapshot.qualificationRuleSet());
+            assertEquals("hytale-0.5.9", snapshot.context().hytaleVersion());
+            assertEquals(7, snapshot.context().playerCount());
+            assertEquals(1, contextCalls.get());
+            assertEquals(TelemetryProfilerStatus.State.COMPLETE,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: independent context-source failures must not discard valid
+    // Phase 1 path evidence or alter the Spark monitor state.
+    @Test
+    void contextFailurePublishesUnavailableContextAndObservedPath() {
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> {
+                    throw new IllegalStateException("players unavailable");
+                },
+                null,
+                new SparkPublicMetricsAdapter(() -> {
+                    throw new IllegalStateException("Spark unavailable");
+                }),
+                new TelemetryProfilerBreadcrumbCounter(),
+                ignored -> {
+                    throw new IllegalStateException("breadcrumbs unavailable");
+                },
+                () -> 0L,
+                null
+        );
+        TelemetryProjectProfilerService service = service(provider);
+        service.attachMonitorDiagnostics(() -> SparkProfilerDiagnostics.simple(
+                SparkProfilerDiagnostics.State.COMPLETE,
+                "spark-1",
+                "Spark completed."
+        ));
+        try {
+            service.publish(qualifyingResult(1, 40.0d));
+
+            TelemetryProfilerSnapshot snapshot = service.view("mod-a").latest().orElseThrow();
+            assertEquals(TelemetryProfilerQualification.OBSERVED,
+                    snapshot.paths().getFirst().qualification());
+            assertEquals(TelemetryProfilerContext.unavailable(), snapshot.context());
+            assertEquals(TelemetryProfilerStatus.State.COMPLETE,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: a complete result with no usable WorldThread sample must
+    // publish NO_DATA and must not advance rolling evidence history.
+    @Test
+    void completeWindowWithoutUsableSamplesDoesNotAdvanceHistory() {
+        TelemetryProjectProfilerService service = service();
+        try {
+            service.publish(noUsableResult(9));
+
+            assertTrue(service.view("mod-a").history().isEmpty());
+            assertEquals(TelemetryProfilerStatus.State.NO_DATA,
+                    service.view("mod-a").status().state());
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: both global limits must evict oldest immutable snapshots and
+    // path occurrences without leaving stale evidence for a repeated signal.
+    @Test
+    void globalSnapshotAndPathLimitsRetainNewestEvidenceWithoutFalseRepeat() {
+        List<String> projectIds = projectIds(51);
+        TelemetryProjectProfilerService service = serviceWithProjects(projectIds);
+        try {
+            for (int window = 1; window <= 11; window++) {
+                service.publish(emptyResult(window, projectIds));
+            }
+            int retainedSnapshots = projectIds.stream()
+                    .mapToInt(id -> service.view(id).history().size())
+                    .sum();
+            assertEquals(500, retainedSnapshots);
+            assertEquals(11, service.view(projectIds.getLast()).latest().orElseThrow().windowKey());
+
+            for (int window = 12; window <= 14; window++) {
+                service.publish(resultWithFivePathsPerProject(window, projectIds));
+            }
+            int retainedPaths = projectIds.stream()
+                    .flatMap(id -> service.view(id).history().stream())
+                    .mapToInt(snapshot -> snapshot.paths().size())
+                    .sum();
+            assertTrue(retainedPaths <= TelemetryProjectProfilerService.MAX_RETAINED_PATH_ENTRIES);
+            assertTrue(new ProfilerSignalEngine().signals(service.view(projectIds.getFirst()).history())
+                    .stream()
+                    .noneMatch(signal -> signal.qualification() == TelemetryProfilerQualification.REPEATED));
+        } finally {
+            service.close();
+        }
+    }
+
+    // Regression: invalidation during the existing pre-insert race hook must
+    // discard prepared signal/context work and leave no retained evidence.
+    @Test
+    void invalidationDuringBeforeInsertRaceDiscardsSignalAndContext() throws Exception {
+        CountDownLatch analyzed = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger contextCalls = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = contextProvider(
+                () -> {
+                    contextCalls.incrementAndGet();
+                    return 3;
+                },
+                "hytale-0.5.9",
+                () -> 1234L
+        );
+        TelemetryProjectProfilerService service = serviceWithBeforeInsertHook(
+                analysis -> {
+                    analyzed.countDown();
+                    await(release);
+                },
+                provider
+        );
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> publish = executor.submit(() -> service.publish(qualifyingResult(1, 40.0d)));
+            assertTrue(analyzed.await(1, SECONDS));
+            performanceEnabled.set(false);
+            service.invalidate("mod-a");
+            release.countDown();
+            publish.get(1, SECONDS);
+
+            assertTrue(service.view("mod-a").history().isEmpty());
+            assertEquals(0, contextCalls.get());
+            assertEquals(TelemetryProfilerStatus.State.DISABLED,
+                    service.view("mod-a").status().state());
+        } finally {
+            release.countDown();
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
     private static TelemetryProjectProfilerService service() {
         return service(() -> List.of(project("mod-a", "example.a", "ModA")));
     }
@@ -515,6 +739,46 @@ class TelemetryProjectProfilerServiceTest {
                 (level, message) -> {
                 },
                 beforeInsert
+        );
+        service.activateProvider();
+        return service;
+    }
+
+    private static TelemetryProjectProfilerService serviceWithBeforeInsertHook(
+            Consumer<ProfilerProjectAnalyzer.Analysis> beforeInsert,
+            TelemetryProfilerContextProvider contextProvider) {
+        performanceEnabled.set(true);
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(project("mod-a", "example.a", "ModA")),
+                ignored -> performanceEnabled.get(),
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                contextProvider,
+                beforeInsert,
+                () -> {
+                }
+        );
+        service.activateProvider();
+        return service;
+    }
+
+    private static TelemetryProjectProfilerService service(
+            TelemetryProfilerContextProvider contextProvider) {
+        performanceEnabled.set(true);
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(project("mod-a", "example.a", "ModA")),
+                ignored -> performanceEnabled.get(),
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                contextProvider,
+                ignored -> {
+                },
+                () -> {
+                }
         );
         service.activateProvider();
         return service;
@@ -557,6 +821,88 @@ class TelemetryProjectProfilerServiceTest {
                 "spark-1", windowKey, 1, 1, 1.0d, List.of()
         );
         return SparkProfileReadResult.complete(snapshot, window);
+    }
+
+    private static SparkProfileReadResult qualifyingResult(int windowKey,
+                                                           double sampledMilliseconds) {
+        SparkProfileWindow window = new SparkProfileWindow(
+                "spark-1",
+                windowKey,
+                1,
+                1,
+                1,
+                1,
+                sampledMilliseconds,
+                List.of(new SparkProfileWindow.ThreadFrames(
+                        "WorldThread - default",
+                        List.of(new SparkProfileWindow.Frame(
+                                -1, "ModA", "example.a.Tick", "tick", "()V", sampledMilliseconds
+                        ))
+                ))
+        );
+        SparkProfileSnapshot snapshot = new SparkProfileSnapshot(
+                "spark-1", windowKey, 1, 1, sampledMilliseconds, List.of()
+        );
+        return SparkProfileReadResult.complete(snapshot, window);
+    }
+
+    private static SparkProfileReadResult emptyResult(int windowKey) {
+        return emptyResult(windowKey, List.of("mod-a"));
+    }
+
+    private static SparkProfileReadResult emptyResult(int windowKey,
+                                                      List<String> projectIds) {
+        SparkProfileWindow window = new SparkProfileWindow(
+                "spark-1",
+                windowKey,
+                1,
+                1,
+                1,
+                1,
+                40.0d,
+                List.of(new SparkProfileWindow.ThreadFrames(
+                        "WorldThread - default",
+                        List.of(new SparkProfileWindow.Frame(
+                                -1, "hytale", "com.hytale.Unowned", "tick", "()V", 40.0d
+                        ))
+                ))
+        );
+        SparkProfileSnapshot snapshot = new SparkProfileSnapshot(
+                "spark-1", windowKey, 1, 1, 40.0d, List.of()
+        );
+        return SparkProfileReadResult.complete(snapshot, window);
+    }
+
+    private static SparkProfileReadResult noUsableResult(int windowKey) {
+        SparkProfileWindow window = new SparkProfileWindow(
+                "spark-1",
+                windowKey,
+                1,
+                0,
+                0,
+                0,
+                0.0d,
+                List.of()
+        );
+        SparkProfileSnapshot snapshot = new SparkProfileSnapshot(
+                "spark-1", windowKey, 1, 0, 0.0d, List.of()
+        );
+        return SparkProfileReadResult.complete(snapshot, window);
+    }
+
+    private static TelemetryProfilerContextProvider contextProvider(
+            java.util.function.IntSupplier playerCount,
+            String hytaleVersion,
+            java.util.function.LongSupplier clock) {
+        return new TelemetryProfilerContextProvider(
+                playerCount,
+                hytaleVersion,
+                new SparkPublicMetricsAdapter(() -> null),
+                new TelemetryProfilerBreadcrumbCounter(),
+                ignored -> false,
+                clock,
+                null
+        );
     }
 
     private static SparkProfileReadResult resultWithFivePathsPerProject(
