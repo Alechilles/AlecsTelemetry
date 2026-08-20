@@ -7,13 +7,23 @@ import java.util.Map;
 
 /** Immutable context captured with a profiler snapshot. */
 public record TelemetryProfilerContext(long observedAtMillis,
+                                       @Nullable String hytaleVersion,
                                        @Nullable Integer playerCount,
                                        @Nullable Double tps,
                                        @Nullable Double mspt,
                                        @Nonnull Map<String, Integer> breadcrumbCategoryCounts) {
 
+    public TelemetryProfilerContext(long observedAtMillis,
+                                    @Nullable Integer playerCount,
+                                    @Nullable Double tps,
+                                    @Nullable Double mspt,
+                                    @Nonnull Map<String, Integer> breadcrumbCategoryCounts) {
+        this(observedAtMillis, null, playerCount, tps, mspt, breadcrumbCategoryCounts);
+    }
+
     public TelemetryProfilerContext {
         requireNonNegative(observedAtMillis, "observedAtMillis");
+        hytaleVersion = optionalText(hytaleVersion);
         requireFiniteNonNegative(tps, "tps");
         requireFiniteNonNegative(mspt, "mspt");
         breadcrumbCategoryCounts = immutableCounts(breadcrumbCategoryCounts);
@@ -21,7 +31,7 @@ public record TelemetryProfilerContext(long observedAtMillis,
 
     @Nonnull
     public static TelemetryProfilerContext unavailable() {
-        return new TelemetryProfilerContext(0L, null, null, null, Map.of());
+        return new TelemetryProfilerContext(0L, null, null, null, null, Map.of());
     }
 
     @Nonnull
@@ -43,6 +53,14 @@ public record TelemetryProfilerContext(long observedAtMillis,
             normalized.put(key, entry.getValue() == null ? 0 : entry.getValue());
         }
         return normalized.isEmpty() ? Map.of() : Map.copyOf(normalized);
+    }
+
+    @Nullable
+    private static String optionalText(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     private static void requireNonNegative(long value, @Nonnull String fieldName) {

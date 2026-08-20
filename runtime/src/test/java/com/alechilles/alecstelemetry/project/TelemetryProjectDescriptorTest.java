@@ -571,4 +571,71 @@ class TelemetryProjectDescriptorTest {
         TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(descriptor.toJson(), null);
         assertEquals("1.4.0", roundTripped.projectVersion());
     }
+
+    @Test
+    void normalizesAndBoundsProfilerCorrelationCategoriesForRoundTrip() {
+        String overlong = "x".repeat(41);
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "correlation-mod",
+                  "displayName": "Correlation Mod",
+                  "telemetry": {
+                    "events": {
+                      "breadcrumbs": {
+                        "supported": true,
+                        "profilerCorrelationCategories": [
+                          " Companion.AI.Tick ",
+                          "COMPANION.ai.tick",
+                          "Player-Count",
+                          "bad category",
+                          "%s",
+                          "TPS",
+                          "mspt",
+                          "tick-rate",
+                          "world_1",
+                          "world.2",
+                          "mod-a",
+                          "mod_b",
+                          "server0",
+                          "server1",
+                          "server2",
+                          "server3",
+                          "server4",
+                          "server5",
+                          "server6",
+                          "server7",
+                          "server8"
+                        ]
+                      }
+                    }
+                  }
+                }
+                """.formatted(overlong),
+                null
+        );
+
+        List<String> expected = List.of(
+                "companion.ai.tick",
+                "player-count",
+                "tps",
+                "mspt",
+                "tick-rate",
+                "world_1",
+                "world.2",
+                "mod-a",
+                "mod_b",
+                "server0",
+                "server1",
+                "server2",
+                "server3",
+                "server4",
+                "server5",
+                "server6"
+        );
+        assertEquals(expected, descriptor.events().breadcrumbs().profilerCorrelationCategories());
+
+        TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(descriptor.toJson(), null);
+        assertEquals(expected, roundTripped.events().breadcrumbs().profilerCorrelationCategories());
+    }
 }

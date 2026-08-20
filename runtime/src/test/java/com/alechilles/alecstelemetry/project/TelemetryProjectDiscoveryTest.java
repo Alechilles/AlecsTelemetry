@@ -304,6 +304,46 @@ class TelemetryProjectDiscoveryTest {
         assertTrue(result.skippedRegistrationWarnings().getFirst().contains("incomplete.json"));
     }
 
+    @Test
+    void warnsOnceWhenDescriptorExcludesProfilerCorrelationCategories() throws Exception {
+        Path modFolder = tempDir.resolve("Invalid Categories Mod");
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "Example",
+                  "Name": "Invalid Categories Mod",
+                  "Version": "1.0.0",
+                  "Main": "com.example.invalid.InvalidCategoriesMod"
+                }
+                """
+        );
+        Files.writeString(
+                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
+                """
+                {
+                  "projectId": "invalid-categories",
+                  "displayName": "Invalid Categories",
+                  "events": {
+                    "breadcrumbs": {
+                      "profilerCorrelationCategories": ["good.category", "bad category", "%s"]
+                    }
+                  }
+                }
+                """.formatted("x".repeat(41))
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(1, result.projects().size());
+        assertEquals(1, result.skippedRegistrationWarnings().size());
+        assertEquals(
+                "Telemetry project invalid-categories excluded 2 invalid or excess profiler breadcrumb correlation categories.",
+                result.skippedRegistrationWarnings().getFirst()
+        );
+    }
+
     private static void writeJar(@Nonnull Path jarPath, @Nonnull String manifest, @Nonnull String descriptor) throws Exception {
         writeJar(jarPath, manifest, Map.of("Server/Telemetry/project.json", descriptor));
     }

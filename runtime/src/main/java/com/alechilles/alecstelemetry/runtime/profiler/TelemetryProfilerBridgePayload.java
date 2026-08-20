@@ -347,6 +347,7 @@ public final class TelemetryProfilerBridgePayload {
         TelemetryProfilerContext safe = context == null ? TelemetryProfilerContext.unavailable() : context;
         LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
         summary.put("observedAtMillis", safe.observedAtMillis());
+        putText(summary, "hytaleVersion", safe.hytaleVersion(), MAX_PROJECT_OR_VERSION_LENGTH);
         if (safe.playerCount() != null && safe.playerCount() >= 0) {
             summary.put("playerCount", safe.playerCount());
         }
@@ -490,6 +491,7 @@ public final class TelemetryProfilerBridgePayload {
             return TelemetryProfilerContext.unavailable();
         }
         long observedAtMillis = nonNegativeLong(map, "observedAtMillis");
+        String hytaleVersion = optionalString(map, "hytaleVersion", MAX_PROJECT_OR_VERSION_LENGTH);
         Integer playerCount = optionalNonNegativeInt(map, "playerCount");
         Double tps = optionalNonNegativeDouble(map, "tps");
         Double mspt = optionalNonNegativeDouble(map, "mspt");
@@ -520,7 +522,7 @@ public final class TelemetryProfilerBridgePayload {
                 // Keep the valid prefix when a foreign map fails during iteration.
             }
         }
-        return new TelemetryProfilerContext(observedAtMillis, playerCount, tps, mspt, counts);
+        return new TelemetryProfilerContext(observedAtMillis, hytaleVersion, playerCount, tps, mspt, counts);
     }
 
     @Nonnull
@@ -615,6 +617,7 @@ public final class TelemetryProfilerBridgePayload {
     private static Map<String, Object> foreignContextMap(@Nonnull Map<?, ?> context) {
         LinkedHashMap<String, Object> copy = new LinkedHashMap<>();
         copyKnownScalar(context, copy, "observedAtMillis");
+        copyKnownScalar(context, copy, "hytaleVersion", MAX_PROJECT_OR_VERSION_LENGTH);
         copyKnownScalar(context, copy, "playerCount");
         copyKnownScalar(context, copy, "tps");
         copyKnownScalar(context, copy, "mspt");
