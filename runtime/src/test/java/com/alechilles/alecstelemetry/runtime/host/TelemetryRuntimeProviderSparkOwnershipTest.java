@@ -150,7 +150,7 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
             providerB.handle.shutdown();
             assertEquals("standalone:Alechilles:SparkFallbackA", TelemetryCoordinatorRegistry.activeBridge().providerId());
 
-            providerA.publishAndAwait(2);
+            providerA.awaitProjectWindow(2);
 
             TelemetryProfilerView view = providerA.handle.api().findProject("mod-a").profiler();
             assertEquals(List.of(2), view.history().stream()
@@ -821,6 +821,23 @@ class TelemetryRuntimeProviderSparkOwnershipTest {
                                    BlockingReader reader,
                                    String contributionToken,
                                    TelemetryProfilerContextProvider contextProvider) {
+        private void awaitProjectWindow(int expectedWindow) throws Exception {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (System.nanoTime() < deadline) {
+                if (handle.api().findProject("mod-a") != null
+                        && handle.api().findProject("mod-a").profiler().history().stream()
+                        .anyMatch(snapshot -> snapshot.windowKey() == expectedWindow)) {
+                    return;
+                }
+                Thread.sleep(10L);
+            }
+            TelemetryProfilerView view = handle.api().findProject("mod-a").profiler();
+            assertTrue(view.history().stream()
+                            .anyMatch(snapshot -> snapshot.windowKey() == expectedWindow),
+                    () -> "status=" + view.status()
+                            + ", history=" + view.history());
+        }
+
         private void publishAndAwait(int expectedWindow) throws Exception {
             if (!handle.ownsActiveCoordinator()) {
                 handle.start();
