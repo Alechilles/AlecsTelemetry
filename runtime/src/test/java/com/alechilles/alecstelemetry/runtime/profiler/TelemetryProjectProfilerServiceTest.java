@@ -888,6 +888,232 @@ class TelemetryProjectProfilerServiceTest {
         }
     }
 
+    // Regression: a failed context clear must leave the project fail-closed,
+    // then allow publication only after a later confirmed clear succeeds.
+    @Test
+    void failedContextClearKeepsCaptureFailClosedUntilRetrySucceeds() throws Exception {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        AtomicBoolean failClear = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        AtomicInteger contextReads = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                contextReads,
+                projectId -> {
+                    if (failClear.get()) {
+                        throw new IllegalStateException("clear failed");
+                    }
+                    breadcrumbs.clear(projectId);
+                }
+        );
+        TelemetryProjectProfilerService service = serviceWithEligibility(
+                eligible,
+                provider,
+                projectWithBreadcrumb()
+        );
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+            service.publish(qualifyingResult(1, 40.0d));
+            contextReads.set(0);
+
+            service.invalidate("mod-a");
+            Future<?> failedPublication = executor.submit(
+                    () -> service.publish(qualifyingResult(2, 40.0d))
+            );
+            failedPublication.get(1, SECONDS);
+            assertTrue(service.view("mod-a").history().isEmpty());
+            assertEquals(0, contextReads.get());
+
+            failClear.set(false);
+            service.publish(qualifyingResult(3, 40.0d));
+            assertEquals(List.of(3), service.view("mod-a").history().stream()
+                    .map(TelemetryProfilerSnapshot::windowKey)
+                    .toList());
+            assertEquals(Map.of(), service.view("mod-a").latest().orElseThrow()
+                    .context().breadcrumbCategoryCounts());
+        } finally {
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    // Regression: concurrent drain triggers must not repeat a clear after the
+    // first request is acknowledged and a new breadcrumb count is recorded.
+    @Test
+    void concurrentDrainTriggersDoNotRepeatAcknowledgedClear() throws Exception {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        CountDownLatch firstCleared = new CountDownLatch(1);
+        CountDownLatch allowFirstReturn = new CountDownLatch(1);
+        CountDownLatch drainTriggeredTwice = new CountDownLatch(2);
+        CountDownLatch allowSecondClear = new CountDownLatch(1);
+        AtomicInteger clearCalls = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                new AtomicInteger(),
+                projectId -> {
+                    int call = clearCalls.incrementAndGet();
+                    if (call == 1) {
+                        breadcrumbs.clear(projectId);
+                        firstCleared.countDown();
+                        await(allowFirstReturn);
+                    } else {
+                        await(allowSecondClear);
+                        breadcrumbs.clear(projectId);
+                    }
+                }
+        );
+        TelemetryProjectProfilerService service = serviceWithContextDrainHook(
+                eligible,
+                provider,
+                projectWithBreadcrumb(),
+                drainTriggeredTwice::countDown
+        );
+        provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> invalidation = null;
+        Future<?> publication = null;
+        try {
+            eligible.set(false);
+            invalidation = executor.submit(() -> service.invalidate("mod-a"));
+            assertTrue(firstCleared.await(1, SECONDS));
+
+            publication = executor.submit(() -> service.publish(qualifyingResult(2, 40.0d)));
+            assertTrue(drainTriggeredTwice.await(1, SECONDS));
+
+            eligible.set(true);
+            provider.recordBreadcrumb("mod-a", "companion.ai.tick");
+            allowFirstReturn.countDown();
+            invalidation.get(1, SECONDS);
+            allowSecondClear.countDown();
+            publication.get(1, SECONDS);
+
+            assertEquals(1, clearCalls.get());
+            assertEquals(Map.of("companion.ai.tick", 1),
+                    service.view("mod-a").latest().orElseThrow()
+                            .context().breadcrumbCategoryCounts());
+        } finally {
+            allowFirstReturn.countDown();
+            allowSecondClear.countDown();
+            if (invalidation != null) {
+                invalidation.cancel(true);
+            }
+            if (publication != null) {
+                publication.cancel(true);
+            }
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    // Regression: an older concurrent registration refresh must not apply its
+    // provider allowlist after a newer refresh has opened.
+    @Test
+    void concurrentRegistrationRefreshesKeepNewestProviderAllowlist() throws Exception {
+        AtomicReference<List<TelemetryProjectRegistration>> registrations =
+                new AtomicReference<>(List.of(projectWithBreadcrumb("1.0.0", "version-1")));
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        CountDownLatch firstRefreshStarted = new CountDownLatch(1);
+        CountDownLatch allowFirstRefresh = new CountDownLatch(1);
+        CountDownLatch secondRefreshCompleted = new CountDownLatch(1);
+        AtomicInteger refreshCalls = new AtomicInteger();
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                null,
+                next -> {
+                    int call = refreshCalls.incrementAndGet();
+                    if (call == 2) {
+                        firstRefreshStarted.countDown();
+                        await(allowFirstRefresh);
+                    }
+                    if (call == 3) {
+                        secondRefreshCompleted.countDown();
+                    }
+                    breadcrumbs.refreshProjects(next);
+                },
+                breadcrumbs::clear,
+                breadcrumbs::clearAll
+        );
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                registrations::get,
+                ignored -> true,
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                provider
+        );
+        service.activateProvider();
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<?> firstRefresh = null;
+        Future<?> secondRefresh = null;
+        try {
+            registrations.set(List.of(projectWithBreadcrumb("2.0.0", "version-2")));
+            firstRefresh = executor.submit(service::refreshProjects);
+            assertTrue(firstRefreshStarted.await(1, SECONDS));
+
+            registrations.set(List.of(projectWithBreadcrumb("3.0.0", "version-3")));
+            secondRefresh = executor.submit(service::refreshProjects);
+            assertFalse(secondRefreshCompleted.await(150, TimeUnit.MILLISECONDS));
+
+            allowFirstRefresh.countDown();
+            firstRefresh.get(1, SECONDS);
+            secondRefresh.get(1, SECONDS);
+
+            provider.recordBreadcrumb("mod-a", "version-3");
+            provider.recordBreadcrumb("mod-a", "version-2");
+            assertEquals(Map.of("version-3", 1), provider.snapshot("mod-a")
+                    .breadcrumbCategoryCounts());
+        } finally {
+            allowFirstRefresh.countDown();
+            if (firstRefresh != null) {
+                firstRefresh.cancel(true);
+            }
+            if (secondRefresh != null) {
+                secondRefresh.cancel(true);
+            }
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
+    // Regression: a failed clear must not prevent terminal shutdown.
+    @Test
+    void failedContextClearDoesNotBlockTerminalShutdown() throws Exception {
+        AtomicBoolean eligible = new AtomicBoolean(true);
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = new TelemetryProfilerBreadcrumbCounter();
+        TelemetryProfilerContextProvider provider = breadcrumbContextProvider(
+                eligible,
+                breadcrumbs,
+                new AtomicInteger(),
+                ignored -> {
+                    throw new IllegalStateException("clear failed");
+                }
+        );
+        TelemetryProjectProfilerService service = serviceWithEligibility(
+                eligible,
+                provider,
+                projectWithBreadcrumb()
+        );
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            service.invalidate("mod-a");
+            Future<?> close = executor.submit(service::close);
+            close.get(1, SECONDS);
+        } finally {
+            service.close();
+            executor.shutdownNow();
+        }
+    }
+
     // Regression: a completed empty project window remains visible while the
     // monitor is transiently waiting, but later failure states remain visible.
     @Test
@@ -1048,6 +1274,30 @@ class TelemetryProjectProfilerServiceTest {
         return service;
     }
 
+    private static TelemetryProjectProfilerService serviceWithContextDrainHook(
+            AtomicBoolean eligible,
+            TelemetryProfilerContextProvider contextProvider,
+            TelemetryProjectRegistration registration,
+            Runnable beforeContextDrain) {
+        performanceEnabled.set(true);
+        TelemetryProjectProfilerService service = new TelemetryProjectProfilerService(
+                () -> List.of(registration),
+                ignored -> eligible.get(),
+                "runtime-1",
+                (level, message) -> {
+                },
+                new ProfilerSignalEngine(),
+                contextProvider,
+                ignored -> {
+                },
+                () -> {
+                },
+                beforeContextDrain
+        );
+        service.activateProvider();
+        return service;
+    }
+
     private static TelemetryProfilerContextProvider breadcrumbContextProvider(
             AtomicBoolean eligible,
             TelemetryProfilerBreadcrumbCounter breadcrumbs,
@@ -1063,6 +1313,28 @@ class TelemetryProjectProfilerServiceTest {
                 ignored -> eligible.get(),
                 () -> 1000L,
                 null
+        );
+    }
+
+    private static TelemetryProfilerContextProvider breadcrumbContextProvider(
+            AtomicBoolean eligible,
+            TelemetryProfilerBreadcrumbCounter breadcrumbs,
+            AtomicInteger contextReads,
+            TelemetryProfilerContextProvider.ClearOperation clearOperation) {
+        return new TelemetryProfilerContextProvider(
+                () -> {
+                    contextReads.incrementAndGet();
+                    return 7;
+                },
+                "hytale-0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> eligible.get(),
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                clearOperation,
+                breadcrumbs::clearAll
         );
     }
 
@@ -1242,6 +1514,12 @@ class TelemetryProjectProfilerServiceTest {
     }
 
     private static TelemetryProjectRegistration projectWithBreadcrumb(String projectVersion) {
+        return projectWithBreadcrumb(projectVersion, "companion.ai.tick");
+    }
+
+    private static TelemetryProjectRegistration projectWithBreadcrumb(
+            String projectVersion,
+            String category) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 "{\"projectId\":\"mod-a\","
                         + "\"projectVersion\":\"" + projectVersion + "\","
@@ -1252,7 +1530,7 @@ class TelemetryProjectProfilerServiceTest {
                         + "\"performance\":{\"supported\":true,\"defaultEnabled\":true},"
                         + "\"events\":{\"breadcrumbs\":{"
                         + "\"enabled\":true,"
-                        + "\"profilerCorrelationCategories\":[\"companion.ai.tick\"]"
+                        + "\"profilerCorrelationCategories\":[\"" + category + "\"]"
                         + "}}}}",
                 null
         );

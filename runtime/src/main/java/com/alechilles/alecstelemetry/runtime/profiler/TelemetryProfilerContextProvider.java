@@ -29,6 +29,9 @@ public final class TelemetryProfilerContextProvider {
     private final Predicate<String> breadcrumbEligible;
     private final LongSupplier clock;
     private final BiConsumer<Level, String> logSink;
+    private final RefreshOperation refreshOperation;
+    private final ClearOperation clearOperation;
+    private final ClearAllOperation clearAllOperation;
     private final EnumMap<Source, Long> lastFailureLogMillis = new EnumMap<>(Source.class);
 
     public TelemetryProfilerContextProvider(
@@ -39,6 +42,31 @@ public final class TelemetryProfilerContextProvider {
             @Nonnull Predicate<String> breadcrumbEligible,
             @Nonnull LongSupplier clock,
             @Nullable BiConsumer<Level, String> logSink) {
+        this(
+                playerCount,
+                hytaleVersion,
+                sparkMetrics,
+                breadcrumbs,
+                breadcrumbEligible,
+                clock,
+                logSink,
+                breadcrumbs::refreshProjects,
+                breadcrumbs::clear,
+                breadcrumbs::clearAll
+        );
+    }
+
+    TelemetryProfilerContextProvider(
+            @Nonnull IntSupplier playerCount,
+            @Nullable String hytaleVersion,
+            @Nonnull SparkPublicMetricsAdapter sparkMetrics,
+            @Nonnull TelemetryProfilerBreadcrumbCounter breadcrumbs,
+            @Nonnull Predicate<String> breadcrumbEligible,
+            @Nonnull LongSupplier clock,
+            @Nullable BiConsumer<Level, String> logSink,
+            @Nonnull RefreshOperation refreshOperation,
+            @Nonnull ClearOperation clearOperation,
+            @Nonnull ClearAllOperation clearAllOperation) {
         this.playerCount = Objects.requireNonNull(playerCount, "playerCount");
         this.hytaleVersion = normalizeVersion(hytaleVersion);
         this.sparkMetrics = Objects.requireNonNull(sparkMetrics, "sparkMetrics");
@@ -46,6 +74,9 @@ public final class TelemetryProfilerContextProvider {
         this.breadcrumbEligible = Objects.requireNonNull(breadcrumbEligible, "breadcrumbEligible");
         this.clock = Objects.requireNonNull(clock, "clock");
         this.logSink = logSink;
+        this.refreshOperation = Objects.requireNonNull(refreshOperation, "refreshOperation");
+        this.clearOperation = Objects.requireNonNull(clearOperation, "clearOperation");
+        this.clearAllOperation = Objects.requireNonNull(clearAllOperation, "clearAllOperation");
     }
 
     @Nonnull
@@ -93,7 +124,7 @@ public final class TelemetryProfilerContextProvider {
                 Map<String, Integer> supplied = breadcrumbs.snapshot(projectId);
                 categoryCounts = supplied == null ? Map.of() : Map.copyOf(supplied);
             } else {
-                breadcrumbs.clear(projectId);
+                clearProject(projectId, observedAtMillis);
             }
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
@@ -113,11 +144,18 @@ public final class TelemetryProfilerContextProvider {
     }
 
     public void refreshProjects(@Nonnull List<TelemetryProjectRegistration> projects) {
+        refreshProjectsConfirmed(projects);
+    }
+
+    boolean refreshProjectsConfirmed(@Nonnull List<TelemetryProjectRegistration> projects) {
         try {
-            breadcrumbs.refreshProjects(projects);
+            Objects.requireNonNull(projects, "projects");
+            refreshOperation.refresh(projects);
+            return true;
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
             logFailure(Source.BREADCRUMBS, failure);
+            return false;
         }
     }
 
@@ -147,33 +185,44 @@ public final class TelemetryProfilerContextProvider {
     }
 
     public void clear(@Nullable String projectId) {
-        clearProject(projectId);
+        clearConfirmed(projectId);
     }
 
     public void clearAll() {
+        clearAllConfirmed();
+    }
+
+    boolean clearConfirmed(@Nullable String projectId) {
+        return clearProjectConfirmed(projectId, safeNowForLog());
+    }
+
+    boolean clearAllConfirmed() {
         try {
-            breadcrumbs.clearAll();
+            clearAllOperation.clearAll();
+            return true;
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
             logFailure(Source.BREADCRUMBS, failure);
+            return false;
         }
     }
 
     private void clearProject(@Nullable String projectId) {
-        try {
-            breadcrumbs.clear(projectId);
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            logFailure(Source.BREADCRUMBS, failure);
-        }
+        clearConfirmed(projectId);
     }
 
     private void clearProject(@Nullable String projectId, long nowMillis) {
+        clearProjectConfirmed(projectId, nowMillis);
+    }
+
+    private boolean clearProjectConfirmed(@Nullable String projectId, long nowMillis) {
         try {
-            breadcrumbs.clear(projectId);
+            clearOperation.clear(projectId);
+            return true;
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
             logFailure(Source.BREADCRUMBS, failure, nowMillis);
+            return false;
         }
     }
 
@@ -270,5 +319,20 @@ public final class TelemetryProfilerContextProvider {
         Source(@Nonnull String label) {
             this.label = label;
         }
+    }
+
+    @FunctionalInterface
+    interface RefreshOperation {
+        void refresh(@Nonnull List<TelemetryProjectRegistration> projects);
+    }
+
+    @FunctionalInterface
+    interface ClearOperation {
+        void clear(@Nullable String projectId);
+    }
+
+    @FunctionalInterface
+    interface ClearAllOperation {
+        void clearAll();
     }
 }

@@ -20,6 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProfilerContextProviderTest {
     private static final String PROJECT_ID = "example";
@@ -248,6 +250,44 @@ class TelemetryProfilerContextProviderTest {
         assertEquals(Map.of(), provider.snapshot("other").breadcrumbCategoryCounts());
         provider.recordBreadcrumb(PROJECT_ID, CATEGORY);
         assertEquals(Map.of(CATEGORY, 1), provider.snapshot(PROJECT_ID).breadcrumbCategoryCounts());
+    }
+
+    // Regression: a failed counter clear must be observable by the service
+    // while the public fail-safe clear boundary remains non-throwing.
+    @Test
+    void confirmedClearReportsFailureWithoutClaimingCountsWereRemoved() {
+        TelemetryProfilerBreadcrumbCounter breadcrumbs = registeredCounter();
+        breadcrumbs.record(PROJECT_ID, CATEGORY);
+        AtomicBoolean failClear = new AtomicBoolean(true);
+        TelemetryProfilerContextProvider provider = new TelemetryProfilerContextProvider(
+                () -> 1,
+                "0.5.9",
+                new SparkPublicMetricsAdapter(() -> null),
+                breadcrumbs,
+                ignored -> true,
+                () -> 1000L,
+                null,
+                breadcrumbs::refreshProjects,
+                ignored -> {
+                    if (failClear.get()) {
+                        throw new IllegalStateException("clear failed");
+                    }
+                    breadcrumbs.clear(PROJECT_ID);
+                },
+                breadcrumbs::clearAll
+        );
+
+        provider.clear(PROJECT_ID);
+        assertEquals(Map.of(CATEGORY, 1), provider.snapshot(PROJECT_ID)
+                .breadcrumbCategoryCounts());
+        assertFalse(provider.clearConfirmed(PROJECT_ID));
+        assertEquals(Map.of(CATEGORY, 1), provider.snapshot(PROJECT_ID)
+                .breadcrumbCategoryCounts());
+
+        failClear.set(false);
+        assertTrue(provider.clearConfirmed(PROJECT_ID));
+        assertEquals(Map.of(), provider.snapshot(PROJECT_ID)
+                .breadcrumbCategoryCounts());
     }
 
     private static TelemetryProfilerContextProvider provider(
