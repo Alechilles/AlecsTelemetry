@@ -17,8 +17,8 @@ class TelemetryDataPathsTest {
     Path tempDir;
 
     @Test
-    void descriptorDirectoriesIncludeOnlyTheActiveServerModsDirectory() throws Exception {
-        Path runtimeRoot = tempDir.resolve("data").resolve("pre-release").resolve("Saves")
+    void descriptorDirectoriesIncludeSaveAndInstalledModsDirectories() throws Exception {
+        Path runtimeRoot = tempDir.resolve("UserData").resolve("Saves")
                 .resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry!");
         Files.createDirectories(runtimeRoot);
         Path saveModsDirectory = runtimeRoot.getParent();
@@ -36,7 +36,13 @@ class TelemetryDataPathsTest {
 
         List<Path> descriptorDirectories = paths.descriptorDirectories();
 
-        assertEquals(List.of(saveModsDirectory.toAbsolutePath().normalize()), descriptorDirectories);
+        assertEquals(
+                List.of(
+                        saveModsDirectory.toAbsolutePath().normalize(),
+                        globalModsDirectory.toAbsolutePath().normalize()
+                ),
+                descriptorDirectories
+        );
     }
 
     @Test
