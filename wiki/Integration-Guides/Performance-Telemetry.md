@@ -17,6 +17,12 @@ The optional Spark monitor provides a separate local project view. It reads
 completed passive Spark `ASYNC` `EXECUTION` windows only. The global monitor,
 the project, and project performance consent must all be enabled.
 
+The monitor reads the newest completed window directly from the tested Spark
+`1.10.172-beta7` in-memory tree at a default and minimum five-minute interval.
+It does not export Spark protobuf data
+or run class-source lookup. Current captures use `<unknown>` source labels, so
+mod descriptors need accurate `packagePrefixes` for reliable attribution.
+
 The view is available from `TelemetryProjectHandle.profiler()` and advertises
 `profiler-api-v1`. It publishes bounded immutable in-memory summaries with class
 and method names, sampled timing, selected WorldThread share, fingerprints,

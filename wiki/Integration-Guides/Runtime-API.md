@@ -54,6 +54,10 @@ an owned method. `DOWNSTREAM` identifies sampled work below the nearest owned
 method and includes the first external method as context. Current paths use
 `OBSERVED`, `PROVISIONAL`, or `REPEATED` from the `hot-path-v1` rolling rules.
 
+The low-cost direct capture path does not run Spark class-source lookup.
+Current captures therefore use `<unknown>` source labels. Project descriptors
+must provide accurate `packagePrefixes` for reliable attribution.
+
 An actionable window is a successful bounded Spark capture with usable selected
 WorldThread samples. Every eligible project advances for that window, even
 when it has no attributed path. The result is an empty `COMPLETE` snapshot, so

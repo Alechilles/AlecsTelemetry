@@ -40,8 +40,9 @@ project performance consent to be enabled.
 
 - `profiler status` shows current diagnostics, including monitor state, active
   ownership and circuit flags, Spark version, schedule, current completed
-  window when available, capture timing, heap delta, thread/frame counts, and
-  hot-path count. It does not show retained history.
+  window when available, capture timing, heap delta, capture-thread allocated
+  bytes when supported, thread/frame counts, and hot-path count. It does not
+  show retained history.
 - `profiler top` shows up to 10 ranked hot paths from the current actionable
   diagnostics result. It can show no data while the monitor is `CAPTURING` or
   after a later non-actionable state, even when history contains an earlier
@@ -53,10 +54,11 @@ The project forms read the local `profiler-api-v1` view. `top <project-id>`
 shows at most five paths from the latest project snapshot. Its header includes
 analysis duration, omitted-path count, and truncated-prefix count. `history
 <project-id>` shows the newest ten retained snapshots in oldest-to-newest
-order. Path lines include `SELF` or `DOWNSTREAM`, sampled milliseconds,
-selected WorldThread share, the owned method, an optional first external
-method, qualification, and a 32-character fingerprint. Current paths use
-`OBSERVED`, `PROVISIONAL`, or `REPEATED` from `hot-path-v1`.
+order. Each path uses a compact line with `SELF` or `DOWNSTREAM`, sampled
+milliseconds, selected WorldThread share, qualification, and a 32-character
+fingerprint. The next line contains the complete bounded owned method tuple. A
+`DOWNSTREAM` path also gets a complete bounded first external method tuple.
+Current paths use `OBSERVED`, `PROVISIONAL`, or `REPEATED` from `hot-path-v1`.
 
 `signals <project-id>` evaluates the latest five actionable project snapshots
 and shows at most five active candidates. A candidate can remain visible after

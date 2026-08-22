@@ -107,7 +107,7 @@ time it starts.
   "sparkProfiler": {
     "enabled": false,
     "initialDelaySeconds": 90,
-    "intervalSeconds": 60,
+    "intervalSeconds": 300,
     "timeoutSeconds": 10,
     "maxSummaryEntries": 5,
     "maxHistorySnapshots": 10
@@ -150,14 +150,16 @@ by default. To use it, enable Spark's passive background profiler, set
 server.
 
 The active Telemetry coordinator starts the monitor after its service starts.
-The monitor reads only completed Spark `ASYNC` `EXECUTION` background windows; it
-does not read a profile started by a user. It checks the latest completed window
-after `initialDelaySeconds`. After a capture attempt resolves without opening
-the circuit, the next poll is scheduled `intervalSeconds` later. A poll can
-read and summarize the same latest completed window again. The monitor retains
-and logs a completed actionable window key once, but `NO_ACTIONABLE_DATA` can be
-processed again on later polls. A completed window can be behind current server
-activity by the Spark background-profiler interval.
+The monitor reads only completed Spark `ASYNC` `EXECUTION` background windows;
+it does not read a profile started by a user. It reads the newest completed
+window directly from the tested Spark `1.10.172-beta7` in-memory tree. It does not export
+Spark protobuf data or run Spark class-source lookup. It checks the latest
+completed window after `initialDelaySeconds`. After a capture attempt resolves
+without opening the circuit, the next poll is scheduled `intervalSeconds`
+later. A poll can read and summarize the same latest completed window again.
+The monitor retains and logs a completed actionable window key once, but
+`NO_ACTIONABLE_DATA` can be processed again on later polls. A completed window
+can be behind current server activity by the Spark background-profiler interval.
 
 The ranking uses Java self time from Hytale thread names containing
 `WorldThread`. Native frames and Java work from other thread names do not enter
@@ -171,6 +173,11 @@ when the manual-report settings, project descriptor, review, redaction, and
 clipping controls allow it. The monitor does not write raw Spark profile or
 frame-tree data to the log or a profile file, and Telemetry does not upload that
 raw data. Spark may retain its own profiler data under its own settings.
+
+Completed status detail includes `captureAllocatedBytes` when the JVM exposes
+current-thread allocation counters. `unavailable` means that optional JVM
+counter was not enabled. The existing heap delta is a separate whole-JVM used
+heap observation and is not an allocation count.
 
 Every line returned by `/telemetry profiler status`, `/telemetry profiler top`,
 `/telemetry profiler history`, and `/telemetry profiler signals` is also written
@@ -227,9 +234,10 @@ Project commands are optional filters on the existing commands:
 ```
 
 `top` shows at most five paths from the latest project snapshot. `history`
-shows the newest ten snapshots. Path lines include `SELF` or `DOWNSTREAM`,
-sampled milliseconds, selected WorldThread share, the owned method, an optional
-first external method, qualification, and a 32-character fingerprint. The
+shows the newest ten snapshots. Each path uses a compact line with `SELF` or
+`DOWNSTREAM`, sampled milliseconds, selected WorldThread share, qualification,
+and a 32-character fingerprint. Separate following lines contain the complete
+bounded owned method and, for `DOWNSTREAM`, the first external method. The
 rolling qualification is `OBSERVED`, `PROVISIONAL`, or `REPEATED` under
 `hot-path-v1`. `signals` evaluates the latest five actionable snapshots and
 shows at most five active candidates with severity, qualification, hits/5,
@@ -240,10 +248,13 @@ ordinary server log. A manually attached server log can contain those lines
 when the normal manual-report settings, review, redaction, and clipping
 controls allow the attachment.
 
-Profiler attribution matches exact plugin identifiers first, then the longest
-complete package prefix. The profiler index accepts at most 32 normalized
-package prefixes per project. Each package-prefix value is limited to 512
-characters before normalization. It reports omitted prefixes in diagnostics.
+Profiler attribution can match an exact plugin identifier, then the longest
+complete package prefix. The direct capture path does not run Spark's source
+lookup, so current captures use `<unknown>` source labels. Accurate
+`packagePrefixes` are required for reliable project attribution. The profiler
+index accepts at most 32 normalized package prefixes per project. Each
+package-prefix value is limited to 512 characters before normalization. It
+reports omitted prefixes in diagnostics.
 
 ### Settings
 
@@ -253,7 +264,7 @@ The canonical `sparkProfiler` fields are:
 | --- | ---: | ---: |
 | `enabled` | `false` | `true` or `false` |
 | `initialDelaySeconds` | `90` | 60 to 3600 |
-| `intervalSeconds` | `60` | 30 to 3600 |
+| `intervalSeconds` | `300` | 300 to 3600 |
 | `timeoutSeconds` | `10` | 1 to 60 |
 | `maxSummaryEntries` | `5` | 1 to 10 |
 | `maxHistorySnapshots` | `10` | 1 to 10 |
@@ -262,7 +273,7 @@ Values outside a numeric range are clamped. New settings templates write only
 the canonical `sparkProfiler` block. The legacy `sparkProfilerCanary` JSON block
 is still accepted for compatibility. It supports `enabled`,
 `initialDelaySeconds`, `timeoutSeconds`, and `maxSummaryEntries`; its interval
-is 60 seconds and its history limit is 10. If both JSON blocks are present, the
+is 300 seconds and its history limit is 10. If both JSON blocks are present, the
 canonical `sparkProfiler` block wins. This includes an explicit `null` canonical
 value, which uses safe canonical defaults instead of the legacy block.
 
@@ -270,12 +281,11 @@ value, which uses safe canonical defaults instead of the legacy block.
 
 - At least 256 MiB of JVM heap headroom is required before a Spark read. Low
   headroom skips that read and tries again at the next interval.
-- A window with more than 25,000 active decoded nodes is discarded as
-  `TOO_COMPLEX`; Telemetry does not keep a partial ranking. Zero-time nodes
-  retained by Spark for older windows do not count toward this limit and are
-  not kept in project evidence. The complete retained Spark tree also has a
-  separate 100,000-node hard limit before Telemetry allocates per-node working
-  arrays.
+- A window with more than 25,000 active nodes is discarded as `TOO_COMPLEX`;
+  Telemetry does not keep a partial ranking. Zero-time branches retained by
+  Spark for older windows do not count toward this limit and are not traversed.
+  A direct read with a 20 ms budget, including mutex wait, also stops as
+  `TOO_COMPLEX` without a partial result.
 - A JVM-wide capture gate allows only one Telemetry Spark read at a time, even
   when standalone and embedded runtimes are present. Capture work uses daemon
   threads and does not run on Hytale's shared scheduler.
@@ -286,15 +296,14 @@ value, which uses safe canonical defaults instead of the legacy block.
   also fails closed.
 - Unsupported Spark, incompatible Spark, excessive profile complexity, a
   failed read, or a timeout opens the monitor circuit for the process. The
-  monitor does not retry after the circuit opens. A late export result is
-  discarded if Spark ignores interruption. Spark absence, no active background
-  sampler, no completed window, no actionable WorldThread data, low heap, and
-  Spark's transient window-rotation export race do not open the circuit; the
+  monitor does not retry after the circuit opens. A late direct-read result is
+  discarded. Spark absence, no active background sampler, no completed window,
+  no actionable WorldThread data, and low heap do not open the circuit; the
   monitor can poll again.
 - A new read starts only while its provider owns the active Telemetry
   coordinator. Ownership loss requests cancellation, stops future polls, and
-  fences late results. A Spark export that ignores interruption may continue in
-  its daemon worker until it returns; the late result is not published.
+  fences late results. A read that does not stop promptly may continue in its
+  daemon worker until it returns; the late result is not published.
   Coordinator shutdown suspends the monitor before service shutdown, and the
   provider handle closes it on permanent shutdown.
 
@@ -313,15 +322,6 @@ Inspect local state with `/telemetry status`,
 
 | Spark Hytale release | Accepted artifact SHA-256 |
 | --- | --- |
-| 1.10.158-r1 | `f57c7a93f77657318340f214fbc37bc244900bc49bd55612f002e85696cc0662` |
-| 1.10.162-r1 | `0d5889ca426a5919bb56a1b36177fbeb86ab143428fec7b236103f4fec874342` |
-| 1.10.164-r1 | `5bd826a5da5a8d9c0b540f2a84de4538de51c3ab199019f7379fdea30ecc5756` |
-| 1.10.165-beta2 | `13654be2a1f00047e3fadf69335afdbb45332bd4eb0d222c7754c4685f6684f2` |
-| 1.10.165-beta3 | `4178cccab6afff2d3c2f0a68fb200d39811838fad1a21e595deb4c917eadfc69` |
-| 1.10.165-beta4 | `41a5bbd8ea681525df80d7b08839b85824cfa9e2ecb8ea1837e26809c441603f` |
-| 1.10.165-r1 | `9c3c762619893fc44289d712e18c57ba3c0675b6b2e1967a36273c75705ebecb` |
-| 1.10.172-beta5 | `ed2b28921d1ddd606d612ec602472d79ae606656ec840fe9f8ba593d39f3a159` |
-| 1.10.172-beta6 | `5e536469e7f4511e9ba279114ddf1b634938161bb896e4098a5a4af28966d19f` |
 | 1.10.172-beta7 | `1c5806cdc276af608051b8fc6c3aee05ab184da28e81735ba9682e5950c5617a` |
 
 The compatibility gate checks Spark's manifest base version and the SHA-256 of

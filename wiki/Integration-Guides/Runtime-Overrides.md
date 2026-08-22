@@ -133,7 +133,7 @@ Global runtime settings live in `Settings/runtime.json`, not per-project overrid
   "sparkProfiler": {
     "enabled": false,
     "initialDelaySeconds": 90,
-    "intervalSeconds": 60,
+    "intervalSeconds": 300,
     "timeoutSeconds": 10,
     "maxSummaryEntries": 5,
     "maxHistorySnapshots": 10
@@ -147,7 +147,10 @@ Global runtime settings live in `Settings/runtime.json`, not per-project overrid
 
 The canonical `sparkProfiler` setting is off by default. When a server owner
 enables it, the active Telemetry coordinator reads completed `ASYNC` `EXECUTION`
-windows from Spark's passive background profiler after startup. It does not read
+windows from Spark's passive background profiler after startup. It reads only
+the newest completed window directly from the tested Spark `1.10.172-beta7`
+tree. It does
+not export Spark protobuf data or run class-source lookup, and it does not read
 a profile started by a user. After `initialDelaySeconds`, the monitor polls
 `intervalSeconds` after each capture attempt resolves without opening the
 circuit. It can re-read the same latest completed window. A completed actionable
@@ -158,7 +161,10 @@ The ranking uses Java self time from Hytale thread names containing
 `WorldThread`. Native frames and Java work on other thread names do not enter
 the ranking. Telemetry keeps bounded summaries and history in memory and logs up
 to `maxSummaryEntries` hot paths when it first retains and logs an actionable
-window key.
+window key. Completed status detail includes `captureAllocatedBytes` when the
+JVM exposes current-thread allocation counters. `unavailable` means the
+optional counter was not enabled. Heap delta remains a separate whole-JVM
+used-heap observation.
 
 The monitor has no dedicated profiler evidence file and no structured Phase 2
 profiler evidence queue or upload path. It keeps bounded summaries, signals, and
@@ -209,9 +215,11 @@ most four listener workers per project and 32 globally. Project commands are:
 /telemetry profiler signals <project-id>
 ```
 
-`top` shows at most five paths. `history` shows the newest ten snapshots.
-Paths use `SELF` or `DOWNSTREAM` and `OBSERVED`, `PROVISIONAL`, or `REPEATED`
-qualification under `hot-path-v1`. `signals` evaluates the latest five
+`top` shows at most five paths. `history` shows the newest ten snapshots. Each
+top path has a compact metrics line followed by a complete bounded owned method
+line and, for `DOWNSTREAM`, a first external method line. Paths use `SELF` or
+`DOWNSTREAM` and `OBSERVED`, `PROVISIONAL`, or `REPEATED` qualification under
+`hot-path-v1`. `signals` evaluates the latest five
 actionable snapshots and shows at most five active candidates with severity,
 qualification, hits/5, median share, total sampled milliseconds, attribution,
 method tuples, and fingerprint. A candidate can remain visible after it is
@@ -221,10 +229,12 @@ when the normal report settings, review, redaction, and clipping controls allow
 it. Disabling the project or performance consent clears the project's retained
 view; re-enabling consent does not restore old summaries.
 
-Profiler attribution matches an exact plugin identifier, then the longest
-complete package prefix. The profiler index accepts at most 32 normalized
-prefixes per project. Each package-prefix value is limited to 512 characters
-before normalization. It reports omitted prefixes.
+Profiler attribution can match an exact plugin identifier, then the longest
+complete package prefix. Direct captures use `<unknown>` source labels because
+the low-cost path skips Spark's source lookup. Accurate `packagePrefixes` are
+required for reliable project attribution. The profiler index accepts at most
+32 normalized prefixes per project. Each package-prefix value is limited to
+512 characters before normalization. It reports omitted prefixes.
 
 ### Spark monitor settings
 
@@ -232,14 +242,14 @@ before normalization. It reports omitted prefixes.
 | --- | ---: | ---: |
 | `enabled` | `false` | `true` or `false` |
 | `initialDelaySeconds` | `90` | 60 to 3600 |
-| `intervalSeconds` | `60` | 30 to 3600 |
+| `intervalSeconds` | `300` | 300 to 3600 |
 | `timeoutSeconds` | `10` | 1 to 60 |
 | `maxSummaryEntries` | `5` | 1 to 10 |
 | `maxHistorySnapshots` | `10` | 1 to 10 |
 
 Values outside a numeric range are clamped. The legacy `sparkProfilerCanary`
 JSON block remains accepted with `enabled`, `initialDelaySeconds`,
-`timeoutSeconds`, and `maxSummaryEntries`; its interval is 60 seconds and its
+`timeoutSeconds`, and `maxSummaryEntries`; its interval is 300 seconds and its
 history limit is 10. If both blocks are present, canonical `sparkProfiler`
 wins, including an explicit `null` canonical value, which uses safe canonical
 defaults.
@@ -248,18 +258,17 @@ The monitor checks Spark's reported base version and the SHA-256 of the complete
 loaded Spark JAR before reading private Spark state. Only the exact artifacts in
 the tested release matrix are accepted. A changed, repackaged, later, or
 otherwise incompatible artifact fails closed. At least 256 MiB of JVM heap
-headroom is required. A window with more than 25,000 active decoded nodes is
-discarded without a partial ranking. Zero-time nodes retained by Spark for
-older windows do not count toward this limit and are not kept. The complete
-retained Spark tree has a separate 100,000-node hard limit before Telemetry
-allocates per-node working arrays. Unsupported or incompatible Spark,
+headroom is required. A window with more than 25,000 active nodes is discarded
+without a partial ranking. Zero-time historical branches are not traversed. A
+direct read also stops without a partial result when its 20 ms budget,
+including mutex wait, expires. Unsupported or incompatible Spark,
 excessive complexity, a failed read, or a timeout opens the session circuit;
 the monitor does not retry after that. Spark absence, no active background
-sampler, no completed window, no actionable WorldThread data, low heap, and
-Spark's transient window-rotation export race do not open the circuit. Ownership
+sampler, no completed window, no actionable WorldThread data, and low heap do
+not open the circuit. Ownership
 loss requests cancellation, stops future polls,
-and fences late results, but an export that ignores interruption can continue
-until Spark returns. See the repository's [runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
+and fences late results, but a read that does not stop promptly can continue
+until it returns. See the repository's [runtime override reference](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
 for the complete tested Spark version and JAR hash matrix.
 
 ## Merge Rules

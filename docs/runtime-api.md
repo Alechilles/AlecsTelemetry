@@ -93,6 +93,10 @@ sampled milliseconds, selected WorldThread share, a qualification, a
 32-character fingerprint, and a representative path of at most eight frames.
 The rule set is `hot-path-v1`.
 
+The low-cost capture path does not run Spark class-source lookup. Current
+direct captures therefore use `<unknown>` source labels. Project descriptors
+must provide accurate `packagePrefixes` for reliable attribution.
+
 An actionable window is a successful bounded Spark capture with usable selected
 WorldThread samples. The service advances every performance-eligible project
 for that window, including a project with no attributed path. Such a project

@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: August 19, 2026
+Effective date: August 21, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -90,7 +90,8 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - Consent metrics are collected separately and are limited to project/version,
   category choice, and first-review funnel events.
 - The optional Spark hot-path monitor is off by default. When a server owner
-  enables it, the runtime reads completed passive Spark background windows,
+  enables it, the runtime reads the newest completed passive Spark background
+  window no more often than once every five minutes,
   computes the loaded Spark JAR's SHA-256 in memory, and writes bounded
   WorldThread hot-path summaries to the local server log. When the global
   monitor is enabled, the project is enabled, and performance consent is
@@ -108,7 +109,8 @@ Alec's Telemetry is designed to avoid player identity data by default.
   that text when the normal report settings, project descriptor, review,
   redaction, and clipping controls allow it. The monitor does not write raw
   Spark profile or frame-tree data to the log or a profile file, and Telemetry
-  does not upload that raw data.
+  does not upload that raw data. The current direct reader does not build Spark
+  protobuf data or request Spark class-source maps.
 - The hosted platform may use IP addresses and request metadata for rate
   limiting, abuse prevention, server-country derivation, security logging, and
   normal hosting operations.
@@ -142,19 +144,24 @@ directory. These files can include:
 Local files stay on the server or local machine unless the configured telemetry
 category or report workflow uploads them.
 
-The Spark hot-path monitor reads Spark thread, class, method, source, and timing
-labels only while it creates a summary. It selects Java self time from Hytale
-`WorldThread` threads. Native frames and Java work on other thread names do not
-enter the ranking. The monitor also computes the loaded Spark JAR's SHA-256 in
-memory to enforce the tested-artifact gate. The runtime does not retain that
-hash or raw profile data. It keeps only bounded summaries and history in memory.
+The Spark hot-path monitor reads Spark thread labels, Java class and method
+names, method descriptors, tree links, and one completed window's timing
+counters only while it creates a summary. It does not request Spark source or
+mod-label maps. It selects Java self time from Hytale `WorldThread` threads.
+Native frames and Java work on other thread names do not enter the ranking. The
+monitor also computes the loaded Spark JAR's SHA-256 in memory to enforce the
+tested-artifact gate. The runtime does not retain that hash or raw profile data.
+It keeps only bounded summaries and history in memory.
 It writes bounded automatic summary lines and operator-requested profiler
 command replies to ordinary server log output. It does not create a raw Spark
 profile file. The server owner and the server's logging setup control retention
 of that local log. Spark can keep its own profiler data under Spark's settings
 and behavior; that retention is separate from Alec's Telemetry.
-Local summaries can contain Spark-reported source or mod labels, Java class and
-method names, timing values, and bounded thread/frame counts.
+Local summaries can contain Java class and method names, timing values, and
+bounded thread/frame counts. The direct reader uses `<unknown>` for Spark source
+labels because it skips Spark's source lookup. Completed status text can also
+contain capture-thread allocated bytes when the JVM supports that counter and a
+separate whole-JVM used-heap delta.
 
 The Spark hot-path monitor has no dedicated profiler evidence file and no
 structured Phase 2 profiler evidence queue or upload path. It keeps bounded

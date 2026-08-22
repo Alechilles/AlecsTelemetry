@@ -264,6 +264,10 @@ available, it matches the longest complete normalized package prefix. A
 partial package string is not a match, and equal-best matches remain
 unattributed.
 
+The low-cost direct Spark reader does not run class-source lookup, so current
+captures use `<unknown>` source labels. Set accurate `packagePrefixes` for all
+packages that can contain your server hot paths.
+
 The profiler accepts at most 32 normalized package prefixes per project. It
 trims values, replaces `/` with `.`, removes trailing dots, and removes
 duplicates in descriptor order. Each package-prefix value is limited to 512

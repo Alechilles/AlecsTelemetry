@@ -402,12 +402,21 @@ active in the newest completed Spark window; zero-time nodes retained by Spark
 for older windows are not kept. A project view clears
 when performance consent is disabled; only later windows can repopulate it.
 
+The capture path reads the newest completed window directly from the tested
+Spark `1.10.172-beta7` in-memory tree at a default and minimum five-minute
+interval. It does not export Spark
+protobuf data or run Spark class-source lookup. Direct captures therefore use
+`<unknown>` as the source label. Mod descriptors must provide accurate
+`packagePrefixes` for reliable project attribution.
+
 The API exposes class/method names, sampled timing, fingerprints, and bounded
 representative paths. It does not expose raw Spark profiles, frame trees, player
 data, or server identity, and Telemetry does not upload these summaries. Spark
 may retain or upload its own profiles under Spark's separate settings.
 The project `profiler top` header also reports analysis duration, omitted-path
-count, and truncated-prefix count for local operator checks.
+count, and truncated-prefix count for local operator checks. Each ranked path
+uses a compact summary line followed by a complete bounded owned-method line
+and, for `DOWNSTREAM`, a complete bounded first-external-method line.
 
 ## Useful Commands
 

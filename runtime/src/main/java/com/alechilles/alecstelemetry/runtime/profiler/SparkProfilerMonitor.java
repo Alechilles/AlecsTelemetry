@@ -669,7 +669,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                     new SparkProfilerDiagnostics(
                             SparkProfilerDiagnostics.State.TIMED_OUT,
                             null,
-                            "Spark snapshot exceeded the time limit. Late results will be discarded; export work may continue until Spark returns.",
+                            "Spark snapshot exceeded the time limit. Late results will be discarded; direct-read work may continue until it returns.",
                             SparkProfilerMonitorSupport.elapsedMillis(attempt.startedAtNanos),
                             0L,
                             0,
@@ -682,7 +682,7 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                     0L
             );
             shutdownExecutorLocked(true);
-            log(Level.WARNING, "Spark profiler monitor timed out. Late results will be discarded; export work may continue until Spark returns.");
+            log(Level.WARNING, "Spark profiler monitor timed out. Late results will be discarded; direct-read work may continue until it returns.");
         }
     }
 
