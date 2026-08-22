@@ -250,7 +250,29 @@ class TelemetryProfilerCommandTest {
     void longProjectPathKeepsRequiredDownstreamFieldsAndFullFingerprintWithinLineBudget()
             throws Exception {
         String fingerprint = "ffeeddccbbaa99887766554433221100";
-        TelemetryProfilerSnapshot snapshot = snapshot(longDownstreamPath(fingerprint));
+        String ownedClass = "com.alechilles.alecstamework.companion.bonded."
+                + "BondedCompanionLeaseRuntimeIndex$WorldActivity";
+        String ownedMethod = "refreshLeaseRuntimeIndexForWorldActivity";
+        String ownedDescriptor = "([Ljava/lang/String;)Lcom/alechilles/alecstamework/companion/"
+                + "bonded/BondedCompanionLeaseRuntimeIndex$WorldActivity;";
+        String externalClass = "com.hypixel.hytale.server.core.universe.world.storage.ChunkStore";
+        String externalMethod = "getChunkReference";
+        String externalDescriptor = "(J)Lcom/hypixel/hytale/component/Ref;";
+        TelemetryProfilerPathEvidence evidence = new TelemetryProfilerPathEvidence(
+                fingerprint,
+                TelemetryProfilerAttribution.DOWNSTREAM,
+                ownedClass,
+                ownedMethod,
+                ownedDescriptor,
+                externalClass,
+                externalMethod,
+                externalDescriptor,
+                123456789.0,
+                123456789.0,
+                TelemetryProfilerQualification.OBSERVED,
+                List.of()
+        );
+        TelemetryProfilerSnapshot snapshot = snapshot(evidence);
         List<String> logLines = new ArrayList<>();
         TelemetryCommandRuntime runtime = runtimeWithProjectSnapshot(
                 "mod-a",
@@ -272,10 +294,14 @@ class TelemetryProfilerCommandTest {
         assertTrue(pathLine.contains("attribution=DOWNSTREAM"));
         assertTrue(pathLine.contains("sampledMs=123456789.00 ms"));
         assertTrue(pathLine.contains("worldThreadShare=123456789.00%"));
-        assertTrue(pathLine.contains("ownedMethod="));
-        assertTrue(pathLine.contains("externalMethod="));
+        assertFalse(pathLine.contains("ownedMethod="));
+        assertFalse(pathLine.contains("externalMethod="));
         assertTrue(pathLine.contains("qualification=OBSERVED"));
         assertTrue(pathLine.contains("fingerprint=" + fingerprint));
+        assertTrue(sender.rawLines().contains(
+                "ownedMethod=" + ownedClass + "#" + ownedMethod + ownedDescriptor));
+        assertTrue(sender.rawLines().contains(
+                "externalMethod=" + externalClass + "#" + externalMethod + externalDescriptor));
         assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
         assertEquals(sender.rawLines(), logLines);
     }

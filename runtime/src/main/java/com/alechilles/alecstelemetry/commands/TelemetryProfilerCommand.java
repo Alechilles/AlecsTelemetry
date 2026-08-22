@@ -30,7 +30,6 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
     private static final int MAX_SIGNAL_WINDOWS = 5;
     private static final int MAX_HISTORY_ENTRIES = 10;
     private static final int MAX_PROJECT_ID_LENGTH = 120;
-    private static final int MAX_PROJECT_METHOD_TEXT = 66;
     private static final int MAX_PROJECT_MEASUREMENT_TEXT = 12;
     private static final int MAX_OUTPUT_TEXT = 320;
 
@@ -309,7 +308,23 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                 status.truncatedPrefixCount()
         )));
         for (int index = 0; index < count; index++) {
-            send(commandContext, runtime, formatProjectPath(index + 1, paths.get(index)));
+            TelemetryProfilerPathEvidence path = paths.get(index);
+            send(commandContext, runtime, formatProjectPath(index + 1, path));
+            send(commandContext, runtime,
+                    formatMethodEvidence("ownedMethod=",
+                            path.ownedClassName(),
+                            path.ownedMethodName(),
+                            path.ownedMethodDescriptor()));
+            if (path.attribution() == TelemetryProfilerAttribution.DOWNSTREAM
+                    && (path.firstExternalClassName() != null
+                    || path.firstExternalMethodName() != null
+                    || path.firstExternalMethodDescriptor() != null)) {
+                send(commandContext, runtime,
+                        formatMethodEvidence("externalMethod=",
+                                path.firstExternalClassName(),
+                                path.firstExternalMethodName(),
+                                path.firstExternalMethodDescriptor()));
+            }
         }
     }
 
@@ -393,19 +408,7 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                 .append(", sampledMs=").append(measurement(path.sampledMilliseconds())).append(" ms")
                 .append(", worldThreadShare=").append(measurement(path.selectedWorldThreadSharePercent()))
                 .append('%')
-                .append(", ownedMethod=").append(projectMethod(path.ownedClassName(),
-                        path.ownedMethodName(), path.ownedMethodDescriptor(), MAX_PROJECT_METHOD_TEXT));
-        if (path.firstExternalClassName() != null
-                || path.firstExternalMethodName() != null
-                || path.firstExternalMethodDescriptor() != null) {
-            line.append(", externalMethod=").append(projectMethod(
-                    path.firstExternalClassName(),
-                    path.firstExternalMethodName(),
-                    path.firstExternalMethodDescriptor(),
-                    MAX_PROJECT_METHOD_TEXT
-            ));
-        }
-        line.append(", qualification=").append(path.qualification().name())
+                .append(", qualification=").append(path.qualification().name())
                 .append(", fingerprint=").append(bounded(path.fingerprint(), 32));
         return bounded(line.toString());
     }
@@ -429,14 +432,20 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                                         @Nullable String descriptor,
                                         int maxLength) {
         int tupleLength = Math.max(9, maxLength);
+        String safeClass = methodComponent(className);
+        String safeMethod = methodComponent(methodName);
+        String safeDescriptor = methodComponent(descriptor);
+        String complete = safeClass + "#" + safeMethod + safeDescriptor;
+        if (complete.length() <= tupleLength) {
+            return complete;
+        }
         int componentBudget = tupleLength - 1;
         int classLength = componentBudget / 3;
         int methodLength = componentBudget / 3;
         int descriptorLength = componentBudget - classLength - methodLength;
-        String safeClass = boundedComponent(className, classLength);
-        String safeMethod = boundedComponent(methodName, methodLength);
-        String safeDescriptor = boundedComponent(descriptor, descriptorLength);
-        return safeClass + "#" + safeMethod + safeDescriptor;
+        return boundedComponent(safeClass, classLength)
+                + "#" + boundedComponent(safeMethod, methodLength)
+                + boundedComponent(safeDescriptor, descriptorLength);
     }
 
     @Nonnull
@@ -450,9 +459,7 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
 
     @Nonnull
     private static String boundedComponent(@Nullable String value, int maxLength) {
-        String normalized = value == null || value.isBlank()
-                ? "<unknown>"
-                : value.replace('\n', ' ').replace('\r', ' ');
+        String normalized = methodComponent(value);
         int limit = Math.max(1, maxLength);
         if (normalized.length() <= limit) {
             return normalized;
@@ -461,6 +468,13 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
             return normalized.substring(0, limit);
         }
         return normalized.substring(0, limit - 3) + "...";
+    }
+
+    @Nonnull
+    private static String methodComponent(@Nullable String value) {
+        return value == null || value.isBlank()
+                ? "<unknown>"
+                : value.replace('\n', ' ').replace('\r', ' ');
     }
 
     @Nonnull
