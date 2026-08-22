@@ -74,7 +74,7 @@ order. Each project path uses one compact line with `SELF` or `DOWNSTREAM`,
 sampled milliseconds, selected WorldThread share, qualification, and the
 32-character fingerprint. The next line contains the complete bounded owned
 method tuple. A `DOWNSTREAM` path also gets a complete bounded first external
-method tuple. Current snapshot paths use the rolling `hot-path-v1`
+method tuple. Current snapshot paths use the rolling `hot-path-v2`
 qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`.
 
 `signals <project-id>` evaluates the latest five actionable project snapshots
@@ -90,9 +90,13 @@ it is absent from the newest window until it expires. Each candidate includes:
 - `SELF` or `DOWNSTREAM` attribution; and
 - the stable fingerprint.
 
+When the representative window has approved profiler-correlation breadcrumbs,
+the next bounded line shows the latest five-minute category counts. It does not
+show breadcrumb detail text.
+
 The next line contains the owned method tuple (`class#methoddescriptor`). A
 `DOWNSTREAM` candidate can also include its first external method tuple. The
-severity bands use median share: `NOTICE` is 2% to under 5%, `MODERATE` is 5%
+severity bands use median share: `NOTICE` is under 5%, `MODERATE` is 5%
 to under 10%, `HIGH` is 10% to under 20%, and `SEVERE` is 20% or more. Severity
 describes sampled impact. It does not prove that the mod caused lag or that
 the server was lagging. A project with no active candidates gets a clear local

@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- Added `hot-path-v2` rolling profiler signals. A project path now becomes a
+  repeated signal after it contributes at least 20 sampled milliseconds in
+  three of the five retained windows, even when a busy server keeps its share
+  below two percent. Signal output includes bounded counts for approved recent
+  correlation breadcrumbs, and base-game frames use the `Hytale Server`
+  source label.
 - Added an opt-in, recurring local Spark hot-path monitor. It reads completed
   passive background windows from fingerprinted official Spark Hytale builds,
   ranks Java self time on Hytale WorldThread threads, keeps bounded summaries

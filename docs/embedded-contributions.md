@@ -283,7 +283,7 @@ project by ID. Consumer code controls any later handling of a snapshot.
 
 The monitor reads only completed passive Spark `ASYNC` `EXECUTION` windows. It
 publishes bounded in-memory summaries with `SELF` or `DOWNSTREAM` attribution
-and `hot-path-v1` qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`.
+and `hot-path-v2` qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`.
 An actionable empty window is retained so old candidates can age. It has no
 dedicated profiler evidence file and no structured Phase 2 profiler evidence
 queue or upload path. Ordinary summary and command-output text can be retained

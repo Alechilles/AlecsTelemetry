@@ -91,10 +91,11 @@ five path entries. A path contains an attribution, owned
 class/method/descriptor, optional first external class/method/descriptor,
 sampled milliseconds, selected WorldThread share, a qualification, a
 32-character fingerprint, and a representative path of at most eight frames.
-The rule set is `hot-path-v1`.
+The rule set is `hot-path-v2`.
 
-The low-cost capture path does not run Spark class-source lookup. Current
-direct captures therefore use `<unknown>` source labels. Project descriptors
+The low-cost capture path does not run Spark class-source lookup. It labels
+`com.hypixel.hytale` and `com.hytale` frames as `Hytale Server`; other direct
+captures use `<unknown>` when Spark did not supply a source. Project descriptors
 must provide accurate `packagePrefixes` for reliable attribution.
 
 An actionable window is a successful bounded Spark capture with usable selected
@@ -110,20 +111,21 @@ listener has one pending value, so a slow listener can receive the newest value
 after intermediate callbacks are coalesced; use `history()` for complete
 retention.
 
-`hot-path-v1` qualifies one path in one window when sampled self time is at
-least 20 ms and at least 2% of selected WorldThread self-time. A path is
+`hot-path-v2` admits one path into rolling repetition when sampled self time is
+at least 20 ms. One appearance becomes an active signal immediately when it
+also reaches at least 2% of selected WorldThread self-time. A path is
 `OBSERVED` until it becomes a stronger candidate. It is `PROVISIONAL` when at
-least one appearance reaches 100 ms and 20% share but fewer than three latest
-qualifying windows. It is `REPEATED` after qualifying in at least three of the
-latest five actionable windows. Qualification uses the stable path fingerprint;
-an empty actionable window ages old candidates. The `signals` command can show
+least one appearance reaches 100 ms and 20% share but it has fewer than three
+appearances. It is `REPEATED` after reaching the 20 ms floor in at least three
+of the latest five actionable windows. Qualification uses the stable path
+fingerprint. An empty actionable window ages old candidates. The `signals` command can show
 an unexpired candidate that is absent from the newest window, while a snapshot
 contains only paths sampled in its current window.
 
 The signal engine ranks active candidates by median selected WorldThread share,
 then total sampled milliseconds, then fingerprint. It returns at most five
-candidates. Severity is a command-side descriptive band: `NOTICE` is 2% to
-under 5%, `MODERATE` is 5% to under 10%, `HIGH` is 10% to under 20%, and
+candidates. Severity is a command-side descriptive band: `NOTICE` is under 5%,
+`MODERATE` is 5% to under 10%, `HIGH` is 10% to under 20%, and
 `SEVERE` is 20% or more. Severity describes sampled impact. It is not a
 causality decision and does not prove that the project caused server lag.
 

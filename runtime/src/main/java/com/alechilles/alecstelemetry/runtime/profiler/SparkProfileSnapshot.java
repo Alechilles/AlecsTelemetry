@@ -50,5 +50,23 @@ public record SparkProfileSnapshot(@Nonnull String sparkVersion,
                           @Nonnull String frame,
                           double selfMilliseconds,
                           double selfSharePercent) {
+        public HotPath {
+            frame = frame == null || frame.isBlank() ? "<unknown>" : frame.trim();
+            source = normalizedSource(source, frame);
+        }
+
+        @Nonnull
+        private static String normalizedSource(String source, @Nonnull String frame) {
+            if (source != null
+                    && !source.isBlank()
+                    && !"<unknown>".equalsIgnoreCase(source)
+                    && !"<none>".equalsIgnoreCase(source)) {
+                return source.trim();
+            }
+            if (frame.startsWith("com.hypixel.hytale.") || frame.startsWith("com.hytale.")) {
+                return "Hytale Server";
+            }
+            return "<unknown>";
+        }
     }
 }

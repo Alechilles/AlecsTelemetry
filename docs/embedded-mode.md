@@ -279,7 +279,7 @@ and clipping controls. Raw Spark profiles and frame trees are not written to
 logs or uploaded by Telemetry. Spark's own profile retention or upload settings
 remain separate.
 
-Phase 2 paths use `SELF` or `DOWNSTREAM` attribution and `hot-path-v1`
+Phase 2 paths use `SELF` or `DOWNSTREAM` attribution and `hot-path-v2`
 qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`. An actionable empty
 window is retained as an empty `COMPLETE` snapshot so old candidates can age.
 The service retains at most five paths per snapshot, ten snapshots per project,

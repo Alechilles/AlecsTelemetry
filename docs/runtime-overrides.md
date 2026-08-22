@@ -196,7 +196,7 @@ Publication requires all three gates:
 - the project's performance consent is enabled.
 
 The view contains bounded immutable summaries, not raw Spark data. It applies
-`hot-path-v1` over the latest five actionable windows. An actionable empty
+`hot-path-v2` over the latest five actionable windows. An actionable empty
 window is retained as an empty `COMPLETE` snapshot so old candidates can age.
 It can expose owned Java class and method names, downstream Java method names,
 sampled timing, WorldThread share, rolling qualification, fingerprints, and
@@ -239,10 +239,11 @@ shows the newest ten snapshots. Each path uses a compact line with `SELF` or
 and a 32-character fingerprint. Separate following lines contain the complete
 bounded owned method and, for `DOWNSTREAM`, the first external method. The
 rolling qualification is `OBSERVED`, `PROVISIONAL`, or `REPEATED` under
-`hot-path-v1`. `signals` evaluates the latest five actionable snapshots and
+`hot-path-v2`. `signals` evaluates the latest five actionable snapshots and
 shows at most five active candidates with severity, qualification, hits/5,
-median share, total sampled milliseconds, attribution, method tuples, and
-fingerprint. A candidate can remain visible after it is absent from the newest
+median share, total sampled milliseconds, attribution, method tuples,
+fingerprint, and approved recent correlation counts when present. A candidate
+can remain visible after it is absent from the newest
 window until it expires. Every project-filtered reply also copies to the
 ordinary server log. A manually attached server log can contain those lines
 when the normal manual-report settings, review, redaction, and clipping
@@ -250,7 +251,8 @@ controls allow the attachment.
 
 Profiler attribution can match an exact plugin identifier, then the longest
 complete package prefix. The direct capture path does not run Spark's source
-lookup, so current captures use `<unknown>` source labels. Accurate
+lookup. It labels base-game package frames as `Hytale Server`; other unknown
+frames remain `<unknown>`. Accurate
 `packagePrefixes` are required for reliable project attribution. The profiler
 index accepts at most 32 normalized package prefixes per project. Each
 package-prefix value is limited to 512 characters before normalization. It

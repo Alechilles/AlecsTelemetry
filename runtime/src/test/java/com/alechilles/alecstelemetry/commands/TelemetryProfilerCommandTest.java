@@ -23,6 +23,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -429,7 +430,7 @@ class TelemetryProfilerCommandTest {
         );
 
         assertTrue(sender.text().contains(
-                "Spark profiler signals: project=example-mod, ruleSet=hot-path-v1, showing=2 of 2"));
+                "Spark profiler signals: project=example-mod, ruleSet=hot-path-v2, showing=2 of 2"));
         assertTrue(sender.text().contains("severity=SEVERE"));
         assertTrue(sender.text().contains("qualification=PROVISIONAL"));
         assertTrue(sender.text().contains("hits=1/5"));
@@ -447,6 +448,43 @@ class TelemetryProfilerCommandTest {
         assertTrue(sender.text().contains(selfFingerprint));
         assertTrue(sender.text().contains(downstreamFingerprint));
         assertTrue(sender.messages.stream().allMatch(message -> message.getRawText().length() <= 320));
+        assertEquals(sender.rawLines(), logLines);
+    }
+
+    @Test
+    void signalsShowRecentProfilerCorrelationCounts() throws Exception {
+        String fingerprint = "00112233445566778899aabbccddeeff";
+        TelemetryProfilerPathEvidence path = selfPath(fingerprint, 40.0, 0.4);
+        List<TelemetryProfilerSnapshot> history = List.of(
+                snapshot(1, path),
+                snapshot(2, path),
+                snapshotWithContext(
+                        3,
+                        new TelemetryProfilerContext(
+                                3L,
+                                null,
+                                null,
+                                null,
+                                Map.of("companion.needs.slow-task", 2)
+                        ),
+                        path
+                )
+        );
+        List<String> logLines = new ArrayList<>();
+        TestCommandSender sender = execute(
+                new TelemetryProfilerCommand(runtimeWithProjectView(
+                        SparkProfilerDiagnostics.disabled(),
+                        List.of(),
+                        "example-mod",
+                        projectView(history.getLast(), history),
+                        logLines
+                )),
+                "signals",
+                "/telemetry profiler signals example-mod"
+        );
+
+        assertTrue(sender.text().contains("qualification=REPEATED"));
+        assertTrue(sender.text().contains("correlations=companion.needs.slow-task:2"));
         assertEquals(sender.rawLines(), logLines);
     }
 
@@ -726,6 +764,13 @@ class TelemetryProfilerCommandTest {
     private static TelemetryProfilerSnapshot snapshot(
             int window,
             TelemetryProfilerPathEvidence... paths) {
+        return snapshotWithContext(window, TelemetryProfilerContext.unavailable(), paths);
+    }
+
+    private static TelemetryProfilerSnapshot snapshotWithContext(
+            int window,
+            TelemetryProfilerContext context,
+            TelemetryProfilerPathEvidence... paths) {
         return new TelemetryProfilerSnapshot(
                 "mod-a",
                 "1.0.0",
@@ -735,7 +780,7 @@ class TelemetryProfilerCommandTest {
                 100.0,
                 "observed-v1",
                 List.of(paths),
-                TelemetryProfilerContext.unavailable()
+                context
         );
     }
 

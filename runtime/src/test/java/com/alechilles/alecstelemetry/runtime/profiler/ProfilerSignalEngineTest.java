@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -45,6 +46,22 @@ class ProfilerSignalEngineTest {
 
         assertEquals(TelemetryProfilerQualification.REPEATED,
                 evaluation.currentPaths().getFirst().qualification());
+    }
+
+    // Regression: stable absolute time must identify a repeated path even on a busy server.
+    @Test
+    void marksLowSharePathRepeatedAfterThreeAbsoluteTimeAppearances() {
+        TelemetryProfilerPathEvidence current = path("path-a", 40.0d, 0.4d);
+
+        ProfilerSignalEngine.Evaluation evaluation = engine.evaluate(
+                windows(List.of(current), List.of(), List.of(current), List.of()),
+                List.of(current)
+        );
+
+        assertEquals(TelemetryProfilerQualification.REPEATED,
+                evaluation.currentPaths().getFirst().qualification());
+        assertEquals(1, evaluation.signals().size());
+        assertEquals(3, evaluation.signals().getFirst().qualifyingWindows());
     }
 
     // Regression: a single large current observation must publish an immediate provisional qualification.
@@ -103,27 +120,27 @@ class ProfilerSignalEngineTest {
                 evaluation.currentPaths().getFirst().qualification());
     }
 
-    // Regression: signal intensity must use only qualifying appearances and select the newest qualifying evidence.
+    // Regression: signal intensity must include repeatable absolute-time appearances and use the newest evidence.
     @Test
-    void usesNewestQualifyingRepresentativeAndIgnoresNonQualifyingIntensity() {
+    void usesNewestRepeatableRepresentativeAndAbsoluteTimeIntensity() {
         TelemetryProfilerPathEvidence first = path("path-a", "old.Owner", 30.0d, 3.0d);
         TelemetryProfilerPathEvidence newestQualifying = path(
                 "path-a", "new.Owner", 100.0d, 20.0d);
-        TelemetryProfilerPathEvidence newestNonQualifying = path(
-                "path-a", "ignored.Owner", 1000.0d, 1.0d);
+        TelemetryProfilerPathEvidence newestAbsoluteTime = path(
+                "path-a", "absolute.Owner", 1000.0d, 1.0d);
 
         ProfilerProjectSignal signal = engine.signals(windows(
                 List.of(first),
                 List.of(),
                 List.of(newestQualifying),
-                List.of(newestNonQualifying)
+                List.of(newestAbsoluteTime)
         )).getFirst();
 
-        assertEquals("new.Owner", signal.representative().ownedClassName());
-        assertEquals(2, signal.qualifyingWindows());
-        assertEquals(11.5d, signal.medianSharePercent(), 0.0001d);
-        assertEquals(130.0d, signal.totalSampledMilliseconds(), 0.0001d);
-        assertEquals(TelemetryProfilerQualification.PROVISIONAL, signal.qualification());
+        assertEquals("absolute.Owner", signal.representative().ownedClassName());
+        assertEquals(3, signal.qualifyingWindows());
+        assertEquals(3.0d, signal.medianSharePercent(), 0.0001d);
+        assertEquals(1130.0d, signal.totalSampledMilliseconds(), 0.0001d);
+        assertEquals(TelemetryProfilerQualification.REPEATED, signal.qualification());
     }
 
     // Regression: median calculation must average the two middle values for even qualifying counts.
@@ -209,6 +226,26 @@ class ProfilerSignalEngineTest {
         assertEquals(ProfilerSignalSeverity.SEVERE, signalFor(signals, "severe").severity());
     }
 
+    // Regression: rolling signals must expose recent approved correlation counts without double-counting windows.
+    @Test
+    void usesLatestAppearanceCorrelationCountsForSignal() {
+        TelemetryProfilerPathEvidence path = path("path-a", 40.0d, 4.0d);
+        TelemetryProfilerSnapshot first = snapshot(
+                1,
+                List.of(path),
+                new TelemetryProfilerContext(1L, null, null, null, Map.of("companion.needs.slow-task", 1))
+        );
+        TelemetryProfilerSnapshot latest = snapshot(
+                2,
+                List.of(path),
+                new TelemetryProfilerContext(2L, null, null, null, Map.of("companion.needs.slow-task", 2))
+        );
+
+        ProfilerProjectSignal signal = engine.signals(List.of(first, latest)).getFirst();
+
+        assertEquals(Map.of("companion.needs.slow-task", 2), signal.recentCorrelationCounts());
+    }
+
     // Regression: qualification must replace only the qualification component on current path copies.
     @Test
     void preservesCurrentPathEvidenceWhenQualificationChanges() {
@@ -254,6 +291,13 @@ class ProfilerSignalEngineTest {
     private static TelemetryProfilerSnapshot snapshot(
             int windowKey,
             List<TelemetryProfilerPathEvidence> paths) {
+        return snapshot(windowKey, paths, TelemetryProfilerContext.unavailable());
+    }
+
+    private static TelemetryProfilerSnapshot snapshot(
+            int windowKey,
+            List<TelemetryProfilerPathEvidence> paths,
+            TelemetryProfilerContext context) {
         return new TelemetryProfilerSnapshot(
                 "mod-a",
                 "1.0.0",
@@ -263,7 +307,7 @@ class ProfilerSignalEngineTest {
                 1000.0d,
                 ProfilerSignalEngine.RULE_SET,
                 paths,
-                TelemetryProfilerContext.unavailable()
+                context
         );
     }
 

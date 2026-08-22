@@ -18,6 +18,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -263,6 +264,10 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                                     path.firstExternalClassName(),
                                     path.firstExternalMethodName(),
                                     path.firstExternalMethodDescriptor()));
+                }
+                if (!signal.recentCorrelationCounts().isEmpty()) {
+                    send(commandContext, runtime,
+                            formatCorrelations(signal.recentCorrelationCounts()));
                 }
             }
         }
@@ -514,6 +519,22 @@ public final class TelemetryProfilerCommand extends AbstractCommandCollection {
                 path.attribution().name(),
                 bounded(path.fingerprint(), 32)
         ));
+    }
+
+    @Nonnull
+    private static String formatCorrelations(@Nonnull Map<String, Integer> counts) {
+        StringBuilder line = new StringBuilder("correlations=");
+        int added = 0;
+        for (Map.Entry<String, Integer> entry : counts.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .limit(5)
+                .toList()) {
+            if (added++ > 0) {
+                line.append(',');
+            }
+            line.append(entry.getKey()).append(':').append(entry.getValue());
+        }
+        return bounded(line.toString());
     }
 
     @Nonnull

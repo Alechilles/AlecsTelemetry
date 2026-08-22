@@ -96,7 +96,7 @@ Alec's Telemetry is designed to avoid player identity data by default.
   WorldThread hot-path summaries to the local server log. When the global
   monitor is enabled, the project is enabled, and performance consent is
   enabled, it qualifies each project over the latest five actionable windows
-  using the local `hot-path-v1` rules. A publication can also contain the
+  using the local `hot-path-v2` rules. A publication can also contain the
   aggregate current player count, nullable Spark public one-minute TPS and
   MSPT values, Hytale and project versions, and counts for declared breadcrumb
   categories from the latest five minutes. Phase 2 has no dedicated profiler
@@ -158,8 +158,10 @@ profile file. The server owner and the server's logging setup control retention
 of that local log. Spark can keep its own profiler data under Spark's settings
 and behavior; that retention is separate from Alec's Telemetry.
 Local summaries can contain Java class and method names, timing values, and
-bounded thread/frame counts. The direct reader uses `<unknown>` for Spark source
-labels because it skips Spark's source lookup. Completed status text can also
+bounded thread/frame counts. The direct reader labels `com.hypixel.hytale` and
+`com.hytale` frames as `Hytale Server`; other frames remain `<unknown>` when
+Spark did not supply a source label. It still skips Spark's source lookup.
+Completed status text can also
 contain capture-thread allocated bytes when the JVM supports that counter and a
 separate whole-JVM used-heap delta.
 
@@ -186,12 +188,14 @@ gets an empty `COMPLETE` window marker, so an old candidate can age and expire.
 Failed, incompatible, too-complex, timed-out, or sample-free windows do not
 advance qualification.
 
-For one stable path fingerprint, a window qualifies when sampled self time is at
-least 20 ms and at least 2% of selected WorldThread self time. `OBSERVED` is the
-normal early state. `PROVISIONAL` means one appearance reaches at least 100 ms
-and 20% share but the path is not yet present in three qualifying windows.
-`REPEATED` means the path qualifies in at least three of the latest five
-actionable windows. Signals expire when no qualifying appearance remains in
+For one stable path fingerprint, an appearance enters rolling repetition when
+it has at least 20 ms of sampled self time. One appearance becomes an active
+signal immediately when it also reaches at least 2% of selected WorldThread
+self time. `OBSERVED` is the normal early state. `PROVISIONAL` means one
+appearance reaches at least 100 ms and 20% share but the path is not yet present
+in three windows. `REPEATED` means the path reaches the 20 ms floor in at least
+three of the latest five actionable windows, even when a busy server keeps its
+percentage below 2%. Signals expire when no eligible appearance remains in
 those five windows. The local `signals` command ranks at most five active
 candidates.
 
@@ -219,6 +223,13 @@ breadcrumb detail text, structured custom fields, raw Spark profiles, Spark
 frame trees, player identifiers, or server identifiers. The Hytale version,
 player count, TPS, MSPT, and breadcrumb values are nullable or empty when their
 source is unavailable or not authorized.
+
+Tamework declares the profiler correlation category
+`companion.needs.slow-task`. It increments that category when one dispatched
+companion-needs batch reaches Hytale's 50 ms slow-task warning boundary. A
+profiler signal can show only the latest approved five-minute category count
+near its representative path. It does not retain the warning line, batch
+inputs, companion identities, world identity, or exact duration.
 
 Each view contains only one project's attributed immutable summary. The local
 runtime API is not an authorization boundary. Server-side code that can access

@@ -14,7 +14,7 @@ import java.util.Objects;
 
 /** Pure bounded evaluator for project profiler signals. */
 public final class ProfilerSignalEngine {
-    public static final String RULE_SET = "hot-path-v1";
+    public static final String RULE_SET = "hot-path-v2";
     static final int MAX_WINDOWS = 5;
     static final int MAX_SIGNALS = 5;
     static final double MIN_MILLISECONDS = 20.0d;
@@ -57,13 +57,13 @@ public final class ProfilerSignalEngine {
             @Nonnull List<TelemetryProfilerSnapshot> windows) {
         Objects.requireNonNull(windows, "windows");
         int start = Math.max(0, windows.size() - MAX_WINDOWS);
-        List<List<TelemetryProfilerPathEvidence>> boundedWindows = new ArrayList<>(MAX_WINDOWS);
+        List<TelemetryProfilerSnapshot> boundedWindows = new ArrayList<>(MAX_WINDOWS);
         for (int index = start; index < windows.size(); index++) {
             TelemetryProfilerSnapshot snapshot = Objects.requireNonNull(
                     windows.get(index), "windows contains null");
-            boundedWindows.add(snapshot.paths());
+            boundedWindows.add(snapshot);
         }
-        return signals(candidates(boundedWindows));
+        return signals(candidatesFromSnapshots(boundedWindows));
     }
 
     @Nonnull
@@ -76,11 +76,28 @@ public final class ProfilerSignalEngine {
                 continue;
             }
             for (TelemetryProfilerPathEvidence path : paths) {
-                if (path == null || !qualifies(path)) {
+                if (path == null || !repeatable(path)) {
                     continue;
                 }
                 candidates.computeIfAbsent(path.fingerprint(), ignored -> new Candidate())
-                        .add(windowIndex, path);
+                        .add(windowIndex, path, Map.of());
+            }
+        }
+        return candidates;
+    }
+
+    @Nonnull
+    private static Map<String, Candidate> candidatesFromSnapshots(
+            @Nonnull List<TelemetryProfilerSnapshot> windows) {
+        Map<String, Candidate> candidates = new HashMap<>();
+        for (int windowIndex = 0; windowIndex < windows.size(); windowIndex++) {
+            TelemetryProfilerSnapshot snapshot = windows.get(windowIndex);
+            for (TelemetryProfilerPathEvidence path : snapshot.paths()) {
+                if (path == null || !repeatable(path)) {
+                    continue;
+                }
+                candidates.computeIfAbsent(path.fingerprint(), ignored -> new Candidate())
+                        .add(windowIndex, path, snapshot.context().breadcrumbCategoryCounts());
             }
         }
         return candidates;
@@ -90,7 +107,7 @@ public final class ProfilerSignalEngine {
     private static List<ProfilerProjectSignal> signals(@Nonnull Map<String, Candidate> candidates) {
         List<ProfilerProjectSignal> signals = new ArrayList<>(candidates.size());
         for (Candidate candidate : candidates.values()) {
-            if (candidate.appearances.isEmpty()) {
+            if (!candidate.actionable()) {
                 continue;
             }
             List<TelemetryProfilerPathEvidence> appearances = candidate.appearances.stream()
@@ -114,7 +131,8 @@ public final class ProfilerSignalEngine {
                     severity(median),
                     qualifyingWindows,
                     median,
-                    totalSampledMilliseconds
+                    totalSampledMilliseconds,
+                    candidate.appearances.getLast().recentCorrelationCounts()
             ));
         }
         return signals.stream()
@@ -127,7 +145,7 @@ public final class ProfilerSignalEngine {
     private static TelemetryProfilerQualification qualification(
             @Nonnull TelemetryProfilerPathEvidence path,
             Candidate candidate) {
-        if (!qualifies(path) || candidate == null) {
+        if (!repeatable(path) || candidate == null) {
             return TelemetryProfilerQualification.OBSERVED;
         }
         return qualification(candidate, Math.min(MAX_WINDOWS, candidate.appearances.size()));
@@ -146,8 +164,12 @@ public final class ProfilerSignalEngine {
         return TelemetryProfilerQualification.OBSERVED;
     }
 
-    private static boolean qualifies(@Nonnull TelemetryProfilerPathEvidence path) {
-        return path.sampledMilliseconds() >= MIN_MILLISECONDS
+    private static boolean repeatable(@Nonnull TelemetryProfilerPathEvidence path) {
+        return path.sampledMilliseconds() >= MIN_MILLISECONDS;
+    }
+
+    private static boolean exceedsShareFloor(@Nonnull TelemetryProfilerPathEvidence path) {
+        return repeatable(path)
                 && path.selectedWorldThreadSharePercent() >= MIN_SHARE_PERCENT;
     }
 
@@ -188,16 +210,30 @@ public final class ProfilerSignalEngine {
     private static final class Candidate {
         private final List<Appearance> appearances = new ArrayList<>();
 
-        private void add(int windowIndex, @Nonnull TelemetryProfilerPathEvidence path) {
+        private void add(int windowIndex,
+                         @Nonnull TelemetryProfilerPathEvidence path,
+                         @Nonnull Map<String, Integer> recentCorrelationCounts) {
+            Appearance appearance = new Appearance(
+                    windowIndex,
+                    path,
+                    Map.copyOf(recentCorrelationCounts)
+            );
             if (!appearances.isEmpty() && appearances.getLast().windowIndex() == windowIndex) {
-                appearances.set(appearances.size() - 1, new Appearance(windowIndex, path));
+                appearances.set(appearances.size() - 1, appearance);
                 return;
             }
-            appearances.add(new Appearance(windowIndex, path));
+            appearances.add(appearance);
+        }
+
+        private boolean actionable() {
+            return appearances.size() >= 3
+                    || appearances.stream().anyMatch(appearance -> exceedsShareFloor(appearance.path()));
         }
     }
 
-    private record Appearance(int windowIndex, @Nonnull TelemetryProfilerPathEvidence path) {
+    private record Appearance(int windowIndex,
+                              @Nonnull TelemetryProfilerPathEvidence path,
+                              @Nonnull Map<String, Integer> recentCorrelationCounts) {
         private boolean isProvisional() {
             return path.sampledMilliseconds() >= PROVISIONAL_MILLISECONDS
                     && path.selectedWorldThreadSharePercent() >= PROVISIONAL_SHARE_PERCENT;
