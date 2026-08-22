@@ -2,12 +2,15 @@ package com.alechilles.alecstelemetry.runtime.profiler;
 
 import me.lucko.spark.common.SparkPlatform;
 import me.lucko.spark.common.sampler.Sampler;
+import me.lucko.spark.common.sampler.async.AsyncDataAggregator;
+import me.lucko.spark.common.sampler.async.AsyncSampler;
+import me.lucko.spark.common.sampler.node.StackTraceNode;
+import me.lucko.spark.common.sampler.node.ThreadNode;
 import me.lucko.spark.hytale.HytaleSparkPlugin;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -16,740 +19,244 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 class SparkProfileReflectionBridgeTest {
 
     @Test
-    void readsOnlyTheLatestCompletedAsyncBackgroundWindow() {
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                profileData()
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+    void readsNewestCompletedWindowWithoutExportingSparkProtobuf() {
+        StackTraceNode leaf = node("example.Leaf", "work")
+                .time(100, 100_000L)
+                .time(200, 20_000L);
+        StackTraceNode parent = node("example.Parent", "run")
+                .time(100, 300_000L)
+                .time(200, 100_000L)
+                .child(leaf);
+        StackTraceNode other = node("example.Other", "tick")
+                .time(100, 50_000L)
+                .time(200, 60_000L);
+        ThreadNode worldThread = worldThread()
+                .time(100, 350_000L)
+                .time(200, 160_000L)
+                .child(parent)
+                .child(other);
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, worldThread);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 2);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 2);
 
         assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        SparkProfileSnapshot snapshot = result.snapshot();
-        assertNotNull(snapshot);
-        assertEquals("1.10.172-SNAPSHOT", snapshot.sparkVersion());
-        assertEquals(200, snapshot.windowKey());
-        assertEquals(1, snapshot.threadCount());
-        assertEquals(3, snapshot.frameCount());
-        assertEquals(160.0d, snapshot.totalSelfMilliseconds(), 0.001d);
-        assertEquals(2, snapshot.hotPaths().size());
-        assertEquals("ExampleMod", snapshot.hotPaths().getFirst().source());
-        assertEquals("example.Parent#run()V", snapshot.hotPaths().getFirst().frame());
-        assertEquals(80.0d, snapshot.hotPaths().getFirst().selfMilliseconds(), 0.001d);
-        assertEquals(50.0d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
-        assertEquals("OtherMod", snapshot.hotPaths().get(1).source());
-        assertEquals(1, sampler.toProtoCalls);
+        assertEquals(0, sampler.toProtoCalls());
+        assertNotNull(result.snapshot());
+        assertEquals(200, result.snapshot().windowKey());
+        assertEquals(160.0d, result.snapshot().totalSelfMilliseconds(), 0.001d);
+        assertEquals("example.Parent#run()V", result.snapshot().hotPaths().getFirst().frame());
+        assertEquals(80.0d, result.snapshot().hotPaths().getFirst().selfMilliseconds(), 0.001d);
+        assertEquals("<unknown>", result.snapshot().hotPaths().getFirst().source());
+        assertNotNull(result.window());
+        List<SparkProfileWindow.Frame> frames = result.window().threads().getFirst().frames();
+        int parentIndex = frameIndex(frames, "example.Parent");
+        int leafIndex = frameIndex(frames, "example.Leaf");
+        int otherIndex = frameIndex(frames, "example.Other");
+        assertEquals(-1, frames.get(parentIndex).parentIndex());
+        assertEquals(parentIndex, frames.get(leafIndex).parentIndex());
+        assertEquals(-1, frames.get(otherIndex).parentIndex());
     }
 
     @Test
-    void ranksOnlyWorldThreadJavaSelfTimeAndKeepsSourceAttribution() {
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                worldThreadRankingProfileData()
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+    void ranksOnlyWorldThreadJavaSelfTime() {
+        ThreadNode background = new ThreadNode("ServerWorker-1")
+                .time(200, 600_000L)
+                .child(node("com.example.Background", "run").time(200, 600_000L));
+        StackTraceNode leaf = node("com.game.Tick", "work").time(200, 300_000L);
+        StackTraceNode tick = node("com.game.Tick", "tick")
+                .time(200, 500_000L)
+                .child(leaf);
+        ThreadNode world = worldThread()
+                .time(200, 950_000L)
+                .child(new StackTraceNode("libc.so.6", "wait", "()L;")
+                        .time(200, 400_000L))
+                .child(tick)
+                .child(node("com.game.Tick", "work").time(200, 50_000L));
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, background, world);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 2);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 5);
 
         assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
         SparkProfileSnapshot snapshot = result.snapshot();
         assertNotNull(snapshot);
-        assertEquals(4, snapshot.totalThreadCount());
-        assertEquals(2, snapshot.selectedThreadCount());
-        assertEquals(8, snapshot.totalFrameCount());
-        assertEquals(6, snapshot.selectedFrameCount());
-        assertEquals(800.0d, snapshot.totalSelfMilliseconds(), 0.001d);
-        assertEquals(2, snapshot.hotPaths().size());
-        assertEquals("GameMod", snapshot.hotPaths().getFirst().source());
+        assertEquals(2, snapshot.totalThreadCount());
+        assertEquals(1, snapshot.selectedThreadCount());
+        assertEquals(550.0d, snapshot.totalSelfMilliseconds(), 0.001d);
         assertEquals("com.game.Tick#work()V", snapshot.hotPaths().getFirst().frame());
-        assertEquals(550.0d, snapshot.hotPaths().getFirst().selfMilliseconds(), 0.001d);
-        assertEquals(68.75d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
+        assertEquals(350.0d, snapshot.hotPaths().getFirst().selfMilliseconds(), 0.001d);
         assertEquals("com.game.Tick#tick()V", snapshot.hotPaths().get(1).frame());
         assertEquals(200.0d, snapshot.hotPaths().get(1).selfMilliseconds(), 0.001d);
-        assertEquals(25.0d, snapshot.hotPaths().get(1).selfSharePercent(), 0.001d);
-    }
-
-    @Test
-    void excludesNativeLibraryFramesThatUseInvalidJvmDescriptors() {
-        SamplerData data = new SamplerData(
-                List.of(702),
-                List.of(new ThreadNode(
-                        "WorldThread - default",
-                        List.of(
-                                new StackNode(
-                                        "libc.so.6",
-                                        "__futex_abstimed_wait_common",
-                                        "()L;",
-                                        List.of(990.0d),
-                                        List.of()
-                                ),
-                                new StackNode(
-                                        "com.example.WorldWork",
-                                        "tick",
-                                        "()V",
-                                        List.of(10.0d),
-                                        List.of()
-                                )
-                        ),
-                        List.of()
-                )),
-                Map.of("com.example.WorldWork", "ExampleMod"),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        SparkProfileSnapshot snapshot = result.snapshot();
-        assertNotNull(snapshot);
-        assertEquals(10.0d, snapshot.totalSelfMilliseconds(), 0.001d);
-        assertEquals(1, snapshot.hotPaths().size());
-        assertEquals("ExampleMod", snapshot.hotPaths().getFirst().source());
-        assertEquals("com.example.WorldWork#tick()V", snapshot.hotPaths().getFirst().frame());
-        assertEquals(100.0d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
     }
 
     @Test
     void reportsNoActionableDataWhenCompletedWindowHasNoWorldThreadSamples() {
-        SamplerData data = new SamplerData(
-                List.of(700),
-                List.of(new ThreadNode(
-                        "ServerWorker-1",
-                        List.of(new StackNode(
-                                "com.example.Background",
-                                "run",
-                                "()V",
-                                List.of(900.0d),
-                                List.of()
-                        )),
-                        List.of()
-                )),
-                Map.of("com.example.Background", "OtherMod"),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+        ThreadNode background = new ThreadNode("ServerWorker-1")
+                .time(700, 900_000L)
+                .child(node("com.example.Background", "run").time(700, 900_000L));
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, background);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 5);
 
-        assertEquals("NO_ACTIONABLE_DATA", result.status().name());
+        assertEquals(SparkProfileReadResult.Status.NO_ACTIONABLE_DATA, result.status());
         assertNull(result.snapshot());
     }
 
     @Test
-    void acceptsWorldThreadNamesThatContainTheWorldThreadMarker() {
-        SamplerData data = new SamplerData(
-                List.of(701),
-                List.of(new ThreadNode(
-                        "Hytale-WorldThread-1",
-                        List.of(new StackNode(
-                                "com.example.WorldWork",
-                                "tick",
-                                "()V",
-                                List.of(125.0d),
-                                List.of()
-                        )),
-                        List.of()
-                )),
-                Map.of("com.example.WorldWork", "ExampleMod"),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+    void doesNotReadUserStartedOrUnsupportedSamplers() {
+        ThreadNode world = worldThread()
+                .time(1, 10_000L)
+                .child(node("example.Tick", "run").time(1, 10_000L));
+        AsyncSampler foreground = sampler(false, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
+        AsyncSampler javaSampler = sampler(true, Sampler.SamplerType.JAVA,
+                Sampler.SamplerMode.EXECUTION, world);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult foregroundResult = trustedBridge().read(plugin(foreground), 5);
+        SparkProfileReadResult javaResult = trustedBridge().read(plugin(javaSampler), 5);
 
-        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        assertNotNull(result.snapshot());
-        assertEquals(1, result.snapshot().selectedThreadCount());
-        assertEquals(125.0d, result.snapshot().totalSelfMilliseconds(), 0.001d);
+        assertEquals(SparkProfileReadResult.Status.NOT_BACKGROUND, foregroundResult.status());
+        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_SAMPLER, javaResult.status());
+        assertEquals(0, foreground.toProtoCalls());
+        assertEquals(0, javaSampler.toProtoCalls());
     }
 
     @Test
-    void skipsAnUntestedSparkVersionBeforeReadingItsProfile() {
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                profileData()
+    void rejectsUnknownVersionAndArtifactBeforeReadingSamplerState() {
+        ThreadNode world = worldThread()
+                .time(1, 10_000L)
+                .child(node("example.Tick", "run").time(1, 10_000L));
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
+
+        SparkProfileReadResult version = new SparkProfileReflectionBridge().read(
+                new HytaleSparkPlugin("1.10.999-SNAPSHOT", new SparkPlatform(sampler)),
+                5
         );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.999-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+        SparkProfileReadResult artifact = new SparkProfileReflectionBridge().read(plugin(sampler), 5);
 
-        SparkProfileReadResult result = new SparkProfileReflectionBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_VERSION, result.status());
-        assertEquals(0, sampler.toProtoCalls);
-    }
-
-    @Test
-    void skipsAnUnknownArtifactEvenWhenItsVersionBaseIsTested() {
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                profileData()
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = new SparkProfileReflectionBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_ARTIFACT, result.status());
-        assertEquals(0, sampler.toProtoCalls);
-    }
-
-    @Test
-    void treatsSparkWindowRotationDuringExportAsRetryableNoData() {
-        WindowRotationSampler sampler = new WindowRotationSampler();
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.NO_DATA, result.status());
-        assertNull(result.snapshot());
-        assertEquals("1.10.172-SNAPSHOT", result.sparkVersion());
-        assertEquals("Spark window changed during export; capture will retry.", result.detail());
-    }
-
-    @Test
-    void doesNotReadAUserStartedForegroundProfile() {
-        FakeSampler sampler = new FakeSampler(
-                false,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                profileData()
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.NOT_BACKGROUND, result.status());
-        assertEquals(0, sampler.toProtoCalls);
-    }
-
-    @Test
-    void doesNotReadTheJavaSamplerEngine() {
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.JAVA,
-                Sampler.SamplerMode.EXECUTION,
-                profileData()
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_SAMPLER, result.status());
-        assertEquals(0, sampler.toProtoCalls);
+        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_VERSION, version.status());
+        assertEquals(SparkProfileReadResult.Status.UNSUPPORTED_ARTIFACT, artifact.status());
+        assertEquals(0, sampler.toProtoCalls());
     }
 
     @Test
     void recursiveFramesDoNotInflateReportedSelfTime() {
-        StackNode outer = new StackNode(
-                "example.Recursive",
-                "run",
-                "()V",
-                List.of(100.0d),
-                List.of(1)
-        );
-        StackNode inner = new StackNode(
-                "example.Recursive",
-                "run",
-                "()V",
-                List.of(100.0d),
-                List.of()
-        );
-        SamplerData data = new SamplerData(
-                List.of(300),
-                List.of(new ThreadNode("WorldThread - default", List.of(outer, inner), List.of(0))),
-                Map.of("example.Recursive", "ExampleMod"),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+        StackTraceNode inner = node("example.Recursive", "run").time(300, 100_000L);
+        StackTraceNode outer = node("example.Recursive", "run")
+                .time(300, 100_000L)
+                .child(inner);
+        ThreadNode world = worldThread().time(300, 100_000L).child(outer);
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 5);
 
         assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        SparkProfileSnapshot snapshot = result.snapshot();
-        assertNotNull(snapshot);
-        assertEquals(100.0d, snapshot.totalSelfMilliseconds(), 0.001d);
-        assertEquals(1, snapshot.hotPaths().size());
-        assertEquals(100.0d, snapshot.hotPaths().getFirst().selfMilliseconds(), 0.001d);
-        assertEquals(100.0d, snapshot.hotPaths().getFirst().selfSharePercent(), 0.001d);
-    }
-
-    @Test
-    void completeWindowRetainsValidatedParentIndexesAndGlobalSummary() {
-        SamplerData data = new SamplerData(
-                List.of(500),
-                List.of(new ThreadNode(
-                        "WorldThread - default",
-                        List.of(
-                                new StackNode("native", "wait", "", List.of(100.0d), List.of(1)),
-                                new StackNode("example.a.Tick", "tick", "()V", List.of(100.0d), List.of(2)),
-                                new StackNode("com.hypixel.Store", "tick", "()V", List.of(100.0d), List.of())
-                        ),
-                        List.of(0)
-                )),
-                Map.of("example.a.Tick", "ModA", "com.hypixel.Store", "Hytale"),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
-
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
-
-        assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        assertNotNull(result.window());
-        assertEquals(List.of(-1, 0), result.window().threads().getFirst().frames().stream()
-                .map(SparkProfileWindow.Frame::parentIndex)
-                .toList());
         assertEquals(100.0d, result.snapshot().totalSelfMilliseconds(), 0.001d);
-        assertEquals("com.hypixel.Store#tick()V", result.snapshot().hotPaths().getFirst().frame());
+        assertEquals(1, result.snapshot().hotPaths().size());
+        assertEquals(100.0d, result.snapshot().hotPaths().getFirst().selfMilliseconds(), 0.001d);
     }
 
     @Test
-    void repeatedSymbolTreeOverNodeLimitFailsClosed() {
-        List<StackNode> nodes = new ArrayList<>(25_001);
+    void activeTreeOverNodeLimitFailsClosed() {
+        ThreadNode world = worldThread().time(400, 25_001_000L);
         for (int index = 0; index < 25_001; index++) {
-            nodes.add(new StackNode(
-                    "example.Repeated",
-                    "run",
-                    "()V",
-                    List.of(index == 25_000 ? 10_000.0d : 1.0d),
-                    List.of()
-            ));
+            world.child(node("example.Active" + index, "run").time(400, 1_000L));
         }
-        SamplerData data = new SamplerData(
-                List.of(400),
-                List.of(new ThreadNode("WorldThread - default", nodes, List.of())),
-                Map.of(),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 5);
 
         assertEquals(SparkProfileReadResult.Status.TOO_COMPLEX, result.status());
         assertNull(result.snapshot());
-        assertEquals(1, sampler.toProtoCalls);
+        assertEquals(0, sampler.toProtoCalls());
     }
 
     @Test
-    void historicalNodesDoNotConsumeTheLatestWindowNodeLimit() {
-        List<StackNode> nodes = new ArrayList<>(25_001);
-        for (int index = 0; index < 25_000; index++) {
-            nodes.add(new StackNode(
-                    "example.Historical" + index,
-                    "run",
-                    "()V",
-                    List.of(1.0d, 0.0d),
-                    List.of()
-            ));
+    void inactiveHistoricalBranchDoesNotConsumeActiveNodeLimit() {
+        StackTraceNode historicalRoot = node("example.Historical0", "run")
+                .time(400, 1_000L);
+        StackTraceNode historicalTail = historicalRoot;
+        for (int index = 1; index < 25_001; index++) {
+            StackTraceNode child = node("example.Historical" + index, "run")
+                    .time(400, 1_000L);
+            historicalTail.child(child);
+            historicalTail = child;
         }
-        nodes.add(new StackNode(
-                "example.Active",
-                "run",
-                "()V",
-                List.of(0.0d, 100.0d),
-                List.of()
-        ));
-        SamplerData data = new SamplerData(
-                List.of(400, 401),
-                List.of(new ThreadNode("WorldThread - default", nodes, List.of(25_000))),
-                Map.of(),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
-        );
+        StackTraceNode active = node("example.Active", "run").time(401, 100_000L);
+        ThreadNode world = worldThread()
+                .time(400, 1_000L)
+                .time(401, 100_000L)
+                .child(historicalRoot)
+                .child(active);
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult result = trustedBridge().read(plugin(sampler), 5);
 
         assertEquals(SparkProfileReadResult.Status.COMPLETE, result.status());
-        assertNotNull(result.window());
-        assertEquals(1, result.window().totalFrameCount());
-        assertEquals(1, result.window().selectedFrameCount());
-        assertEquals(List.of("example.Active"), result.window().threads().getFirst().frames().stream()
-                .map(SparkProfileWindow.Frame::className)
-                .toList());
+        assertEquals(1, result.snapshot().totalFrameCount());
+        assertEquals("example.Active#run()V", result.snapshot().hotPaths().getFirst().frame());
     }
 
     @Test
-    void retainedTreeOverHardLimitFailsClosedEvenWhenLatestWindowIsSmall() {
-        StackNode historical = new StackNode(
-                "example.Historical",
-                "run",
-                "()V",
-                List.of(1.0d, 0.0d),
-                List.of()
-        );
-        List<StackNode> nodes = new ArrayList<>(100_002);
-        for (int index = 0; index < 100_001; index++) {
-            nodes.add(historical);
-        }
-        nodes.add(new StackNode(
-                "example.Active",
-                "run",
-                "()V",
-                List.of(0.0d, 100.0d),
-                List.of()
-        ));
-        SamplerData data = new SamplerData(
-                List.of(400, 401),
-                List.of(new ThreadNode("WorldThread - default", nodes, List.of(100_001))),
-                Map.of(),
-                Map.of()
-        );
-        FakeSampler sampler = new FakeSampler(
-                true,
-                Sampler.SamplerType.ASYNC,
-                Sampler.SamplerMode.EXECUTION,
-                data
-        );
-        HytaleSparkPlugin plugin = new HytaleSparkPlugin(
-                "1.10.172-SNAPSHOT",
-                new SparkPlatform(sampler)
+    void directReadBudgetFailsClosedWithoutPartialSnapshot() {
+        ThreadNode world = worldThread()
+                .time(500, 10_000L)
+                .child(node("example.Tick", "run").time(500, 10_000L));
+        AsyncSampler sampler = sampler(true, Sampler.SamplerType.ASYNC,
+                Sampler.SamplerMode.EXECUTION, world);
+        AtomicLong clock = new AtomicLong();
+        SparkProfileReflectionBridge bridge = new SparkProfileReflectionBridge(
+                (pluginClass, reportedVersion) -> reportedVersion,
+                () -> clock.getAndAdd(10L),
+                5L
         );
 
-        SparkProfileReadResult result = trustedBridge().read(plugin, 5);
+        SparkProfileReadResult result = bridge.read(plugin(sampler), 5);
 
         assertEquals(SparkProfileReadResult.Status.TOO_COMPLEX, result.status());
         assertNull(result.snapshot());
+        assertEquals(0, sampler.toProtoCalls());
     }
 
     private static SparkProfileReflectionBridge trustedBridge() {
         return new SparkProfileReflectionBridge((pluginClass, reportedVersion) -> reportedVersion);
     }
 
-    private static SamplerData profileData() {
-        StackNode leaf = new StackNode(
-                "example.Leaf",
-                "work",
-                "()V",
-                List.of(100.0d, 20.0d),
-                List.of()
-        );
-        StackNode parent = new StackNode(
-                "example.Parent",
-                "run",
-                "()V",
-                List.of(300.0d, 100.0d),
-                List.of(0)
-        );
-        StackNode other = new StackNode(
-                "example.Other",
-                "tick",
-                "()V",
-                List.of(50.0d, 60.0d),
-                List.of()
-        );
-        ThreadNode thread = new ThreadNode(
-                "WorldThread - default",
-                List.of(leaf, parent, other),
-                List.of(1, 2)
-        );
-        return new SamplerData(
-                List.of(100, 200),
-                List.of(thread),
-                Map.of(
-                        "example.Leaf", "ExampleMod",
-                        "example.Parent", "FallbackMod",
-                        "example.Other", "OtherMod"
-                ),
-                Map.of("example.Parent;run;()V", "ExampleMod")
-        );
+    private static HytaleSparkPlugin plugin(AsyncSampler sampler) {
+        return new HytaleSparkPlugin("1.10.172-SNAPSHOT", new SparkPlatform(sampler));
     }
 
-    private static SamplerData worldThreadRankingProfileData() {
-        StackNode nativeWait = new StackNode(
-                "native",
-                "Unsafe_Park",
-                "",
-                List.of(900.0d, 900.0d),
-                List.of()
-        );
-        StackNode nonWorldJava = new StackNode(
-                "com.example.Background",
-                "run",
-                "()V",
-                List.of(600.0d, 600.0d),
-                List.of()
-        );
-        StackNode worldNativeWait = new StackNode(
-                "native",
-                "Unsafe_Park",
-                "",
-                List.of(900.0d, 900.0d),
-                List.of()
-        );
-        StackNode worldTick = new StackNode(
-                "com.game.Tick",
-                "tick",
-                "()V",
-                List.of(500.0d, 500.0d),
-                List.of(2)
-        );
-        StackNode worldLeaf = new StackNode(
-                "com.game.Tick",
-                "work",
-                "()V",
-                List.of(300.0d, 300.0d),
-                List.of()
-        );
-        StackNode repeatedWorldWork = new StackNode(
-                "com.game.Tick",
-                "work",
-                "()V",
-                List.of(150.0d, 150.0d),
-                List.of()
-        );
-        StackNode netherWorldWork = new StackNode(
-                "com.game.Tick",
-                "work",
-                "()V",
-                List.of(100.0d, 100.0d),
-                List.of()
-        );
-        StackNode worldRender = new StackNode(
-                "com.game.Render",
-                "render",
-                "()V",
-                List.of(50.0d, 50.0d),
-                List.of()
-        );
-        return new SamplerData(
-                List.of(100, 200),
-                List.of(
-                        new ThreadNode("NativeWait-1", List.of(nativeWait), List.of(0)),
-                        new ThreadNode("ServerWorker-1", List.of(nonWorldJava), List.of(0)),
-                        new ThreadNode(
-                                "WorldThread - default",
-                                List.of(worldNativeWait, worldTick, worldLeaf, repeatedWorldWork),
-                                List.of(0, 2)
-                        ),
-                        new ThreadNode(
-                                "WorldThread - nether",
-                                List.of(netherWorldWork, worldRender),
-                                List.of(0, 1)
-                        )
-                ),
-                Map.of(
-                        "com.example.Background", "OtherMod",
-                        "com.game.Render", "RenderMod"
-                ),
-                Map.of(
-                        "com.game.Tick;tick;()V", "GameMod",
-                        "com.game.Tick;work;()V", "GameMod"
-                )
-        );
+    private static AsyncSampler sampler(boolean background,
+                                        Sampler.SamplerType type,
+                                        Sampler.SamplerMode mode,
+                                        ThreadNode... threads) {
+        AsyncDataAggregator aggregator = new AsyncDataAggregator();
+        for (int index = 0; index < threads.length; index++) {
+            aggregator.thread("thread-" + index, threads[index]);
+        }
+        return new AsyncSampler(background, type, mode, aggregator);
     }
 
-    public static final class FakeSampler {
-        private final boolean background;
-        private final Sampler.SamplerType type;
-        private final Sampler.SamplerMode mode;
-        private final SamplerData data;
-        private int toProtoCalls;
-
-        private FakeSampler(boolean background,
-                            Sampler.SamplerType type,
-                            Sampler.SamplerMode mode,
-                            SamplerData data) {
-            this.background = background;
-            this.type = type;
-            this.mode = mode;
-            this.data = data;
-        }
-
-        public boolean isRunningInBackground() {
-            return background;
-        }
-
-        public Sampler.SamplerType getType() {
-            return type;
-        }
-
-        public Sampler.SamplerMode getMode() {
-            return mode;
-        }
-
-        public Object toProto(SparkPlatform platform, Sampler.ExportProps props) {
-            props.classSourceLookup().get();
-            toProtoCalls++;
-            return data;
-        }
+    private static ThreadNode worldThread() {
+        return new ThreadNode("WorldThread - default");
     }
 
-    public static final class WindowRotationSampler {
-        public boolean isRunningInBackground() {
-            return true;
-        }
-
-        public Sampler.SamplerType getType() {
-            return Sampler.SamplerType.ASYNC;
-        }
-
-        public Sampler.SamplerMode getMode() {
-            return Sampler.SamplerMode.EXECUTION;
-        }
-
-        public Object toProto(SparkPlatform platform, Sampler.ExportProps props) {
-            RuntimeException failure = new RuntimeException("No index for key 29786489 in [29786488]");
-            failure.setStackTrace(new StackTraceElement[]{new StackTraceElement(
-                    "me.lucko.spark.common.sampler.window.ProtoTimeEncoder",
-                    "lambda$encode$0",
-                    "ProtoTimeEncoder.java",
-                    89
-            )});
-            throw failure;
-        }
+    private static StackTraceNode node(String className, String methodName) {
+        return new StackTraceNode(className, methodName, "()V");
     }
 
-    public record SamplerData(List<Integer> timeWindows,
-                              List<ThreadNode> threads,
-                              Map<String, String> classSources,
-                              Map<String, String> methodSources) {
-        public List<Integer> getTimeWindowsList() {
-            return timeWindows;
+    private static int frameIndex(List<SparkProfileWindow.Frame> frames, String className) {
+        for (int index = 0; index < frames.size(); index++) {
+            if (className.equals(frames.get(index).className())) {
+                return index;
+            }
         }
-
-        public List<ThreadNode> getThreadsList() {
-            return threads;
-        }
-
-        public Map<String, String> getClassSourcesMap() {
-            return classSources;
-        }
-
-        public Map<String, String> getMethodSourcesMap() {
-            return methodSources;
-        }
-    }
-
-    public record ThreadNode(String name,
-                             List<StackNode> children,
-                             List<Integer> childrenRefs) {
-        public String getName() {
-            return name;
-        }
-
-        public List<StackNode> getChildrenList() {
-            return children;
-        }
-
-        public List<Integer> getChildrenRefsList() {
-            return childrenRefs;
-        }
-    }
-
-    public record StackNode(String className,
-                            String methodName,
-                            String methodDesc,
-                            List<Double> times,
-                            List<Integer> childrenRefs) {
-        public String getClassName() {
-            return className;
-        }
-
-        public String getMethodName() {
-            return methodName;
-        }
-
-        public String getMethodDesc() {
-            return methodDesc;
-        }
-
-        public List<Double> getTimesList() {
-            return times;
-        }
-
-        public List<Integer> getChildrenRefsList() {
-            return childrenRefs;
-        }
+        throw new AssertionError("Missing frame " + className);
     }
 }

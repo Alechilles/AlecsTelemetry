@@ -12,56 +12,62 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.CodeSource;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HexFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.function.LongSupplier;
 
 /**
- * Reads a bounded summary from tested Spark Hytale builds without linking to Spark.
+ * Reads one bounded window from a tested Spark Hytale build without linking to Spark.
  */
 final class SparkProfileReflectionBridge implements SparkProfileReader {
     private static final String HYTALE_PLUGIN_CLASS = "me.lucko.spark.hytale.HytaleSparkPlugin";
     private static final String SPARK_PLATFORM_CLASS = "me.lucko.spark.common.SparkPlatform";
-    private static final String EXPORT_PROPS_CLASS = "me.lucko.spark.common.sampler.Sampler$ExportProps";
-    private static final String CLASS_SOURCE_LOOKUP_CLASS =
-            "me.lucko.spark.common.sampler.source.ClassSourceLookup";
-    private static final Set<String> TESTED_VERSIONS = Set.of(
-            "1.10.158",
-            "1.10.162",
-            "1.10.164",
-            "1.10.165",
-            "1.10.172"
+    private static final String ASYNC_SAMPLER_CLASS =
+            "me.lucko.spark.common.sampler.async.AsyncSampler";
+    private static final String ABSTRACT_AGGREGATOR_CLASS =
+            "me.lucko.spark.common.sampler.aggregator.AbstractDataAggregator";
+    private static final String ABSTRACT_NODE_CLASS =
+            "me.lucko.spark.common.sampler.node.AbstractNode";
+    private static final String THREAD_NODE_CLASS =
+            "me.lucko.spark.common.sampler.node.ThreadNode";
+    private static final String STACK_NODE_CLASS =
+            "me.lucko.spark.common.sampler.node.StackTraceNode";
+    private static final Set<String> TESTED_VERSIONS = Set.of("1.10.172");
+    private static final Map<String, String> TESTED_ARTIFACTS = Map.of(
+            "1c5806cdc276af608051b8fc6c3aee05ab184da28e81735ba9682e5950c5617a",
+            "1.10.172-beta7"
     );
-    private static final Map<String, String> TESTED_ARTIFACTS = Map.ofEntries(
-            Map.entry("f57c7a93f77657318340f214fbc37bc244900bc49bd55612f002e85696cc0662", "1.10.158-r1"),
-            Map.entry("0d5889ca426a5919bb56a1b36177fbeb86ab143428fec7b236103f4fec874342", "1.10.162-r1"),
-            Map.entry("5bd826a5da5a8d9c0b540f2a84de4538de51c3ab199019f7379fdea30ecc5756", "1.10.164-r1"),
-            Map.entry("13654be2a1f00047e3fadf69335afdbb45332bd4eb0d222c7754c4685f6684f2", "1.10.165-beta2"),
-            Map.entry("4178cccab6afff2d3c2f0a68fb200d39811838fad1a21e595deb4c917eadfc69", "1.10.165-beta3"),
-            Map.entry("41a5bbd8ea681525df80d7b08839b85824cfa9e2ecb8ea1837e26809c441603f", "1.10.165-beta4"),
-            Map.entry("9c3c762619893fc44289d712e18c57ba3c0675b6b2e1967a36273c75705ebecb", "1.10.165-r1"),
-            Map.entry("ed2b28921d1ddd606d612ec602472d79ae606656ec840fe9f8ba593d39f3a159", "1.10.172-beta5"),
-            Map.entry("5e536469e7f4511e9ba279114ddf1b634938161bb896e4098a5a4af28966d19f", "1.10.172-beta6"),
-            Map.entry("1c5806cdc276af608051b8fc6c3aee05ab184da28e81735ba9682e5950c5617a", "1.10.172-beta7")
-    );
-    private static final int MAX_DECODED_NODES = 25_000;
-    private static final int MAX_RETAINED_NODES = 100_000;
+    private static final int MAX_ACTIVE_NODES = 25_000;
+    private static final long MAX_READ_NANOS = 20_000_000L;
+    private static final int DEADLINE_CHECK_MASK = 63;
     private static final int MAX_TEXT_LENGTH = 240;
+    private static final String UNKNOWN_SOURCE = "<unknown>";
 
     private final SparkArtifactVerifier artifactVerifier;
+    private final LongSupplier nanoTime;
+    private final long maxReadNanos;
+    private volatile AccessPlan accessPlan;
 
     SparkProfileReflectionBridge() {
         this(SparkProfileReflectionBridge::testedArtifactRelease);
     }
 
     SparkProfileReflectionBridge(@Nonnull SparkArtifactVerifier artifactVerifier) {
+        this(artifactVerifier, System::nanoTime, MAX_READ_NANOS);
+    }
+
+    SparkProfileReflectionBridge(@Nonnull SparkArtifactVerifier artifactVerifier,
+                                 @Nonnull LongSupplier nanoTime,
+                                 long maxReadNanos) {
         this.artifactVerifier = artifactVerifier;
+        this.nanoTime = nanoTime;
+        this.maxReadNanos = Math.max(0L, maxReadNanos);
     }
 
     @Nonnull
@@ -101,16 +107,21 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                         "Spark's artifact fingerprint is outside the tested compatibility set."
                 );
             }
-            return readTestedVersion(sparkPlugin, testedRelease, Math.max(1, Math.min(10, maxEntries)));
+            return readTestedVersion(
+                    sparkPlugin,
+                    testedRelease,
+                    Math.max(1, Math.min(10, maxEntries))
+            );
+        } catch (ActiveNodeLimitExceeded ignored) {
+            return tooComplexNodes(testedRelease == null ? version : testedRelease);
+        } catch (ReadBudgetExceeded ignored) {
+            return SparkProfileReadResult.of(
+                    SparkProfileReadResult.Status.TOO_COMPLEX,
+                    testedRelease == null ? version : testedRelease,
+                    "Spark's latest window exceeded the 20 ms direct-read budget. No partial summary was kept."
+            );
         } catch (Throwable failure) {
             rethrowIfFatal(failure);
-            if (isWindowRotationExportRace(failure)) {
-                return SparkProfileReadResult.of(
-                        SparkProfileReadResult.Status.NO_DATA,
-                        testedRelease == null ? version : testedRelease,
-                        "Spark window changed during export; capture will retry."
-                );
-            }
             return SparkProfileReadResult.of(
                     SparkProfileReadResult.Status.INCOMPATIBLE,
                     version,
@@ -128,13 +139,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         Class<?> platformClass = Class.forName(SPARK_PLATFORM_CLASS, false, sparkClassLoader);
 
         Field platformField = pluginClass.getDeclaredField("platform");
-        if (!platformField.trySetAccessible()) {
-            return SparkProfileReadResult.of(
-                    SparkProfileReadResult.Status.INCOMPATIBLE,
-                    version,
-                    "Spark denied read-only access to its platform field."
-            );
-        }
+        requireAccessible(platformField, "Spark denied read-only access to its platform field.");
         Object platform = platformField.get(sparkPlugin);
         if (platform == null) {
             return SparkProfileReadResult.of(
@@ -144,11 +149,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             );
         }
         if (!platformClass.isInstance(platform)) {
-            return SparkProfileReadResult.of(
-                    SparkProfileReadResult.Status.INCOMPATIBLE,
-                    version,
-                    "Spark's platform type did not match the tested contract."
-            );
+            throw new IllegalStateException("Spark's platform type did not match the tested contract.");
         }
 
         Object samplerContainer = invokeNoArgs(platform, "getSamplerContainer");
@@ -176,48 +177,78 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                     "Only Spark's ASYNC EXECUTION background sampler is supported."
             );
         }
+        if (!ASYNC_SAMPLER_CLASS.equals(sampler.getClass().getName())) {
+            throw new IllegalStateException("Spark's sampler class did not match the tested contract.");
+        }
 
-        Object profileData = exportProfileData(sparkClassLoader, platformClass, platform, sampler);
-        return summarize(version, profileData, maxEntries);
-    }
+        AccessPlan plan = accessPlan(sampler.getClass(), sparkClassLoader);
+        Object mutex = plan.currentJobMutex().get(sampler);
+        Object aggregator = plan.dataAggregator().get(sampler);
+        if (mutex == null || !plan.aggregatorClass().isInstance(aggregator)) {
+            throw new IllegalStateException("Spark's sampler state did not match the tested contract.");
+        }
 
-    @Nonnull
-    private static Object exportProfileData(@Nonnull ClassLoader sparkClassLoader,
-                                            @Nonnull Class<?> platformClass,
-                                            @Nonnull Object platform,
-                                            @Nonnull Object sampler) throws Throwable {
-        Class<?> exportPropsClass = Class.forName(EXPORT_PROPS_CLASS, true, sparkClassLoader);
-        Object exportProps = exportPropsClass.getConstructor().newInstance();
-
-        Class<?> classSourceLookupClass = Class.forName(CLASS_SOURCE_LOOKUP_CLASS, true, sparkClassLoader);
-        Method createClassSourceLookup = classSourceLookupClass.getMethod("create", platformClass);
-        Supplier<Object> lookupSupplier = () -> invokeSupplier(createClassSourceLookup, platform);
-        invoke(
-                exportPropsClass.getMethod("classSourceLookup", Supplier.class),
-                exportProps,
-                lookupSupplier
-        );
-
-        Method toProto = sampler.getClass().getMethod("toProto", platformClass, exportPropsClass);
-        return invoke(toProto, sampler, platform, exportProps);
-    }
-
-    @Nonnull
-    private static Object invokeSupplier(@Nonnull Method method, @Nonnull Object platform) {
-        try {
-            return invoke(method, null, platform);
-        } catch (Throwable failure) {
-            rethrowIfFatal(failure);
-            throw new IllegalStateException("Spark class-source lookup failed.", failure);
+        long startedAt = nanoTime.getAsLong();
+        synchronized (mutex) {
+            ReadBudget budget = new ReadBudget(nanoTime, startedAt, maxReadNanos);
+            budget.checkNow();
+            return summarizeDirect(version, aggregator, plan, maxEntries, budget);
         }
     }
 
     @Nonnull
-    private static SparkProfileReadResult summarize(@Nonnull String version,
-                                                    @Nonnull Object profileData,
-                                                    int maxEntries) throws Throwable {
-        List<?> windows = listValue(invokeNoArgs(profileData, "getTimeWindowsList"));
-        if (windows.isEmpty()) {
+    private AccessPlan accessPlan(@Nonnull Class<?> samplerClass,
+                                  @Nonnull ClassLoader classLoader) throws Exception {
+        AccessPlan cached = accessPlan;
+        if (cached != null && cached.samplerClass() == samplerClass) {
+            return cached;
+        }
+
+        Class<?> aggregatorClass = Class.forName(ABSTRACT_AGGREGATOR_CLASS, false, classLoader);
+        Class<?> abstractNodeClass = Class.forName(ABSTRACT_NODE_CLASS, false, classLoader);
+        Class<?> threadNodeClass = Class.forName(THREAD_NODE_CLASS, false, classLoader);
+        Class<?> stackNodeClass = Class.forName(STACK_NODE_CLASS, false, classLoader);
+        Field dataAggregator = samplerClass.getDeclaredField("dataAggregator");
+        Field currentJobMutex = samplerClass.getDeclaredField("currentJobMutex");
+        Field threadData = aggregatorClass.getDeclaredField("threadData");
+        Field children = abstractNodeClass.getDeclaredField("children");
+        Field times = abstractNodeClass.getDeclaredField("times");
+        requireAccessible(dataAggregator, "Spark denied access to its data aggregator.");
+        requireAccessible(currentJobMutex, "Spark denied access to its rotation mutex.");
+        requireAccessible(threadData, "Spark denied access to its retained thread map.");
+        requireAccessible(children, "Spark denied access to its retained child map.");
+        requireAccessible(times, "Spark denied access to its retained time map.");
+
+        AccessPlan created = new AccessPlan(
+                samplerClass,
+                aggregatorClass,
+                threadNodeClass,
+                stackNodeClass,
+                dataAggregator,
+                currentJobMutex,
+                threadData,
+                children,
+                times,
+                threadNodeClass.getMethod("getThreadLabel"),
+                stackNodeClass.getMethod("getClassName"),
+                stackNodeClass.getMethod("getMethodName"),
+                stackNodeClass.getMethod("getMethodDescription")
+        );
+        accessPlan = created;
+        return created;
+    }
+
+    @Nonnull
+    private static SparkProfileReadResult summarizeDirect(@Nonnull String version,
+                                                          @Nonnull Object aggregator,
+                                                          @Nonnull AccessPlan plan,
+                                                          int maxEntries,
+                                                          @Nonnull ReadBudget budget) throws Throwable {
+        Map<?, ?> threadData = mapValue(
+                plan.threadData().get(aggregator),
+                "Spark's retained thread data was not a map."
+        );
+        if (threadData.isEmpty()) {
             return SparkProfileReadResult.of(
                     SparkProfileReadResult.Status.NO_DATA,
                     version,
@@ -225,124 +256,96 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
             );
         }
 
-        int latestIndex = latestWindowIndex(windows);
-        int windowKey = numberValue(windows.get(latestIndex)).intValue();
-        List<?> threads = listValue(invokeNoArgs(profileData, "getThreadsList"));
-        Map<?, ?> classSources = mapValue(invokeNoArgs(profileData, "getClassSourcesMap"));
-        Map<?, ?> methodSources = mapValue(invokeNoArgs(profileData, "getMethodSourcesMap"));
-
-        int retainedNodeCount = 0;
-        for (Object thread : threads) {
-            int threadNodeCount = listValue(invokeNoArgs(thread, "getChildrenList")).size();
-            if (threadNodeCount > MAX_RETAINED_NODES - retainedNodeCount) {
-                return SparkProfileReadResult.of(
-                        SparkProfileReadResult.Status.TOO_COMPLEX,
-                        version,
-                        "Spark's retained profile tree exceeded 100,000 nodes. No partial summary was kept."
-                );
-            }
-            retainedNodeCount += threadNodeCount;
+        int windowKey = latestWindowKey(threadData.values(), plan, budget);
+        if (windowKey == Integer.MIN_VALUE) {
+            return SparkProfileReadResult.of(
+                    SparkProfileReadResult.Status.NO_DATA,
+                    version,
+                    "Spark has not completed a background profile window yet."
+            );
         }
 
         Map<FrameKey, MutableHotPath> aggregates = new HashMap<>();
         List<SparkProfileWindow.ThreadFrames> selectedThreads = new ArrayList<>();
+        NodeVisitStack stack = new NodeVisitStack();
+        Integer boxedWindowKey = windowKey;
         int totalFrameCount = 0;
         int selectedThreadCount = 0;
         int selectedFrameCount = 0;
         double totalSelfMilliseconds = 0.0d;
-        for (Object thread : threads) {
-            List<?> nodes = listValue(invokeNoArgs(thread, "getChildrenList"));
-            String threadName = safeText(String.valueOf(invokeNoArgs(thread, "getName")));
+
+        for (Object threadNode : threadData.values()) {
+            budget.check();
+            if (!plan.threadNodeClass().isInstance(threadNode)) {
+                throw new IllegalStateException("Spark retained an unexpected thread node type.");
+            }
+            String threadName = safeText(String.valueOf(invoke(plan.threadLabel(), threadNode)));
             boolean selectedThread = isWorldThread(threadName);
             if (selectedThread) {
                 selectedThreadCount++;
             }
-            double[] inclusiveTimes = new double[nodes.size()];
-            for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
-                double inclusive = timeAt(nodes.get(nodeIndex), latestIndex);
-                inclusiveTimes[nodeIndex] = inclusive;
-                if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
-                    continue;
-                }
+
+            ArrayList<SparkProfileWindow.Frame> frames = selectedThread
+                    ? new ArrayList<>()
+                    : null;
+            stack.clear();
+            pushActiveChildren(stack, threadNode, -1, boxedWindowKey, plan, budget);
+            while (!stack.isEmpty()) {
+                Object node = stack.popNode();
+                int parentIndex = stack.poppedParentIndex();
+                long inclusiveMicros = stack.poppedInclusiveMicros();
                 totalFrameCount++;
-                if (selectedThread) {
-                    selectedFrameCount++;
+                if (totalFrameCount > MAX_ACTIVE_NODES) {
+                    return tooComplexNodes(version);
                 }
-                if (totalFrameCount > MAX_DECODED_NODES) {
-                    return SparkProfileReadResult.of(
-                            SparkProfileReadResult.Status.TOO_COMPLEX,
-                            version,
-                            "Spark's latest completed window exceeded 25,000 decoded nodes. No partial summary was kept."
-                    );
-                }
-            }
-            if (!selectedThread) {
-                continue;
-            }
-
-            int[] parentIndexes = validatedParentIndexes(thread, nodes);
-            List<DecodedFrame> decodedFrames = Arrays.asList(new DecodedFrame[nodes.size()]);
-            for (int nodeIndex = 0; nodeIndex < nodes.size(); nodeIndex++) {
-                double inclusive = inclusiveTimes[nodeIndex];
-                if (!Double.isFinite(inclusive) || inclusive <= 0.0d) {
+                if (!selectedThread) {
+                    pushActiveChildren(stack, node, -1, boxedWindowKey, plan, budget);
                     continue;
                 }
-                Object node = nodes.get(nodeIndex);
-                double directChildren = 0.0d;
-                for (Object childRefValue : listValue(invokeNoArgs(node, "getChildrenRefsList"))) {
-                    int childRef = numberValue(childRefValue).intValue();
-                    double childTime = inclusiveTimes[childRef];
-                    if (Double.isFinite(childTime) && childTime > 0.0d) {
-                        directChildren += childTime;
-                    }
-                }
-                double self = 0.0d;
-                if (Double.isFinite(inclusive) && inclusive > 0.0d) {
-                    self = inclusive - directChildren;
-                    double tolerance = Math.max(0.001d, inclusive * 0.000001d);
-                    if (self < -tolerance) {
-                        self = 0.0d;
-                    } else {
-                        self = Math.max(0.0d, self);
-                    }
-                }
-                String className = safeText(String.valueOf(invokeNoArgs(node, "getClassName")));
-                String methodName = safeText(String.valueOf(invokeNoArgs(node, "getMethodName")));
-                String methodDesc = safeText(String.valueOf(invokeNoArgs(node, "getMethodDesc")));
-                String source = sourceFor(classSources, methodSources, className, methodName, methodDesc);
-                decodedFrames.set(
-                        nodeIndex,
-                        new DecodedFrame(source, className, methodName, methodDesc, self)
+
+                selectedFrameCount++;
+                String className = safeText(String.valueOf(invoke(plan.className(), node)));
+                String methodName = safeText(String.valueOf(invoke(plan.methodName(), node)));
+                String methodDesc = safeText(String.valueOf(invoke(plan.methodDescription(), node)));
+                boolean javaFrame = isJavaFrame(className, methodDesc);
+                int retainedIndex = javaFrame ? frames.size() : parentIndex;
+                long directChildrenMicros = pushActiveChildren(
+                        stack,
+                        node,
+                        retainedIndex,
+                        boxedWindowKey,
+                        plan,
+                        budget
                 );
-            }
+                if (!javaFrame) {
+                    continue;
+                }
 
-            selectedThreads.add(selectedThreadFrames(threadName, decodedFrames, parentIndexes));
-            for (int nodeIndex = 0; nodeIndex < decodedFrames.size(); nodeIndex++) {
-                DecodedFrame decoded = decodedFrames.get(nodeIndex);
-                if (decoded == null) {
+                double selfMilliseconds = Math.max(0L, inclusiveMicros - directChildrenMicros) / 1000.0d;
+                frames.add(new SparkProfileWindow.Frame(
+                        parentIndex,
+                        UNKNOWN_SOURCE,
+                        className,
+                        methodName,
+                        methodDesc,
+                        selfMilliseconds
+                ));
+                if (selfMilliseconds <= 0.0d) {
                     continue;
                 }
-                double self = decoded.selfMilliseconds();
-                if (self <= 0.0d) {
-                    continue;
-                }
+                totalSelfMilliseconds += selfMilliseconds;
                 FrameKey key = new FrameKey(
-                        decoded.source(),
-                        decoded.className(),
-                        decoded.methodName(),
-                        decoded.methodDescriptor(),
-                        selectedThread ? "WORLD_THREAD" : "OTHER_THREAD"
+                        UNKNOWN_SOURCE,
+                        className,
+                        methodName,
+                        methodDesc,
+                        "WORLD_THREAD"
                 );
-                if (!selectedThread || !isJavaFrame(decoded.className(), decoded.methodDescriptor())) {
-                    continue;
-                }
-                totalSelfMilliseconds += self;
-                MutableHotPath aggregate = aggregates.get(key);
-                if (aggregate == null) {
-                    aggregate = new MutableHotPath(key);
-                    aggregates.put(key, aggregate);
-                }
-                aggregate.selfMilliseconds += self;
+                MutableHotPath aggregate = aggregates.computeIfAbsent(key, MutableHotPath::new);
+                aggregate.selfMilliseconds += selfMilliseconds;
+            }
+            if (selectedThread) {
+                selectedThreads.add(new SparkProfileWindow.ThreadFrames(threadName, frames));
             }
         }
 
@@ -368,14 +371,14 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
                 .sorted(Comparator
                         .comparingDouble((MutableHotPath value) -> value.selfMilliseconds)
                         .reversed()
-                        .thenComparing(value -> value.key.frame()))
+                        .thenComparing(value -> value.frame))
                 .limit(maxEntries)
                 .map(value -> value.toHotPath(total))
                 .toList();
         return SparkProfileReadResult.complete(new SparkProfileSnapshot(
                 version,
                 windowKey,
-                threads.size(),
+                threadData.size(),
                 selectedThreadCount,
                 totalFrameCount,
                 selectedFrameCount,
@@ -384,7 +387,7 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         ), new SparkProfileWindow(
                 version,
                 windowKey,
-                threads.size(),
+                threadData.size(),
                 selectedThreadCount,
                 totalFrameCount,
                 selectedFrameCount,
@@ -393,148 +396,73 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         ));
     }
 
-    @Nonnull
-    private static SparkProfileWindow.ThreadFrames selectedThreadFrames(
-            @Nonnull String threadName,
-            @Nonnull List<DecodedFrame> decodedFrames,
-            @Nonnull int[] parentIndexes) {
-        int[] retainedIndexes = new int[decodedFrames.size()];
-        Arrays.fill(retainedIndexes, -1);
-        ArrayList<Integer> originalIndexes = new ArrayList<>();
-        for (int index = 0; index < decodedFrames.size(); index++) {
-            DecodedFrame frame = decodedFrames.get(index);
-            if (frame != null && isJavaFrame(frame.className(), frame.methodDescriptor())) {
-                retainedIndexes[index] = originalIndexes.size();
-                originalIndexes.add(index);
+    private static int latestWindowKey(@Nonnull Collection<?> threadNodes,
+                                       @Nonnull AccessPlan plan,
+                                       @Nonnull ReadBudget budget) throws IllegalAccessException {
+        int latest = Integer.MIN_VALUE;
+        for (Object threadNode : threadNodes) {
+            Map<?, ?> times = mapValue(
+                    plan.times().get(threadNode),
+                    "Spark retained node times were not a map."
+            );
+            for (Object key : times.keySet()) {
+                budget.check();
+                if (key instanceof Integer candidate && candidate > latest) {
+                    latest = candidate;
+                }
             }
         }
-
-        int[] nearestRetainedParents = nearestRetainedParents(decodedFrames.size(), parentIndexes, retainedIndexes);
-
-        ArrayList<SparkProfileWindow.Frame> frames = new ArrayList<>(originalIndexes.size());
-        for (int originalIndex : originalIndexes) {
-            DecodedFrame frame = decodedFrames.get(originalIndex);
-            int parent = nearestRetainedParents[originalIndex];
-            frames.add(new SparkProfileWindow.Frame(
-                    parent,
-                    frame.source(),
-                    frame.className(),
-                    frame.methodName(),
-                    frame.methodDescriptor(),
-                    frame.selfMilliseconds()
-            ));
-        }
-        return new SparkProfileWindow.ThreadFrames(threadName, frames);
+        return latest;
     }
 
-    @Nonnull
-    private static int[] nearestRetainedParents(int nodeCount,
-                                                 @Nonnull int[] parentIndexes,
-                                                 @Nonnull int[] retainedIndexes) {
-        int[] nearest = new int[nodeCount];
-        Arrays.fill(nearest, Integer.MIN_VALUE);
-        ArrayList<Integer> path = new ArrayList<>();
-        for (int start = 0; start < nodeCount; start++) {
-            if (nearest[start] != Integer.MIN_VALUE) {
+    private static long pushActiveChildren(@Nonnull NodeVisitStack stack,
+                                           @Nonnull Object parent,
+                                           int parentIndex,
+                                           @Nonnull Integer windowKey,
+                                           @Nonnull AccessPlan plan,
+                                           @Nonnull ReadBudget budget) throws IllegalAccessException {
+        Map<?, ?> children = mapValue(
+                plan.children().get(parent),
+                "Spark retained node children were not a map."
+        );
+        long directChildrenMicros = 0L;
+        for (Object child : children.values()) {
+            budget.check();
+            if (!plan.stackNodeClass().isInstance(child)) {
+                throw new IllegalStateException("Spark retained an unexpected stack node type.");
+            }
+            long childMicros = timeValue(child, windowKey, plan);
+            if (childMicros <= 0L) {
                 continue;
             }
-            path.clear();
-            int current = start;
-            while (current >= 0 && nearest[current] == Integer.MIN_VALUE) {
-                path.add(current);
-                current = parentIndexes[current];
-            }
-            for (int pathIndex = path.size() - 1; pathIndex >= 0; pathIndex--) {
-                int originalIndex = path.get(pathIndex);
-                int parent = parentIndexes[originalIndex];
-                nearest[originalIndex] = parent < 0
-                        ? -1
-                        : retainedIndexes[parent] >= 0 ? retainedIndexes[parent] : nearest[parent];
-            }
+            directChildrenMicros = saturatingAdd(directChildrenMicros, childMicros);
+            stack.push(child, parentIndex, childMicros);
         }
-        return nearest;
+        return directChildrenMicros;
+    }
+
+    private static long timeValue(@Nonnull Object node,
+                                  @Nonnull Integer windowKey,
+                                  @Nonnull AccessPlan plan) throws IllegalAccessException {
+        Map<?, ?> times = mapValue(
+                plan.times().get(node),
+                "Spark retained node times were not a map."
+        );
+        Object value = times.get(windowKey);
+        return value instanceof Number number ? Math.max(0L, number.longValue()) : 0L;
+    }
+
+    private static long saturatingAdd(long left, long right) {
+        return right > Long.MAX_VALUE - left ? Long.MAX_VALUE : left + right;
     }
 
     @Nonnull
-    private static int[] validatedParentIndexes(@Nonnull Object thread,
-                                                 @Nonnull List<?> nodes) throws Throwable {
-        int[] parents = new int[nodes.size()];
-        Arrays.fill(parents, -1);
-        for (int parent = 0; parent < nodes.size(); parent++) {
-            for (Object childRefValue : listValue(invokeNoArgs(nodes.get(parent), "getChildrenRefsList"))) {
-                int child = validatedIndex(childRefValue, "child");
-                if (child < 0 || child >= nodes.size()) {
-                    throw new IllegalArgumentException("Spark child reference is outside the thread node list.");
-                }
-                if (parents[child] >= 0 && parents[child] != parent) {
-                    throw new IllegalArgumentException("Spark node has multiple parents.");
-                }
-                parents[child] = parent;
-            }
-        }
-        for (Object rootRefValue : listValue(invokeNoArgs(thread, "getChildrenRefsList"))) {
-            int root = validatedIndex(rootRefValue, "root");
-            if (root < 0 || root >= nodes.size()) {
-                throw new IllegalArgumentException("Spark root reference is outside the thread node list.");
-            }
-        }
-        byte[] colors = new byte[parents.length];
-        for (int start = 0; start < parents.length; start++) {
-            if (colors[start] != 0) {
-                continue;
-            }
-            ArrayList<Integer> path = new ArrayList<>();
-            int current = start;
-            while (current >= 0 && colors[current] == 0) {
-                colors[current] = 1;
-                path.add(current);
-                current = parents[current];
-            }
-            if (current >= 0 && colors[current] == 1) {
-                throw new IllegalArgumentException("Spark parent links contain a cycle.");
-            }
-            for (int index : path) {
-                colors[index] = 2;
-            }
-        }
-        return parents;
-    }
-
-    private static int validatedIndex(@Nullable Object value, @Nonnull String kind) {
-        if (!(value instanceof Number number)) {
-            throw new IllegalArgumentException("Spark " + kind + " reference was not an integer.");
-        }
-        double candidate = number.doubleValue();
-        if (!Double.isFinite(candidate)
-                || candidate != Math.rint(candidate)
-                || candidate < Integer.MIN_VALUE
-                || candidate > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("Spark " + kind + " reference was not an integer.");
-        }
-        return (int) candidate;
-    }
-
-    private static double timeAt(@Nonnull Object node, int index) throws Throwable {
-        List<?> times = listValue(invokeNoArgs(node, "getTimesList"));
-        if (index < 0 || index >= times.size()) {
-            return 0.0d;
-        }
-        return numberValue(times.get(index)).doubleValue();
-    }
-
-    @Nonnull
-    private static String sourceFor(@Nonnull Map<?, ?> classSources,
-                                    @Nonnull Map<?, ?> methodSources,
-                                    @Nonnull String className,
-                                    @Nonnull String methodName,
-                                    @Nonnull String methodDesc) {
-        Object source = methodDesc.isBlank()
-                ? null
-                : methodSources.get(className + ";" + methodName + ";" + methodDesc);
-        if (source == null) {
-            source = classSources.get(className);
-        }
-        return source == null ? "<unknown>" : safeText(String.valueOf(source));
+    private static SparkProfileReadResult tooComplexNodes(@Nullable String version) {
+        return SparkProfileReadResult.of(
+                SparkProfileReadResult.Status.TOO_COMPLEX,
+                version,
+                "Spark's latest completed window exceeded 25,000 active nodes. No partial summary was kept."
+        );
     }
 
     private static boolean isWorldThread(@Nonnull String threadName) {
@@ -589,32 +517,19 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         };
     }
 
-    private static int latestWindowIndex(@Nonnull List<?> windows) {
-        int latestIndex = 0;
-        int latestWindow = numberValue(windows.getFirst()).intValue();
-        for (int index = 1; index < windows.size(); index++) {
-            int candidate = numberValue(windows.get(index)).intValue();
-            if (candidate > latestWindow) {
-                latestWindow = candidate;
-                latestIndex = index;
-            }
+    @Nonnull
+    private static Map<?, ?> mapValue(@Nullable Object value, @Nonnull String failureMessage) {
+        if (value instanceof Map<?, ?> map) {
+            return map;
         }
-        return latestIndex;
+        throw new IllegalStateException(failureMessage);
     }
 
-    @Nonnull
-    private static Number numberValue(@Nullable Object value) {
-        return value instanceof Number number ? number : 0;
-    }
-
-    @Nonnull
-    private static List<?> listValue(@Nullable Object value) {
-        return value instanceof List<?> list ? list : List.of();
-    }
-
-    @Nonnull
-    private static Map<?, ?> mapValue(@Nullable Object value) {
-        return value instanceof Map<?, ?> map ? map : Map.of();
+    private static void requireAccessible(@Nonnull Field field,
+                                          @Nonnull String failureMessage) {
+        if (!field.trySetAccessible()) {
+            throw new IllegalStateException(failureMessage);
+        }
     }
 
     @Nullable
@@ -683,6 +598,18 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         if (text == null) {
             return "";
         }
+        if (text.length() <= MAX_TEXT_LENGTH) {
+            boolean safe = true;
+            for (int index = 0; index < text.length(); index++) {
+                if (Character.isISOControl(text.charAt(index))) {
+                    safe = false;
+                    break;
+                }
+            }
+            if (safe) {
+                return text.trim();
+            }
+        }
         StringBuilder safe = new StringBuilder(Math.min(text.length(), MAX_TEXT_LENGTH));
         for (int index = 0; index < text.length() && safe.length() < MAX_TEXT_LENGTH; index++) {
             char character = text.charAt(index);
@@ -706,6 +633,21 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         }
     }
 
+    private record AccessPlan(@Nonnull Class<?> samplerClass,
+                              @Nonnull Class<?> aggregatorClass,
+                              @Nonnull Class<?> threadNodeClass,
+                              @Nonnull Class<?> stackNodeClass,
+                              @Nonnull Field dataAggregator,
+                              @Nonnull Field currentJobMutex,
+                              @Nonnull Field threadData,
+                              @Nonnull Field children,
+                              @Nonnull Field times,
+                              @Nonnull Method threadLabel,
+                              @Nonnull Method className,
+                              @Nonnull Method methodName,
+                              @Nonnull Method methodDescription) {
+    }
+
     private record FrameKey(@Nonnull String source,
                             @Nonnull String className,
                             @Nonnull String methodName,
@@ -717,44 +659,122 @@ final class SparkProfileReflectionBridge implements SparkProfileReader {
         }
     }
 
-    private static boolean isWindowRotationExportRace(@Nonnull Throwable failure) {
-        String message = failure.getMessage();
-        if (message == null
-                || !message.startsWith("No index for key ")
-                || !message.contains(" in [")) {
-            return false;
-        }
-        for (StackTraceElement frame : failure.getStackTrace()) {
-            if ("me.lucko.spark.common.sampler.window.ProtoTimeEncoder".equals(frame.getClassName())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private record DecodedFrame(@Nonnull String source,
-                                @Nonnull String className,
-                                @Nonnull String methodName,
-                                @Nonnull String methodDescriptor,
-                                double selfMilliseconds) {
-    }
-
     private static final class MutableHotPath {
         private final FrameKey key;
+        private final String frame;
         private double selfMilliseconds;
 
         private MutableHotPath(@Nonnull FrameKey key) {
             this.key = key;
+            this.frame = key.frame();
         }
 
         @Nonnull
         private SparkProfileSnapshot.HotPath toHotPath(double totalSelfMilliseconds) {
             return new SparkProfileSnapshot.HotPath(
                     key.source(),
-                    key.frame(),
+                    frame,
                     selfMilliseconds,
                     selfMilliseconds * 100.0d / totalSelfMilliseconds
             );
+        }
+    }
+
+    private static final class NodeVisitStack {
+        private Object[] nodes = new Object[256];
+        private int[] parentIndexes = new int[256];
+        private long[] inclusiveMicros = new long[256];
+        private int size;
+        private int poppedParentIndex;
+        private long poppedInclusiveMicros;
+
+        private void clear() {
+            size = 0;
+        }
+
+        private boolean isEmpty() {
+            return size == 0;
+        }
+
+        private void push(@Nonnull Object node, int parentIndex, long inclusive) {
+            if (size >= MAX_ACTIVE_NODES) {
+                throw ActiveNodeLimitExceeded.INSTANCE;
+            }
+            if (size == nodes.length) {
+                int newLength = Math.min(MAX_ACTIVE_NODES, nodes.length * 2);
+                Object[] grownNodes = new Object[newLength];
+                int[] grownParents = new int[newLength];
+                long[] grownInclusive = new long[newLength];
+                System.arraycopy(nodes, 0, grownNodes, 0, size);
+                System.arraycopy(parentIndexes, 0, grownParents, 0, size);
+                System.arraycopy(inclusiveMicros, 0, grownInclusive, 0, size);
+                nodes = grownNodes;
+                parentIndexes = grownParents;
+                inclusiveMicros = grownInclusive;
+            }
+            nodes[size] = node;
+            parentIndexes[size] = parentIndex;
+            inclusiveMicros[size] = inclusive;
+            size++;
+        }
+
+        @Nonnull
+        private Object popNode() {
+            int index = --size;
+            Object node = nodes[index];
+            nodes[index] = null;
+            poppedParentIndex = parentIndexes[index];
+            poppedInclusiveMicros = inclusiveMicros[index];
+            return node;
+        }
+
+        private int poppedParentIndex() {
+            return poppedParentIndex;
+        }
+
+        private long poppedInclusiveMicros() {
+            return poppedInclusiveMicros;
+        }
+    }
+
+    private static final class ReadBudget {
+        private final LongSupplier nanoTime;
+        private final long startedAt;
+        private final long maxNanos;
+        private int operations;
+
+        private ReadBudget(@Nonnull LongSupplier nanoTime, long startedAt, long maxNanos) {
+            this.nanoTime = nanoTime;
+            this.startedAt = startedAt;
+            this.maxNanos = maxNanos;
+        }
+
+        private void check() {
+            if ((operations++ & DEADLINE_CHECK_MASK) == 0) {
+                checkNow();
+            }
+        }
+
+        private void checkNow() {
+            if (nanoTime.getAsLong() - startedAt >= maxNanos) {
+                throw ReadBudgetExceeded.INSTANCE;
+            }
+        }
+    }
+
+    private static final class ReadBudgetExceeded extends RuntimeException {
+        private static final ReadBudgetExceeded INSTANCE = new ReadBudgetExceeded();
+
+        private ReadBudgetExceeded() {
+            super(null, null, false, false);
+        }
+    }
+
+    private static final class ActiveNodeLimitExceeded extends RuntimeException {
+        private static final ActiveNodeLimitExceeded INSTANCE = new ActiveNodeLimitExceeded();
+
+        private ActiveNodeLimitExceeded() {
+            super(null, null, false, false);
         }
     }
 }
