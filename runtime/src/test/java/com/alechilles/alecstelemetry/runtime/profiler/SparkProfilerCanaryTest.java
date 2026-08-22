@@ -98,7 +98,8 @@ class SparkProfilerCanaryTest {
 
             assertTrue(entered.await(1, TimeUnit.SECONDS));
             awaitState(canary, SparkProfilerDiagnostics.State.TIMED_OUT, Duration.ofSeconds(2));
-            assertTrue(canary.diagnostics().detail().contains("may continue until Spark returns"));
+            assertTrue(canary.diagnostics().detail().contains(
+                    "direct-read work may continue until it returns"));
         } finally {
             release.countDown();
             canary.close();

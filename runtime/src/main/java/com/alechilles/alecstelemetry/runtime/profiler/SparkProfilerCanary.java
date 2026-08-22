@@ -124,7 +124,7 @@ public final class SparkProfilerCanary implements AutoCloseable {
     }
 
     private static final class TelemetryRuntimeSettingsDefaults {
-        private static final int INTERVAL_SECONDS = 60;
+        private static final int INTERVAL_SECONDS = 300;
         private static final int MAX_HISTORY_SNAPSHOTS = 10;
 
         private TelemetryRuntimeSettingsDefaults() {
