@@ -59,7 +59,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     private static final int DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT = 200;
     private static final boolean DEFAULT_SPARK_PROFILER_ENABLED = false;
     private static final int DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS = 90;
-    private static final int DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS = 60;
+    private static final int DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS = 300;
     private static final int DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS = 10;
     private static final int DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES = 5;
     private static final int DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS = 10;
@@ -276,7 +276,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         return new SparkProfilerSettings(
                 safe.enabled == null ? DEFAULT_SPARK_PROFILER_ENABLED : safe.enabled,
                 clamp(safe.initialDelaySeconds, DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS, 60, 3600),
-                clamp(safe.intervalSeconds, DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS, 30, 3600),
+                clamp(safe.intervalSeconds, DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS, 300, 3600),
                 clamp(safe.timeoutSeconds, DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS, 1, 60),
                 clamp(safe.maxSummaryEntries, DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES, 1, 10),
                 clamp(safe.maxHistorySnapshots, DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS, 1, 10)

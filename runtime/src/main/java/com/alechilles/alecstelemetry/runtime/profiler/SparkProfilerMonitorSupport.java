@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.lang.management.ManagementFactory;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 
@@ -18,6 +19,8 @@ final class SparkProfilerMonitorSupport {
             "com.alechilles.alecstelemetry.runtime.profiler.spark.capture.gate.v1";
     private static final long JVM_CAPTURE_RETRY_SECONDS = 1L;
     private static final int MAX_DETAIL_LENGTH = 240;
+    private static final com.sun.management.ThreadMXBean THREAD_ALLOCATION_BEAN =
+            threadAllocationBean();
 
     private SparkProfilerMonitorSupport() {
     }
@@ -25,13 +28,15 @@ final class SparkProfilerMonitorSupport {
     @Nonnull
     static SparkProfilerDiagnostics diagnosticsFrom(@Nonnull SparkProfileReadResult result,
                                                      long durationMillis,
-                                                     long heapDeltaBytes) {
+                                                     long heapDeltaBytes,
+                                                     long captureAllocatedBytes) {
         SparkProfileSnapshot snapshot = result.snapshot();
         if (result.status() == SparkProfileReadResult.Status.COMPLETE && snapshot != null) {
             return new SparkProfilerDiagnostics(
                     SparkProfilerDiagnostics.State.COMPLETE,
                     snapshot.sparkVersion(),
-                    "Raw Spark profile data was not retained.",
+                    "Raw Spark profile data was not retained; captureAllocatedBytes="
+                            + allocationText(captureAllocatedBytes) + ".",
                     durationMillis,
                     heapDeltaBytes,
                     snapshot.windowKey(),
@@ -117,6 +122,45 @@ final class SparkProfilerMonitorSupport {
     static long usedHeapBytes() {
         Runtime runtime = Runtime.getRuntime();
         return runtime.totalMemory() - runtime.freeMemory();
+    }
+
+    static long currentThreadAllocatedBytes() {
+        com.sun.management.ThreadMXBean bean = THREAD_ALLOCATION_BEAN;
+        if (bean == null) {
+            return -1L;
+        }
+        try {
+            return bean.getCurrentThreadAllocatedBytes();
+        } catch (RuntimeException | LinkageError ignored) {
+            return -1L;
+        }
+    }
+
+    static long allocationDelta(long before, long after) {
+        if (before < 0L || after < before) {
+            return -1L;
+        }
+        return after - before;
+    }
+
+    @Nullable
+    private static com.sun.management.ThreadMXBean threadAllocationBean() {
+        try {
+            java.lang.management.ThreadMXBean platformBean = ManagementFactory.getThreadMXBean();
+            if (platformBean instanceof com.sun.management.ThreadMXBean allocationBean
+                    && allocationBean.isThreadAllocatedMemorySupported()
+                    && allocationBean.isThreadAllocatedMemoryEnabled()) {
+                return allocationBean;
+            }
+        } catch (RuntimeException | LinkageError ignored) {
+            // Allocation diagnostics are optional and must not affect capture.
+        }
+        return null;
+    }
+
+    @Nonnull
+    private static String allocationText(long allocatedBytes) {
+        return allocatedBytes < 0L ? "unavailable" : Long.toString(allocatedBytes);
     }
 
     static long elapsedMillis(long startedAtNanos) {

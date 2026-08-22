@@ -105,6 +105,23 @@ class SparkProfilerMonitorTest {
     }
 
     @Test
+    void completedCaptureReportsCaptureThreadAllocation() throws Exception {
+        SparkProfilerMonitor monitor = newMonitor(
+                settings(2, 2, 5),
+                (plugin, maxEntries) -> complete(1),
+                new ArrayList<>()
+        );
+        try {
+            monitor.activateNow();
+            awaitHistorySize(monitor, 1, Duration.ofSeconds(2));
+
+            assertTrue(monitor.diagnostics().detail().contains("captureAllocatedBytes="));
+        } finally {
+            monitor.close();
+        }
+    }
+
+    @Test
     void projectSinkRunsAfterGlobalHistoryInsertionAndOutsideMonitorLock() throws Exception {
         CountDownLatch sinkEntered = new CountDownLatch(1);
         CountDownLatch releaseSink = new CountDownLatch(1);

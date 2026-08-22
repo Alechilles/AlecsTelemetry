@@ -504,18 +504,25 @@ public final class SparkProfilerMonitor implements AutoCloseable {
         }
         SparkProfileReadResult result = null;
         Throwable failure = null;
+        long allocatedBefore = SparkProfilerMonitorSupport.currentThreadAllocatedBytes();
+        long allocatedAfter;
         try {
             result = profileReader.read(attempt.sparkPlugin, settings.maxSummaryEntries());
         } catch (Throwable caught) {
             SparkProfilerMonitorSupport.rethrowIfFatal(caught);
             failure = caught;
         } finally {
+            allocatedAfter = SparkProfilerMonitorSupport.currentThreadAllocatedBytes();
             attempt.releaseJvmCapture();
         }
         if (failure != null) {
             handleCaptureFailure(attempt, failure);
         } else {
-            publishCapture(attempt, result);
+            publishCapture(
+                    attempt,
+                    result,
+                    SparkProfilerMonitorSupport.allocationDelta(allocatedBefore, allocatedAfter)
+            );
         }
     }
 
@@ -532,7 +539,8 @@ public final class SparkProfilerMonitor implements AutoCloseable {
     }
 
     private void publishCapture(@Nonnull SparkProfilerCaptureAttempt attempt,
-                                @Nullable SparkProfileReadResult result) {
+                                @Nullable SparkProfileReadResult result,
+                                long captureAllocatedBytes) {
         long durationMillis = SparkProfilerMonitorSupport.elapsedMillis(attempt.startedAtNanos);
         long heapDelta = SparkProfilerMonitorSupport.usedHeapBytes() - attempt.heapBefore;
         synchronized (lifecycleLock) {
@@ -563,7 +571,12 @@ public final class SparkProfilerMonitor implements AutoCloseable {
                 );
                 return;
             }
-            SparkProfilerDiagnostics completed = SparkProfilerMonitorSupport.diagnosticsFrom(result, durationMillis, heapDelta);
+            SparkProfilerDiagnostics completed = SparkProfilerMonitorSupport.diagnosticsFrom(
+                    result,
+                    durationMillis,
+                    heapDelta,
+                    captureAllocatedBytes
+            );
             boolean opensCircuit = opensCircuit(result.status());
             if (opensCircuit) {
                 circuitOpen = true;

@@ -28,7 +28,7 @@ class TelemetryRuntimeSettingsTest {
 
         assertFalse(profiler.enabled());
         assertEquals(90, profiler.initialDelaySeconds());
-        assertEquals(60, profiler.intervalSeconds());
+        assertEquals(300, profiler.intervalSeconds());
         assertEquals(10, profiler.timeoutSeconds());
         assertEquals(5, profiler.maxSummaryEntries());
         assertEquals(10, profiler.maxHistorySnapshots());
@@ -55,7 +55,7 @@ class TelemetryRuntimeSettingsTest {
 
         assertTrue(settings.enabled());
         assertEquals(60, settings.initialDelaySeconds());
-        assertEquals(30, settings.intervalSeconds());
+        assertEquals(300, settings.intervalSeconds());
         assertEquals(60, settings.timeoutSeconds());
         assertEquals(10, settings.maxSummaryEntries());
         assertEquals(10, settings.maxHistorySnapshots());
@@ -79,7 +79,7 @@ class TelemetryRuntimeSettingsTest {
 
         assertTrue(settings.sparkProfiler().enabled());
         assertEquals(120, settings.sparkProfiler().initialDelaySeconds());
-        assertEquals(60, settings.sparkProfiler().intervalSeconds());
+        assertEquals(300, settings.sparkProfiler().intervalSeconds());
         assertEquals(20, settings.sparkProfiler().timeoutSeconds());
         assertEquals(7, settings.sparkProfiler().maxSummaryEntries());
         assertEquals(10, settings.sparkProfiler().maxHistorySnapshots());
@@ -116,7 +116,7 @@ class TelemetryRuntimeSettingsTest {
 
         assertTrue(settings.enabled());
         assertEquals(300, settings.initialDelaySeconds());
-        assertEquals(90, settings.intervalSeconds());
+        assertEquals(300, settings.intervalSeconds());
         assertEquals(15, settings.timeoutSeconds());
         assertEquals(6, settings.maxSummaryEntries());
         assertEquals(8, settings.maxHistorySnapshots());
@@ -142,7 +142,7 @@ class TelemetryRuntimeSettingsTest {
 
         assertFalse(settings.enabled());
         assertEquals(90, settings.initialDelaySeconds());
-        assertEquals(60, settings.intervalSeconds());
+        assertEquals(300, settings.intervalSeconds());
         assertEquals(10, settings.timeoutSeconds());
         assertEquals(5, settings.maxSummaryEntries());
         assertEquals(10, settings.maxHistorySnapshots());
@@ -182,7 +182,7 @@ class TelemetryRuntimeSettingsTest {
         JsonObject document = JsonParser.parseString(Files.readString(settingsFile)).getAsJsonObject();
         assertTrue(document.has("sparkProfiler"));
         assertFalse(document.has("sparkProfilerCanary"));
-        assertEquals(60, document.getAsJsonObject("sparkProfiler").get("intervalSeconds").getAsInt());
+        assertEquals(300, document.getAsJsonObject("sparkProfiler").get("intervalSeconds").getAsInt());
         assertEquals(10, document.getAsJsonObject("sparkProfiler").get("maxHistorySnapshots").getAsInt());
     }
 }
