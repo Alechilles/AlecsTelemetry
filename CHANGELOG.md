@@ -31,6 +31,9 @@
   remain local. Telemetry does not upload raw profiles, frame trees, player
   data, or server identity for this feature.
 
+### Changed
+- Updated the embedded Creditor library to 1.1.1 for stable Hytale 0.6 support.
+
 ### Fixed
 - Counted and retained only frames active in the newest completed Spark window.
   Historical zero-time nodes in Spark's retained call tree no longer inflate

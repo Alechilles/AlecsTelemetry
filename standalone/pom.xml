@@ -33,7 +33,7 @@
         <dependency>
             <groupId>curse.maven</groupId>
             <artifactId>creditor-1560961</artifactId>
-            <version>8334074</version>
+            <version>8724366</version>
         </dependency>
         <dependency>
             <groupId>com.hypixel.hytale</groupId>
