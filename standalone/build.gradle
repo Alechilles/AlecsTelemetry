@@ -39,7 +39,7 @@ configurations.named('testImplementation') {
 hytaleTools {
     hytaleVersion = localProperty('hytale_version')
     patchline = localProperty('hytale_patchline')
-    manifestServerVersion = '0.5.x'
+    manifestServerVersion = '>=0.5.0 <0.7.0'
     manifestGroup = 'Alechilles'
     modId = "Alec's Telemetry!"
     modDescription = 'Standalone telemetry runtime mod for Hytale mods.'

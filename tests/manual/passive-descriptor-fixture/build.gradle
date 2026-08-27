@@ -21,9 +21,9 @@ sourceSets.named('main') {
 }
 
 hytaleTools {
-    hytaleVersion = providers.gradleProperty('hytale_version').getOrElse('0.5.7')
+    hytaleVersion = providers.gradleProperty('hytale_version').getOrElse('0.6.0')
     patchline = providers.gradleProperty('hytale_patchline').getOrElse('release')
-    manifestServerVersion = '0.5.x'
+    manifestServerVersion = '>=0.5.0 <0.7.0'
     manifestGroup = 'Alechilles'
     modId = 'Passive Telemetry Descriptor Host Fixture'
     modDescription = 'Manual fixture for a descriptor-only shaded telemetry library.'
