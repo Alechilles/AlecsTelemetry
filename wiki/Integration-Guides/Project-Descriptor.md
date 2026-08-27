@@ -101,11 +101,7 @@ Runtime override files still use `enabled`; those files store saved consent choi
     "events": {
       "errors": { "supported": true },
       "lifecycle": { "supported": true },
-      "breadcrumbs": {
-        "supported": true,
-        "automatic": true,
-        "profilerCorrelationCategories": ["companion.ai.tick"]
-      }
+      "breadcrumbs": { "supported": true, "automatic": true }
     },
     "performance": {
       "supported": true,
@@ -140,74 +136,13 @@ Identity fields are optional overrides:
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
-### Profiler attribution
-
-The local Spark profiler matches an exact normalized plugin identifier first.
-When that is not available, it uses the longest complete normalized package
-prefix. Partial strings are not matches, and equal-best project matches remain
-unattributed.
-
-The low-cost direct Spark reader does not run class-source lookup, so current
-captures use `<unknown>` source labels. Set accurate `packagePrefixes` for all
-packages that can contain your server hot paths.
-
-The profiler accepts at most 32 normalized package prefixes per project. It
-trims values, replaces `/` with `.`, removes trailing dots, and removes
-duplicates in descriptor order. Each package-prefix value is limited to 512
-characters before normalization. Extra or longer values remain valid for other
-Telemetry behavior but do not enter the profiler index; local diagnostics
-report the truncation.
-
-### Profiler breadcrumb correlation
-
-The optional `events.breadcrumbs.profilerCorrelationCategories` field allows
-small local context counts in profiler snapshots:
-
-```json
-{
-  "telemetry": {
-    "events": {
-      "breadcrumbs": {
-        "supported": true,
-        "profilerCorrelationCategories": [
-          "companion.ai.tick",
-          "companion.lease.scan"
-        ]
-      }
-    }
-  }
-}
-```
-
-The runtime accepts at most 16 categories. Each category must be no longer than
-40 characters and must match the exact lowercase pattern `[a-z0-9_.-]+`.
-Duplicates are removed in first-seen order. Invalid entries and entries after
-the first 16 are excluded and reported by a bounded local diagnostic. The
-project remains valid when entries are excluded.
-
-At publication, the profiler keeps only non-zero counts from five one-minute
-buckets. A breadcrumb is counted only when its trimmed static category exactly
-matches an accepted descriptor category. The detail text, structured custom
-fields, and undeclared or dynamically generated categories never enter profiler
-context. Project enablement and breadcrumb consent are required for counting and
-publication; clearing breadcrumb consent clears these counts without clearing
-performance snapshots.
-
 ## Category Fields
 
 Crash supports `supported`, `defaultEnabled`, `uncaughtExceptions`, `setupFailures`, `startFailures`, and `exceptionalWorldRemovals`.
 
-Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, `automatic`, and `profilerCorrelationCategories`.
+Events support `supported`, `defaultEnabled`, and `details` for `errors` and `lifecycle`. Breadcrumbs support `supported`, `defaultEnabled`, and `automatic`.
 
 Performance supports `supported`, `defaultEnabled`, `sampleRate`, `thresholdMs`, and `details`.
-
-The local project profiler requires `performance.supported: true`, an enabled
-project, current performance consent, and the server owner's global Spark
-monitor setting. These gates enable bounded in-memory summaries only. They do
-not create a dedicated profiler evidence file or structured profiler upload
-path; ordinary monitor and command-output text follows the server log policy
-and can enter manual current or previous log attachments under the normal
-report settings, review, redaction, and clipping controls.
 
 Usage supports `supported`, `defaultEnabled`, `allowedEvents`, and `details`.
 

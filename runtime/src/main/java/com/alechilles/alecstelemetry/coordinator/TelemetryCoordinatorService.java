@@ -231,9 +231,7 @@ public final class TelemetryCoordinatorService {
         HashSet<String> rejectedTokens = new HashSet<>();
         for (Map<String, Object> contribution : contributions == null ? List.<Map<String, Object>>of() : contributions) {
             String token = stringValue(contribution == null ? null : contribution.get("token"));
-            String proposedProjectId = stringValue(contribution == null ? null : contribution.get("projectId"));
-            TelemetryProjectRegistration passiveBase = byProjectId.get(proposedProjectId.toLowerCase(Locale.ROOT));
-            TelemetryProjectRegistration registration = registrationFromContribution(contribution, passiveBase);
+            TelemetryProjectRegistration registration = registrationFromContribution(contribution);
             if (registration == null) {
                 return false;
             }
@@ -890,9 +888,7 @@ public final class TelemetryCoordinatorService {
     }
 
     @Nullable
-    private static TelemetryProjectRegistration registrationFromContribution(
-            @Nullable Map<String, Object> contribution,
-            @Nullable TelemetryProjectRegistration passiveBase) {
+    private static TelemetryProjectRegistration registrationFromContribution(@Nullable Map<String, Object> contribution) {
         if (contribution == null) {
             return null;
         }
@@ -918,16 +914,8 @@ public final class TelemetryCoordinatorService {
             String hostPluginIdentifier = stringValue(contribution.get("hostPluginIdentifier"));
             String hostPluginVersion = stringValue(contribution.get("hostPluginVersion"));
             String descriptorHash = stringValue(contribution.get("descriptorHash"));
-            String canonicalHash = descriptor.canonicalHash();
-            if (!canonicalHash.equalsIgnoreCase(descriptorHash)) {
-                boolean compatibleSchemaHash = descriptorHash.matches("(?i)[0-9a-f]{64}")
-                        && passiveBase != null
-                        && passiveBase.isPassiveDescriptor()
-                        && canonicalHash.equalsIgnoreCase(passiveBase.declaredDescriptorHash());
-                if (!compatibleSchemaHash) {
-                    return null;
-                }
-                descriptorHash = canonicalHash;
+            if (!descriptor.canonicalHash().equalsIgnoreCase(descriptorHash)) {
+                return null;
             }
             return TelemetryProjectRegistration.contribution(
                     descriptor,

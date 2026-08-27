@@ -184,9 +184,9 @@ public final class TelemetryProjectDiscovery {
         ArrayList<TelemetryProjectRegistration> registrations = new ArrayList<>();
         Path descriptorPath = descriptorPath(folder);
         if (Files.isRegularFile(descriptorPath)) {
-                try {
-                    String rawDescriptor = Files.readString(descriptorPath, StandardCharsets.UTF_8);
-                    registrations.add(toRegistration(rawDescriptor, manifest, folder, skippedRegistrationWarnings));
+            try {
+                String rawDescriptor = Files.readString(descriptorPath, StandardCharsets.UTF_8);
+                registrations.add(toRegistration(rawDescriptor, manifest, folder));
             } catch (Exception ex) {
                 warn("Failed to read telemetry descriptor " + descriptorPath, ex);
             }
@@ -216,8 +216,7 @@ public final class TelemetryProjectDiscovery {
                         rawDescriptor,
                         manifest,
                         folder,
-                        namespacedDescriptor.toString(),
-                        skippedRegistrationWarnings
+                        namespacedDescriptor.toString()
                 );
                 if (registration != null) {
                     registrations.add(registration);
@@ -250,7 +249,7 @@ public final class TelemetryProjectDiscovery {
             if (descriptorEntry != null) {
                 try (InputStream stream = zipFile.getInputStream(descriptorEntry)) {
                     String rawDescriptor = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-                    registrations.add(toRegistration(rawDescriptor, manifest, archive, skippedRegistrationWarnings));
+                    registrations.add(toRegistration(rawDescriptor, manifest, archive));
                 } catch (Exception ex) {
                     warn("Failed to read telemetry descriptor " + archive, ex);
                 }
@@ -281,8 +280,7 @@ public final class TelemetryProjectDiscovery {
                             rawDescriptor,
                             manifest,
                             archive,
-                            namespacedDescriptor.getName(),
-                            skippedRegistrationWarnings
+                            namespacedDescriptor.getName()
                     );
                     if (registration != null) {
                         registrations.add(registration);
@@ -327,8 +325,7 @@ public final class TelemetryProjectDiscovery {
     @Nonnull
     private TelemetryProjectRegistration toRegistration(@Nonnull String rawDescriptor,
                                                         @Nullable ModManifest manifest,
-                                                        @Nonnull Path sourcePath,
-                                                        @Nonnull List<String> skippedRegistrationWarnings) {
+                                                        @Nonnull Path sourcePath) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 rawDescriptor,
                 manifest == null
@@ -340,7 +337,6 @@ public final class TelemetryProjectDiscovery {
                         manifest.defaultPackagePrefixes()
                 )
         );
-        addProfilerCorrelationWarning(descriptor, rawDescriptor, skippedRegistrationWarnings);
 
         String pluginIdentifier = manifest == null ? firstOrUnknown(descriptor.ownerPluginIdentifiers()) : manifest.identifier();
         String pluginVersion = manifest == null ? "unknown" : manifest.version();
@@ -351,8 +347,7 @@ public final class TelemetryProjectDiscovery {
     private TelemetryProjectRegistration toPassiveRegistration(@Nonnull String rawDescriptor,
                                                                 @Nullable ModManifest manifest,
                                                                 @Nonnull Path sourcePath,
-                                                                @Nonnull String resourceName,
-                                                                @Nonnull List<String> skippedRegistrationWarnings) {
+                                                                @Nonnull String resourceName) {
         if (manifest == null) {
             throw new IllegalArgumentException(
                     "Passive telemetry descriptor " + resourceName + " has no valid host manifest"
@@ -381,7 +376,6 @@ public final class TelemetryProjectDiscovery {
         }
 
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(rawDescriptor, null);
-        addProfilerCorrelationWarning(descriptor, rawDescriptor, skippedRegistrationWarnings);
         if (!descriptor.stats().supported()
                 || descriptor.stats().allowedEvents().stream().noneMatch("heartbeat"::equalsIgnoreCase)) {
             throw new IllegalArgumentException("stats.supported and stats.allowedEvents[heartbeat] are required");
@@ -392,21 +386,6 @@ public final class TelemetryProjectDiscovery {
                 manifest.identifier(),
                 manifest.version()
         );
-    }
-
-    private static void addProfilerCorrelationWarning(
-            @Nonnull TelemetryProjectDescriptor descriptor,
-            @Nonnull String rawDescriptor,
-            @Nonnull List<String> skippedRegistrationWarnings) {
-        int excluded = TelemetryProjectDescriptor.excludedProfilerCorrelationCategoryCount(rawDescriptor);
-        if (excluded > 0) {
-            addSkippedWarning(
-                    skippedRegistrationWarnings,
-                    "Telemetry project " + descriptor.projectId()
-                            + " excluded " + excluded
-                            + " invalid or excess profiler breadcrumb correlation categories."
-            );
-        }
     }
 
     private static boolean hasNonBlankOwner(@Nonnull JsonObject object) {

@@ -244,56 +244,6 @@ attach standardized fields such as `subsystem`, `phase`, `featureKey`,
 `detail(key, value)` entries are filtered by the descriptor allowlist before
 upload.
 
-## Local project profiler (Phase 2)
-
-An embedded consumer can read the local project profiler through the same
-project handle as a standalone consumer:
-
-```java
-TelemetryProjectHandle project = api.findProject("example-mod");
-TelemetryProfilerView profiler = project.profiler();
-TelemetryProfilerStatus status = profiler.status();
-Optional<TelemetryProfilerSnapshot> latest = profiler.latest();
-List<TelemetryProfilerSnapshot> history = profiler.history();
-TelemetryProfilerSubscription subscription = profiler.subscribe(snapshot ->
-        snapshot.paths().forEach(path -> logger.info(
-                path.attribution() + " " + path.sampledMilliseconds() + " ms "
-                        + path.ownedClassName() + "#" + path.ownedMethodName())));
-```
-
-The active coordinator advertises capability `profiler-api-v1`. An older
-elected embedded or standalone provider returns an unavailable view with empty
-data and a closed subscription. It does not throw a linkage error. The local
-API is not an authorization boundary: server-side consumer code with API access
-can request another registered project by ID. Consumer code controls later
-handling of snapshots.
-
-Publication requires the global Spark monitor, the project, and project
-performance consent to be enabled. The monitor reads only completed passive
-Spark `ASYNC` `EXECUTION` windows and produces bounded immutable in-memory
-summaries. It has no dedicated profiler evidence file and no structured Phase 2
-profiler evidence queue or upload path. Ordinary monitor summaries and command
-output can be retained by the server log policy and can enter manual current or
-previous log attachments under the normal report settings, review, redaction,
-and clipping controls. Raw Spark profiles and frame trees are not written to
-logs or uploaded by Telemetry. Spark's own profile retention or upload settings
-remain separate.
-
-Phase 2 paths use `SELF` or `DOWNSTREAM` attribution and `hot-path-v2`
-qualification: `OBSERVED`, `PROVISIONAL`, or `REPEATED`. An actionable empty
-window is retained as an empty `COMPLETE` snapshot so old candidates can age.
-The service retains at most five paths per snapshot, ten snapshots per project,
-500 snapshots globally, and 500 project-path entries globally. It accepts at
-most four listener workers per project and 32 globally. `/telemetry profiler
-signals <project-id>` evaluates the latest five actionable snapshots and shows
-at most five active candidates. Disabling the project or performance consent
-clears that project's retained summaries, signals, and context; re-enabling the
-gates allows only later actionable windows. Attribution uses an exact plugin
-identifier, then the longest complete package prefix, with at most 32
-normalized prefixes per project.
-Each package-prefix value is limited to 512 characters before normalization.
-Longer values are omitted and reported as truncated.
-
 ## Storage Layout
 
 The elected active coordinator stores runtime settings, project overrides,

@@ -17,7 +17,6 @@ public final class TelemetryCommandRoot extends AbstractCommandCollection {
         requirePermission(ROOT_PERMISSION);
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         addSubCommand(new TelemetryStatusCommand(runtime));
-        addSubCommand(new TelemetryProfilerCommand(runtime));
         addSubCommand(new TelemetryProjectsCommand(runtime));
         addSubCommand(new TelemetryProjectCommand(runtime));
         addSubCommand(new TelemetryConsentCommand(runtime));

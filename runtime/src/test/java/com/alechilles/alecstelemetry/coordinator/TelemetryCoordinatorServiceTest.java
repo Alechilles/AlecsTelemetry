@@ -284,49 +284,6 @@ class TelemetryCoordinatorServiceTest {
     }
 
     @Test
-    void olderRuntimeDescriptorHashCanReconcileWhenDescriptorMatchesPassiveBase() {
-        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
-                tempDir.resolve("Settings").resolve("runtime.json"),
-                null
-        );
-        TelemetryProjectDescriptor declared = creditorDescriptor(true);
-        TelemetryProjectRegistration passive = TelemetryProjectRegistration.passiveDescriptor(
-                declared,
-                tempDir.resolve("Creditor.jar"),
-                "Example:Host",
-                "3.0.0"
-        );
-        TelemetryCoordinatorService service = new TelemetryCoordinatorService(
-                settings,
-                dataPaths(settings),
-                List.of(passive),
-                List.of(passive),
-                List.of(),
-                new SequencedClient(),
-                null,
-                null
-        );
-        assertTrue(new TelemetryConsentStateStore(null).markReviewed(
-                dataPaths(settings).consentStateFile(),
-                passive
-        ));
-        Map<String, Object> contribution = new java.util.HashMap<>(contribution(
-                "creditor-older-runtime-token",
-                declared,
-                "Author:Creditor",
-                "1.4.0",
-                "Example:Host",
-                "3.0.0"
-        ));
-        contribution.put("descriptorHash", "a".repeat(64));
-
-        assertTrue(service.reconcileProjectContributions(1L, List.of(contribution)));
-        assertEquals(TelemetryProjectRegistrationSource.CONTRIBUTION,
-                service.projects().getFirst().source());
-        assertTrue(service.projects().getFirst().usage().supported());
-    }
-
-    @Test
     void lateBaseCollisionCannotReplaceAnEstablishedContributionDestination() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),

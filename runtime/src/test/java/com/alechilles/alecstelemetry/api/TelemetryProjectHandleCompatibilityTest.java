@@ -14,13 +14,10 @@ import org.junit.jupiter.api.Test;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -107,60 +104,6 @@ class TelemetryProjectHandleCompatibilityTest {
     }
 
     @Test
-    void legacyHandleGetsUnavailableProfilerWithoutImplementingANewMethod() {
-        TelemetryProfilerView profiler = new NoopTelemetryProjectHandle().profiler();
-
-        assertEquals(TelemetryProfilerStatus.State.UNAVAILABLE, profiler.status().state());
-        assertTrue(profiler.latest().isEmpty());
-        assertTrue(profiler.history().isEmpty());
-        profiler.subscribe(snapshot -> {
-            throw new AssertionError("unavailable view must not publish");
-        }).close();
-    }
-
-    @Test
-    void profilerSnapshotDefensivelyCopiesEvidence() {
-        ArrayList<TelemetryProfilerPathEvidence> paths = new ArrayList<>();
-        paths.add(pathEvidence("00112233445566778899aabbccddeeff"));
-        TelemetryProfilerSnapshot snapshot = snapshot(paths);
-
-        paths.clear();
-
-        assertEquals(1, snapshot.paths().size());
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.paths().clear());
-        assertThrows(UnsupportedOperationException.class,
-                () -> snapshot.paths().getFirst().representativePath().clear());
-    }
-
-    @Test
-    void profilerPathEvidenceBoundsRepresentativeFrames() {
-        ArrayList<String> representativePath = new ArrayList<>();
-        String overlongFrame = "x".repeat(513);
-        for (int index = 0; index < 9; index++) {
-            representativePath.add(overlongFrame);
-        }
-
-        TelemetryProfilerPathEvidence evidence = pathEvidence(
-                "00112233445566778899aabbccddeeff",
-                representativePath
-        );
-
-        assertEquals(8, evidence.representativePath().size());
-        assertEquals(512, evidence.representativePath().getFirst().length());
-        assertTrue(evidence.representativePath().stream().allMatch(frame -> frame.length() <= 512));
-    }
-
-    @Test
-    void runtimeBackedHandleDelegatesProfilerByProjectId() {
-        FakeRuntimeOperations runtime = new FakeRuntimeOperations(true, true);
-        runtime.profiler = TelemetryProfilerView.unavailable();
-
-        assertSame(runtime.profiler,
-                new TelemetryProjectHandleImpl(runtime, "example-mod").profiler());
-        assertEquals("example-mod", runtime.profilerProjectId);
-    }
-
-    @Test
     void runtimeApiEnabledFollowsGlobalRuntimeOperation() {
         TelemetryRuntimeApi disabledApi = new TelemetryRuntimeApiImpl(new FakeRuntimeOperations(false, true));
         TelemetryRuntimeApi enabledApi = new TelemetryRuntimeApiImpl(new FakeRuntimeOperations(true, false));
@@ -244,8 +187,6 @@ class TelemetryProjectHandleCompatibilityTest {
         private String openedProjectId;
         private TelemetryReportOpenRequest openedRequest;
         private TelemetryBreadcrumbContext breadcrumbContext;
-        private TelemetryProfilerView profiler;
-        private String profilerProjectId;
 
         private FakeRuntimeOperations(boolean enabled, boolean projectEnabled) {
             this.enabled = enabled;
@@ -350,13 +291,6 @@ class TelemetryProjectHandleCompatibilityTest {
         }
 
         @Nonnull
-        @Override
-        public TelemetryProfilerView profiler(@Nonnull String projectId) {
-            profilerProjectId = projectId;
-            return profiler;
-        }
-
-        @Nonnull
         private static TelemetryProjectRegistration project(@Nonnull String projectId, @Nonnull String displayName) {
             TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                     "{\"projectId\":\"" + projectId + "\",\"displayName\":\"" + displayName + "\"}",
@@ -364,46 +298,5 @@ class TelemetryProjectHandleCompatibilityTest {
             );
             return new TelemetryProjectRegistration(descriptor, "Example:" + displayName, "1.0.0", null);
         }
-    }
-
-    @Nonnull
-    private static TelemetryProfilerPathEvidence pathEvidence(@Nonnull String fingerprint) {
-        return pathEvidence(fingerprint, List.of("example.Tick#tick()V"));
-    }
-
-    @Nonnull
-    private static TelemetryProfilerPathEvidence pathEvidence(
-            @Nonnull String fingerprint,
-            @Nonnull List<String> representativePath) {
-        return new TelemetryProfilerPathEvidence(
-                fingerprint,
-                TelemetryProfilerAttribution.SELF,
-                "example.Tick",
-                "tick",
-                "()V",
-                null,
-                null,
-                null,
-                1.0d,
-                10.0d,
-                TelemetryProfilerQualification.OBSERVED,
-                representativePath
-        );
-    }
-
-    @Nonnull
-    private static TelemetryProfilerSnapshot snapshot(
-            @Nonnull List<TelemetryProfilerPathEvidence> paths) {
-        return new TelemetryProfilerSnapshot(
-                "example-mod",
-                "1.0.0",
-                "spark-1",
-                1,
-                1L,
-                1.0d,
-                "unqualified-v1",
-                paths,
-                new TelemetryProfilerContext(1L, 1, 20.0d, 50.0d, Map.of("profiler", 1))
-        );
     }
 }

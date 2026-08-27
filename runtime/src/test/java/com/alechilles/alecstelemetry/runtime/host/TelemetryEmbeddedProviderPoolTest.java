@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -71,40 +70,6 @@ class TelemetryEmbeddedProviderPoolTest {
         assertEquals(1, TelemetryEmbeddedProviderPool.providerCountForTests());
 
         second[0].close();
-        assertEquals(0, TelemetryEmbeddedProviderPool.providerCountForTests());
-    }
-
-    @Test
-    void retainsStartedDelegateUntilTheLastLeaseCloses() {
-        TelemetryEmbeddedProviderPool.clearForTests();
-        AtomicInteger created = new AtomicInteger();
-        AtomicInteger starts = new AtomicInteger();
-        AtomicInteger shutdowns = new AtomicInteger();
-        TelemetryEmbeddedProviderPool.setProviderFactoryForTests((plugin, descriptor) -> {
-            created.incrementAndGet();
-            return new RecordingHandle(starts, shutdowns);
-        });
-
-        JavaPlugin plugin = testPlugin(tempDir);
-        TelemetryEmbeddedProviderPool.Lease first = (TelemetryEmbeddedProviderPool.Lease)
-                TelemetryEmbeddedProviderPool.acquire(plugin, null);
-        TelemetryEmbeddedProviderPool.Lease second = (TelemetryEmbeddedProviderPool.Lease)
-                TelemetryEmbeddedProviderPool.acquire(plugin, null);
-
-        first.start();
-        assertEquals(1, created.get());
-        assertEquals(1, starts.get());
-
-        first.close();
-        assertEquals(0, shutdowns.get());
-        assertEquals(1, TelemetryEmbeddedProviderPool.providerCountForTests());
-
-        second.start();
-        assertEquals(1, created.get());
-        assertEquals(1, starts.get());
-
-        second.close();
-        assertEquals(1, shutdowns.get());
         assertEquals(0, TelemetryEmbeddedProviderPool.providerCountForTests());
     }
 
@@ -174,46 +139,6 @@ class TelemetryEmbeddedProviderPoolTest {
                     Thread.currentThread().interrupt();
                 }
             }
-        }
-
-        @Override
-        public boolean ownsActiveCoordinator() {
-            return false;
-        }
-
-        @Override
-        public String activeCoordinatorProviderId() {
-            return null;
-        }
-
-        @Override
-        public int registeredProjectCount() {
-            return 0;
-        }
-
-        @Override
-        public TelemetryRuntimeApi api() {
-            return null;
-        }
-    }
-
-    private static final class RecordingHandle implements TelemetryRuntimeHostHandle {
-        private final AtomicInteger starts;
-        private final AtomicInteger shutdowns;
-
-        private RecordingHandle(AtomicInteger starts, AtomicInteger shutdowns) {
-            this.starts = starts;
-            this.shutdowns = shutdowns;
-        }
-
-        @Override
-        public void start() {
-            starts.incrementAndGet();
-        }
-
-        @Override
-        public void shutdown() {
-            shutdowns.incrementAndGet();
         }
 
         @Override

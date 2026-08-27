@@ -15,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Declarative project registration loaded from `Server/Telemetry/project.json`.
@@ -77,9 +76,6 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     private static final int CURRENT_SCHEMA_VERSION = 1;
     private static final String MODE_HOSTED = "hosted";
     private static final String MODE_CUSTOM = "custom";
-    private static final int MAX_PROFILER_CORRELATION_CATEGORIES = 16;
-    private static final int MAX_PROFILER_CORRELATION_CATEGORY_LENGTH = 40;
-    private static final Pattern PROFILER_CORRELATION_CATEGORY_PATTERN = Pattern.compile("^[a-z0-9_.-]+$");
     public static final String RUNTIME_MODE_DEPENDENCY = "dependency";
     public static final String RUNTIME_MODE_EMBEDDED = "embedded";
     public static final String PROJECT_KEY_HEADER = "X-Telemetry-Project-Key";
@@ -213,21 +209,6 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         );
     }
 
-    static int excludedProfilerCorrelationCategoryCount(@Nonnull String rawJson) {
-        Document parsed = GSON.fromJson(rawJson, Document.class);
-        if (parsed == null) {
-            return 0;
-        }
-        EventsDocument eventsDocument = choose(
-                parsed.telemetry == null ? null : parsed.telemetry.events,
-                parsed.events
-        );
-        BreadcrumbsDocument breadcrumbs = eventsDocument == null ? null : eventsDocument.breadcrumbs;
-        return normalizeProfilerCorrelationCategories(
-                breadcrumbs == null ? null : breadcrumbs.profilerCorrelationCategories
-        ).excludedCount();
-    }
-
     @Nonnull
     public String toJson() {
         LinkedHashMap<String, Object> document = new LinkedHashMap<>();
@@ -245,7 +226,11 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 "events", Map.of(
                 "errors", eventTypeDocument(events.errors()),
                 "lifecycle", eventTypeDocument(events.lifecycle()),
-                "breadcrumbs", breadcrumbsDocument(events.breadcrumbs())
+                "breadcrumbs", Map.of(
+                        "supported", events.breadcrumbs().supported(),
+                        "defaultEnabled", events.breadcrumbs().enabled(),
+                        "automatic", events.breadcrumbs().automatic()
+                )
         ),
                 "performance", Map.of(
                 "supported", performance.supported(),
@@ -335,18 +320,6 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 "defaultEnabled", options.enabled(),
                 "details", detailRulesDocument(options.details())
         );
-    }
-
-    @Nonnull
-    private static Map<String, Object> breadcrumbsDocument(@Nonnull BreadcrumbOptions options) {
-        LinkedHashMap<String, Object> document = new LinkedHashMap<>();
-        document.put("supported", options.supported());
-        document.put("defaultEnabled", options.enabled());
-        document.put("automatic", options.automatic());
-        if (!options.profilerCorrelationCategories().isEmpty()) {
-            document.put("profilerCorrelationCategories", options.profilerCorrelationCategories());
-        }
-        return document;
     }
 
     @Nonnull
@@ -542,34 +515,6 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     @Nonnull
-    private static NormalizedCorrelationCategories normalizeProfilerCorrelationCategories(
-            @Nullable List<String> values) {
-        if (values == null || values.isEmpty()) {
-            return new NormalizedCorrelationCategories(List.of(), 0);
-        }
-        LinkedHashMap<String, Boolean> normalized = new LinkedHashMap<>();
-        int excludedCount = 0;
-        for (String value : values) {
-            String candidate = normalizeNullable(value);
-            if (candidate == null) {
-                excludedCount++;
-                continue;
-            }
-            if (candidate.length() > MAX_PROFILER_CORRELATION_CATEGORY_LENGTH
-                    || !PROFILER_CORRELATION_CATEGORY_PATTERN.matcher(candidate).matches()) {
-                excludedCount++;
-                continue;
-            }
-            candidate = candidate.toLowerCase(Locale.ROOT);
-            if (normalized.size() >= MAX_PROFILER_CORRELATION_CATEGORIES
-                    || normalized.putIfAbsent(candidate, Boolean.TRUE) != null) {
-                excludedCount++;
-            }
-        }
-        return new NormalizedCorrelationCategories(List.copyOf(normalized.keySet()), excludedCount);
-    }
-
-    @Nonnull
     private static Map<String, String> normalizeHeaders(@Nullable Map<String, String> rawHeaders) {
         if (rawHeaders == null || rawHeaders.isEmpty()) {
             return Map.of();
@@ -698,8 +643,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                         document == null ? null : document.defaultEnabled,
                         document == null ? null : document.enabled
                 ),
-                document != null && boolOrDefault(document.automatic, false),
-                document == null ? null : document.profilerCorrelationCategories
+                document != null && boolOrDefault(document.automatic, false)
         );
     }
 
@@ -1008,22 +952,9 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         }
     }
 
-    public record BreadcrumbOptions(boolean supported,
-                                    boolean enabled,
-                                    boolean automatic,
-                                    @Nonnull List<String> profilerCorrelationCategories) {
-        public BreadcrumbOptions {
-            profilerCorrelationCategories = normalizeProfilerCorrelationCategories(
-                    profilerCorrelationCategories
-            ).values();
-        }
-
-        public BreadcrumbOptions(boolean supported, boolean enabled, boolean automatic) {
-            this(supported, enabled, automatic, List.of());
-        }
-
+    public record BreadcrumbOptions(boolean supported, boolean enabled, boolean automatic) {
         public BreadcrumbOptions(boolean enabled, boolean automatic) {
-            this(enabled, enabled, automatic, List.of());
+            this(enabled, enabled, automatic);
         }
     }
 
@@ -1298,10 +1229,6 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private Boolean defaultEnabled;
         private Boolean enabled;
         private Boolean automatic;
-        private List<String> profilerCorrelationCategories;
-    }
-
-    private record NormalizedCorrelationCategories(@Nonnull List<String> values, int excludedCount) {
     }
 
     private static final class PerformanceDocument {

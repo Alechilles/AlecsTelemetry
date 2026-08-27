@@ -187,11 +187,7 @@ and cannot be compared retrospectively.
         }
       },
       "lifecycle": { "supported": true },
-      "breadcrumbs": {
-        "supported": true,
-        "automatic": true,
-        "profilerCorrelationCategories": ["companion.ai.tick"]
-      }
+      "breadcrumbs": { "supported": true, "automatic": true }
     },
     "performance": {
       "supported": true,
@@ -256,65 +252,6 @@ Identity fields are optional overrides.
 - `ownerPluginIdentifiers`: aliases, renamed plugins, or unusual ownership matching
 - `packagePrefixes`: crash attribution when Java code lives outside the package inferred from `Main`, or when no `Main` exists
 
-### Profiler attribution
-
-The optional local Spark profiler uses the same project identity metadata. It
-matches an exact normalized plugin identifier first. If no exact source label is
-available, it matches the longest complete normalized package prefix. A
-partial package string is not a match, and equal-best matches remain
-unattributed.
-
-The low-cost direct Spark reader does not run class-source lookup, so current
-captures use `<unknown>` source labels. Set accurate `packagePrefixes` for all
-packages that can contain your server hot paths.
-
-The profiler accepts at most 32 normalized package prefixes per project. It
-trims values, replaces `/` with `.`, removes trailing dots, and removes
-duplicates in descriptor order. Each package-prefix value is limited to 512
-characters before normalization. Extra or longer values remain valid for other
-Telemetry behavior but do not enter the profiler index; the local status
-reports the truncation.
-A profiler summary is bounded and held in memory. The descriptor does not make
-it a profiler evidence file or structured upload contract. Ordinary monitor and
-command-output text follows the server log policy and can enter manual current
-or previous log attachments under the normal report settings, review,
-redaction, and clipping controls.
-
-### Profiler breadcrumb correlation
-
-The optional `events.breadcrumbs.profilerCorrelationCategories` field allows
-small local context counts in profiler snapshots:
-
-```json
-{
-  "telemetry": {
-    "events": {
-      "breadcrumbs": {
-        "supported": true,
-        "profilerCorrelationCategories": [
-          "companion.ai.tick",
-          "companion.lease.scan"
-        ]
-      }
-    }
-  }
-}
-```
-
-The runtime accepts at most 16 categories. Each category must be no longer than
-40 characters and must match the exact lowercase pattern `[a-z0-9_.-]+`.
-Duplicates are removed in first-seen order. Invalid entries and entries after
-the first 16 are excluded and reported by a bounded local diagnostic. The
-project remains valid when entries are excluded.
-
-At publication, the profiler keeps only non-zero counts from five one-minute
-buckets. A breadcrumb is counted only when its trimmed static category exactly
-matches an accepted descriptor category. The detail text, structured custom
-fields, and undeclared or dynamically generated categories never enter profiler
-context. Project enablement and breadcrumb consent are required for counting and
-publication; clearing breadcrumb consent clears these counts without clearing
-performance snapshots.
-
 For an anchored contribution, the logical plugin identifier and logical semantic
 version come from the contribution builder. They are the project attribution in
 telemetry envelopes; the physical host plugin remains local provider/election
@@ -344,7 +281,6 @@ Events:
 - `events.breadcrumbs.supported`
 - `events.breadcrumbs.defaultEnabled`
 - `events.breadcrumbs.automatic`
-- `events.breadcrumbs.profilerCorrelationCategories`
 
 Performance:
 
@@ -353,12 +289,6 @@ Performance:
 - `sampleRate`
 - `thresholdMs`
 - `details`
-
-The local project profiler uses the project's performance consent gate. It
-requires `performance.supported: true`, an enabled project, current performance
-consent, and the server owner's global Spark monitor setting. These gates enable
-local profiler processing; they do not create a profiler evidence file or a
-structured upload permission.
 
 Usage:
 

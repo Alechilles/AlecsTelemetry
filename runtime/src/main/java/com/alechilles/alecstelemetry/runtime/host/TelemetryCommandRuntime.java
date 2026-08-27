@@ -1,6 +1,5 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
-import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -10,8 +9,6 @@ import com.alechilles.alecstelemetry.report.PlayerReportRuntimeContext;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeDiagnostics;
 import com.alechilles.alecstelemetry.runtime.TelemetryRuntimeSettings;
-import com.alechilles.alecstelemetry.runtime.profiler.SparkProfilerDiagnostics;
-import com.alechilles.alecstelemetry.runtime.profiler.SparkProfileSnapshot;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -37,24 +34,6 @@ public interface TelemetryCommandRuntime {
 
     @Nonnull
     TelemetryRuntimeDiagnostics diagnostics();
-
-    @Nonnull
-    default SparkProfilerDiagnostics sparkProfilerDiagnostics() {
-        return SparkProfilerDiagnostics.disabled();
-    }
-
-    @Nonnull
-    default List<SparkProfileSnapshot> sparkProfilerHistory() {
-        return List.of();
-    }
-
-    @Nonnull
-    default TelemetryProfilerView projectProfiler(@Nonnull String projectId) {
-        return TelemetryProfilerView.unavailable();
-    }
-
-    default void logProfilerCommandOutput(@Nonnull String message) {
-    }
 
     @Nonnull
     TelemetryRuntimeDiagnostics.ProjectDiagnostics projectDiagnostics(@Nonnull String projectId);

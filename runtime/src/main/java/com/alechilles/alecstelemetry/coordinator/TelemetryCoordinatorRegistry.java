@@ -1,8 +1,5 @@
 package com.alechilles.alecstelemetry.coordinator;
 
-import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
-import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.lang.reflect.Method;
@@ -12,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 /**
  * JVM-wide coordinator registry shared by standalone and embedded telemetry copies.
@@ -45,8 +41,8 @@ public final class TelemetryCoordinatorRegistry {
                     RECONCILED_REVISIONS.remove(candidate.providerId());
                     return;
                 }
-                previousBridge.deactivate();
                 previousBridge.shutdown();
+                previousBridge.deactivate();
             }
         }
         elect();
@@ -58,8 +54,8 @@ public final class TelemetryCoordinatorRegistry {
         if (removed != null) {
             ReflectiveBridge bridge = new ReflectiveBridge(removed, candidateFrom(removed));
             if (bridge.isActive()) {
-                bridge.deactivate();
                 bridge.shutdown();
+                bridge.deactivate();
             }
         }
         elect();
@@ -105,8 +101,8 @@ public final class TelemetryCoordinatorRegistry {
             TelemetryRuntimeCandidate candidate = candidateFrom(entry.getValue());
             ReflectiveBridge bridge = new ReflectiveBridge(entry.getValue(), candidate);
             if (bridge.isActive()) {
-                bridge.deactivate();
                 bridge.shutdown();
+                bridge.deactivate();
             }
         }
         existing.clear();
@@ -166,8 +162,8 @@ public final class TelemetryCoordinatorRegistry {
             }
             ReflectiveBridge bridge = new ReflectiveBridge(value, candidate);
             if (bridge.isActive()) {
-                bridge.deactivate();
                 bridge.shutdown();
+                bridge.deactivate();
             }
         }
     }
@@ -181,8 +177,8 @@ public final class TelemetryCoordinatorRegistry {
             }
             ReflectiveBridge fallback = new ReflectiveBridge(value, candidate);
             if (fallback.isActive()) {
-                fallback.deactivate();
                 fallback.shutdown();
+                fallback.deactivate();
             }
         }
         if (!winningBridge.isActive()) {
@@ -563,114 +559,6 @@ public final class TelemetryCoordinatorRegistry {
                 return TelemetryCoordinatorBridge.super.consentDiagnostics();
             } catch (ReflectiveOperationException ex) {
                 return TelemetryCoordinatorBridge.super.consentDiagnostics();
-            }
-        }
-
-        @Nonnull
-        @Override
-        public List<String> capabilities() {
-            try {
-                Object value = invoke(delegate, "capabilities");
-                if (!(value instanceof List<?> list)) {
-                    return TelemetryCoordinatorBridge.super.capabilities();
-                }
-                for (Object capability : list) {
-                    if (TelemetryProfilerView.CAPABILITY.equals(capability)) {
-                        return List.of(TelemetryProfilerView.CAPABILITY);
-                    }
-                }
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-            }
-            return TelemetryCoordinatorBridge.super.capabilities();
-        }
-
-        @Nonnull
-        @Override
-        public Map<String, Object> profilerStatus(@Nonnull String projectId) {
-            try {
-                Object value = invoke(
-                        delegate,
-                        "profilerStatus",
-                        new Class<?>[]{String.class},
-                        projectId
-                );
-                return TelemetryProfilerBridgePayload.foreignStatusMap(value);
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-                return TelemetryCoordinatorBridge.super.profilerStatus(projectId);
-            }
-        }
-
-        @Nonnull
-        @Override
-        public Map<String, Object> profilerLatest(@Nonnull String projectId) {
-            try {
-                Object value = invoke(
-                        delegate,
-                        "profilerLatest",
-                        new Class<?>[]{String.class},
-                        projectId
-                );
-                return TelemetryProfilerBridgePayload.foreignSnapshotMap(value);
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-                return TelemetryCoordinatorBridge.super.profilerLatest(projectId);
-            }
-        }
-
-        @Nonnull
-        @Override
-        public List<Map<String, Object>> profilerHistory(@Nonnull String projectId) {
-            try {
-                Object value = invoke(
-                        delegate,
-                        "profilerHistory",
-                        new Class<?>[]{String.class},
-                        projectId
-                );
-                return TelemetryProfilerBridgePayload.foreignHistoryMaps(value);
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-                return TelemetryCoordinatorBridge.super.profilerHistory(projectId);
-            }
-        }
-
-        @Nonnull
-        @Override
-        public String subscribeProfiler(@Nonnull String projectId,
-                                        @Nonnull Consumer<Map<String, Object>> listener) {
-            try {
-                Consumer<Map<String, Object>> safeListener = payload -> {
-                    try {
-                        listener.accept(TelemetryProfilerBridgePayload.foreignSnapshotMap(payload));
-                    } catch (RuntimeException | LinkageError ignored) {
-                        // A foreign callback or payload must not escape through the provider boundary.
-                    }
-                };
-                Object value = invoke(
-                        delegate,
-                        "subscribeProfiler",
-                        new Class<?>[]{String.class, Consumer.class},
-                        projectId,
-                        safeListener
-                );
-                if (value instanceof String subscriptionId && !subscriptionId.isBlank()) {
-                    return subscriptionId;
-                }
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-            }
-            return TelemetryCoordinatorBridge.super.subscribeProfiler(projectId, listener);
-        }
-
-        @Override
-        public boolean unsubscribeProfiler(@Nonnull String subscriptionId) {
-            try {
-                Object value = invoke(
-                        delegate,
-                        "unsubscribeProfiler",
-                        new Class<?>[]{String.class},
-                        subscriptionId
-                );
-                return value instanceof Boolean result && result;
-            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
-                return TelemetryCoordinatorBridge.super.unsubscribeProfiler(subscriptionId);
             }
         }
 

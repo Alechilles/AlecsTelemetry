@@ -172,24 +172,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
     public List<Path> descriptorDirectories() {
         ArrayList<Path> directories = new ArrayList<>();
         addDirectory(directories, modsDirectory);
-        addDirectory(directories, resolveInstalledModsDirectory(modsDirectory));
         return List.copyOf(directories);
-    }
-
-    @Nullable
-    private static Path resolveInstalledModsDirectory(@Nullable Path modsDirectory) {
-        if (modsDirectory == null) {
-            return null;
-        }
-        Path saveDirectory = modsDirectory.getParent();
-        Path savesDirectory = saveDirectory == null ? null : saveDirectory.getParent();
-        if (savesDirectory == null
-                || savesDirectory.getFileName() == null
-                || !"saves".equalsIgnoreCase(savesDirectory.getFileName().toString())) {
-            return null;
-        }
-        Path userDataDirectory = savesDirectory.getParent();
-        return userDataDirectory == null ? null : userDataDirectory.resolve("Mods");
     }
 
     @Nullable

@@ -51,11 +51,6 @@ class TelemetryContributionProviderHandoffIT {
         assertTrue(providerB.active);
         assertEquals(List.of("library"), providerB.replayedProjectIds());
         assertTrue(providerB.replayedBeforeStart);
-        assertEquals(
-                List.of("activate", "start", "deactivate", "shutdown"),
-                providerA.lifecycleEvents()
-        );
-        assertEquals(List.of("activate", "start"), providerB.lifecycleEvents());
     }
 
     @Test
@@ -266,7 +261,6 @@ class TelemetryContributionProviderHandoffIT {
     private static final class RecordingProvider implements TelemetryCoordinatorBridge {
         private final TelemetryRuntimeCandidate candidate;
         private final ArrayList<String> replayed = new ArrayList<>();
-        private final ArrayList<String> lifecycle = new ArrayList<>();
         private boolean active;
         private boolean started;
         private boolean replayedBeforeStart;
@@ -293,11 +287,10 @@ class TelemetryContributionProviderHandoffIT {
         @Override public String providerPluginVersion() { return candidate.providerPluginVersion(); }
         @Override public String sourcePath() { return candidate.sourcePath().toString(); }
         @Override public String sharedDataRoot() { return candidate.sharedDataRoot().toString(); }
-        @Override public void activate() { lifecycle.add("activate"); active = true; }
-        @Override public void deactivate() { lifecycle.add("deactivate"); active = false; }
+        @Override public void activate() { active = true; }
+        @Override public void deactivate() { active = false; }
         @Override public boolean isActive() { return active; }
-        @Override public void start() { lifecycle.add("start"); started = true; }
-        @Override public void shutdown() { lifecycle.add("shutdown"); }
+        @Override public void start() { started = true; }
         @Override public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
             if (started) {
                 replayedBeforeStart = false;
@@ -319,10 +312,6 @@ class TelemetryContributionProviderHandoffIT {
 
         private List<String> replayedProjectIds() {
             return List.copyOf(replayed);
-        }
-
-        private List<String> lifecycleEvents() {
-            return List.copyOf(lifecycle);
         }
     }
 

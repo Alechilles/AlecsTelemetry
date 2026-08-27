@@ -2,8 +2,6 @@ package com.alechilles.alecstelemetry.runtime;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
@@ -27,7 +25,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        int maxUploadsPerFlush,
                                        int maxBreadcrumbsPerProject,
                                        @Nonnull ManualReportSettings manualReports,
-                                       @Nonnull SparkProfilerSettings sparkProfiler,
                                        @Nonnull String hostedIngestEndpoint,
                                        @Nonnull String hostedEventIngestEndpoint) {
 
@@ -57,92 +54,7 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     private static final boolean DEFAULT_ALLOW_DIAGNOSTICS = true;
     private static final int DEFAULT_MAX_LOG_ATTACHMENT_BYTES = 262144;
     private static final int DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT = 200;
-    private static final boolean DEFAULT_SPARK_PROFILER_ENABLED = false;
-    private static final int DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS = 90;
-    private static final int DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS = 300;
-    private static final int DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS = 10;
-    private static final int DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES = 5;
-    private static final int DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS = 10;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
-
-    /**
-     * Keeps the pre-canary constructor available for existing embedded callers.
-     */
-    public TelemetryRuntimeSettings(@Nonnull Path filePath,
-                                    boolean enabled,
-                                    int flushIntervalSeconds,
-                                    int connectTimeoutMs,
-                                    int readTimeoutMs,
-                                    int maxPendingReportsPerProject,
-                                    int maxPendingEventsPerProject,
-                                    int maxUploadsPerFlush,
-                                    int maxBreadcrumbsPerProject,
-                                    @Nonnull ManualReportSettings manualReports,
-                                    @Nonnull String hostedIngestEndpoint,
-                                    @Nonnull String hostedEventIngestEndpoint) {
-        this(
-                filePath,
-                enabled,
-                flushIntervalSeconds,
-                connectTimeoutMs,
-                readTimeoutMs,
-                maxPendingReportsPerProject,
-                maxPendingEventsPerProject,
-                maxUploadsPerFlush,
-                maxBreadcrumbsPerProject,
-                manualReports,
-                new SparkProfilerSettings(
-                        DEFAULT_SPARK_PROFILER_ENABLED,
-                        DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS,
-                        DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS,
-                        DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS,
-                        DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES,
-                        DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS
-                ),
-                hostedIngestEndpoint,
-                hostedEventIngestEndpoint
-        );
-    }
-
-    /**
-     * Keeps the pre-recurring-monitor constructor available for existing embedded callers.
-     */
-    public TelemetryRuntimeSettings(@Nonnull Path filePath,
-                                    boolean enabled,
-                                    int flushIntervalSeconds,
-                                    int connectTimeoutMs,
-                                    int readTimeoutMs,
-                                    int maxPendingReportsPerProject,
-                                    int maxPendingEventsPerProject,
-                                    int maxUploadsPerFlush,
-                                    int maxBreadcrumbsPerProject,
-                                    @Nonnull ManualReportSettings manualReports,
-                                    @Nonnull SparkProfilerCanarySettings sparkProfilerCanary,
-                                    @Nonnull String hostedIngestEndpoint,
-                                    @Nonnull String hostedEventIngestEndpoint) {
-        this(
-                filePath,
-                enabled,
-                flushIntervalSeconds,
-                connectTimeoutMs,
-                readTimeoutMs,
-                maxPendingReportsPerProject,
-                maxPendingEventsPerProject,
-                maxUploadsPerFlush,
-                maxBreadcrumbsPerProject,
-                manualReports,
-                new SparkProfilerSettings(
-                        sparkProfilerCanary.enabled(),
-                        sparkProfilerCanary.initialDelaySeconds(),
-                        DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS,
-                        sparkProfilerCanary.timeoutSeconds(),
-                        sparkProfilerCanary.maxSummaryEntries(),
-                        DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS
-                ),
-                hostedIngestEndpoint,
-                hostedEventIngestEndpoint
-        );
-    }
 
     @Nonnull
     public static TelemetryRuntimeSettings load(@Nonnull Path filePath, @Nullable HytaleLogger logger) {
@@ -159,9 +71,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(parsed.maxUploadsPerFlush, DEFAULT_MAX_UPLOADS_PER_FLUSH, 1, 500),
                 clamp(parsed.maxBreadcrumbsPerProject, DEFAULT_MAX_BREADCRUMBS_PER_PROJECT, 1, 200),
                 normalizeManualReportSettings(parsed.manualReports),
-                parsed.sparkProfilerPresent
-                        ? normalizeSparkProfilerSettings(parsed.sparkProfiler)
-                        : normalizeSparkProfilerCanarySettings(parsed.sparkProfilerCanary),
                 parsed.hostedIngestEndpoint == null || parsed.hostedIngestEndpoint.isBlank()
                         ? DEFAULT_HOSTED_INGEST_ENDPOINT
                         : parsed.hostedIngestEndpoint.trim(),
@@ -185,13 +94,8 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
             if (raw.isBlank()) {
                 return new SettingsDocument();
             }
-            JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
-            SettingsDocument parsed = GSON.fromJson(json, SettingsDocument.class);
-            if (parsed == null) {
-                return new SettingsDocument();
-            }
-            parsed.sparkProfilerPresent = json.has("sparkProfiler");
-            return parsed;
+            SettingsDocument parsed = GSON.fromJson(raw, SettingsDocument.class);
+            return parsed == null ? new SettingsDocument() : parsed;
         } catch (Exception ex) {
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log(
@@ -216,7 +120,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         safe.maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         safe.maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
         safe.manualReports = ManualReportSettingsDocument.defaults();
-        safe.sparkProfiler = SparkProfilerSettingsDocument.defaults();
         safe.hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         safe.hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;
         try {
@@ -267,50 +170,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         );
     }
 
-    @Nonnull
-    private static SparkProfilerSettings normalizeSparkProfilerSettings(
-            @Nullable SparkProfilerSettingsDocument document) {
-        SparkProfilerSettingsDocument safe = document == null
-                ? new SparkProfilerSettingsDocument()
-                : document;
-        return new SparkProfilerSettings(
-                safe.enabled == null ? DEFAULT_SPARK_PROFILER_ENABLED : safe.enabled,
-                clamp(safe.initialDelaySeconds, DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS, 60, 3600),
-                clamp(safe.intervalSeconds, DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS, 300, 3600),
-                clamp(safe.timeoutSeconds, DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS, 1, 60),
-                clamp(safe.maxSummaryEntries, DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES, 1, 10),
-                clamp(safe.maxHistorySnapshots, DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS, 1, 10)
-        );
-    }
-
-    private static SparkProfilerSettings normalizeSparkProfilerCanarySettings(
-            @Nullable SparkProfilerCanarySettingsDocument document) {
-        SparkProfilerCanarySettingsDocument safe = document == null
-                ? new SparkProfilerCanarySettingsDocument()
-                : document;
-        return new SparkProfilerSettings(
-                safe.enabled == null ? DEFAULT_SPARK_PROFILER_ENABLED : safe.enabled,
-                clamp(safe.initialDelaySeconds, DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS, 60, 3600),
-                DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS,
-                clamp(safe.timeoutSeconds, DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS, 1, 60),
-                clamp(safe.maxSummaryEntries, DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES, 1, 10),
-                DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS
-        );
-    }
-
-    /**
-     * Temporary compatibility view for callers that still use the canary name.
-     */
-    @Nonnull
-    public SparkProfilerCanarySettings sparkProfilerCanary() {
-        return new SparkProfilerCanarySettings(
-                sparkProfiler.enabled(),
-                sparkProfiler.initialDelaySeconds(),
-                sparkProfiler.timeoutSeconds(),
-                sparkProfiler.maxSummaryEntries()
-        );
-    }
-
     public record ManualReportSettings(boolean enabled,
                                        boolean manualReviewRequired,
                                        boolean allowContact,
@@ -324,23 +183,8 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        @Nonnull String hostedReportIngestEndpoint) {
     }
 
-    public record SparkProfilerSettings(boolean enabled,
-                                        int initialDelaySeconds,
-                                        int intervalSeconds,
-                                        int timeoutSeconds,
-                                        int maxSummaryEntries,
-                                        int maxHistorySnapshots) {
-    }
-
-    public record SparkProfilerCanarySettings(boolean enabled,
-                                              int initialDelaySeconds,
-                                              int timeoutSeconds,
-                                              int maxSummaryEntries) {
-    }
-
     private static final class SettingsDocument {
         private Integer version;
-        private transient boolean sparkProfilerPresent;
         private Boolean enabled;
         private Integer flushIntervalSeconds = DEFAULT_FLUSH_INTERVAL_SECONDS;
         private Integer connectTimeoutMs = DEFAULT_CONNECT_TIMEOUT_MS;
@@ -350,8 +194,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         private Integer maxUploadsPerFlush = DEFAULT_MAX_UPLOADS_PER_FLUSH;
         private Integer maxBreadcrumbsPerProject = DEFAULT_MAX_BREADCRUMBS_PER_PROJECT;
         private ManualReportSettingsDocument manualReports = ManualReportSettingsDocument.defaults();
-        private SparkProfilerSettingsDocument sparkProfiler;
-        private SparkProfilerCanarySettingsDocument sparkProfilerCanary;
         private String hostedIngestEndpoint = DEFAULT_HOSTED_INGEST_ENDPOINT;
         private String hostedEventIngestEndpoint = DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT;
     }
@@ -372,32 +214,6 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
         @Nonnull
         private static ManualReportSettingsDocument defaults() {
             return new ManualReportSettingsDocument();
-        }
-    }
-
-    private static final class SparkProfilerSettingsDocument {
-        private Boolean enabled = DEFAULT_SPARK_PROFILER_ENABLED;
-        private Integer initialDelaySeconds = DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS;
-        private Integer intervalSeconds = DEFAULT_SPARK_PROFILER_INTERVAL_SECONDS;
-        private Integer timeoutSeconds = DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS;
-        private Integer maxSummaryEntries = DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES;
-        private Integer maxHistorySnapshots = DEFAULT_SPARK_PROFILER_MAX_HISTORY_SNAPSHOTS;
-
-        @Nonnull
-        private static SparkProfilerSettingsDocument defaults() {
-            return new SparkProfilerSettingsDocument();
-        }
-    }
-
-    private static final class SparkProfilerCanarySettingsDocument {
-        private Boolean enabled = DEFAULT_SPARK_PROFILER_ENABLED;
-        private Integer initialDelaySeconds = DEFAULT_SPARK_PROFILER_INITIAL_DELAY_SECONDS;
-        private Integer timeoutSeconds = DEFAULT_SPARK_PROFILER_TIMEOUT_SECONDS;
-        private Integer maxSummaryEntries = DEFAULT_SPARK_PROFILER_MAX_SUMMARY_ENTRIES;
-
-        @Nonnull
-        private static SparkProfilerCanarySettingsDocument defaults() {
-            return new SparkProfilerCanarySettingsDocument();
         }
     }
 }

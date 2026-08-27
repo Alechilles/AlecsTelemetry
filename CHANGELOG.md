@@ -2,48 +2,10 @@
 
 ## 1.2.2 - Stable 0.6 Compatibility Hotfix - 2026-08-27
 
-### Added
-- Added `hot-path-v2` rolling profiler signals. A project path now becomes a
-  repeated signal after it contributes at least 20 sampled milliseconds in
-  three of the five retained windows, even when a busy server keeps its share
-  below two percent. Signal output includes bounded counts for approved recent
-  correlation breadcrumbs, and base-game frames use the `Hytale Server`
-  source label.
-- Added an opt-in, recurring local Spark hot-path monitor. It reads completed
-  passive background windows from fingerprinted official Spark Hytale builds,
-  ranks Java self time on Hytale WorldThread threads, keeps bounded summaries
-  and history in memory, logs local hot paths, and fails closed on unsupported
-  or incompatible Spark artifacts. The monitor does not directly queue or
-  upload profiler data; ordinary log lines remain subject to the manual-report
-  attachment controls if a user submits a report.
-- Added server-log copies of every `/telemetry profiler status`, `top`, and
-  `history` reply so operators can retain and compare command results.
-- Added the local project profiler API (`profiler-api-v1`). Enabled projects
-  can read immutable bounded `SELF` and `DOWNSTREAM` summaries and subscribe
-  to later snapshots. Phase 1 emits `OBSERVED` evidence only; `signals` remains
-  Phase 2 work. Older elected providers return an unavailable view safely.
-- Added project-filtered `/telemetry profiler top <project-id>` and
-  `/telemetry profiler history <project-id>` commands. Project replies remain
-  bounded and are copied to the ordinary server log. The project `top` header
-  includes analysis duration, omitted-path count, and truncated-prefix count.
-- Documented that project summaries require the global Spark monitor and
-  project performance consent, use at most 32 profiler package prefixes, and
-  remain local. Telemetry does not upload raw profiles, frame trees, player
-  data, or server identity for this feature.
-
 ### Changed
 - Updated the embedded Creditor library to 1.1.1 for stable Hytale 0.6 support.
 
 ### Fixed
-- Counted and retained only frames active in the newest completed Spark window.
-  Historical zero-time nodes in Spark's retained call tree no longer inflate
-  frame diagnostics or open the complexity circuit after several captures.
-- Treated Spark's transient window-rotation export race as retryable no-data
-  instead of an incompatible runtime, so the monitor does not open its circuit
-  when Spark advances a passive window during export.
-- Excluded async-profiler native-library frames with invalid JVM method
-  descriptors from WorldThread rankings, preventing native waits from
-  displacing actionable Java hot paths.
 - Corrected the embedded-runtime packaging guide and example manifest so hosts
   publish the Telemetry `Common/**` UI assets required by `/telemetry consent`.
 

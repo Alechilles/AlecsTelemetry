@@ -2,7 +2,6 @@ package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
-import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
@@ -27,11 +26,6 @@ public interface TelemetryRuntimeOperations {
     TelemetryProjectRegistration findProject(@Nonnull String projectId);
 
     boolean isProjectEnabled(@Nonnull String projectId);
-
-    @Nonnull
-    default TelemetryProfilerView profiler(@Nonnull String projectId) {
-        return TelemetryProfilerView.unavailable();
-    }
 
     default boolean canEmitStatsHeartbeat() {
         return true;

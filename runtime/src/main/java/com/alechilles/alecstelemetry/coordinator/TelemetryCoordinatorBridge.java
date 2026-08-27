@@ -4,7 +4,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Local view of the active coordinator bridge.
@@ -71,42 +70,6 @@ public interface TelemetryCoordinatorBridge {
     @Nonnull
     default List<Map<String, Object>> projectSummaries() {
         return List.of();
-    }
-
-    /** Optional JDK-only profiler capability advertised by newer providers. */
-    @Nonnull
-    default List<String> capabilities() {
-        return List.of();
-    }
-
-    /** Returns a JDK-only profiler status payload for one project. */
-    @Nonnull
-    default Map<String, Object> profilerStatus(@Nonnull String projectId) {
-        return Map.of();
-    }
-
-    /** Returns a JDK-only latest profiler snapshot payload for one project. */
-    @Nonnull
-    default Map<String, Object> profilerLatest(@Nonnull String projectId) {
-        return Map.of();
-    }
-
-    /** Returns JDK-only profiler history payloads for one project. */
-    @Nonnull
-    default List<Map<String, Object>> profilerHistory(@Nonnull String projectId) {
-        return List.of();
-    }
-
-    /** Subscribes a JDK-only listener and returns an opaque provider-scoped ID. */
-    @Nonnull
-    default String subscribeProfiler(@Nonnull String projectId,
-                                     @Nonnull Consumer<Map<String, Object>> listener) {
-        return "";
-    }
-
-    /** Removes one provider-scoped profiler subscription. */
-    default boolean unsubscribeProfiler(@Nonnull String subscriptionId) {
-        return false;
     }
 
     @Nonnull

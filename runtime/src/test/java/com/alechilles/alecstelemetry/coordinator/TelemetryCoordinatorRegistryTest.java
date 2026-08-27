@@ -1,40 +1,21 @@
 package com.alechilles.alecstelemetry.coordinator;
 
-import com.alechilles.alecstelemetry.api.TelemetryProfilerView;
-import com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot;
-import com.alechilles.alecstelemetry.api.TelemetryProfilerSubscription;
-import com.alechilles.alecstelemetry.api.TelemetryProfilerStatus;
-import com.alechilles.alecstelemetry.runtime.profiler.RemoteTelemetryProfilerView;
-import com.alechilles.alecstelemetry.runtime.profiler.TelemetryProfilerBridgePayload;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.AbstractMap;
-import java.util.AbstractSet;
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryCoordinatorRegistryTest {
-    private static final int MAX_INSPECTED_TREE_ENTRIES = 128;
 
     @AfterEach
     void clearRegistry() {
@@ -80,147 +61,6 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals("Alechilles:Alec's Tamework!", embedded.lastWorldFailurePluginIdentifier);
         assertFalse(embedded.projectEnabled);
         assertFalse(embedded.breadcrumbsEnabled);
-    }
-
-    @Test
-    void olderForeignProviderDefaultsToNoProfilerCapability() {
-        ForeignBridge legacy = foreignBridge("legacy", TelemetryRuntimeOrigin.EMBEDDED, "9.0.0");
-
-        TelemetryCoordinatorRegistry.register(legacy);
-
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertTrue(active.capabilities().isEmpty());
-        assertTrue(active.profilerLatest("mod-a").isEmpty());
-        assertTrue(active.profilerHistory("mod-a").isEmpty());
-    }
-
-    @Test
-    void capableForeignProviderRoundTripsOnlyJdkPayloads() {
-        CapableForeignBridge provider = capableForeignBridge();
-
-        TelemetryCoordinatorRegistry.register(provider);
-
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertTrue(active.capabilities().contains(TelemetryProfilerView.CAPABILITY));
-        assertEquals(7, ((Number) active.profilerLatest("mod-a").get("windowKey")).intValue());
-        assertTrue(active.profilerLatest("mod-a").values().stream()
-                .noneMatch(value -> value instanceof com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot));
-    }
-
-    @Test
-    void reflectiveProfilerCallbackIsSanitizedToBoundedImmutableJdkTree() {
-        CapableForeignBridge provider = capableForeignBridge();
-        String oversizedFrame = "f".repeat(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH + 1);
-        provider.latestPayload = snapshotPayload(7, "a".repeat(32), oversizedFrame);
-        provider.callbackPayload = snapshotPayload(7, "a".repeat(32), oversizedFrame);
-        provider.callbackPayload.put("projectId", "p".repeat(121));
-        provider.callbackPayload.put("foreign", new MutableForeignValue());
-        TelemetryCoordinatorRegistry.register(provider);
-
-        AtomicReference<Map<String, Object>> received = new AtomicReference<>();
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertNotNull(active);
-        assertEquals(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH, firstFrameLength(
-                active.profilerLatest("mod-a")
-        ));
-        assertEquals(
-                "foreign-subscription",
-                active.subscribeProfiler("mod-a", received::set)
-        );
-
-        Map<String, Object> payload = received.get();
-        assertNotNull(payload);
-        Object projectId = payload.get("projectId");
-        assertTrue(!(projectId instanceof String) || ((String) projectId).length() <= 120);
-        assertThrows(UnsupportedOperationException.class, () -> payload.put("mutated", true));
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> ((List<?>) payload.get("paths")).clear()
-        );
-        assertTrue(maxStringLength(payload) <= TelemetryProfilerBridgePayload.MAX_DETAIL_LENGTH);
-        assertTrue(payload.values().stream().noneMatch(value -> value instanceof MutableForeignValue));
-        assertEquals(TelemetryProfilerBridgePayload.MAX_METHOD_LENGTH, firstFrameLength(payload));
-    }
-
-    @Test
-    void malformedNestedMapsInspectOnlyTheBoundedEntryPrefix() {
-        CapableForeignBridge provider = capableForeignBridge();
-        CountingMalformedMap malformed = new CountingMalformedMap(1_000);
-        provider.latestPayload = snapshotPayloadWithContextCounts(7, malformed);
-        TelemetryCoordinatorRegistry.register(provider);
-
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertNotNull(active);
-        active.profilerLatest("mod-a");
-
-        assertTrue(malformed.inspected.get() <= MAX_INSPECTED_TREE_ENTRIES);
-    }
-
-    @Test
-    void nestedMalformedMapsShareOneGlobalInspectionBudget() {
-        CapableForeignBridge provider = capableForeignBridge();
-        CountingNestedMap malformed = new CountingNestedMap(2, 256);
-        provider.latestPayload = snapshotPayloadWithContextCounts(7, malformed);
-        TelemetryCoordinatorRegistry.register(provider);
-
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertNotNull(active);
-        active.profilerLatest("mod-a");
-
-        assertTrue(malformed.inspected.get() <= MAX_INSPECTED_TREE_ENTRIES);
-    }
-
-    @Test
-    void foreignSnapshotRejectsFingerprintThatIsNotExactlyThirtyTwoLowercaseHexCharacters() {
-        CapableForeignBridge provider = capableForeignBridge();
-        provider.latestPayload = snapshotPayload(7, "a".repeat(31));
-        TelemetryCoordinatorRegistry.register(provider);
-
-        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        assertNotNull(active);
-        assertTrue(new RemoteTelemetryProfilerView(active, "mod-a").latest().isEmpty());
-    }
-
-    @Test
-    void isolatedForeignProviderRoundTripsBoundedProfilerView() throws Exception {
-        URL classes = TelemetryCoordinatorRegistryTest.class
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation();
-        try (ProfilerFixtureClassLoader isolated = new ProfilerFixtureClassLoader(
-                classes,
-                TelemetryCoordinatorRegistryTest.class.getClassLoader()
-        )) {
-            Class<?> fixtureType = isolated.loadClass(IsolatedForeignProfilerBridge.class.getName());
-            assertSame(isolated, fixtureType.getClassLoader());
-            assertThrows(
-                    ClassNotFoundException.class,
-                    () -> isolated.loadClass("com.alechilles.alecstelemetry.api.TelemetryProfilerSnapshot")
-            );
-            Object foreign = fixtureType.getConstructor().newInstance();
-
-            TelemetryCoordinatorRegistry.register(foreign);
-
-            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-            assertNotNull(active);
-            RemoteTelemetryProfilerView view = new RemoteTelemetryProfilerView(active, "mod-a");
-            assertEquals(TelemetryProfilerStatus.State.COMPLETE, view.status().state());
-            assertEquals(20, view.latest().orElseThrow().windowKey());
-            assertEquals(
-                    List.of(11, 12, 13, 14, 15, 16, 17, 18, 19, 20),
-                    view.history().stream().map(TelemetryProfilerSnapshot::windowKey).toList()
-            );
-
-            AtomicBoolean callback = new AtomicBoolean();
-            TelemetryProfilerSubscription subscription = view.subscribe(snapshot -> {
-                callback.set(snapshot.windowKey() == 20);
-            });
-            assertTrue(callback.get());
-            subscription.close();
-
-            Method unsubscribed = fixtureType.getMethod("unsubscribed");
-            assertTrue((Boolean) unsubscribed.invoke(foreign));
-        }
     }
 
     @Test
@@ -372,15 +212,6 @@ class TelemetryCoordinatorRegistryTest {
                                                String runtimeVersion,
                                                int protocolVersion) {
         return new ForeignBridge(candidate(providerId, origin, runtimeVersion, protocolVersion));
-    }
-
-    private static CapableForeignBridge capableForeignBridge() {
-        return new CapableForeignBridge(candidate(
-                "capable",
-                TelemetryRuntimeOrigin.EMBEDDED,
-                "9.0.0",
-                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION
-        ));
     }
 
     private static TelemetryRuntimeCandidate candidate(String providerId,
@@ -554,7 +385,7 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     @SuppressWarnings("unused")
-    private static class ForeignBridge {
+    private static final class ForeignBridge {
         private final TelemetryRuntimeCandidate candidate;
         private boolean active;
         private String lastProjectId;
@@ -567,7 +398,7 @@ class TelemetryCoordinatorRegistryTest {
         private String lastWorldRemovalReason;
         private String lastWorldFailurePluginIdentifier;
 
-        protected ForeignBridge(TelemetryRuntimeCandidate candidate) {
+        private ForeignBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
         }
 
@@ -656,358 +487,6 @@ class TelemetryCoordinatorRegistryTest {
             lastWorldRemovalReason = removalReason;
             lastWorldFailurePluginIdentifier = possibleFailureCause;
             return true;
-        }
-    }
-
-    private static final class CapableForeignBridge extends ForeignBridge {
-        private Map<String, Object> latestPayload = Map.of("windowKey", 7);
-        private Map<String, Object> callbackPayload = snapshotPayload(7, "a".repeat(32));
-
-        private CapableForeignBridge(TelemetryRuntimeCandidate candidate) {
-            super(candidate);
-        }
-
-        public List<String> capabilities() {
-            return List.of(TelemetryProfilerView.CAPABILITY);
-        }
-
-        public Map<String, Object> profilerLatest(String projectId) {
-            return latestPayload;
-        }
-
-        public String subscribeProfiler(String projectId,
-                                        java.util.function.Consumer<Map<String, Object>> listener) {
-            listener.accept(callbackPayload);
-            return "foreign-subscription";
-        }
-    }
-
-    private static Map<String, Object> snapshotPayload(int windowKey, String fingerprint) {
-        return snapshotPayload(windowKey, fingerprint, "com.example.Mod#tick()V");
-    }
-
-    private static Map<String, Object> snapshotPayload(int windowKey,
-                                                       String fingerprint,
-                                                       String frame) {
-        Map<String, Object> path = new java.util.LinkedHashMap<>();
-        path.put("fingerprint", fingerprint);
-        path.put("attribution", "SELF");
-        path.put("ownedClassName", "com.example.Mod");
-        path.put("ownedMethodName", "tick");
-        path.put("ownedMethodDescriptor", "()V");
-        path.put("sampledMilliseconds", 1.0d);
-        path.put("selectedWorldThreadSharePercent", 2.0d);
-        path.put("qualification", "OBSERVED");
-        path.put("representativePath", new ArrayList<>(List.of(frame)));
-        Map<String, Object> context = new java.util.LinkedHashMap<>();
-        context.put("observedAtMillis", 1L);
-        context.put("breadcrumbCategoryCounts", new java.util.LinkedHashMap<>());
-        Map<String, Object> payload = new java.util.LinkedHashMap<>();
-        payload.put("projectId", "mod-a");
-        payload.put("projectVersion", "1.0.0");
-        payload.put("sparkVersion", "spark-1");
-        payload.put("windowKey", windowKey);
-        payload.put("observedAtMillis", 1L);
-        payload.put("selectedWorldThreadSelfMilliseconds", 1.0d);
-        payload.put("qualificationRuleSet", "unqualified-v1");
-        payload.put("paths", new ArrayList<>(List.of(path)));
-        payload.put("context", context);
-        return payload;
-    }
-
-    private static Map<String, Object> snapshotPayloadWithContextCounts(int windowKey,
-                                                                          Map<?, ?> counts) {
-        Map<String, Object> path = Map.of(
-                "fingerprint", "a".repeat(32),
-                "attribution", "SELF",
-                "ownedClassName", "com.example.Mod",
-                "ownedMethodName", "tick",
-                "ownedMethodDescriptor", "()V",
-                "sampledMilliseconds", 1.0d,
-                "selectedWorldThreadSharePercent", 2.0d,
-                "qualification", "OBSERVED",
-                "representativePath", List.of("com.example.Mod#tick()V")
-        );
-        return Map.of(
-                "projectId", "mod-a",
-                "projectVersion", "1.0.0",
-                "sparkVersion", "spark-1",
-                "windowKey", windowKey,
-                "observedAtMillis", 1L,
-                "selectedWorldThreadSelfMilliseconds", 1.0d,
-                "qualificationRuleSet", "unqualified-v1",
-                "paths", List.of(path),
-                "context", Map.of(
-                        "observedAtMillis", 1L,
-                        "breadcrumbCategoryCounts", counts
-                )
-        );
-    }
-
-    private static int maxStringLength(Object value) {
-        if (value instanceof String string) {
-            return string.length();
-        }
-        if (value instanceof Map<?, ?> map) {
-            int maximum = 0;
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                maximum = Math.max(maximum, maxStringLength(entry.getKey()));
-                maximum = Math.max(maximum, maxStringLength(entry.getValue()));
-            }
-            return maximum;
-        }
-        if (value instanceof List<?> list) {
-            int maximum = 0;
-            for (Object item : list) {
-                maximum = Math.max(maximum, maxStringLength(item));
-            }
-            return maximum;
-        }
-        return 0;
-    }
-
-    private static int firstFrameLength(Map<String, Object> payload) {
-        Object paths = payload.get("paths");
-        assertTrue(paths instanceof List<?> && !((List<?>) paths).isEmpty());
-        Object path = ((List<?>) paths).get(0);
-        assertTrue(path instanceof Map<?, ?>);
-        Object frames = ((Map<?, ?>) path).get("representativePath");
-        assertTrue(frames instanceof List<?> && !((List<?>) frames).isEmpty());
-        Object frame = ((List<?>) frames).get(0);
-        assertTrue(frame instanceof String);
-        return ((String) frame).length();
-    }
-
-    private static final class MutableForeignValue {
-    }
-
-    private static final class CountingMalformedMap extends AbstractMap<Object, Object> {
-        private final int size;
-        private final AtomicInteger inspected;
-
-        private CountingMalformedMap(int size) {
-            this(size, new AtomicInteger());
-        }
-
-        private CountingMalformedMap(int size, AtomicInteger inspected) {
-            this.size = size;
-            this.inspected = inspected;
-        }
-
-        @Override
-        public Set<Entry<Object, Object>> entrySet() {
-            return new AbstractSet<>() {
-                @Override
-                public Iterator<Entry<Object, Object>> iterator() {
-                    return new Iterator<>() {
-                        private int index;
-
-                        @Override
-                        public boolean hasNext() {
-                            return index < size;
-                        }
-
-                        @Override
-                        public Entry<Object, Object> next() {
-                            inspected.incrementAndGet();
-                            return Map.entry("bad-" + index++, new MutableForeignValue());
-                        }
-                    };
-                }
-
-                @Override
-                public int size() {
-                    return size;
-                }
-            };
-        }
-    }
-
-    private static final class CountingNestedMap extends AbstractMap<Object, Object> {
-        private final int branchCount;
-        private final int entryCount;
-        private final AtomicInteger inspected = new AtomicInteger();
-
-        private CountingNestedMap(int branchCount, int entryCount) {
-            this.branchCount = branchCount;
-            this.entryCount = entryCount;
-        }
-
-        @Override
-        public Set<Entry<Object, Object>> entrySet() {
-            return new AbstractSet<>() {
-                @Override
-                public Iterator<Entry<Object, Object>> iterator() {
-                    return new Iterator<>() {
-                        private int index;
-
-                        @Override
-                        public boolean hasNext() {
-                            return index < branchCount;
-                        }
-
-                        @Override
-                        public Entry<Object, Object> next() {
-                            inspected.incrementAndGet();
-                            return Map.entry("branch-" + index++, new CountingMalformedMap(entryCount, inspected));
-                        }
-                    };
-                }
-
-                @Override
-                public int size() {
-                    return branchCount;
-                }
-            };
-        }
-    }
-
-    /** Fixture source uses only JDK types and is loaded child-first by the boundary test. */
-    public static final class IsolatedForeignProfilerBridge {
-        private boolean unsubscribed;
-
-        public String providerId() {
-            return "isolated-profiler";
-        }
-
-        public String origin() {
-            return "EMBEDDED";
-        }
-
-        public String runtimeVersion() {
-            return "9.0.0";
-        }
-
-        public int coordinatorProtocolVersion() {
-            return 3;
-        }
-
-        public String providerPluginIdentifier() {
-            return "Example:Isolated";
-        }
-
-        public String providerPluginVersion() {
-            return "1.0.0";
-        }
-
-        public String sourcePath() {
-            return "isolated.jar";
-        }
-
-        public String sharedDataRoot() {
-            return "Telemetry";
-        }
-
-        public void activate() {
-        }
-
-        public void deactivate() {
-        }
-
-        public boolean isActive() {
-            return true;
-        }
-
-        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
-            return true;
-        }
-
-        public Map<String, Object> dispatchProjectContribution(String token,
-                                                               String operation,
-                                                               Map<String, Object> payload,
-                                                               Throwable throwable) {
-            return Map.of("accepted", true);
-        }
-
-        public List<String> capabilities() {
-            return List.of("profiler-api-v1");
-        }
-
-        public Map<String, Object> profilerStatus(String projectId) {
-            return Map.of(
-                    "state", "COMPLETE",
-                    "detail", "isolated",
-                    "active", true,
-                    "circuitOpen", false,
-                    "sparkVersion", "spark-1",
-                    "runtimeVersion", "9.0.0",
-                    "nextCaptureAtMillis", 0L,
-                    "analysisDurationMillis", 2L,
-                    "omittedPathCount", 0,
-                    "truncatedPrefixCount", 0
-            );
-        }
-
-        public Map<String, Object> profilerLatest(String projectId) {
-            return snapshot(20);
-        }
-
-        public List<Map<String, Object>> profilerHistory(String projectId) {
-            ArrayList<Map<String, Object>> history = new ArrayList<>();
-            for (int window = 1; window <= 20; window++) {
-                history.add(snapshot(window));
-            }
-            return history;
-        }
-
-        public String subscribeProfiler(String projectId,
-                                        java.util.function.Consumer<Map<String, Object>> listener) {
-            listener.accept(snapshot(20));
-            return "isolated-subscription";
-        }
-
-        public boolean unsubscribeProfiler(String subscriptionId) {
-            unsubscribed = "isolated-subscription".equals(subscriptionId);
-            return unsubscribed;
-        }
-
-        public boolean unsubscribed() {
-            return unsubscribed;
-        }
-
-        private static Map<String, Object> snapshot(int window) {
-            return Map.of(
-                    "projectId", "mod-a",
-                    "projectVersion", "1.0.0",
-                    "sparkVersion", "spark-1",
-                    "windowKey", window,
-                    "observedAtMillis", (long) window,
-                    "selectedWorldThreadSelfMilliseconds", 1.0d,
-                    "qualificationRuleSet", "unqualified-v1",
-                    "paths", List.of(),
-                    "context", Map.of(
-                            "observedAtMillis", (long) window,
-                            "breadcrumbCategoryCounts", Map.of()
-                    )
-            );
-        }
-    }
-
-    private static final class ProfilerFixtureClassLoader extends URLClassLoader {
-        private final String fixtureName = IsolatedForeignProfilerBridge.class.getName();
-
-        private ProfilerFixtureClassLoader(URL classes, ClassLoader parent) {
-            super(new URL[]{classes}, parent);
-        }
-
-        @Override
-        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-            if (name.startsWith("com.alechilles.alecstelemetry.api.TelemetryProfiler")) {
-                throw new ClassNotFoundException(name);
-            }
-            if (!fixtureName.equals(name)) {
-                return super.loadClass(name, resolve);
-            }
-            synchronized (getClassLoadingLock(name)) {
-                Class<?> loaded = findLoadedClass(name);
-                if (loaded == null) {
-                    loaded = findClass(name);
-                }
-                if (resolve) {
-                    resolveClass(loaded);
-                }
-                return loaded;
-            }
         }
     }
 }

@@ -8,16 +8,11 @@ def localProperty = { String name -> providers.gradleProperty(name).getOrElse(lo
 
 group = 'com.alechilles'
 version = localProperty('mod_version')
-def runtimeVersion = version.toString()
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
     }
-}
-
-repositories {
-    mavenCentral()
 }
 
 dependencies {
@@ -29,13 +24,6 @@ dependencies {
 
 configurations.named('testImplementation') {
     extendsFrom(configurations.compileOnly)
-}
-
-tasks.named('processResources') {
-    inputs.property('runtimeVersion', runtimeVersion)
-    filesMatching('META-INF/maven/com.alechilles/alecstelemetry-runtime/pom.properties') {
-        expand(runtimeVersion: runtimeVersion)
-    }
 }
 
 tasks.withType(Test).configureEach {
