@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.2 - Stable 0.6 Compatibility Hotfix - 2026-08-27
 
 ### Added
 - Added `hot-path-v2` rolling profiler signals. A project path now becomes a
