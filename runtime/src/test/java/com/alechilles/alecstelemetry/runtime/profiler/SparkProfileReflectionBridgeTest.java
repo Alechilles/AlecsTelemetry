@@ -225,7 +225,11 @@ class SparkProfileReflectionBridgeTest {
     }
 
     private static SparkProfileReflectionBridge trustedBridge() {
-        return new SparkProfileReflectionBridge((pluginClass, reportedVersion) -> reportedVersion);
+        return new SparkProfileReflectionBridge(
+                (pluginClass, reportedVersion) -> reportedVersion,
+                () -> 0L,
+                20_000_000L
+        );
     }
 
     private static HytaleSparkPlugin plugin(AsyncSampler sampler) {
