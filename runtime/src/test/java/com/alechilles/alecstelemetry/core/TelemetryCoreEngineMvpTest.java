@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -216,6 +217,34 @@ class TelemetryCoreEngineMvpTest {
         assertTrue(rejected.validationErrors().contains("project_not_found"));
     }
 
+    @Test
+    void retainsPendingReportWhenUploadClientThrowsALinkageError() {
+        Path settingsFile = tempDir.resolve("Settings").resolve("runtime.json");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths(settings),
+                List.of(project),
+                List.of(project),
+                List.of(),
+                new ErrorClient(),
+                null,
+                null
+        );
+
+        assertTrue(engine.captureTestReport(project.projectId(), "simulated upload error"));
+
+        TelemetryCoreEngine.FlushSummary summary = assertDoesNotThrow(
+                () -> engine.flushPendingReportsNow("manual")
+        );
+
+        assertEquals(1, summary.attempted());
+        assertEquals(0, summary.uploaded());
+        assertEquals(1, summary.pendingAfter());
+        assertTrue(summary.lastFailure().contains("JVM error"));
+    }
+
     private TelemetryDataPaths dataPaths(TelemetryRuntimeSettings settings) {
         return new TelemetryDataPaths(
                 tempDir,
@@ -236,6 +265,9 @@ class TelemetryCoreEngineMvpTest {
                   "runtimeMode": "standalone",
                   "ownerPluginIdentifiers": ["Example:Retired Report"],
                   "packagePrefixes": ["com.example.retired"],
+                  "capture": {
+                    "uncaughtExceptions": true
+                  },
                   "reports": {
                     "enabled": true,
                     "issue": {
@@ -297,6 +329,14 @@ class TelemetryCoreEngineMvpTest {
                 Thread.currentThread().interrupt();
                 return UploadResult.failure(0, "Interrupted");
             }
+        }
+    }
+
+    private static final class ErrorClient implements CrashReportClient {
+
+        @Override
+        public UploadResult upload(DeliveryTarget target, String payloadJson) {
+            throw new NoClassDefFoundError("simulated upload failure");
         }
     }
 }
