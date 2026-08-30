@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.3 - Runtime Version Stamp Hotfix - 2026-08-30
+
+### Fixed
+- Maven and shaded hosts now report the concrete runtime version.
+
 ## 1.2.2 - Stable 0.6 Compatibility Hotfix - 2026-08-27
 
 ### Changed

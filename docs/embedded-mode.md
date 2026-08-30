@@ -30,7 +30,7 @@ For Maven builds, add the public repository and depend on the runtime artifact:
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.2.2</version>
+  <version>1.2.3</version>
 </dependency>
 ```
 
@@ -44,7 +44,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.2.2")
+    implementation("com.alechilles:alecstelemetry-runtime:1.2.3")
 }
 ```
 
@@ -68,7 +68,7 @@ This Gradle Groovy DSL example merges the host resources with the runtime UI.
 It uses the AzureDoom Hytale Gradle plugin names:
 
 ```groovy
-def telemetryVersion = '1.2.2'
+def telemetryVersion = '1.2.3'
 def telemetryCoordinates =
         "com.alechilles:alecstelemetry-runtime:${telemetryVersion}"
 def embeddedAssetPackDirectory =
