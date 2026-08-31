@@ -1,6 +1,8 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
@@ -10,6 +12,7 @@ import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.diagnostic.TelemetryDiagnosticBundleBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryProjectContributionRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
@@ -609,6 +612,56 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             return new PlayerReportRuntimeContext(false, 0, null, coordinatorBridge.service.loadedMods());
         }
         return PlayerReportRuntimeContext.UNKNOWN;
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        return submitDiagnosticBundle(project.projectId(), bundle);
+    }
+
+    @Nonnull
+    public TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull String projectId,
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        if (contributed) {
+            if (!project.projectId().equalsIgnoreCase(projectId.trim())) {
+                return new TelemetryDiagnosticBundleResult(
+                        TelemetryDiagnosticBundleResult.Status.REJECTED,
+                        "contribution_project_mismatch"
+                );
+            }
+            return TelemetryDiagnosticBundleBridge.resultFromMap(dispatchContribution(
+                    "diagnostic_bundle",
+                    Map.of("bundle", TelemetryDiagnosticBundleBridge.bundleToMap(bundle)),
+                    null
+            ));
+        }
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        if (!usesLocalCoordinator(active)) {
+            return TelemetryDiagnosticBundleBridge.resultFromMap(active.submitDiagnosticBundle(
+                    projectId,
+                    TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
+            ));
+        }
+        if (coordinatorBridge != null) {
+            return TelemetryDiagnosticBundleBridge.resultFromMap(
+                    coordinatorBridge.service.submitDiagnosticBundle(
+                            projectId,
+                            TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
+                    )
+            );
+        }
+        if (engine != null) {
+            return engine.submitDiagnosticBundle(projectId, bundle);
+        }
+        return new TelemetryDiagnosticBundleResult(
+                TelemetryDiagnosticBundleResult.Status.DISABLED,
+                "embedded_telemetry_disabled"
+        );
     }
 
     @Nonnull
@@ -1909,7 +1962,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
 
     private static boolean isBufferableBeforeStart(@Nonnull String operation) {
         return switch (operation.trim().toLowerCase(Locale.ROOT)) {
-            case "breadcrumb", "lifecycle", "capture_setup" -> true;
+            case "breadcrumb", "lifecycle", "capture_setup", "diagnostic_bundle" -> true;
             default -> false;
         };
     }
@@ -2467,6 +2520,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return service.captureTestReport(projectId, detail);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> submitDiagnosticBundle(@Nonnull String projectId,
+                                                          @Nonnull Map<String, Object> bundle) {
+            return service.submitDiagnosticBundle(projectId, bundle);
         }
 
         @Override

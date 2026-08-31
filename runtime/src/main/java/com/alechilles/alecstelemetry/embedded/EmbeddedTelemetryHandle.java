@@ -2,6 +2,8 @@ package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 
@@ -82,6 +84,13 @@ public interface EmbeddedTelemetryHandle {
     }
 
     void captureExceptionalWorldRemoval(@Nullable World world, @Nullable RemoveWorldEvent.RemovalReason removalReason);
+
+    @Nonnull
+    default TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        return TelemetryDiagnosticBundleResult.unsupported();
+    }
 
     boolean requestFlush();
 

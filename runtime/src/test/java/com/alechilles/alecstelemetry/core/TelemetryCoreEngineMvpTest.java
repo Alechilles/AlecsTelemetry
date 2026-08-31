@@ -1,5 +1,8 @@
 package com.alechilles.alecstelemetry.core;
 
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
@@ -31,6 +34,82 @@ class TelemetryCoreEngineMvpTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void diagnosticBundleUsesDurableEventQueue() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryDataPaths paths = dataPaths(settings);
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                paths,
+                List.of(project),
+                List.of(),
+                new RecordingClient(),
+                null,
+                null
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.createOrJoinIssue("safe-fingerprint"))
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.QUEUED, result.status());
+        assertEquals(1, engine.pendingReports(project.projectId()));
+        Path queued = Files.list(paths.pendingEventsDirectory(project.projectId()))
+                .findFirst()
+                .orElseThrow();
+        String payload = Files.readString(queued);
+        assertTrue(payload.contains("\"eventType\": \"diagnostic_bundle\""));
+        assertFalse(payload.contains("followUpTokenHash"));
+    }
+
+    @Test
+    void diagnosticBundleRejectsIssueDispositionWithoutFingerprint() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths(settings),
+                List.of(project),
+                List.of(),
+                new RecordingClient(),
+                null,
+                null
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(new TelemetryDiagnosticDisposition("create_or_join_issue", null))
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    private static TelemetryDiagnosticBundle diagnosticBundle(
+            TelemetryDiagnosticDisposition disposition
+    ) {
+        return new TelemetryDiagnosticBundle(
+                "diagnostic-1",
+                "2026-08-30T12:00:00Z",
+                "automatic",
+                "persistence_failure",
+                "Persistence failure",
+                "Safe summary",
+                "error",
+                disposition,
+                Map.of("subsystem", "persistence"),
+                List.of()
+        );
+    }
 
     @Test
     void blockedAsyncUploadDoesNotDelaySchedulerTasks() throws Exception {

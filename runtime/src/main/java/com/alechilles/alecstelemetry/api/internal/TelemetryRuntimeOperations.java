@@ -2,6 +2,8 @@ package com.alechilles.alecstelemetry.api.internal;
 
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.reports.TelemetryReportOpenRequest;
 import com.alechilles.alecstelemetry.runtime.stats.TelemetryPlayerIntervalSnapshot;
@@ -38,6 +40,14 @@ public interface TelemetryRuntimeOperations {
     boolean requestFlush(@Nullable String projectId);
 
     boolean captureTestReport(@Nonnull String projectId, @Nullable String detail);
+
+    @Nonnull
+    default TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull String projectId,
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        return TelemetryDiagnosticBundleResult.unsupported();
+    }
 
     boolean openReportPage(@Nonnull String projectId,
                            @Nonnull Ref<EntityStore> playerEntityRef,
