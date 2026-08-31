@@ -1,7 +1,7 @@
 {
     "Group": "Alechilles",
     "Name": "Alec's Telemetry!",
-    "Version": "1.2.3",
+    "Version": "1.3.0",
     "Description": "Standalone telemetry runtime mod for Hytale mods.",
     "Authors": [
         {
