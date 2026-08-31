@@ -354,12 +354,16 @@ When you sign in or are invited to a project, the portal may store:
 MCP agent access is optional and is controlled by authorized project members.
 An agent receives only the project and scope access approved for its credential.
 Telemetry, report text, and diagnostic fields returned to an agent are treated
-as untrusted evidence; the service applies bounds and redaction controls and
-does not return attachment bytes through MCP. MCP credentials and telemetry
-ingest keys are separate. We display newly-created credential values once and
-store only protected verification values thereafter. Project policies can require
-portal approval before an agent changes an issue, creates a linked GitHub issue,
-or provisions an ingest credential.
+as untrusted evidence; the service applies bounds and redaction controls.
+An explicitly authorized diagnostic-read credential can also read an opaque
+diagnostic attachment through MCP when the attachment is no larger than 1 MiB.
+Larger attachments remain available through the portal. Diagnostic attachment
+reads are limited to the selected project and are audited. The service does not
+preview, interpret, or execute the attachment bytes. MCP credentials and
+telemetry ingest keys are separate. We display newly-created credential values
+once and store only protected verification values thereafter. Project policies
+can require portal approval before an agent changes an issue, creates a linked
+GitHub issue, or provisions an ingest credential.
 
 For Hytale sign-in, we store the stable per-application Hytale subject
 identifier returned to Alec's Telemetry and, when you grant the profile scope,
