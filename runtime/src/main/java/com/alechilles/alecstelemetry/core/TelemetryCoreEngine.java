@@ -310,6 +310,18 @@ public final class TelemetryCoreEngine {
     @Nullable
     private static String validateDiagnosticAttachment(@Nullable TelemetryDiagnosticAttachment attachment) {
         if (attachment == null) return "diagnostic_attachment_missing";
+        if (!safeIdentifier(attachment.attachmentId())) {
+            return "diagnostic_attachment_id_invalid";
+        }
+        if (!safeIdentifier(attachment.kind())) {
+            return "diagnostic_attachment_kind_invalid";
+        }
+        if (!safeFileName(attachment.fileName())) {
+            return "diagnostic_attachment_file_name_invalid";
+        }
+        if (!safeContentType(attachment.contentType())) {
+            return "diagnostic_attachment_content_type_invalid";
+        }
         byte[] decoded;
         try {
             decoded = switch (attachment.contentEncoding()) {
@@ -337,6 +349,22 @@ public final class TelemetryCoreEngine {
             return "diagnostic_attachment_sha256_mismatch";
         }
         return null;
+    }
+
+    private static boolean safeIdentifier(@Nullable String value) {
+        return value != null
+                && value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
+    }
+
+    private static boolean safeFileName(@Nullable String value) {
+        return value != null
+                && value.matches("[A-Za-z0-9][A-Za-z0-9._ -]{0,127}")
+                && !value.endsWith(".") && !value.endsWith(" ");
+    }
+
+    private static boolean safeContentType(@Nullable String value) {
+        return value != null && value.length() <= 128
+                && value.matches("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+");
     }
 
     @Nonnull

@@ -12,6 +12,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 class TelemetryDiagnosticBundleEnvelopeTest {
 
@@ -53,6 +54,10 @@ class TelemetryDiagnosticBundleEnvelopeTest {
                 json.getAsJsonObject("disposition").get("mode").getAsString());
         assertEquals("base64", json.getAsJsonArray("attachments").get(0)
                 .getAsJsonObject().get("contentEncoding").getAsString());
+        assertNotEquals("example-session-hash", json.get("sessionHash").getAsString());
+        assertNotEquals("example-server-hash", json.get("serverHash").getAsString());
+        assertFalse(json.has("sessionId"));
+        assertFalse(json.has("serverId"));
         assertFalse(json.has("contact"));
         assertFalse(json.has("followUpTokenHash"));
         assertFalse(json.has("reportKind"));

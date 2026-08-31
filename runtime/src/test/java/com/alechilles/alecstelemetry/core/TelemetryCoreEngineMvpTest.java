@@ -1,6 +1,7 @@
 package com.alechilles.alecstelemetry.core;
 
 import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticAttachment;
 import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
 import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
@@ -91,6 +92,38 @@ class TelemetryCoreEngineMvpTest {
         );
 
         assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
+    void diagnosticBundleRejectsUnsafeAttachmentFileName() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"), null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(project), List.of(),
+                new RecordingClient(), null, null
+        );
+        TelemetryDiagnosticBundle base = diagnosticBundle(
+                TelemetryDiagnosticDisposition.informational()
+        );
+        TelemetryDiagnosticBundle unsafe = new TelemetryDiagnosticBundle(
+                base.diagnosticId(), base.capturedAtUtc(), base.source(),
+                base.diagnosticKind(), base.title(), base.summary(),
+                base.severity(), base.disposition(), base.attributes(),
+                List.of(TelemetryDiagnosticAttachment.binary(
+                        "attachment-1", "database_export", "../../database.zip",
+                        "application/zip", new byte[]{1}
+                ))
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(), unsafe
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attachment_file_name_invalid", result.detail());
         assertEquals(0, engine.pendingReports(project.projectId()));
     }
 

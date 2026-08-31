@@ -102,7 +102,7 @@ Diagnostic bundle envelopes also use `POST /ingest/event` with:
 - `diagnosticId` and `capturedAtUtc`
 - `projectId`, `pluginIdentifier`, and `pluginVersion`
 - `source`, `diagnosticKind`, `title`, `summary`, and `severity`
-- optional `sessionId` and `serverId` hashes
+- optional project-scoped `sessionHash` and `serverHash`
 - `disposition.mode`
   - `informational`
   - `create_or_join_issue`

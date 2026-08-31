@@ -190,7 +190,7 @@ the attachments contain. A bundle can include:
 
 - project and plugin identity, plugin version, diagnostic ID, timestamp, source,
   kind, severity, title, and summary
-- internal hashed server and session values for grouping
+- internal project-scoped server and session hashes for grouping
 - a project-scoped issue fingerprint and bounded scalar attributes
 - opaque text or binary attachments with file metadata, byte count, and SHA-256
 
