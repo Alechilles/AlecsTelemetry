@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 - Diagnostic Bundles - 2026-08-30
+
+### Added
+- Added a general project API for bounded diagnostic bundles with opaque text or
+  binary attachments.
+- Added automatic issue grouping through a project-defined stable fingerprint.
+
+### Changed
+- Diagnostic bundles use the normal hosted event route and local event queue.
+  They remain separate from player-written manual reports and review workflows.
+- Diagnostic bundles honor Error events consent and reject attributes that are
+  nested or exceed the bounded scalar limits.
+
 ## 1.2.3 - Runtime Version Stamp Hotfix - 2026-08-30
 
 ### Fixed

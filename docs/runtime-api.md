@@ -4,8 +4,8 @@ Consumer mods can use Alec's Telemetry as an optional runtime integration after
 they ship `Server/Telemetry/project.json`.
 
 Use the public API when a mod wants to add breadcrumbs, explicit non-crash
-events, performance timings, usage events, stats events, or a custom entry point
-for manual player reports.
+events, performance timings, usage events, stats events, bounded diagnostic
+bundles, or a custom entry point for manual player reports.
 
 ## Locate The Runtime
 
@@ -43,11 +43,48 @@ methods directly.
 - `recordPerformance(...)` and `recordPerformanceWithContext(...)`
 - `recordUsage(...)` and `recordUsageWithContext(...)`
 - `recordStats(...)` and `recordStatsWithContext(...)`
+- `submitDiagnosticBundle(...)`
 - `openReportPage(...)`
 - `requestFlush()`
 
 The runtime ignores events that are disabled by project consent, descriptor
 defaults, runtime overrides, sampling, or descriptor allowlists.
+
+## Diagnostic Bundles
+
+Use `submitDiagnosticBundle` when a mod detects a technical failure and owns a
+safe, bounded evidence package. Diagnostic bundles use event telemetry. They do
+not open the manual report UI and do not include player contact or follow-up
+fields. Project telemetry and Error events consent must both be enabled.
+
+```java
+TelemetryDiagnosticAttachment attachment = TelemetryDiagnosticAttachment.binary(
+        diagnosticId + "-database",
+        "database_export",
+        "database-debug.zip",
+        "application/zip",
+        redactedZip
+);
+
+TelemetryDiagnosticBundleResult result = project.submitDiagnosticBundle(
+        new TelemetryDiagnosticBundle(
+                diagnosticId,
+                Instant.now().toString(),
+                "automatic",
+                "persistence_failure",
+                "Persistence failure",
+                "A redacted diagnostic export is attached.",
+                "error",
+                TelemetryDiagnosticDisposition.createOrJoinIssue(fingerprint),
+                Map.of("operation", "checkpoint"),
+                List.of(attachment)
+        )
+);
+```
+
+The producer owns capture policy, redaction, and attachment contents. The
+runtime validates the envelope and queues it through the normal event path.
+See [Diagnostic Bundles](diagnostic-bundles.md) for limits and privacy rules.
 
 ## Event Context
 

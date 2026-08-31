@@ -239,6 +239,14 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    /** Routes a general diagnostic bundle using JDK-only bridge values. */
+    @Nonnull
+    default Map<String, Object> submitDiagnosticBundle(@Nonnull String projectId,
+                                                       @Nonnull Map<String, Object> bundle) {
+        return Map.of("status", "UNSUPPORTED", "accepted", false,
+                "detail", "coordinator_diagnostic_bundles_unavailable");
+    }
+
     @Nonnull
     default Map<String, Object> submitManualReport(@Nonnull String projectId,
                                                    @Nonnull Map<String, Object> submission,

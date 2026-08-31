@@ -35,6 +35,13 @@ public final class TelemetryEventStore {
     }
 
     public synchronized boolean persist(@Nonnull TelemetryEventEnvelope event) {
+        return persistRaw(event.eventType(), event.eventId(), event.toJson());
+    }
+
+    /** Persists a non-standard envelope that still uses the event upload route. */
+    public synchronized boolean persistRaw(@Nonnull String eventType,
+                                           @Nonnull String eventId,
+                                           @Nonnull String payload) {
         try {
             Files.createDirectories(pendingDirectory);
             pruneOldestToLimit(maxPendingEvents - 1);
@@ -42,10 +49,10 @@ public final class TelemetryEventStore {
                     Locale.ROOT,
                     "%013d-%s-%s.json",
                     System.currentTimeMillis(),
-                    sanitizeToken(event.eventType()),
-                    sanitizeToken(event.eventId())
+                    sanitizeToken(eventType),
+                    sanitizeToken(eventId)
             );
-            writeAtomically(pendingDirectory.resolve(fileName), event.toJson());
+            writeAtomically(pendingDirectory.resolve(fileName), payload);
             return true;
         } catch (Exception ex) {
             logWarning("Failed to persist telemetry event.", ex);

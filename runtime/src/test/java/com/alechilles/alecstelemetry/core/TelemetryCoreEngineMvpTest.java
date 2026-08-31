@@ -1,5 +1,9 @@
 package com.alechilles.alecstelemetry.core;
 
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticAttachment;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
@@ -16,6 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -31,6 +36,231 @@ class TelemetryCoreEngineMvpTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void diagnosticBundleUsesDurableEventQueue() throws Exception {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryDataPaths paths = dataPaths(settings);
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                paths,
+                List.of(project),
+                List.of(),
+                new RecordingClient(),
+                null,
+                null
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.createOrJoinIssue("safe-fingerprint"))
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.QUEUED, result.status());
+        assertEquals(1, engine.pendingReports(project.projectId()));
+        Path queued = Files.list(paths.pendingEventsDirectory(project.projectId()))
+                .findFirst()
+                .orElseThrow();
+        String payload = Files.readString(queued);
+        assertTrue(payload.contains("\"eventType\": \"diagnostic_bundle\""));
+        assertFalse(payload.contains("followUpTokenHash"));
+    }
+
+    @Test
+    void diagnosticBundleHonorsErrorEventConsent() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"), null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(project), List.of(),
+                new RecordingClient(), null, null
+        );
+        engine.setErrorEventsEnabled(project.projectId(), false);
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.informational())
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
+        assertEquals("error_event_telemetry_disabled", result.detail());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
+    void diagnosticBundleRejectsIssueDispositionWithoutFingerprint() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"),
+                null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings,
+                dataPaths(settings),
+                List.of(project),
+                List.of(),
+                new RecordingClient(),
+                null,
+                null
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(new TelemetryDiagnosticDisposition("create_or_join_issue", null))
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
+    void diagnosticBundleRejectsUnsafeAttachmentFileName() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"), null
+        );
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(project), List.of(),
+                new RecordingClient(), null, null
+        );
+        TelemetryDiagnosticBundle base = diagnosticBundle(
+                TelemetryDiagnosticDisposition.informational()
+        );
+        TelemetryDiagnosticBundle unsafe = new TelemetryDiagnosticBundle(
+                base.diagnosticId(), base.capturedAtUtc(), base.source(),
+                base.diagnosticKind(), base.title(), base.summary(),
+                base.severity(), base.disposition(), base.attributes(),
+                List.of(TelemetryDiagnosticAttachment.binary(
+                        "attachment-1", "database_export", "../../database.zip",
+                        "application/zip", new byte[]{1}
+                ))
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(), unsafe
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attachment_file_name_invalid", result.detail());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
+    void diagnosticBundleRejectsNestedAttributeValue() {
+        TelemetryCoreEngine engine = diagnosticEngine();
+        TelemetryDiagnosticBundle bundle = diagnosticBundle(
+                "diagnostic-nested",
+                Map.of("context", Map.of("private", "nested"))
+        );
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                registration().projectId(), bundle
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attribute_value_invalid", result.detail());
+    }
+
+    @Test
+    void diagnosticBundleRejectsExcessiveAttributeCount() {
+        LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
+        for (int index = 0; index < 33; index++) {
+            attributes.put("attribute-" + index, index);
+        }
+        TelemetryCoreEngine engine = diagnosticEngine();
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                registration().projectId(),
+                diagnosticBundle("diagnostic-count", attributes)
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attribute_count_exceeded", result.detail());
+    }
+
+    @Test
+    void diagnosticBundleRejectsOversizedStringAttribute() {
+        TelemetryCoreEngine engine = diagnosticEngine();
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                registration().projectId(),
+                diagnosticBundle(
+                        "diagnostic-value-size",
+                        Map.of("detail", "x".repeat(257))
+                )
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attribute_value_too_long", result.detail());
+    }
+
+    @Test
+    void diagnosticBundleRejectsNonStringCharacterSequence() {
+        TelemetryCoreEngine engine = diagnosticEngine();
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                registration().projectId(),
+                diagnosticBundle(
+                        "diagnostic-character-sequence",
+                        Map.of("detail", new StringBuilder("nested-value"))
+                )
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attribute_value_invalid", result.detail());
+    }
+
+    private TelemetryCoreEngine diagnosticEngine() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"), null
+        );
+        return new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(registration()), List.of(),
+                new RecordingClient(), null, null
+        );
+    }
+
+    private static TelemetryDiagnosticBundle diagnosticBundle(
+            TelemetryDiagnosticDisposition disposition
+    ) {
+        return diagnosticBundle(
+                "diagnostic-1", Map.of("subsystem", "persistence"), disposition
+        );
+    }
+
+    private static TelemetryDiagnosticBundle diagnosticBundle(
+            String diagnosticId,
+            Map<String, Object> attributes
+    ) {
+        return diagnosticBundle(
+                diagnosticId, attributes,
+                TelemetryDiagnosticDisposition.informational()
+        );
+    }
+
+    private static TelemetryDiagnosticBundle diagnosticBundle(
+            String diagnosticId,
+            Map<String, Object> attributes,
+            TelemetryDiagnosticDisposition disposition
+    ) {
+        return new TelemetryDiagnosticBundle(
+                diagnosticId,
+                "2026-08-30T12:00:00Z",
+                "automatic",
+                "persistence_failure",
+                "Persistence failure",
+                "Safe summary",
+                "error",
+                disposition,
+                attributes,
+                List.of()
+        );
+    }
 
     @Test
     void blockedAsyncUploadDoesNotDelaySchedulerTasks() throws Exception {
@@ -248,6 +478,12 @@ class TelemetryCoreEngineMvpTest {
                           "values": ["minor", "major", "blocking"]
                         }
                       }
+                    }
+                  },
+                  "events": {
+                    "errors": {
+                      "supported": true,
+                      "enabled": true
                     }
                   },
                   "defaults": {

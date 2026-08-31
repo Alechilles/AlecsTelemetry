@@ -2,6 +2,8 @@ package com.alechilles.alecstelemetry.runtime.host;
 
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
 import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeApiImpl;
@@ -9,6 +11,7 @@ import com.alechilles.alecstelemetry.api.internal.TelemetryRuntimeOperations;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorRegistry;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorService;
+import com.alechilles.alecstelemetry.diagnostic.TelemetryDiagnosticBundleBridge;
 import com.alechilles.alecstelemetry.coordinator.TelemetryRuntimeCandidate;
 import com.alechilles.alecstelemetry.coordinator.TelemetryServerVerificationResult;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCoordinator;
@@ -617,6 +620,25 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
     public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active == null ? coordinator.captureTestReport(projectId, detail) : active.captureTestReport(projectId, detail);
+    }
+
+    @Nonnull
+    @Override
+    public TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull String projectId,
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        Map<String, Object> result = active == null
+                ? coordinator.submitDiagnosticBundle(
+                        projectId,
+                        TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
+                )
+                : active.submitDiagnosticBundle(
+                        projectId,
+                        TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
+                );
+        return TelemetryDiagnosticBundleBridge.resultFromMap(result);
     }
 
     @Nonnull
@@ -1825,6 +1847,13 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return service.captureTestReport(projectId, detail);
+        }
+
+        @Nonnull
+        @Override
+        public Map<String, Object> submitDiagnosticBundle(@Nonnull String projectId,
+                                                          @Nonnull Map<String, Object> bundle) {
+            return service.submitDiagnosticBundle(projectId, bundle);
         }
 
         @Override

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -112,6 +113,44 @@ class TelemetryProjectHandleCompatibilityTest {
         assertTrue(enabledApi.isEnabled());
     }
 
+    @Test
+    void legacyHandleReturnsUnsupportedDiagnosticBundleResult() {
+        TelemetryProjectHandle handle = new NoopTelemetryProjectHandle();
+
+        assertEquals(
+                TelemetryDiagnosticBundleResult.Status.UNSUPPORTED,
+                handle.submitDiagnosticBundle(bundle()).status()
+        );
+    }
+
+    @Test
+    void runtimeBackedHandleDelegatesDiagnosticBundle() {
+        FakeRuntimeOperations runtime = new FakeRuntimeOperations(true, true);
+        TelemetryProjectHandle handle = new TelemetryProjectHandleImpl(runtime, "example-mod");
+        TelemetryDiagnosticBundle bundle = bundle();
+
+        TelemetryDiagnosticBundleResult result = handle.submitDiagnosticBundle(bundle);
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.QUEUED, result.status());
+        assertEquals("example-mod", runtime.diagnosticProjectId);
+        assertSame(bundle, runtime.diagnosticBundle);
+    }
+
+    private static TelemetryDiagnosticBundle bundle() {
+        return new TelemetryDiagnosticBundle(
+                "diagnostic-1",
+                "2026-08-30T12:00:00Z",
+                "automatic",
+                "persistence_failure",
+                "Persistence failure",
+                "Safe summary",
+                "error",
+                TelemetryDiagnosticDisposition.createOrJoinIssue("safe-fingerprint"),
+                Map.of(),
+                List.of()
+        );
+    }
+
     private static class NoopTelemetryProjectHandle implements TelemetryProjectHandle {
         @Nonnull
         @Override
@@ -187,6 +226,8 @@ class TelemetryProjectHandleCompatibilityTest {
         private String openedProjectId;
         private TelemetryReportOpenRequest openedRequest;
         private TelemetryBreadcrumbContext breadcrumbContext;
+        private String diagnosticProjectId;
+        private TelemetryDiagnosticBundle diagnosticBundle;
 
         private FakeRuntimeOperations(boolean enabled, boolean projectEnabled) {
             this.enabled = enabled;
@@ -224,6 +265,20 @@ class TelemetryProjectHandleCompatibilityTest {
         @Override
         public boolean captureTestReport(@Nonnull String projectId, @Nullable String detail) {
             return false;
+        }
+
+        @Nonnull
+        @Override
+        public TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+                @Nonnull String projectId,
+                @Nonnull TelemetryDiagnosticBundle bundle
+        ) {
+            diagnosticProjectId = projectId;
+            diagnosticBundle = bundle;
+            return new TelemetryDiagnosticBundleResult(
+                    TelemetryDiagnosticBundleResult.Status.QUEUED,
+                    null
+            );
         }
 
         @Override

@@ -2,12 +2,17 @@ package com.alechilles.alecstelemetry.core;
 
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticAttachment;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.crash.CrashAttribution;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.crash.CrashReportStore;
 import com.alechilles.alecstelemetry.event.TelemetryEventEnvelope;
 import com.alechilles.alecstelemetry.event.TelemetryEventStore;
+import com.alechilles.alecstelemetry.diagnostic.TelemetryDiagnosticBundleEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCatalog;
 import com.alechilles.alecstelemetry.report.ManualReportAttachment;
@@ -30,7 +35,11 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,6 +47,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Base64;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -70,6 +80,12 @@ public final class TelemetryCoreEngine {
     private static final int STATS_HEARTBEAT_STARTUP_MAX_SECONDS = 300;
     private static final long DEFAULT_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.SECONDS.toMillis(60);
     private static final long MAX_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.MINUTES.toMillis(15);
+    private static final int MAX_DIAGNOSTIC_ATTACHMENTS = 16;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTES = 32;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTE_VALUE_LENGTH = 256;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTE_NUMBER_LENGTH = 128;
+    private static final int MAX_DIAGNOSTIC_ATTACHMENT_BYTES = 1_048_576;
+    private static final int MAX_DIAGNOSTIC_PAYLOAD_BYTES = 2_097_152;
 
     private final TelemetryRuntimeSettings settings;
     private final TelemetryDataPaths dataPaths;
@@ -209,6 +225,227 @@ public final class TelemetryCoreEngine {
 
     public int statsHeartbeatIntervalSeconds() {
         return statsHeartbeatIntervalSeconds.get();
+    }
+
+    /**
+     * Validates and durably queues a project diagnostic through the event route.
+     */
+    @Nonnull
+    public TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull String projectId,
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        if (project == null) {
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.REJECTED, "project_not_found");
+        }
+        if (!isProjectRuntimeEnabled(project)
+                || project.resolveEventDeliveryTarget(settings) == null) {
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.DISABLED, "event_telemetry_disabled");
+        }
+        if (!areErrorEventsRuntimeEnabled(project)) {
+            return diagnosticResult(
+                    TelemetryDiagnosticBundleResult.Status.DISABLED,
+                    "error_event_telemetry_disabled"
+            );
+        }
+        String validationFailure = validateDiagnosticBundle(bundle);
+        if (validationFailure != null) {
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.REJECTED, validationFailure);
+        }
+        try {
+            TelemetryDiagnosticBundleEnvelope envelope = TelemetryDiagnosticBundleEnvelope.create(
+                    project.projectId(),
+                    project.pluginIdentifier(),
+                    project.pluginVersion(),
+                    sessionId,
+                    serverId,
+                    bundle
+            );
+            String payload = envelope.toJson();
+            if (payload.getBytes(StandardCharsets.UTF_8).length > MAX_DIAGNOSTIC_PAYLOAD_BYTES) {
+                return diagnosticResult(TelemetryDiagnosticBundleResult.Status.REJECTED, "diagnostic_payload_too_large");
+            }
+            if (!eventStoreFor(project).persistRaw(
+                    TelemetryDiagnosticBundleEnvelope.EVENT_TYPE,
+                    bundle.diagnosticId(),
+                    payload
+            )) {
+                return diagnosticResult(TelemetryDiagnosticBundleResult.Status.FAILED, "diagnostic_queue_write_failed");
+            }
+            requestFlushAsync("diagnostic_bundle", project.projectId());
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.QUEUED, null);
+        } catch (RuntimeException failure) {
+            logWarning("Failed to queue diagnostic bundle.", failure);
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.FAILED, "diagnostic_queue_failed");
+        }
+    }
+
+    @Nullable
+    private static String validateDiagnosticBundle(@Nullable TelemetryDiagnosticBundle bundle) {
+        if (bundle == null) return "diagnostic_bundle_missing";
+        if (isBlank(bundle.diagnosticId())) return "diagnostic_id_missing";
+        if (isBlank(bundle.capturedAtUtc())) return "captured_at_missing";
+        try {
+            Instant.parse(bundle.capturedAtUtc());
+        } catch (RuntimeException ignored) {
+            return "captured_at_invalid";
+        }
+        if (isBlank(bundle.source())) return "diagnostic_source_missing";
+        if (isBlank(bundle.diagnosticKind())) return "diagnostic_kind_missing";
+        if (isBlank(bundle.title())) return "diagnostic_title_missing";
+        if (isBlank(bundle.summary())) return "diagnostic_summary_missing";
+        if (!List.of("info", "warning", "error").contains(bundle.severity())) {
+            return "diagnostic_severity_invalid";
+        }
+        TelemetryDiagnosticDisposition disposition = bundle.disposition();
+        if (disposition == null
+                || (!TelemetryDiagnosticDisposition.INFORMATIONAL.equals(disposition.mode())
+                && !TelemetryDiagnosticDisposition.CREATE_OR_JOIN_ISSUE.equals(disposition.mode()))) {
+            return "diagnostic_disposition_invalid";
+        }
+        if (TelemetryDiagnosticDisposition.CREATE_OR_JOIN_ISSUE.equals(disposition.mode())
+                && isBlank(disposition.fingerprint())) {
+            return "diagnostic_fingerprint_missing";
+        }
+        String attributeFailure = validateDiagnosticAttributes(bundle.attributes());
+        if (attributeFailure != null) {
+            return attributeFailure;
+        }
+        if (bundle.attachments().size() > MAX_DIAGNOSTIC_ATTACHMENTS) {
+            return "diagnostic_attachment_count_exceeded";
+        }
+        for (TelemetryDiagnosticAttachment attachment : bundle.attachments()) {
+            String failure = validateDiagnosticAttachment(attachment);
+            if (failure != null) return failure;
+        }
+        return null;
+    }
+
+    @Nullable
+    private static String validateDiagnosticAttributes(
+            @Nonnull Map<String, Object> attributes
+    ) {
+        if (attributes.size() > MAX_DIAGNOSTIC_ATTRIBUTES) {
+            return "diagnostic_attribute_count_exceeded";
+        }
+        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+            if (!safeIdentifier(entry.getKey())) {
+                return "diagnostic_attribute_key_invalid";
+            }
+            Object value = entry.getValue();
+            if (value instanceof String text) {
+                if (text.length() > MAX_DIAGNOSTIC_ATTRIBUTE_VALUE_LENGTH) {
+                    return "diagnostic_attribute_value_too_long";
+                }
+            } else if (!safeDiagnosticNumber(value)
+                    && !(value instanceof Boolean)) {
+                return "diagnostic_attribute_value_invalid";
+            }
+        }
+        return null;
+    }
+
+    private static boolean safeDiagnosticNumber(@Nullable Object value) {
+        if (value instanceof Byte || value instanceof Short
+                || value instanceof Integer || value instanceof Long) {
+            return true;
+        }
+        if (value instanceof Float number) {
+            return Float.isFinite(number);
+        }
+        if (value instanceof Double number) {
+            return Double.isFinite(number);
+        }
+        if (value instanceof BigInteger || value instanceof BigDecimal) {
+            return value.toString().length()
+                    <= MAX_DIAGNOSTIC_ATTRIBUTE_NUMBER_LENGTH;
+        }
+        return false;
+    }
+
+    @Nullable
+    private static String validateDiagnosticAttachment(@Nullable TelemetryDiagnosticAttachment attachment) {
+        if (attachment == null) return "diagnostic_attachment_missing";
+        if (!safeIdentifier(attachment.attachmentId())) {
+            return "diagnostic_attachment_id_invalid";
+        }
+        if (!safeIdentifier(attachment.kind())) {
+            return "diagnostic_attachment_kind_invalid";
+        }
+        if (!safeFileName(attachment.fileName())) {
+            return "diagnostic_attachment_file_name_invalid";
+        }
+        if (!safeContentType(attachment.contentType())) {
+            return "diagnostic_attachment_content_type_invalid";
+        }
+        byte[] decoded;
+        try {
+            decoded = switch (attachment.contentEncoding()) {
+                case "identity" -> attachment.content().getBytes(StandardCharsets.UTF_8);
+                case "base64" -> {
+                    byte[] value = Base64.getDecoder().decode(attachment.content());
+                    if (!Base64.getEncoder().encodeToString(value).equals(attachment.content())) {
+                        throw new IllegalArgumentException("non-canonical base64");
+                    }
+                    yield value;
+                }
+                default -> null;
+            };
+        } catch (IllegalArgumentException failure) {
+            return "diagnostic_attachment_encoding_invalid";
+        }
+        if (decoded == null) return "diagnostic_attachment_encoding_invalid";
+        if (decoded.length > MAX_DIAGNOSTIC_ATTACHMENT_BYTES) {
+            return "diagnostic_attachment_too_large";
+        }
+        if (decoded.length != attachment.byteCount()) {
+            return "diagnostic_attachment_byte_count_mismatch";
+        }
+        if (!sha256(decoded).equals(attachment.sha256())) {
+            return "diagnostic_attachment_sha256_mismatch";
+        }
+        return null;
+    }
+
+    private static boolean safeIdentifier(@Nullable String value) {
+        return value != null
+                && value.matches("[A-Za-z0-9][A-Za-z0-9._:-]{0,127}");
+    }
+
+    private static boolean safeFileName(@Nullable String value) {
+        return value != null
+                && value.matches("[A-Za-z0-9][A-Za-z0-9._ -]{0,127}")
+                && !value.endsWith(".") && !value.endsWith(" ");
+    }
+
+    private static boolean safeContentType(@Nullable String value) {
+        return value != null && value.length() <= 128
+                && value.matches("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+");
+    }
+
+    @Nonnull
+    private static TelemetryDiagnosticBundleResult diagnosticResult(
+            @Nonnull TelemetryDiagnosticBundleResult.Status status,
+            @Nullable String detail
+    ) {
+        return new TelemetryDiagnosticBundleResult(status, detail);
+    }
+
+    private static boolean isBlank(@Nullable String value) {
+        return value == null || value.isBlank();
+    }
+
+    @Nonnull
+    private static String sha256(@Nonnull byte[] bytes) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(bytes);
+            StringBuilder result = new StringBuilder(hash.length * 2);
+            for (byte value : hash) result.append(String.format(Locale.ROOT, "%02x", value));
+            return result.toString();
+        } catch (NoSuchAlgorithmException failure) {
+            throw new IllegalStateException("SHA-256 is unavailable", failure);
+        }
     }
 
     public int statsHeartbeatDelaySeconds(boolean firstHeartbeat) {

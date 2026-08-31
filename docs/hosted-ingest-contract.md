@@ -95,6 +95,29 @@ Normal event envelopes use:
 - `details`
 - `runtime`
 
+Diagnostic bundle envelopes also use `POST /ingest/event` with:
+
+- `schemaVersion: 1`
+- `eventType: "diagnostic_bundle"`
+- `diagnosticId` and `capturedAtUtc`
+- `projectId`, `pluginIdentifier`, and `pluginVersion`
+- `source`, `diagnosticKind`, `title`, `summary`, and `severity`
+- optional project-scoped `sessionHash` and `serverHash`
+- `disposition.mode`
+  - `informational`
+  - `create_or_join_issue`
+- `disposition.fingerprint` for issue-producing diagnostics
+- bounded scalar `attributes`
+- flat opaque `attachments`
+
+Each attachment includes `attachmentId`, `kind`, `fileName`, `contentType`,
+`contentEncoding`, decoded `byteCount`, decoded `sha256`, and `content`.
+`contentEncoding` is `identity` or canonical `base64`.
+
+The hosted service should use `(projectId, diagnosticId)` as the idempotency
+identity. A `create_or_join_issue` fingerprint groups diagnostics within that
+project. Archive contents remain opaque to this ingest contract.
+
 `details` is reserved for descriptor-validated custom Event Context fields and
 bounded debug context such as breadcrumbs on error or failed lifecycle events.
 For issue-producing events, the hosted portal may aggregate scalar, low-cardinality
@@ -194,7 +217,7 @@ The hosted service should reject or throttle when:
 - `projectId` does not match the project mapped by the key
 - the request body exceeds the global or per-project size limit
 - the body is not valid JSON
-- the body does not match either the crash envelope schema or event envelope schema
+- the body does not match the crash, event, or diagnostic-bundle envelope schema
 - the event type or event name is not allowed for the hosted project
 - the project exceeds its request-per-minute budget
 

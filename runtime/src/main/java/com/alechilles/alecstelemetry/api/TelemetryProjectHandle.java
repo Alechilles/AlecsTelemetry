@@ -82,5 +82,15 @@ public interface TelemetryProjectHandle {
         return false;
     }
 
+    /**
+     * Queues one project-owned diagnostic bundle when the active runtime supports it.
+     */
+    @Nonnull
+    default TelemetryDiagnosticBundleResult submitDiagnosticBundle(
+            @Nonnull TelemetryDiagnosticBundle bundle
+    ) {
+        return TelemetryDiagnosticBundleResult.unsupported();
+    }
+
     boolean requestFlush();
 }

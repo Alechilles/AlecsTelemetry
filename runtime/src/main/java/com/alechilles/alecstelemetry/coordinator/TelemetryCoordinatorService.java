@@ -4,6 +4,7 @@ import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.core.TelemetryCoreEngine;
 import com.alechilles.alecstelemetry.crash.CrashReportClient;
+import com.alechilles.alecstelemetry.diagnostic.TelemetryDiagnosticBundleBridge;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
@@ -630,6 +631,15 @@ public final class TelemetryCoordinatorService {
     }
 
     @Nonnull
+    public Map<String, Object> submitDiagnosticBundle(@Nonnull String projectId,
+                                                      @Nonnull Map<String, Object> bundle) {
+        return TelemetryDiagnosticBundleBridge.resultToMap(engine.submitDiagnosticBundle(
+                projectId,
+                TelemetryDiagnosticBundleBridge.bundleFromMap(bundle)
+        ));
+    }
+
+    @Nonnull
     public Map<String, Object> submitManualReport(@Nonnull String projectId,
                                                   @Nonnull Map<String, Object> submission,
                                                   @Nonnull Map<String, Object> playerContext) {
@@ -1048,6 +1058,12 @@ public final class TelemetryCoordinatorService {
                         playerContextFrom(mapValue(payload.get("playerContext")))
                 );
                 return manualReportResultToMap(result);
+            }
+            case "diagnostic_bundle" -> {
+                return submitDiagnosticBundle(
+                        project.projectId(),
+                        mapValue(payload.get("bundle"))
+                );
             }
             default -> {
                 return Map.of("accepted", false, "reason", "unknown_contribution_operation");
