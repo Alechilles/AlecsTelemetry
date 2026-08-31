@@ -777,6 +777,31 @@ public final class TelemetryCoordinatorRegistry {
             );
         }
 
+        @Nonnull
+        @Override
+        public Map<String, Object> submitDiagnosticBundle(
+                @Nonnull String projectId,
+                @Nonnull Map<String, Object> bundle
+        ) {
+            try {
+                Object value = invoke(
+                        delegate,
+                        "submitDiagnosticBundle",
+                        new Class<?>[]{String.class, Map.class},
+                        projectId,
+                        bundle
+                );
+                if (value instanceof Map<?, ?> result) {
+                    return stringObjectMap(result);
+                }
+                return TelemetryCoordinatorBridge.super
+                        .submitDiagnosticBundle(projectId, bundle);
+            } catch (ReflectiveOperationException ex) {
+                return TelemetryCoordinatorBridge.super
+                        .submitDiagnosticBundle(projectId, bundle);
+            }
+        }
+
         @Override
         @SuppressWarnings("unchecked")
         public Map<String, Object> submitManualReport(@Nonnull String projectId,

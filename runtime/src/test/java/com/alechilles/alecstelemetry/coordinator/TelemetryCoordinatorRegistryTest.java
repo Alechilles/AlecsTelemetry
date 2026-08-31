@@ -64,6 +64,22 @@ class TelemetryCoordinatorRegistryTest {
     }
 
     @Test
+    void forwardsDiagnosticBundleAcrossClassLoaderBridge() {
+        ForeignBridge embedded = foreignBridge(
+                "embedded", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4"
+        );
+        TelemetryCoordinatorRegistry.register(embedded);
+        Map<String, Object> bundle = Map.of("diagnosticId", "diag-1");
+
+        Map<String, Object> result = TelemetryCoordinatorRegistry.activeBridge()
+                .submitDiagnosticBundle("alecs-tamework", bundle);
+
+        assertEquals("QUEUED", result.get("status"));
+        assertEquals("alecs-tamework", embedded.lastDiagnosticProjectId);
+        assertEquals(bundle, embedded.lastDiagnosticBundle);
+    }
+
+    @Test
     void ignoresIncompatibleNewerCandidate() {
         RecordingBridge standalone = bridge("standalone", TelemetryRuntimeOrigin.STANDALONE, "0.1.3");
         ForeignBridge incompatible = foreignBridge(
@@ -397,6 +413,8 @@ class TelemetryCoordinatorRegistryTest {
         private String lastWorldName;
         private String lastWorldRemovalReason;
         private String lastWorldFailurePluginIdentifier;
+        private String lastDiagnosticProjectId;
+        private Map<String, Object> lastDiagnosticBundle = Map.of();
 
         private ForeignBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -487,6 +505,15 @@ class TelemetryCoordinatorRegistryTest {
             lastWorldRemovalReason = removalReason;
             lastWorldFailurePluginIdentifier = possibleFailureCause;
             return true;
+        }
+
+        public Map<String, Object> submitDiagnosticBundle(
+                String projectId,
+                Map<String, Object> bundle
+        ) {
+            lastDiagnosticProjectId = projectId;
+            lastDiagnosticBundle = bundle;
+            return Map.of("status", "QUEUED");
         }
     }
 }
