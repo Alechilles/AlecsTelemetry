@@ -936,6 +936,45 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void bufferedDiagnosticFailsClosedWhenLegacyCoordinatorAppearsBeforeStart() throws Exception {
+        TestPlugin plugin = testPlugin(tempDir.resolve("pre-start-diagnostic"));
+        Class<?> anchor = isolatedAnchor(
+                "isolated/pre-start-diagnostic.json",
+                fixtureBytes("fixtures/contributed-hosted-project.json")
+        );
+        TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
+                .descriptorResource(anchor, "/isolated/pre-start-diagnostic.json")
+                .logicalPluginIdentifier("Example:Library")
+                .logicalPluginVersion("2.4.0")
+                .build();
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.contribute(plugin, contribution);
+
+        TelemetryDiagnosticBundleResult buffered = service.submitDiagnosticBundle(
+                service.projectId(),
+                diagnosticBundle()
+        );
+        assertEquals(TelemetryDiagnosticBundleResult.Status.QUEUED, buffered.status());
+        assertTrue(buffered.accepted());
+
+        LegacyProtocolThreeBridge legacy = new LegacyProtocolThreeBridge(new TelemetryRuntimeCandidate(
+                "standalone:Example:Legacy",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Legacy",
+                "1.0.0",
+                tempDir.resolve("Legacy.jar"),
+                tempDir.resolve("LegacyTelemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(legacy);
+
+        service.start();
+
+        assertEquals(0, legacy.diagnosticDispatches);
+        assertEquals(0, legacy.diagnosticContributionDispatches);
+    }
+
+    @Test
     void coordinatorBackedEmbeddedConsentIncludesConsentOnlyProjects() throws Exception {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -1582,6 +1621,7 @@ class EmbeddedTelemetryServiceTest {
         private final TelemetryRuntimeCandidate candidate;
         private boolean active;
         private int diagnosticDispatches;
+        private int diagnosticContributionDispatches;
 
         private LegacyProtocolThreeBridge(TelemetryRuntimeCandidate candidate) {
             this.candidate = candidate;
@@ -1639,6 +1679,9 @@ class EmbeddedTelemetryServiceTest {
                                                                String operation,
                                                                Map<String, Object> payload,
                                                                Throwable throwable) {
+            if ("diagnostic_bundle".equalsIgnoreCase(operation)) {
+                diagnosticContributionDispatches++;
+            }
             return Map.of("accepted", true);
         }
 

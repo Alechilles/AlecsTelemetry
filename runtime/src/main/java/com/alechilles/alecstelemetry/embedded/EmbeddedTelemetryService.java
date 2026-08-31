@@ -2099,6 +2099,15 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             if (active == null) {
                 return Map.of("accepted", false, "reason", "coordinator_unavailable");
             }
+            if ("diagnostic_bundle".equalsIgnoreCase(operation.trim())
+                    && !active.isDiagnosticsEnabled(project.projectId())) {
+                return Map.of(
+                        "accepted", false,
+                        "status", "DISABLED",
+                        "detail", "diagnostic_telemetry_disabled",
+                        "reason", "diagnostic_telemetry_disabled"
+                );
+            }
             return active.dispatchProjectContribution(token, operation, payload, throwable);
         }
     }
