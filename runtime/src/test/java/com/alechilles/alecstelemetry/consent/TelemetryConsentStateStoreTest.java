@@ -1,7 +1,9 @@
 package com.alechilles.alecstelemetry.consent;
 
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -11,6 +13,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryConsentStateStoreTest {
@@ -98,7 +101,35 @@ class TelemetryConsentStateStoreTest {
     }
 
     @Test
-    void treatsLegacyReviewedEntriesWithoutCapabilitiesAsReviewed() throws Exception {
+    void requiresDiagnosticsReviewForModernReviewedProjectsAndDisablesItUntilReview() throws Exception {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration withoutDiagnostics = registrationWithCapabilities(false, false, true);
+        TelemetryProjectRegistration withDiagnostics = registrationWithCapabilitiesAndDiagnostics(
+                "1.0.0",
+                false,
+                false,
+                true,
+                true
+        );
+
+        assertTrue(store.markReviewed(stateFile, withoutDiagnostics));
+        assertEquals(List.of("diagnostics"), store.addedSupportedCategories(stateFile, withDiagnostics));
+        assertFalse(store.isReviewed(stateFile, withDiagnostics));
+
+        Path overrideFile = tempDir.resolve("Settings").resolve("projects").resolve("example-mod.json");
+        TelemetryProjectOverrideStore overrideStore = new TelemetryProjectOverrideStore(null);
+        assertTrue(overrideStore.disableCategories(
+                overrideFile,
+                store.addedSupportedCategories(stateFile, withDiagnostics)
+        ));
+        TelemetryProjectOverride protectiveOverride = overrideStore.load(overrideFile);
+        assertNotNull(protectiveOverride);
+        assertEquals(Boolean.FALSE, protectiveOverride.diagnostics().enabled());
+    }
+
+    @Test
+    void requiresDiagnosticsReviewForLegacyReviewedEntriesButKeepsOtherLegacyCategoriesCompatible() throws Exception {
         Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
         Files.createDirectories(stateFile.getParent());
         Files.writeString(stateFile, """
@@ -114,11 +145,27 @@ class TelemetryConsentStateStoreTest {
                 }
                 """);
         TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
-        TelemetryProjectRegistration expanded = registrationWithCapabilities(true, true, true);
+        TelemetryProjectRegistration expanded = registrationWithCapabilitiesAndDiagnostics(
+                "1.0.0",
+                true,
+                true,
+                true,
+                true
+        );
 
-        assertTrue(store.isReviewed(stateFile, expanded));
-        assertEquals(List.of(), store.addedSupportedCategories(stateFile, expanded));
-        assertEquals(List.of(), store.unreviewedProjects(stateFile, List.of(expanded)));
+        assertFalse(store.isReviewed(stateFile, expanded));
+        assertEquals(List.of("diagnostics"), store.addedSupportedCategories(stateFile, expanded));
+        assertEquals(List.of(expanded), store.unreviewedProjects(stateFile, List.of(expanded)));
+
+        Path overrideFile = tempDir.resolve("Settings").resolve("projects").resolve("example-mod.json");
+        TelemetryProjectOverrideStore overrideStore = new TelemetryProjectOverrideStore(null);
+        assertTrue(overrideStore.disableCategories(
+                overrideFile,
+                store.addedSupportedCategories(stateFile, expanded)
+        ));
+        TelemetryProjectOverride protectiveOverride = overrideStore.load(overrideFile);
+        assertNotNull(protectiveOverride);
+        assertEquals(Boolean.FALSE, protectiveOverride.diagnostics().enabled());
     }
 
     @Test
@@ -169,6 +216,14 @@ class TelemetryConsentStateStoreTest {
                                                                               boolean error,
                                                                               boolean usage,
                                                                               boolean stats) {
+        return registrationWithCapabilitiesAndDiagnostics(version, error, usage, stats, false);
+    }
+
+    private static TelemetryProjectRegistration registrationWithCapabilitiesAndDiagnostics(String version,
+                                                                                             boolean error,
+                                                                                             boolean usage,
+                                                                                             boolean stats,
+                                                                                             boolean diagnostics) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """
                 {
@@ -178,6 +233,7 @@ class TelemetryConsentStateStoreTest {
                   "ownerPluginIdentifiers": ["Example:Example Mod"],
                   "packagePrefixes": ["com.example.telemetry"],
                   "telemetry": {
+                    "diagnostics": { "supported": %s, "defaultEnabled": true },
                     "events": {
                       "errors": { "supported": %s }
                     },
@@ -185,7 +241,7 @@ class TelemetryConsentStateStoreTest {
                     "stats": { "supported": %s, "allowedEvents": ["heartbeat"] }
                   }
                 }
-                """.formatted(version, error, usage, stats),
+                """.formatted(version, diagnostics, error, usage, stats),
                 null
         );
         return new TelemetryProjectRegistration(

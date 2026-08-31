@@ -116,6 +116,7 @@ class TelemetryRuntimeDiscoveryTest {
                     "lifecycle": { "enabled": false },
                     "breadcrumbs": { "enabled": false }
                   },
+                  "diagnostics": { "enabled": false },
                   "performance": { "enabled": false },
                   "usage": { "enabled": false },
                   "stats": { "enabled": false }
@@ -135,6 +136,7 @@ class TelemetryRuntimeDiscoveryTest {
         String cleaned = Files.readString(dataPaths.projectOverrideFile("stats-project"));
         assertFalse(cleaned.contains("\"capture\""));
         assertFalse(cleaned.contains("\"events\""));
+        assertFalse(cleaned.contains("\"diagnostics\""));
         assertFalse(cleaned.contains("\"performance\""));
         assertFalse(cleaned.contains("\"usage\""));
         assertTrue(cleaned.contains("\"stats\""));

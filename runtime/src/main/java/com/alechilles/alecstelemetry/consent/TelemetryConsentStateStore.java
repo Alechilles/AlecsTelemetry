@@ -41,18 +41,22 @@ public final class TelemetryConsentStateStore {
     /**
      * Returns categories supported by the current registration that were not
      * present in the most recent reviewed capability snapshot for this logical
-     * project. Legacy entries without a capability snapshot intentionally
-     * produce no additions so existing consent remains compatible.
+     * project. Legacy entries without a capability snapshot are due only for
+     * the diagnostics category, which did not exist when those entries were
+     * written.
      */
     @Nonnull
     public List<String> addedSupportedCategories(@Nonnull Path file,
                                                   @Nonnull TelemetryProjectRegistration project) {
         StateDocument document = read(file);
         ReviewedProjectDocument baseline = reviewedBaseline(document, project);
-        if (baseline == null || baseline.supportedCategories == null) {
+        if (baseline == null) {
             return List.of();
         }
         List<String> current = TelemetryConsentCapabilities.supportedCategoryNames(project);
+        if (baseline.supportedCategories == null) {
+            return current.contains("diagnostics") ? List.of("diagnostics") : List.of();
+        }
         java.util.HashSet<String> previous = new java.util.HashSet<>();
         for (String category : baseline.supportedCategories) {
             if (category != null && !category.isBlank()) {

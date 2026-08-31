@@ -200,6 +200,9 @@ public final class TelemetryRuntimeDiscovery {
                 && override.events() != null
                 && override.events().errors() != null
                 && override.events().errors().enabled() != null;
+        boolean hasUnsupportedDiagnostics = !supported.diagnosticsEnabled()
+                && override.diagnostics() != null
+                && override.diagnostics().enabled() != null;
         boolean hasUnsupportedLifecycle = !supported.lifecycleEnabled()
                 && override.events() != null
                 && override.events().lifecycle() != null
@@ -219,6 +222,7 @@ public final class TelemetryRuntimeDiscovery {
                 && override.stats().enabled() != null;
         return hasUnsupportedCapture
                 || hasUnsupportedErrors
+                || hasUnsupportedDiagnostics
                 || hasUnsupportedLifecycle
                 || hasUnsupportedBreadcrumbs
                 || hasUnsupportedPerformance

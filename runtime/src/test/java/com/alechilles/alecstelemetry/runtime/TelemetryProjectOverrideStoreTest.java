@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TelemetryProjectOverrideStoreTest {
@@ -83,5 +85,31 @@ class TelemetryProjectOverrideStoreTest {
         assertEquals(false, override.stats().enabled());
         assertEquals("custom", override.destinationMode());
         assertEquals("https://example.com/telemetry", override.customEndpoint().url());
+    }
+
+    @Test
+    void savesDiagnosticsConsentWithoutRemovingOtherEventControls() throws Exception {
+        Path overrideFile = tempDir.resolve("projects").resolve("example-mod.json");
+        Files.createDirectories(overrideFile.getParent());
+        Files.writeString(
+                overrideFile,
+                """
+                {
+                  "events": {
+                    "lifecycle": { "enabled": true }
+                  }
+                }
+                """
+        );
+
+        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(null);
+
+        assertTrue(store.saveDiagnosticsEnabled(overrideFile, true));
+
+        TelemetryProjectOverride loaded = store.load(overrideFile);
+        assertNotNull(loaded);
+        assertEquals(Boolean.TRUE, loaded.diagnostics().enabled());
+        assertNull(loaded.events().errors());
+        assertEquals(Boolean.TRUE, loaded.events().lifecycle().enabled());
     }
 }

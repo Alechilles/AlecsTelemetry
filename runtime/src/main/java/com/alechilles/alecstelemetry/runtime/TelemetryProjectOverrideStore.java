@@ -101,6 +101,10 @@ public final class TelemetryProjectOverrideStore {
         return updateEventTypeEnabled(file, "errors", enabled);
     }
 
+    public boolean saveDiagnosticsEnabled(@Nonnull Path file, boolean enabled) {
+        return update(file, root -> object(root, "diagnostics").addProperty("enabled", enabled));
+    }
+
     public boolean saveLifecycleEventsEnabled(@Nonnull Path file, boolean enabled) {
         return updateEventTypeEnabled(file, "lifecycle", enabled);
     }
@@ -136,6 +140,7 @@ public final class TelemetryProjectOverrideStore {
                         capture.addProperty("exceptionalWorldRemovals", false);
                     }
                     case "error" -> updateEventTypeEnabled(root, "errors", false);
+                    case "diagnostics" -> object(root, "diagnostics").addProperty("enabled", false);
                     case "lifecycle", "breadcrumbs" -> updateEventTypeEnabled(
                             root,
                             rawCategory.trim().toLowerCase(Locale.ROOT),
@@ -167,6 +172,7 @@ public final class TelemetryProjectOverrideStore {
                 root.remove("capture");
             }
             updateEventType(root, "errors", supported.errorEnabled(), snapshot.errorEnabled());
+            updateCategory(root, "diagnostics", supported.diagnosticsEnabled(), snapshot.diagnosticsEnabled());
             updateEventType(root, "lifecycle", supported.lifecycleEnabled(), snapshot.lifecycleEnabled());
             updateEventType(root, "breadcrumbs", supported.breadcrumbsEnabled(), snapshot.breadcrumbsEnabled());
             updateCategory(root, "performance", supported.performanceEnabled(), snapshot.performanceEnabled());
@@ -181,6 +187,9 @@ public final class TelemetryProjectOverrideStore {
                 root.remove("capture");
             }
             removeUnsupportedEventType(root, "errors", supported.errorEnabled());
+            if (!supported.diagnosticsEnabled()) {
+                root.remove("diagnostics");
+            }
             removeUnsupportedEventType(root, "lifecycle", supported.lifecycleEnabled());
             removeUnsupportedEventType(root, "breadcrumbs", supported.breadcrumbsEnabled());
             if (!supported.performanceEnabled()) {
