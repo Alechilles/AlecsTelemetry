@@ -254,7 +254,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.2.1")
+    implementation("com.alechilles:alecstelemetry-runtime:1.3.0")
 }
 ```
 
