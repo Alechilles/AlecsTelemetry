@@ -334,7 +334,7 @@ public final class TelemetryCoreEngine {
                 return "diagnostic_attribute_key_invalid";
             }
             Object value = entry.getValue();
-            if (value instanceof CharSequence text) {
+            if (value instanceof String text) {
                 if (text.length() > MAX_DIAGNOSTIC_ATTRIBUTE_VALUE_LENGTH) {
                     return "diagnostic_attribute_value_too_long";
                 }

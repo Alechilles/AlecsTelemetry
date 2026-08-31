@@ -199,6 +199,22 @@ class TelemetryCoreEngineMvpTest {
         assertEquals("diagnostic_attribute_value_too_long", result.detail());
     }
 
+    @Test
+    void diagnosticBundleRejectsNonStringCharacterSequence() {
+        TelemetryCoreEngine engine = diagnosticEngine();
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                registration().projectId(),
+                diagnosticBundle(
+                        "diagnostic-character-sequence",
+                        Map.of("detail", new StringBuilder("nested-value"))
+                )
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.REJECTED, result.status());
+        assertEquals("diagnostic_attribute_value_invalid", result.detail());
+    }
+
     private TelemetryCoreEngine diagnosticEngine() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"), null
