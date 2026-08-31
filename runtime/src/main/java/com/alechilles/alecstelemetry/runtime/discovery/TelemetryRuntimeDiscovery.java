@@ -2,6 +2,7 @@ package com.alechilles.alecstelemetry.runtime.discovery;
 
 import com.alechilles.alecstelemetry.consent.TelemetryConsentCapabilities;
 import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectCollisionDetector;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
@@ -73,6 +74,12 @@ public final class TelemetryRuntimeDiscovery {
         Map<String, TelemetryProjectOverride> overrides = overrideStore
                 .loadAll(dataPaths.projectSettingsDirectory());
         overrides = cleanUnsupportedCentralConsentOverrides(
+                activeConsentProjects,
+                overrides,
+                dataPaths,
+                overrideStore
+        );
+        overrides = protectNewlySupportedCentralConsentOverrides(
                 activeConsentProjects,
                 overrides,
                 dataPaths,
@@ -159,6 +166,41 @@ public final class TelemetryRuntimeDiscovery {
     }
 
     @Nonnull
+    private Map<String, TelemetryProjectOverride> protectNewlySupportedCentralConsentOverrides(
+            @Nonnull List<TelemetryProjectRegistration> projects,
+            @Nonnull Map<String, TelemetryProjectOverride> overrides,
+            @Nonnull TelemetryDataPaths dataPaths,
+            @Nonnull TelemetryProjectOverrideStore store) {
+        LinkedHashMap<String, TelemetryProjectOverride> protectedOverrides = new LinkedHashMap<>(overrides);
+        TelemetryConsentStateStore consentStateStore = new TelemetryConsentStateStore(logger);
+        for (TelemetryProjectRegistration project : projects) {
+            if (project.isPassiveDescriptor()) {
+                continue;
+            }
+            List<String> additions = consentStateStore.addedSupportedCategories(
+                    dataPaths.consentStateFile(),
+                    project
+            );
+            if (additions.isEmpty()) {
+                continue;
+            }
+            String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
+            java.nio.file.Path overrideFile = dataPaths.projectOverrideFile(project.projectId());
+            TelemetryProjectOverride existing = protectedOverrides.get(projectIdKey);
+            if (store.disableCategories(overrideFile, additions)) {
+                TelemetryProjectOverride reloaded = store.load(overrideFile);
+                if (reloaded != null) {
+                    protectedOverrides.put(projectIdKey, reloaded);
+                    continue;
+                }
+            }
+            protectedOverrides.put(projectIdKey, disabledOverride(existing, additions));
+            warnConsentProtectionFailure(project, overrideFile, additions);
+        }
+        return Map.copyOf(protectedOverrides);
+    }
+
+    @Nonnull
     private Map<String, TelemetryProjectOverride> cleanUnsupportedCentralConsentOverrides(
             @Nonnull List<TelemetryProjectRegistration> projects,
             @Nonnull Map<String, TelemetryProjectOverride> overrides,
@@ -228,6 +270,51 @@ public final class TelemetryRuntimeDiscovery {
                 || hasUnsupportedPerformance
                 || hasUnsupportedUsage
                 || hasUnsupportedStats;
+    }
+
+    @Nonnull
+    private static TelemetryProjectOverride disabledOverride(
+            @Nullable TelemetryProjectOverride existing,
+            @Nonnull List<String> categories) {
+        TelemetryProjectOverride base = existing == null
+                ? TelemetryProjectOverride.fromJson("{}")
+                : existing;
+        TelemetryProjectOverride.EventsOverride events = base.events();
+        if (categories.contains("error") || categories.contains("lifecycle") || categories.contains("breadcrumbs")) {
+            events = new TelemetryProjectOverride.EventsOverride(
+                    categories.contains("error")
+                            ? new TelemetryProjectOverride.EventTypeOverride(false)
+                            : events == null ? null : events.errors(),
+                    categories.contains("lifecycle")
+                            ? new TelemetryProjectOverride.EventTypeOverride(false)
+                            : events == null ? null : events.lifecycle(),
+                    categories.contains("breadcrumbs")
+                            ? new TelemetryProjectOverride.BreadcrumbsOverride(false)
+                            : events == null ? null : events.breadcrumbs()
+            );
+        }
+        return new TelemetryProjectOverride(
+                base.enabled(),
+                categories.contains("crash")
+                        ? new TelemetryProjectOverride.CaptureOverride(false, false, false, false)
+                        : base.capture(),
+                base.destinationMode(),
+                events,
+                categories.contains("diagnostics")
+                        ? new TelemetryProjectOverride.DiagnosticsOverride(false)
+                        : base.diagnostics(),
+                categories.contains("performance")
+                        ? new TelemetryProjectOverride.PerformanceOverride(false, null, null)
+                        : base.performance(),
+                categories.contains("usage")
+                        ? new TelemetryProjectOverride.UsageOverride(false, List.of())
+                        : base.usage(),
+                categories.contains("stats")
+                        ? new TelemetryProjectOverride.StatsOverride(false, List.of())
+                        : base.stats(),
+                base.hosted(),
+                base.customEndpoint()
+        );
     }
 
     private static boolean matchesLoadedMod(@Nonnull TelemetryProjectRegistration project,
@@ -304,5 +391,22 @@ public final class TelemetryRuntimeDiscovery {
             Level level = warning.contains("embedded telemetry project") ? Level.INFO : Level.WARNING;
             logger.at(level).log("Telemetry registration note: " + warning);
         }
+    }
+
+    private void warnConsentProtectionFailure(@Nonnull TelemetryProjectRegistration project,
+                                              @Nonnull java.nio.file.Path overrideFile,
+                                              @Nonnull List<String> categories) {
+        if (logger == null) {
+            return;
+        }
+        logger.at(Level.WARNING).log(
+                "Failed to persist consent protection for "
+                        + String.join(", ", categories)
+                        + " on telemetry project "
+                        + project.projectId()
+                        + " at "
+                        + overrideFile
+                        + "; categories remain disabled for this runtime."
+        );
     }
 }

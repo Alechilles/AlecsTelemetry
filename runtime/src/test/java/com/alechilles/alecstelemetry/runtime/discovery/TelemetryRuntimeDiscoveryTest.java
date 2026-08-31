@@ -1,10 +1,13 @@
 package com.alechilles.alecstelemetry.runtime.discovery;
 
+import com.alechilles.alecstelemetry.consent.TelemetryConsentStateStore;
 import com.alechilles.alecstelemetry.crash.CrashReportEnvelope;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDescriptor;
+import com.alechilles.alecstelemetry.project.TelemetryProjectOverride;
 import com.alechilles.alecstelemetry.project.TelemetryProjectDiscovery;
 import com.alechilles.alecstelemetry.project.TelemetryProjectRegistration;
 import com.alechilles.alecstelemetry.runtime.TelemetryDataPaths;
+import com.alechilles.alecstelemetry.runtime.TelemetryProjectOverrideStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -14,6 +17,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,6 +78,97 @@ class TelemetryRuntimeDiscoveryTest {
         assertEquals(1, result.projects().size());
         assertFalse(result.projects().getFirst().isEnabled());
         assertFalse(result.consentProjects().getFirst().isEnabled());
+    }
+
+    @Test
+    void discoverActiveProtectsDiagnosticsWhenReviewedProjectGainsSupport() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Diagnostics Mod",
+                "Example",
+                "Diagnostics Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "diagnostics-project",
+                  "displayName": "Diagnostics Mod",
+                  "packagePrefixes": ["example.diagnostics"]
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        TelemetryProjectRegistration oldRegistration = registration(
+                "diagnostics-project",
+                "Example:Diagnostics Mod",
+                "Diagnostics Mod"
+        );
+        assertTrue(new TelemetryConsentStateStore(null).markReviewed(
+                dataPaths.consentStateFile(),
+                oldRegistration
+        ));
+
+        Files.writeString(
+                modsDirectory.resolve("Diagnostics Mod")
+                        .resolve("Server")
+                        .resolve("Telemetry")
+                        .resolve("project.json"),
+                """
+                {
+                  "projectId": "diagnostics-project",
+                  "displayName": "Diagnostics Mod",
+                  "packagePrefixes": ["example.diagnostics"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Diagnostics Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.projects().size());
+        assertFalse(result.projects().getFirst().diagnostics().enabled());
+        assertFalse(result.consentProjects().getFirst().diagnostics().enabled());
+        TelemetryProjectOverride savedOverride = new TelemetryProjectOverrideStore(null)
+                .load(dataPaths.projectOverrideFile("diagnostics-project"));
+        assertNotNull(savedOverride);
+        assertEquals(Boolean.FALSE, savedOverride.diagnostics().enabled());
+    }
+
+    @Test
+    void discoverActiveKeepsFreshDiagnosticsDefaultEnabled() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Fresh Diagnostics Mod",
+                "Example",
+                "Fresh Diagnostics Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "fresh-diagnostics-project",
+                  "displayName": "Fresh Diagnostics Mod",
+                  "packagePrefixes": ["example.freshdiagnostics"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Fresh Diagnostics Mod", "1.0.0")
+                ))
+        );
+
+        assertTrue(result.projects().getFirst().diagnostics().enabled());
+        assertTrue(result.consentProjects().getFirst().diagnostics().enabled());
+        assertFalse(Files.exists(dataPaths.projectOverrideFile("fresh-diagnostics-project")));
     }
 
     @Test
