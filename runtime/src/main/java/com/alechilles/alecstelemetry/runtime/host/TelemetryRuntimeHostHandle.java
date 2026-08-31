@@ -35,6 +35,14 @@ public interface TelemetryRuntimeHostHandle {
         return false;
     }
 
+    default boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+        return false;
+    }
+
+    default boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
     default boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
         return false;
     }

@@ -538,6 +538,10 @@ class EmbeddedTelemetryServiceTest {
                     "errors": { "enabled": true },
                     "breadcrumbs": { "enabled": true }
                   },
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
+                  },
                   "defaults": {
                     "destinationMode": "custom"
                   },
@@ -864,10 +868,12 @@ class EmbeddedTelemetryServiceTest {
         assertTrue(TelemetryCoordinatorRegistry.activeBridge().applyConsent(
                 "embedded-mod",
                 TelemetryConsentBridgePayload.snapshotSummary(
-                        new TelemetryConsentSnapshot(false, false, false, false, false, false, false, false)
+                        new TelemetryConsentSnapshot(false, false, false, true, false, false, false, false, false)
                 )
         ));
         assertFalse(service.consentProjectDiagnostics("embedded-mod").enabled());
+        assertFalse(service.consentProjectDiagnostics("embedded-mod").errorEnabled());
+        assertTrue(service.consentProjectDiagnostics("embedded-mod").diagnosticsEnabled());
 
         service.shutdown();
         assertTrue(TelemetryCoordinatorRegistry.activeBridge() == null);
@@ -1271,6 +1277,10 @@ class EmbeddedTelemetryServiceTest {
                   "events": {
                     "errors": { "enabled": true },
                     "breadcrumbs": { "enabled": true }
+                  },
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
                   },
                   "defaults": {
                     "destinationMode": "custom"

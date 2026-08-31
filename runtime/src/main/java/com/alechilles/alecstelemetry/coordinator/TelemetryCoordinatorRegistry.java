@@ -499,6 +499,25 @@ public final class TelemetryCoordinatorRegistry {
         }
 
         @Override
+        public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+            return invokeBoolean(
+                    "isDiagnosticsEnabled",
+                    new Class<?>[]{String.class},
+                    projectId
+            );
+        }
+
+        @Override
+        public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+            return invokeBoolean(
+                    "setDiagnosticsEnabled",
+                    new Class<?>[]{String.class, boolean.class},
+                    projectId,
+                    enabled
+            );
+        }
+
+        @Override
         public boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
             return invokeBoolean(
                     "setLifecycleEventsEnabled",

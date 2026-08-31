@@ -1,5 +1,7 @@
 package com.alechilles.alecstelemetry.coordinator;
 
+import com.alechilles.alecstelemetry.runtime.TelemetryConsentBridgePayload;
+import com.alechilles.alecstelemetry.consent.TelemetryConsentSnapshot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +46,7 @@ class TelemetryCoordinatorRegistryTest {
         assertTrue(active.recordUsage("alecs-tamework", "settings_page_opened", Map.of("source", "api")));
         assertTrue(active.setProjectEnabled("alecs-tamework", false));
         assertTrue(active.setBreadcrumbsEnabled("alecs-tamework", false));
+        assertFalse(active.isDiagnosticsEnabled("alecs-tamework"));
         RuntimeException throwable = new RuntimeException("world crashed");
         assertTrue(active.captureExceptionalWorldRemoval(
                 throwable,
@@ -61,6 +64,37 @@ class TelemetryCoordinatorRegistryTest {
         assertEquals("Alechilles:Alec's Tamework!", embedded.lastWorldFailurePluginIdentifier);
         assertFalse(embedded.projectEnabled);
         assertFalse(embedded.breadcrumbsEnabled);
+    }
+
+    @Test
+    void forwardsIndependentDiagnosticsConsentAcrossClassLoaderBridge() {
+        DiagnosticsBridge embedded = diagnosticsBridge("embedded", TelemetryRuntimeOrigin.EMBEDDED, "0.1.4");
+        TelemetryCoordinatorRegistry.register(embedded);
+
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        assertTrue(active.applyConsent(
+                "alecs-tamework",
+                TelemetryConsentBridgePayload.snapshotSummary(
+                        new TelemetryConsentSnapshot(true, false, false, true, false, false, false, false, false)
+                )
+        ));
+
+        assertTrue(active.isDiagnosticsEnabled("alecs-tamework"));
+        assertFalse(embedded.errorEnabled);
+    }
+
+    @Test
+    void missingDiagnosticsConsentMapValueDefaultsToFalse() {
+        Map<String, Object> legacy = Map.of(
+                "projectEnabled", true,
+                "crashEnabled", true,
+                "errorEnabled", true
+        );
+        assertFalse(TelemetryConsentBridgePayload.snapshotFromSummary(legacy).diagnosticsEnabled());
+
+        Map<String, Object> current = new java.util.HashMap<>(legacy);
+        current.put("diagnosticsEnabled", true);
+        assertTrue(TelemetryConsentBridgePayload.snapshotFromSummary(current).diagnosticsEnabled());
     }
 
     @Test
@@ -209,6 +243,14 @@ class TelemetryCoordinatorRegistryTest {
         return new RecordingBridge(candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION));
     }
 
+    private static DiagnosticsBridge diagnosticsBridge(String providerId,
+                                                       TelemetryRuntimeOrigin origin,
+                                                       String runtimeVersion) {
+        return new DiagnosticsBridge(
+                candidate(providerId, origin, runtimeVersion, TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION)
+        );
+    }
+
     private static OrderedBridge orderedBridge(String providerId,
                                                TelemetryRuntimeOrigin origin,
                                                String runtimeVersion,
@@ -354,6 +396,30 @@ class TelemetryCoordinatorRegistryTest {
         @Override
         public boolean isActive() {
             return active;
+        }
+    }
+
+    private static final class DiagnosticsBridge extends RecordingBridge {
+        private boolean diagnosticsEnabled;
+        private boolean errorEnabled = true;
+
+        private DiagnosticsBridge(TelemetryRuntimeCandidate candidate) {
+            super(candidate);
+        }
+
+        public boolean isDiagnosticsEnabled(String projectId) {
+            return diagnosticsEnabled;
+        }
+
+        public boolean setDiagnosticsEnabled(String projectId, boolean enabled) {
+            diagnosticsEnabled = enabled;
+            return true;
+        }
+
+        public boolean applyConsent(String projectId, Map<String, Object> snapshot) {
+            diagnosticsEnabled = Boolean.TRUE.equals(snapshot.get("diagnosticsEnabled"));
+            errorEnabled = Boolean.TRUE.equals(snapshot.get("errorEnabled"));
+            return true;
         }
     }
 

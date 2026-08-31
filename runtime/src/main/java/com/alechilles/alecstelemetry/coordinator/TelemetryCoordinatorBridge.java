@@ -99,6 +99,14 @@ public interface TelemetryCoordinatorBridge {
         return false;
     }
 
+    default boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+        return false;
+    }
+
+    default boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+        return false;
+    }
+
     default boolean setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
         return false;
     }

@@ -349,6 +349,10 @@ public final class TelemetryCoordinatorService {
         return engine.isErrorEventsEnabled(projectId);
     }
 
+    public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+        return engine.isDiagnosticsEnabled(projectId);
+    }
+
     public boolean isLifecycleEventsEnabled(@Nonnull String projectId) {
         return engine.isLifecycleEventsEnabled(projectId);
     }
@@ -449,6 +453,14 @@ public final class TelemetryCoordinatorService {
             return false;
         }
         engine.setErrorEventsEnabled(projectId, enabled);
+        return true;
+    }
+
+    public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+        if (engine.findProject(projectId) == null) {
+            return false;
+        }
+        engine.setDiagnosticsEnabled(projectId, enabled);
         return true;
     }
 

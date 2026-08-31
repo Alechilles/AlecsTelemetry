@@ -54,6 +54,7 @@ public final class TelemetryConsentBridgePayload {
         summary.put("runtimeMode", project.runtimeMode());
         summary.put("crashEnabled", project.crashEnabled());
         summary.put("errorEnabled", project.errorEnabled());
+        summary.put("diagnosticsEnabled", project.diagnosticsEnabled());
         summary.put("lifecycleEnabled", project.lifecycleEnabled());
         summary.put("performanceEnabled", project.performanceEnabled());
         summary.put("usageEnabled", project.usageEnabled());
@@ -61,6 +62,7 @@ public final class TelemetryConsentBridgePayload {
         summary.put("breadcrumbsEnabled", project.breadcrumbsEnabled());
         summary.put("crashSupported", project.crashSupported());
         summary.put("errorSupported", project.errorSupported());
+        summary.put("diagnosticsSupported", project.diagnosticsSupported());
         summary.put("lifecycleSupported", project.lifecycleSupported());
         summary.put("performanceSupported", project.performanceSupported());
         summary.put("usageSupported", project.usageSupported());
@@ -112,6 +114,7 @@ public final class TelemetryConsentBridgePayload {
                 firstNonBlank(stringValue(summary.get("runtimeMode")), TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY),
                 booleanValue(summary, "crashEnabled"),
                 booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "diagnosticsEnabled"),
                 booleanValue(summary, "lifecycleEnabled"),
                 booleanValue(summary, "performanceEnabled"),
                 booleanValue(summary, "usageEnabled"),
@@ -119,6 +122,7 @@ public final class TelemetryConsentBridgePayload {
                 booleanValue(summary, "breadcrumbsEnabled"),
                 booleanValue(summary, "crashSupported"),
                 booleanValue(summary, "errorSupported"),
+                booleanValue(summary, "diagnosticsSupported"),
                 booleanValue(summary, "lifecycleSupported"),
                 booleanValue(summary, "performanceSupported"),
                 booleanValue(summary, "usageSupported"),
@@ -133,6 +137,7 @@ public final class TelemetryConsentBridgePayload {
         summary.put("projectEnabled", snapshot.projectEnabled());
         summary.put("crashEnabled", snapshot.crashEnabled());
         summary.put("errorEnabled", snapshot.errorEnabled());
+        summary.put("diagnosticsEnabled", snapshot.diagnosticsEnabled());
         summary.put("lifecycleEnabled", snapshot.lifecycleEnabled());
         summary.put("performanceEnabled", snapshot.performanceEnabled());
         summary.put("usageEnabled", snapshot.usageEnabled());
@@ -147,6 +152,7 @@ public final class TelemetryConsentBridgePayload {
                 booleanValue(summary, "projectEnabled"),
                 booleanValue(summary, "crashEnabled"),
                 booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "diagnosticsEnabled"),
                 booleanValue(summary, "lifecycleEnabled"),
                 booleanValue(summary, "performanceEnabled"),
                 booleanValue(summary, "usageEnabled"),

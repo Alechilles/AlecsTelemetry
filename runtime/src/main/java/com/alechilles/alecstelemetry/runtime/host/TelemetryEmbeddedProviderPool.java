@@ -191,6 +191,16 @@ public final class TelemetryEmbeddedProviderPool {
         }
 
         @Override
+        public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+            return entry.delegate.isDiagnosticsEnabled(projectId);
+        }
+
+        @Override
+        public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+            return entry.delegate.setDiagnosticsEnabled(projectId, enabled);
+        }
+
+        @Override
         public boolean applyConsent(@Nonnull String projectId, @Nonnull TelemetryConsentSnapshot snapshot) {
             return entry.delegate.applyConsent(projectId, snapshot);
         }

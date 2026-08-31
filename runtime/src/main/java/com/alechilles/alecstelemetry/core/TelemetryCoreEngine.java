@@ -106,6 +106,7 @@ public final class TelemetryCoreEngine {
     private final ConcurrentHashMap<String, AtomicBoolean> projectEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> crashEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> errorEventsEnabledOverrides = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> diagnosticsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> lifecycleEventsEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> performanceEnabledOverrides = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> usageEnabledOverrides = new ConcurrentHashMap<>();
@@ -243,10 +244,10 @@ public final class TelemetryCoreEngine {
                 || project.resolveEventDeliveryTarget(settings) == null) {
             return diagnosticResult(TelemetryDiagnosticBundleResult.Status.DISABLED, "event_telemetry_disabled");
         }
-        if (!areErrorEventsRuntimeEnabled(project)) {
+        if (!isDiagnosticsRuntimeEnabled(project)) {
             return diagnosticResult(
                     TelemetryDiagnosticBundleResult.Status.DISABLED,
-                    "error_event_telemetry_disabled"
+                    "diagnostic_telemetry_disabled"
             );
         }
         String validationFailure = validateDiagnosticBundle(bundle);
@@ -524,6 +525,11 @@ public final class TelemetryCoreEngine {
         return project != null && areErrorEventsRuntimeEnabled(project);
     }
 
+    public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+        TelemetryProjectRegistration project = findProject(projectId);
+        return project != null && isDiagnosticsRuntimeEnabled(project);
+    }
+
     public boolean isLifecycleEventsEnabled(@Nonnull String projectId) {
         TelemetryProjectRegistration project = findProject(projectId);
         return project != null && areLifecycleEventsRuntimeEnabled(project);
@@ -581,6 +587,10 @@ public final class TelemetryCoreEngine {
 
     public void setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
         errorEventsEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
+    }
+
+    public void setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+        diagnosticsEnabledOverrides.computeIfAbsent(normalizeProjectId(projectId), ignored -> new AtomicBoolean()).set(enabled);
     }
 
     public void setLifecycleEventsEnabled(@Nonnull String projectId, boolean enabled) {
@@ -1264,6 +1274,11 @@ public final class TelemetryCoreEngine {
     private boolean areErrorEventsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
         AtomicBoolean override = errorEventsEnabledOverrides.get(normalizeProjectId(project.projectId()));
         return override == null ? project.events().errors().enabled() : override.get();
+    }
+
+    private boolean isDiagnosticsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
+        AtomicBoolean override = diagnosticsEnabledOverrides.get(normalizeProjectId(project.projectId()));
+        return override == null ? project.diagnostics().enabled() : override.get();
     }
 
     private boolean areLifecycleEventsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {

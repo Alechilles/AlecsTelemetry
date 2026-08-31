@@ -924,6 +924,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             }
             applied &= coordinatorBridge.service.setCrashEnabled(projectId, snapshot.crashEnabled());
             applied &= coordinatorBridge.service.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            applied &= coordinatorBridge.service.setDiagnosticsEnabled(projectId, snapshot.diagnosticsEnabled());
             applied &= coordinatorBridge.service.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
             applied &= coordinatorBridge.service.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
             applied &= coordinatorBridge.service.setUsageEnabled(projectId, snapshot.usageEnabled());
@@ -943,6 +944,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
             engine.setProjectEnabled(projectId, snapshot.projectEnabled());
             engine.setCrashEnabled(projectId, snapshot.crashEnabled());
             engine.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            engine.setDiagnosticsEnabled(projectId, snapshot.diagnosticsEnabled());
             engine.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
             engine.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
             engine.setUsageEnabled(projectId, snapshot.usageEnabled());
@@ -1559,6 +1561,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 project.runtimeMode(),
                 commandCrashEnabled(project),
                 commandErrorEnabled(project),
+                commandDiagnosticsEnabled(project),
                 commandLifecycleEnabled(project),
                 commandPerformanceEnabled(project),
                 commandUsageEnabled(project),
@@ -1566,6 +1569,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 commandBreadcrumbsEnabled(project),
                 supportsCrash(project),
                 project.descriptor().events().errors().supported(),
+                project.descriptor().diagnostics().supported(),
                 project.descriptor().events().lifecycle().supported(),
                 project.descriptor().performance().supported(),
                 project.descriptor().usage().supported(),
@@ -1648,6 +1652,19 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         return this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())
                 ? engine.isErrorEventsEnabled(project.projectId())
                 : project.events().errors().enabled();
+    }
+
+    private boolean commandDiagnosticsEnabled(@Nonnull TelemetryProjectRegistration project) {
+        if (coordinatorBridge != null && coordinatorBridge.service.findProject(project.projectId()) != null) {
+            return coordinatorBridge.service.isDiagnosticsEnabled(project.projectId());
+        }
+        if (this.project != null && engine != null && this.project.projectId().equalsIgnoreCase(project.projectId())) {
+            return engine.isDiagnosticsEnabled(project.projectId());
+        }
+        if (hostHandle != null) {
+            return hostHandle.isDiagnosticsEnabled(project.projectId());
+        }
+        return project.diagnostics().enabled();
     }
 
     private boolean commandLifecycleEnabled(@Nonnull TelemetryProjectRegistration project) {
@@ -1782,6 +1799,7 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                 snapshot.projectEnabled(),
                 supported.crashEnabled() && snapshot.crashEnabled(),
                 supported.errorEnabled() && snapshot.errorEnabled(),
+                supported.diagnosticsEnabled() && snapshot.diagnosticsEnabled(),
                 supported.lifecycleEnabled() && snapshot.lifecycleEnabled(),
                 supported.performanceEnabled() && snapshot.performanceEnabled(),
                 supported.usageEnabled() && snapshot.usageEnabled(),
@@ -2356,6 +2374,16 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         @Override
         public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
             return service.setErrorEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+            return service.isDiagnosticsEnabled(projectId);
+        }
+
+        @Override
+        public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setDiagnosticsEnabled(projectId, enabled);
         }
 
         @Override

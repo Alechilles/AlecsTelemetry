@@ -71,7 +71,7 @@ class TelemetryCoreEngineMvpTest {
     }
 
     @Test
-    void diagnosticBundleHonorsErrorEventConsent() {
+    void diagnosticBundleUsesIndependentConsent() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"), null
         );
@@ -80,7 +80,8 @@ class TelemetryCoreEngineMvpTest {
                 settings, dataPaths(settings), List.of(project), List.of(),
                 new RecordingClient(), null, null
         );
-        engine.setErrorEventsEnabled(project.projectId(), false);
+        engine.setErrorEventsEnabled(project.projectId(), true);
+        engine.setDiagnosticsEnabled(project.projectId(), false);
 
         TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
                 project.projectId(),
@@ -88,8 +89,19 @@ class TelemetryCoreEngineMvpTest {
         );
 
         assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
-        assertEquals("error_event_telemetry_disabled", result.detail());
+        assertEquals("diagnostic_telemetry_disabled", result.detail());
         assertEquals(0, engine.pendingReports(project.projectId()));
+
+        engine.setErrorEventsEnabled(project.projectId(), false);
+        engine.setDiagnosticsEnabled(project.projectId(), true);
+
+        result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.informational())
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.QUEUED, result.status());
+        assertEquals(1, engine.pendingReports(project.projectId()));
     }
 
     @Test
@@ -485,6 +497,10 @@ class TelemetryCoreEngineMvpTest {
                       "supported": true,
                       "enabled": true
                     }
+                  },
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
                   },
                   "defaults": {
                     "destinationMode": "custom"

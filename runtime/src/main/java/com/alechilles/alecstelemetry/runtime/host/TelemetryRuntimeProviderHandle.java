@@ -384,6 +384,18 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         return active == null ? coordinator.setBreadcrumbsEnabled(projectId, enabled) : active.setBreadcrumbsEnabled(projectId, enabled);
     }
+
+    @Override
+    public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? coordinator.isDiagnosticsEnabled(projectId) : active.isDiagnosticsEnabled(projectId);
+    }
+
+    @Override
+    public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+        TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+        return active == null ? coordinator.setDiagnosticsEnabled(projectId, enabled) : active.setDiagnosticsEnabled(projectId, enabled);
+    }
     @Nonnull
     @Override
     public List<TelemetryProjectRegistration> unreviewedConsentProjects() {
@@ -1007,6 +1019,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             if (runtimeProject) {
                 applied &= active.setCrashEnabled(projectId, snapshot.crashEnabled());
                 applied &= active.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+                applied &= active.setDiagnosticsEnabled(projectId, snapshot.diagnosticsEnabled());
                 applied &= active.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
                 applied &= active.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
                 applied &= active.setUsageEnabled(projectId, snapshot.usageEnabled());
@@ -1022,6 +1035,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         if (coordinator.findProject(projectId) != null) {
             applied &= coordinator.setCrashEnabled(projectId, snapshot.crashEnabled());
             applied &= coordinator.setErrorEventsEnabled(projectId, snapshot.errorEnabled());
+            applied &= coordinator.setDiagnosticsEnabled(projectId, snapshot.diagnosticsEnabled());
             applied &= coordinator.setLifecycleEventsEnabled(projectId, snapshot.lifecycleEnabled());
             applied &= coordinator.setPerformanceEnabled(projectId, snapshot.performanceEnabled());
             applied &= coordinator.setUsageEnabled(projectId, snapshot.usageEnabled());
@@ -1053,6 +1067,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 project.runtimeMode(),
                 registeredForRuntime ? coordinator.isCrashEnabled(project.projectId()) : project.isCrashTelemetryEnabled(),
                 registeredForRuntime ? coordinator.isErrorEventsEnabled(project.projectId()) : project.events().errors().enabled(),
+                registeredForRuntime ? coordinator.isDiagnosticsEnabled(project.projectId()) : project.diagnostics().enabled(),
                 registeredForRuntime ? coordinator.isLifecycleEventsEnabled(project.projectId()) : project.events().lifecycle().enabled(),
                 registeredForRuntime ? coordinator.isPerformanceEnabled(project.projectId()) : project.performance().enabled(),
                 registeredForRuntime ? coordinator.isUsageEnabled(project.projectId()) : project.usage().enabled(),
@@ -1060,6 +1075,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 registeredForRuntime ? coordinator.isBreadcrumbsEnabled(project.projectId()) : project.events().breadcrumbs().enabled(),
                 supportsCrash(project),
                 project.descriptor().events().errors().supported(),
+                project.descriptor().diagnostics().supported(),
                 project.descriptor().events().lifecycle().supported(),
                 project.descriptor().performance().supported(),
                 project.descriptor().usage().supported(),
@@ -1104,6 +1120,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         summary.put("runtimeMode", project.runtimeMode());
         summary.put("crashEnabled", project.crashEnabled());
         summary.put("errorEnabled", project.errorEnabled());
+        summary.put("diagnosticsEnabled", project.diagnosticsEnabled());
         summary.put("lifecycleEnabled", project.lifecycleEnabled());
         summary.put("performanceEnabled", project.performanceEnabled());
         summary.put("usageEnabled", project.usageEnabled());
@@ -1111,6 +1128,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         summary.put("breadcrumbsEnabled", project.breadcrumbsEnabled());
         summary.put("crashSupported", project.crashSupported());
         summary.put("errorSupported", project.errorSupported());
+        summary.put("diagnosticsSupported", project.diagnosticsSupported());
         summary.put("lifecycleSupported", project.lifecycleSupported());
         summary.put("performanceSupported", project.performanceSupported());
         summary.put("usageSupported", project.usageSupported());
@@ -1162,6 +1180,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 firstNonBlank(stringValue(summary.get("runtimeMode")), TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY),
                 booleanValue(summary, "crashEnabled"),
                 booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "diagnosticsEnabled"),
                 booleanValue(summary, "lifecycleEnabled"),
                 booleanValue(summary, "performanceEnabled"),
                 booleanValue(summary, "usageEnabled"),
@@ -1169,6 +1188,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 booleanValue(summary, "breadcrumbsEnabled"),
                 booleanValue(summary, "crashSupported"),
                 booleanValue(summary, "errorSupported"),
+                booleanValue(summary, "diagnosticsSupported"),
                 booleanValue(summary, "lifecycleSupported"),
                 booleanValue(summary, "performanceSupported"),
                 booleanValue(summary, "usageSupported"),
@@ -1198,6 +1218,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         summary.put("projectEnabled", snapshot.projectEnabled());
         summary.put("crashEnabled", snapshot.crashEnabled());
         summary.put("errorEnabled", snapshot.errorEnabled());
+        summary.put("diagnosticsEnabled", snapshot.diagnosticsEnabled());
         summary.put("lifecycleEnabled", snapshot.lifecycleEnabled());
         summary.put("performanceEnabled", snapshot.performanceEnabled());
         summary.put("usageEnabled", snapshot.usageEnabled());
@@ -1212,6 +1233,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 booleanValue(summary, "projectEnabled"),
                 booleanValue(summary, "crashEnabled"),
                 booleanValue(summary, "errorEnabled"),
+                booleanValue(summary, "diagnosticsEnabled"),
                 booleanValue(summary, "lifecycleEnabled"),
                 booleanValue(summary, "performanceEnabled"),
                 booleanValue(summary, "usageEnabled"),
@@ -1236,6 +1258,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                 snapshot.projectEnabled(),
                 supported.crashEnabled() && snapshot.crashEnabled(),
                 supported.errorEnabled() && snapshot.errorEnabled(),
+                supported.diagnosticsEnabled() && snapshot.diagnosticsEnabled(),
                 supported.lifecycleEnabled() && snapshot.lifecycleEnabled(),
                 supported.performanceEnabled() && snapshot.performanceEnabled(),
                 supported.usageEnabled() && snapshot.usageEnabled(),
@@ -1727,6 +1750,16 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         @Override
         public boolean setErrorEventsEnabled(@Nonnull String projectId, boolean enabled) {
             return service.setErrorEventsEnabled(projectId, enabled);
+        }
+
+        @Override
+        public boolean isDiagnosticsEnabled(@Nonnull String projectId) {
+            return service.isDiagnosticsEnabled(projectId);
+        }
+
+        @Override
+        public boolean setDiagnosticsEnabled(@Nonnull String projectId, boolean enabled) {
+            return service.setDiagnosticsEnabled(projectId, enabled);
         }
 
         @Override

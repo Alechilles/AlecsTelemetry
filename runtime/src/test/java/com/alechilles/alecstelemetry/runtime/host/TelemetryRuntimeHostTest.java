@@ -597,7 +597,7 @@ class TelemetryRuntimeHostTest {
             assertTrue(project.overridePresent());
         }
 
-        assertTrue(handle.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true)));
+        assertTrue(handle.applyConsentToAll(new TelemetryConsentSnapshot(true, true, true, true, true, true, true, true, true)));
         for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : handle.consentDiagnostics().projects()) {
             assertAllTelemetryEnabled(project);
             assertTrue(project.overridePresent());
@@ -621,6 +621,15 @@ class TelemetryRuntimeHostTest {
         assertNotNull(override);
         assertEquals(false, override.usage().enabled());
         assertEquals(true, override.stats().enabled());
+
+        assertTrue(handle.applyConsent(
+                "first-mod",
+                new TelemetryConsentSnapshot(true, false, false, true, false, false, false, false, false)
+        ));
+        TelemetryRuntimeDiagnostics.ProjectDiagnostics firstDiagnostics = handle.consentProjectDiagnostics("first-mod");
+        assertNotNull(firstDiagnostics);
+        assertFalse(firstDiagnostics.errorEnabled());
+        assertTrue(firstDiagnostics.diagnosticsEnabled());
     }
 
     @Test
@@ -1154,6 +1163,10 @@ class TelemetryRuntimeHostTest {
                     "lifecycle": { "enabled": true },
                     "breadcrumbs": { "enabled": true }
                   },
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
+                  },
                   "performance": {
                     "enabled": true
                   },
@@ -1307,6 +1320,7 @@ class TelemetryRuntimeHostTest {
         assertTrue(project.enabled());
         assertTrue(project.crashEnabled());
         assertTrue(project.errorEnabled());
+        assertTrue(project.diagnosticsEnabled());
         assertTrue(project.lifecycleEnabled());
         assertTrue(project.performanceEnabled());
         assertTrue(project.usageEnabled());
@@ -1318,6 +1332,7 @@ class TelemetryRuntimeHostTest {
         assertFalse(project.enabled());
         assertFalse(project.crashEnabled());
         assertFalse(project.errorEnabled());
+        assertFalse(project.diagnosticsEnabled());
         assertFalse(project.lifecycleEnabled());
         assertFalse(project.performanceEnabled());
         assertFalse(project.usageEnabled());
