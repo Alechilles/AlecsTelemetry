@@ -123,8 +123,8 @@ an unrelated replacement is required. A matching explicit contribution may
 still upgrade its elected passive base as described below. This boundary also
 keeps queued envelopes on the destination that created them.
 
-Before `start()`, only setup breadcrumbs, lifecycle events, and setup-failure
-captures are accepted for bounded replay. Manual reports, flushes, and other
+Before `start()`, setup breadcrumbs, lifecycle events, setup-failure captures,
+and diagnostic bundles are accepted for bounded replay. Manual reports, flushes, and other
 operations return a bounded `not_started` rejection and are never drained after
 startup.
 

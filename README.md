@@ -34,6 +34,8 @@ backend, the same runtime can target custom endpoints instead.
   breadcrumbs, local queueing, and hosted issue grouping.
 - Structured runtime events: explicit errors, lifecycle timings, performance
   measurements, feature usage events, and descriptor-validated Event Context.
+- Diagnostic bundles: bounded automatic technical evidence with opaque
+  attachments and project-scoped issue grouping.
 - Public usage stats: aggregate active servers, active players, environment
   breakdowns, versions, loaded mods, and public embed cards through ModStats.io.
 - Server browser: server owners can publish verified public server listings,
@@ -398,6 +400,7 @@ For the full runtime, web portal, and ModStats.io policy, see
 - [Runtime overrides](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/runtime-overrides.md)
 - [Privacy policy](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/privacy-policy.md)
 - [Manual player reports](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/manual-player-reports.md)
+- [Diagnostic bundles](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/diagnostic-bundles.md)
 - [Usage stats guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/usage-stats.md)
 - [Public wiki](https://wiki.hytalemodding.dev/mod/alecs-telemetry/home)
 - [Project key operations](https://wiki.hytalemodding.dev/mod/alecs-telemetry/project-key-operations)

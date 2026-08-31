@@ -182,6 +182,30 @@ different-owner, fenced, and retired candidates cannot write. Registration alone
 every operation remains subject to the project's descriptor, independent
 consent, allowlist, sampling, and destination gates.
 
+### Automatic Diagnostic Bundles
+
+When event telemetry is enabled, a mod can submit a bounded diagnostic bundle
+for a technical failure. The producing mod controls when capture occurs and what
+the attachments contain. A bundle can include:
+
+- project and plugin identity, plugin version, diagnostic ID, timestamp, source,
+  kind, severity, title, and summary
+- internal hashed server and session values for grouping
+- a project-scoped issue fingerprint and bounded scalar attributes
+- opaque text or binary attachments with file metadata, byte count, and SHA-256
+
+Diagnostic bundles are separate from manual player reports. They do not include
+manual-report contact, follow-up, review, approval, or rejection fields. The
+runtime does not inspect an archive's members before upload. Mod authors must
+redact attachments before submission and must document automatic capture and its
+opt-out. Attachments must not contain player names, raw UUIDs, chat, coordinates,
+tokens, inventory contents, raw saves, raw databases, or unrestricted logs.
+
+The hosted service can group a `create_or_join_issue` diagnostic by its stable
+project fingerprint and can treat repeated `(projectId, diagnosticId)` values as
+one diagnostic. Access and retention follow the project's private telemetry and
+attachment policies.
+
 ### Public Usage Stats
 
 Stats heartbeats are separate from feature-usage telemetry. Current runtimes send
