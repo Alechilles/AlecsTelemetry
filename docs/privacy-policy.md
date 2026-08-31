@@ -1,6 +1,6 @@
 # Alec's Telemetry Privacy Policy
 
-Effective date: August 18, 2026
+Effective date: August 30, 2026
 
 This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -49,6 +49,11 @@ Alec's Telemetry is designed to avoid player identity data by default.
   traces, error messages, plugin versions, Hytale versions, Java/runtime details,
   operating system details, loaded mod IDs, server/session identifiers, and
   descriptor-approved event context.
+- A producing mod can automatically send a diagnostic bundle with safe
+  operator-facing metadata and opaque redacted attachments. Diagnostic bundles
+  are not manual player reports. The producing mod controls its local
+  enablement, review, redaction, and opt-out policy; the hosted platform does
+  not require a separate administrator opt-in.
 - Embedded contributors can register independent logical projects through an
   anchored descriptor. Their envelopes use the logical project/plugin identity
   and logical plugin version. Physical host identifiers, host versions, source
@@ -107,6 +112,7 @@ directory. These files can include:
 - server-owner consent choices and runtime overrides
 - server identity and verification values used for ModStats server claiming
 - queued telemetry waiting to upload
+- queued automatic diagnostic bundles waiting to upload
 - local project-election state and bounded candidate diagnostics, including the
   logical project ID/version, physical host identifier/version, normalized source
   path, registration source, and descriptor hash used to choose one provider
@@ -184,27 +190,35 @@ consent, allowlist, sampling, and destination gates.
 
 ### Automatic Diagnostic Bundles
 
-When project telemetry and Error events consent are enabled, a mod can submit a
-bounded diagnostic bundle for a technical failure. The producing mod controls
-when capture occurs and what the attachments contain. A bundle can include:
+When project telemetry and Error events consent are enabled, a mod can send a
+general diagnostic bundle through the hosted event endpoint. This package is
+separate from a manual player report. It can include:
 
-- project and plugin identity, plugin version, diagnostic ID, timestamp, source,
-  kind, severity, title, and summary
-- internal project-scoped server and session hashes for grouping
-- a project-scoped issue fingerprint and bounded scalar attributes
-- opaque text or binary attachments with file metadata, byte count, and SHA-256
+- project and diagnostic IDs, capture and receive times, source, diagnostic
+  kind, title, summary, severity, plugin ID, and plugin version
+- project-defined scalar attributes, such as subsystem, failure stage, counts,
+  or recovery state
+- an informational disposition, or a stable project-supplied fingerprint that
+  creates or joins an issue
+- optional project-scoped one-way hashes for server and session correlation;
+  raw server and session IDs are not accepted in this envelope
+- up to 16 opaque attachments with a safe filename, media type, decoded byte
+  count, and SHA-256 hash
 
-Diagnostic bundles are separate from manual player reports. They do not include
-manual-report contact, follow-up, review, approval, or rejection fields. The
-runtime does not inspect an archive's members before upload. Mod authors must
-redact attachments before submission and must document automatic capture and its
-opt-out. Attachments must not contain player names, raw UUIDs, chat, coordinates,
-tokens, inventory contents, raw saves, raw databases, or unrestricted logs.
+The producing mod decides when automatic collection is enabled and must redact
+the package before upload. It can provide an opt-out or other local control.
+The hosted platform validates attachment encoding, size, and SHA-256, then
+stores normalized metadata separately from decoded attachment bytes. It does
+not keep Base64 attachment content in normalized metadata and does not preview
+or extract attachment contents in the portal. Attachments must not contain
+player names, raw UUIDs, chat, coordinates, tokens, inventory contents, raw
+saves, raw databases, or unrestricted logs.
 
-The hosted service can group a `create_or_join_issue` diagnostic by its stable
-project fingerprint and can treat repeated `(projectId, diagnosticId)` values as
-one diagnostic. Access and retention follow the project's private telemetry and
-attachment policies.
+An informational bundle appears in the authorized project's Diagnostics area
+without creating an issue. An issue-producing bundle creates or joins an issue
+using the project-supplied fingerprint. Authorized project maintainers can
+later link or promote informational evidence. No diagnostic bundle content is
+part of public ModStats responses.
 
 ### Public Usage Stats
 
@@ -389,8 +403,9 @@ Web Solutions LLC generally uses:
 
 Data is used to:
 
-- deliver crash, error, performance, lifecycle, usage, stats, and manual-report
-  workflows requested by server owners and mod authors
+- deliver crash, error, performance, lifecycle, usage, stats, automatic
+  diagnostic-bundle, and manual-report workflows requested by server owners and
+  mod authors
 - show project dashboards and issue triage views to authorized project members
 - compute public aggregate mod stats and server listing data
 - route notifications to configured Discord channels
@@ -420,7 +435,8 @@ Access depends on the surface:
   Paid recognition does not change public ranking, active counts, or verified
   telemetry evidence.
 - Project owners, admins, maintainers, and viewers can see the portal data their
-  role allows for that project.
+  role allows for that project, including diagnostic metadata and opaque
+  attachment downloads.
 - Configured Discord channels may receive crash, event, or manual-report alert
   summaries.
 - Configured GitHub repositories may receive issue content when project members
@@ -476,6 +492,9 @@ Retention depends on the data type and operational need.
   diagnostic occurrence that supplied them and are deleted with that occurrence.
 - Crash report metadata and raw JSON, manual report metadata, and manual report
   raw JSON are retained for 730 days by default.
+- Diagnostic bundle metadata is retained for 730 days by default. Its opaque
+  attachments are retained for 180 days by default. Linked issue workflow
+  history can remain after the bundle or attachment expires.
 - Manual report attachments and log attachments are retained for 180 days by
   default.
 - Consent metrics and first-review funnel events are retained for 730 days by
@@ -527,6 +546,8 @@ Server owners can:
 - review each embedded logical contribution as its own consent project, even
   when several contributions share one physical runtime provider
 - use runtime override files to disable telemetry categories or change endpoints
+- use controls supplied by a producing mod to disable its automatic diagnostic
+  bundles; the hosted platform does not add a separate administrator opt-in
 - disable manual reports or require local review before upload
 - disable optional report contact fields, resolution updates, log attachments,
   loaded mod lists, diagnostics, and other report extras
