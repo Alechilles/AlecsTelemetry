@@ -1,5 +1,8 @@
 package com.alechilles.alecstelemetry.runtime.host;
 
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeLocator;
 import com.alechilles.alecstelemetry.coordinator.TelemetryCoordinatorBridge;
@@ -630,6 +633,55 @@ class TelemetryRuntimeHostTest {
         assertNotNull(firstDiagnostics);
         assertFalse(firstDiagnostics.errorEnabled());
         assertTrue(firstDiagnostics.diagnosticsEnabled());
+    }
+
+    @Test
+    void diagnosticSubmissionFailsClosedForLegacyActiveCoordinator() {
+        TelemetryProjectRegistration project = registration(
+                telemetryCategoryDescriptor("legacy-project", "Legacy Project"),
+                "Example:Legacy",
+                "1.0.0",
+                tempDir.resolve("Legacy.jar")
+        );
+        Path providerRoot = tempDir.resolve("new-provider");
+        TelemetryDataPaths providerPaths = dataPaths(providerRoot);
+        TelemetryRuntimeSettings providerSettings = TelemetryRuntimeSettings.load(
+                providerPaths.settingsFile(), null
+        );
+        ProviderFixture fixture = providerFixture(
+                "standalone:Example:New Provider",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.4",
+                providerSettings,
+                providerPaths,
+                List.of(project),
+                List.of(project),
+                List.of(),
+                project
+        );
+        StandaloneStyleConsentBridge legacy = new StandaloneStyleConsentBridge(
+                new TelemetryRuntimeCandidate(
+                        "standalone:Example:Legacy Provider",
+                        TelemetryRuntimeOrigin.STANDALONE,
+                        "0.1.3",
+                        TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                        "Example:Legacy Provider",
+                        "1.0.0",
+                        tempDir.resolve("Legacy Provider.jar"),
+                        tempDir.resolve("LegacyProviderTelemetry")
+                ),
+                project
+        );
+        TelemetryCoordinatorRegistry.register(legacy);
+
+        TelemetryDiagnosticBundleResult result = fixture.handle().submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle()
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
+        assertEquals("diagnostic_telemetry_disabled", result.detail());
+        assertEquals(0, legacy.diagnosticDispatches);
     }
 
     @Test
@@ -1316,6 +1368,21 @@ class TelemetryRuntimeHostTest {
         );
     }
 
+    private static TelemetryDiagnosticBundle diagnosticBundle() {
+        return new TelemetryDiagnosticBundle(
+                "legacy-diagnostic",
+                "2026-08-31T19:00:00Z",
+                "test",
+                "persistence",
+                "Persistence failure",
+                "Legacy coordinator gate test.",
+                "error",
+                TelemetryDiagnosticDisposition.informational(),
+                Map.of(),
+                List.of()
+        );
+    }
+
     private static void assertAllTelemetryEnabled(TelemetryRuntimeDiagnostics.ProjectDiagnostics project) {
         assertTrue(project.enabled());
         assertTrue(project.crashEnabled());
@@ -1368,6 +1435,7 @@ class TelemetryRuntimeHostTest {
         private final TelemetryRuntimeCandidate candidate;
         private final TelemetryProjectRegistration project;
         private final ArrayList<String> reviewedProjectIds = new ArrayList<>();
+        private int diagnosticDispatches;
         private boolean active;
         private TelemetryConsentSnapshot snapshot = new TelemetryConsentSnapshot(
                 true,
@@ -1475,6 +1543,12 @@ class TelemetryRuntimeHostTest {
         public boolean applyConsentToAll(Map<String, Object> snapshot) {
             this.snapshot = TelemetryConsentBridgePayload.snapshotFromSummary(snapshot);
             return true;
+        }
+
+        @Override
+        public Map<String, Object> submitDiagnosticBundle(String projectId, Map<String, Object> bundle) {
+            diagnosticDispatches++;
+            return Map.of("status", "QUEUED");
         }
 
         @Override

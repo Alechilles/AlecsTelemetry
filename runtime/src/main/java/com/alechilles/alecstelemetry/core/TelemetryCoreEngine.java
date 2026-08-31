@@ -236,6 +236,9 @@ public final class TelemetryCoreEngine {
             @Nonnull String projectId,
             @Nonnull TelemetryDiagnosticBundle bundle
     ) {
+        if (!enabled.get()) {
+            return diagnosticResult(TelemetryDiagnosticBundleResult.Status.DISABLED, "event_telemetry_disabled");
+        }
         TelemetryProjectRegistration project = findProject(projectId);
         if (project == null) {
             return diagnosticResult(TelemetryDiagnosticBundleResult.Status.REJECTED, "project_not_found");

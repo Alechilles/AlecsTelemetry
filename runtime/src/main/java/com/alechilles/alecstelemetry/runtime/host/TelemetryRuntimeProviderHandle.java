@@ -641,15 +641,19 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
             @Nonnull TelemetryDiagnosticBundle bundle
     ) {
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
-        Map<String, Object> result = active == null
-                ? coordinator.submitDiagnosticBundle(
-                        projectId,
-                        TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
-                )
-                : active.submitDiagnosticBundle(
-                        projectId,
-                        TelemetryDiagnosticBundleBridge.bundleToMap(bundle)
+        Map<String, Object> bundleMap = TelemetryDiagnosticBundleBridge.bundleToMap(bundle);
+        Map<String, Object> result;
+        if (active == null || bridge.providerId().equals(active.providerId())) {
+            result = coordinator.submitDiagnosticBundle(projectId, bundleMap);
+        } else {
+            if (!active.isDiagnosticsEnabled(projectId)) {
+                return new TelemetryDiagnosticBundleResult(
+                        TelemetryDiagnosticBundleResult.Status.DISABLED,
+                        "diagnostic_telemetry_disabled"
                 );
+            }
+            result = active.submitDiagnosticBundle(projectId, bundleMap);
+        }
         return TelemetryDiagnosticBundleBridge.resultFromMap(result);
     }
 

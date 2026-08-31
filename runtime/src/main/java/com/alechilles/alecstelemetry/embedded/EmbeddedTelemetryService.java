@@ -634,6 +634,13 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
                         "contribution_project_mismatch"
                 );
             }
+            TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
+            if (active != null && !active.isDiagnosticsEnabled(projectId)) {
+                return new TelemetryDiagnosticBundleResult(
+                        TelemetryDiagnosticBundleResult.Status.DISABLED,
+                        "diagnostic_telemetry_disabled"
+                );
+            }
             return TelemetryDiagnosticBundleBridge.resultFromMap(dispatchContribution(
                     "diagnostic_bundle",
                     Map.of("bundle", TelemetryDiagnosticBundleBridge.bundleToMap(bundle)),
@@ -642,6 +649,12 @@ public final class EmbeddedTelemetryService implements EmbeddedTelemetryHandle, 
         }
         TelemetryCoordinatorBridge active = TelemetryCoordinatorRegistry.activeBridge();
         if (!usesLocalCoordinator(active)) {
+            if (!active.isDiagnosticsEnabled(projectId)) {
+                return new TelemetryDiagnosticBundleResult(
+                        TelemetryDiagnosticBundleResult.Status.DISABLED,
+                        "diagnostic_telemetry_disabled"
+                );
+            }
             return TelemetryDiagnosticBundleBridge.resultFromMap(active.submitDiagnosticBundle(
                     projectId,
                     TelemetryDiagnosticBundleBridge.bundleToMap(bundle)

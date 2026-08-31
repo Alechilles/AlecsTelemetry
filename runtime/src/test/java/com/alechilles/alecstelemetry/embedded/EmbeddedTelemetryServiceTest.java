@@ -1,6 +1,9 @@
 package com.alechilles.alecstelemetry.embedded;
 
 import com.alechilles.alecstelemetry.api.TelemetryBreadcrumbContext;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundle;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticBundleResult;
+import com.alechilles.alecstelemetry.api.TelemetryDiagnosticDisposition;
 import com.alechilles.alecstelemetry.api.TelemetryEventContext;
 import com.alechilles.alecstelemetry.api.TelemetryProjectHandle;
 import com.alechilles.alecstelemetry.api.TelemetryRuntimeApi;
@@ -880,6 +883,59 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
+    void diagnosticSubmissionFailsClosedForLegacyActiveCoordinator() {
+        Path telemetryRoot = tempDir.resolve("legacy-active-telemetry");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                telemetryRoot.resolve("Settings").resolve("runtime.json"), null
+        );
+        TelemetryDataPaths dataPaths = new TelemetryDataPaths(
+                telemetryRoot,
+                settings.filePath(),
+                telemetryRoot.resolve("Settings").resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor(),
+                "Example:Embedded Mod",
+                "1.0.0",
+                tempDir.resolve("Embedded Mod.jar")
+        );
+        LegacyProtocolThreeBridge legacy = new LegacyProtocolThreeBridge(new TelemetryRuntimeCandidate(
+                "standalone:Example:Legacy",
+                TelemetryRuntimeOrigin.STANDALONE,
+                "0.1.3",
+                TelemetryCoordinatorRegistry.COORDINATOR_PROTOCOL_VERSION,
+                "Example:Legacy",
+                "1.0.0",
+                tempDir.resolve("Legacy.jar"),
+                tempDir.resolve("LegacyTelemetry")
+        ));
+        TelemetryCoordinatorRegistry.register(legacy);
+        EmbeddedTelemetryService service = new EmbeddedTelemetryService(
+                settings,
+                dataPaths,
+                registration,
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")),
+                new SequencedClient(CrashReportClient.UploadResult.success(204)),
+                null,
+                null,
+                new EmbeddedTelemetryPlayerCounter()
+        );
+
+        TelemetryDiagnosticBundleResult result = service.submitDiagnosticBundle(
+                registration.projectId(),
+                diagnosticBundle()
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
+        assertEquals("diagnostic_telemetry_disabled", result.detail());
+        assertEquals(0, legacy.diagnosticDispatches);
+    }
+
+    @Test
     void coordinatorBackedEmbeddedConsentIncludesConsentOnlyProjects() throws Exception {
         Path telemetryRoot = tempDir.resolve("Telemetry");
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(telemetryRoot.resolve("Settings").resolve("runtime.json"), null);
@@ -1504,6 +1560,92 @@ class EmbeddedTelemetryServiceTest {
         @Override
         public V get(long timeout, TimeUnit unit) {
             return null;
+        }
+    }
+
+    private static TelemetryDiagnosticBundle diagnosticBundle() {
+        return new TelemetryDiagnosticBundle(
+                "legacy-diagnostic",
+                "2026-08-31T19:00:00Z",
+                "test",
+                "persistence",
+                "Persistence failure",
+                "Legacy coordinator gate test.",
+                "error",
+                TelemetryDiagnosticDisposition.informational(),
+                Map.of(),
+                List.of()
+        );
+    }
+
+    private static final class LegacyProtocolThreeBridge {
+        private final TelemetryRuntimeCandidate candidate;
+        private boolean active;
+        private int diagnosticDispatches;
+
+        private LegacyProtocolThreeBridge(TelemetryRuntimeCandidate candidate) {
+            this.candidate = candidate;
+        }
+
+        public String providerId() {
+            return candidate.providerId();
+        }
+
+        public String origin() {
+            return candidate.origin().name();
+        }
+
+        public String runtimeVersion() {
+            return candidate.runtimeVersion();
+        }
+
+        public int coordinatorProtocolVersion() {
+            return candidate.coordinatorProtocolVersion();
+        }
+
+        public String providerPluginIdentifier() {
+            return candidate.providerPluginIdentifier();
+        }
+
+        public String providerPluginVersion() {
+            return candidate.providerPluginVersion();
+        }
+
+        public String sourcePath() {
+            return candidate.sourcePath().toString();
+        }
+
+        public String sharedDataRoot() {
+            return candidate.sharedDataRoot().toString();
+        }
+
+        public void activate() {
+            active = true;
+        }
+
+        public void deactivate() {
+            active = false;
+        }
+
+        public boolean isActive() {
+            return active;
+        }
+
+        public boolean reconcileProjectContributions(long revision, List<Map<String, Object>> contributions) {
+            return true;
+        }
+
+        public Map<String, Object> dispatchProjectContribution(String token,
+                                                               String operation,
+                                                               Map<String, Object> payload,
+                                                               Throwable throwable) {
+            return Map.of("accepted", true);
+        }
+
+        public Map<String, Object> submitDiagnosticBundle(String projectId,
+                                                           Map<String, Object> bundle) {
+            diagnosticDispatches++;
+            return Map.of("status", "QUEUED");
         }
     }
 

@@ -105,6 +105,29 @@ class TelemetryCoreEngineMvpTest {
     }
 
     @Test
+    void diagnosticBundleRejectsWhenRuntimeIsDisabled() throws Exception {
+        Path settingsFile = tempDir.resolve("Settings").resolve("runtime.json");
+        Files.createDirectories(settingsFile.getParent());
+        Files.writeString(settingsFile, "{\"enabled\":false}");
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+        TelemetryProjectRegistration project = registration();
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(project), List.of(),
+                new RecordingClient(), null, null
+        );
+        engine.setDiagnosticsEnabled(project.projectId(), true);
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.informational())
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
+        assertEquals("event_telemetry_disabled", result.detail());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
     void diagnosticBundleRejectsIssueDispositionWithoutFingerprint() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),
