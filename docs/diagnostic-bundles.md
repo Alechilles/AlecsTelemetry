@@ -26,6 +26,15 @@ wire contract.
 
 ## Limits
 
+Diagnostic bundles require both project telemetry and the Error events category
+to be enabled. A consent or runtime override change applies before a bundle can
+enter the local queue.
+
+Attributes are limited to 32 entries. Keys use safe identifier characters and
+are at most 128 characters. Values must be booleans, finite numbers, or strings
+of at most 256 characters. Nested objects, arrays, and other value types are
+rejected.
+
 The runtime accepts at most 16 attachments. Each decoded attachment must be at
 most 1 MiB. The serialized diagnostic payload must be at most 2 MiB. A hosted
 project can impose a smaller request limit.

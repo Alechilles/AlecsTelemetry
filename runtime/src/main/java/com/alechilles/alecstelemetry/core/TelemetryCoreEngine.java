@@ -35,6 +35,8 @@ import com.hypixel.hytale.server.core.universe.world.events.RemoveWorldEvent;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -79,6 +81,9 @@ public final class TelemetryCoreEngine {
     private static final long DEFAULT_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.SECONDS.toMillis(60);
     private static final long MAX_UPLOAD_RETRY_COOLDOWN_MILLIS = TimeUnit.MINUTES.toMillis(15);
     private static final int MAX_DIAGNOSTIC_ATTACHMENTS = 16;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTES = 32;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTE_VALUE_LENGTH = 256;
+    private static final int MAX_DIAGNOSTIC_ATTRIBUTE_NUMBER_LENGTH = 128;
     private static final int MAX_DIAGNOSTIC_ATTACHMENT_BYTES = 1_048_576;
     private static final int MAX_DIAGNOSTIC_PAYLOAD_BYTES = 2_097_152;
 
@@ -238,6 +243,12 @@ public final class TelemetryCoreEngine {
                 || project.resolveEventDeliveryTarget(settings) == null) {
             return diagnosticResult(TelemetryDiagnosticBundleResult.Status.DISABLED, "event_telemetry_disabled");
         }
+        if (!areErrorEventsRuntimeEnabled(project)) {
+            return diagnosticResult(
+                    TelemetryDiagnosticBundleResult.Status.DISABLED,
+                    "error_event_telemetry_disabled"
+            );
+        }
         String validationFailure = validateDiagnosticBundle(bundle);
         if (validationFailure != null) {
             return diagnosticResult(TelemetryDiagnosticBundleResult.Status.REJECTED, validationFailure);
@@ -297,6 +308,10 @@ public final class TelemetryCoreEngine {
                 && isBlank(disposition.fingerprint())) {
             return "diagnostic_fingerprint_missing";
         }
+        String attributeFailure = validateDiagnosticAttributes(bundle.attributes());
+        if (attributeFailure != null) {
+            return attributeFailure;
+        }
         if (bundle.attachments().size() > MAX_DIAGNOSTIC_ATTACHMENTS) {
             return "diagnostic_attachment_count_exceeded";
         }
@@ -305,6 +320,48 @@ public final class TelemetryCoreEngine {
             if (failure != null) return failure;
         }
         return null;
+    }
+
+    @Nullable
+    private static String validateDiagnosticAttributes(
+            @Nonnull Map<String, Object> attributes
+    ) {
+        if (attributes.size() > MAX_DIAGNOSTIC_ATTRIBUTES) {
+            return "diagnostic_attribute_count_exceeded";
+        }
+        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+            if (!safeIdentifier(entry.getKey())) {
+                return "diagnostic_attribute_key_invalid";
+            }
+            Object value = entry.getValue();
+            if (value instanceof CharSequence text) {
+                if (text.length() > MAX_DIAGNOSTIC_ATTRIBUTE_VALUE_LENGTH) {
+                    return "diagnostic_attribute_value_too_long";
+                }
+            } else if (!safeDiagnosticNumber(value)
+                    && !(value instanceof Boolean)) {
+                return "diagnostic_attribute_value_invalid";
+            }
+        }
+        return null;
+    }
+
+    private static boolean safeDiagnosticNumber(@Nullable Object value) {
+        if (value instanceof Byte || value instanceof Short
+                || value instanceof Integer || value instanceof Long) {
+            return true;
+        }
+        if (value instanceof Float number) {
+            return Float.isFinite(number);
+        }
+        if (value instanceof Double number) {
+            return Double.isFinite(number);
+        }
+        if (value instanceof BigInteger || value instanceof BigDecimal) {
+            return value.toString().length()
+                    <= MAX_DIAGNOSTIC_ATTRIBUTE_NUMBER_LENGTH;
+        }
+        return false;
     }
 
     @Nullable

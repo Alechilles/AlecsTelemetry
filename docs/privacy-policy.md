@@ -184,9 +184,9 @@ consent, allowlist, sampling, and destination gates.
 
 ### Automatic Diagnostic Bundles
 
-When event telemetry is enabled, a mod can submit a bounded diagnostic bundle
-for a technical failure. The producing mod controls when capture occurs and what
-the attachments contain. A bundle can include:
+When project telemetry and Error events consent are enabled, a mod can submit a
+bounded diagnostic bundle for a technical failure. The producing mod controls
+when capture occurs and what the attachments contain. A bundle can include:
 
 - project and plugin identity, plugin version, diagnostic ID, timestamp, source,
   kind, severity, title, and summary

@@ -55,7 +55,7 @@ defaults, runtime overrides, sampling, or descriptor allowlists.
 Use `submitDiagnosticBundle` when a mod detects a technical failure and owns a
 safe, bounded evidence package. Diagnostic bundles use event telemetry. They do
 not open the manual report UI and do not include player contact or follow-up
-fields.
+fields. Project telemetry and Error events consent must both be enabled.
 
 ```java
 TelemetryDiagnosticAttachment attachment = TelemetryDiagnosticAttachment.binary(
