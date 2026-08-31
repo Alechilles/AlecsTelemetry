@@ -16,11 +16,33 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                                         @Nullable CaptureOverride capture,
                                         @Nullable String destinationMode,
                                         @Nullable EventsOverride events,
+                                        @Nullable DiagnosticsOverride diagnostics,
                                         @Nullable PerformanceOverride performance,
                                         @Nullable UsageOverride usage,
                                         @Nullable StatsOverride stats,
                                         @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
                                         @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
+
+    public TelemetryProjectOverride(@Nullable Boolean enabled,
+                                    @Nullable CaptureOverride capture,
+                                    @Nullable String destinationMode,
+                                    @Nullable EventsOverride events,
+                                    @Nullable PerformanceOverride performance,
+                                    @Nullable UsageOverride usage,
+                                    @Nullable StatsOverride stats,
+                                    @Nonnull TelemetryProjectDescriptor.HostedDestination hosted,
+                                    @Nonnull TelemetryProjectDescriptor.CustomEndpoint customEndpoint) {
+        this(enabled,
+                capture,
+                destinationMode,
+                events,
+                null,
+                performance,
+                usage,
+                stats,
+                hosted,
+                customEndpoint);
+    }
 
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
@@ -46,6 +68,9 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                         safe.events.lifecycle == null ? null : new EventTypeOverride(safe.events.lifecycle.enabled),
                         safe.events.breadcrumbs == null ? null : new BreadcrumbsOverride(safe.events.breadcrumbs.enabled)
                 ),
+                safe.diagnostics == null
+                        ? null
+                        : new DiagnosticsOverride(safe.diagnostics.enabled),
                 safe.performance == null
                         ? null
                         : new PerformanceOverride(
@@ -84,6 +109,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
                 || capture != null && capture.hasAnyValue()
                 || destinationMode != null
                 || events != null && events.hasAnyValue()
+                || diagnostics != null && diagnostics.enabled() != null
                 || performance != null
                 || usage != null
                 || stats != null
@@ -161,6 +187,7 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
         private CaptureDocument capture;
         private String destinationMode;
         private EventsDocument events;
+        private DiagnosticsDocument diagnostics;
         private PerformanceDocument performance;
         private UsageDocument usage;
         private StatsDocument stats;
@@ -186,6 +213,10 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     }
 
     private static final class BreadcrumbsDocument {
+        private Boolean enabled;
+    }
+
+    private static final class DiagnosticsDocument {
         private Boolean enabled;
     }
 
@@ -244,6 +275,9 @@ public record TelemetryProjectOverride(@Nullable Boolean enabled,
     }
 
     public record BreadcrumbsOverride(@Nullable Boolean enabled) {
+    }
+
+    public record DiagnosticsOverride(@Nullable Boolean enabled) {
     }
 
     private static final class HostedDocument {

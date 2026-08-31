@@ -13,6 +13,7 @@ public final class TelemetryConsentCapabilities {
     private static final List<String> CATEGORY_ORDER = List.of(
             "crash",
             "error",
+            "diagnostics",
             "lifecycle",
             "performance",
             "usage",
@@ -29,6 +30,7 @@ public final class TelemetryConsentCapabilities {
                 true,
                 project.descriptor().capture().supportsAnySource(),
                 project.descriptor().events().errors().supported(),
+                project.descriptor().diagnostics().supported(),
                 project.descriptor().events().lifecycle().supported(),
                 project.descriptor().performance().supported(),
                 project.descriptor().usage().supported(),

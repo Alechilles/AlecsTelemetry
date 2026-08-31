@@ -6,6 +6,7 @@ package com.alechilles.alecstelemetry.consent;
 public enum TelemetryConsentCategory {
     CRASH("crash"),
     ERROR("error"),
+    DIAGNOSTICS("diagnostics"),
     LIFECYCLE("lifecycle"),
     PERFORMANCE("performance"),
     USAGE("usage"),

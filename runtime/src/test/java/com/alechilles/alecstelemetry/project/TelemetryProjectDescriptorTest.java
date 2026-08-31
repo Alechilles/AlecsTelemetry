@@ -185,6 +185,74 @@ class TelemetryProjectDescriptorTest {
     }
 
     @Test
+    void parsesDiagnosticsDefaultsWithoutCouplingThemToErrors() {
+        TelemetryProjectDescriptor enabled = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "diag-on",
+                  "displayName": "Diag On",
+                  "telemetry": {
+                    "diagnostics": {
+                      "supported": true,
+                      "defaultEnabled": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectDescriptor defaultOff = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "diag-off",
+                  "displayName": "Diag Off",
+                  "telemetry": {
+                    "diagnostics": {
+                      "supported": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectDescriptor omitted = TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"none\",\"displayName\":\"None\"}",
+                null
+        );
+
+        assertTrue(enabled.diagnostics().supported());
+        assertTrue(enabled.diagnostics().enabled());
+        assertTrue(defaultOff.diagnostics().supported());
+        assertFalse(defaultOff.diagnostics().enabled());
+        assertFalse(omitted.diagnostics().supported());
+        assertFalse(omitted.diagnostics().enabled());
+
+        TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(defaultOff.toJson(), null);
+        assertTrue(roundTripped.diagnostics().supported());
+        assertFalse(roundTripped.diagnostics().enabled());
+    }
+
+    @Test
+    void parsesLegacyTopLevelDiagnosticsSection() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "legacy-diagnostics",
+                  "displayName": "Legacy Diagnostics",
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.diagnostics().supported());
+        assertTrue(descriptor.diagnostics().enabled());
+    }
+
+    @Test
     void acceptsLegacyEnabledAsDefaultEnabledAlias() {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
                 """

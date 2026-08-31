@@ -28,6 +28,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                                          @Nonnull List<String> packagePrefixes,
                                          @Nonnull CaptureOptions capture,
                                          @Nonnull EventOptions events,
+                                         @Nonnull DiagnosticOptions diagnostics,
                                          @Nonnull PerformanceOptions performance,
                                          @Nonnull UsageOptions usage,
                                          @Nonnull StatsOptions stats,
@@ -62,6 +63,44 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 packagePrefixes,
                 capture,
                 events,
+                new DiagnosticOptions(false, false),
+                performance,
+                usage,
+                stats,
+                ui,
+                reports,
+                defaults,
+                hosted,
+                customEndpoint);
+    }
+
+    public TelemetryProjectDescriptor(int schemaVersion,
+                                      @Nonnull String projectId,
+                                      @Nullable String projectVersion,
+                                      @Nonnull String displayName,
+                                      @Nonnull String runtimeMode,
+                                      @Nonnull List<String> ownerPluginIdentifiers,
+                                      @Nonnull List<String> packagePrefixes,
+                                      @Nonnull CaptureOptions capture,
+                                      @Nonnull EventOptions events,
+                                      @Nonnull PerformanceOptions performance,
+                                      @Nonnull UsageOptions usage,
+                                      @Nonnull StatsOptions stats,
+                                      @Nonnull UiOptions ui,
+                                      @Nonnull ManualReportOptions reports,
+                                      @Nonnull Defaults defaults,
+                                      @Nonnull HostedDestination hosted,
+                                      @Nonnull CustomEndpoint customEndpoint) {
+        this(schemaVersion,
+                projectId,
+                projectVersion,
+                displayName,
+                runtimeMode,
+                ownerPluginIdentifiers,
+                packagePrefixes,
+                capture,
+                events,
+                new DiagnosticOptions(false, false),
                 performance,
                 usage,
                 stats,
@@ -110,6 +149,21 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 boolOrDefault(captureDocument.setupFailures, false),
                 boolOrDefault(captureDocument.startFailures, false),
                 boolOrDefault(captureDocument.exceptionalWorldRemovals, false)
+        );
+
+        DiagnosticDocument diagnosticsDocument = choose(
+                safe.telemetry == null ? null : safe.telemetry.diagnostics,
+                safe.diagnostics
+        );
+        boolean diagnosticsSupported = categorySupported(
+                diagnosticsDocument,
+                diagnosticsDocument == null ? null : diagnosticsDocument.supported
+        );
+        DiagnosticOptions diagnostics = diagnosticsDocument == null
+                ? new DiagnosticOptions(false, false)
+                : new DiagnosticOptions(
+                diagnosticsSupported,
+                diagnosticDefaultEnabled(diagnosticsSupported, diagnosticsDocument.defaultEnabled)
         );
 
         String destinationMode = normalizeMode(
@@ -198,6 +252,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 packagePrefixes,
                 capture,
                 events,
+                diagnostics,
                 performance,
                 usage,
                 stats,
@@ -231,6 +286,10 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                         "defaultEnabled", events.breadcrumbs().enabled(),
                         "automatic", events.breadcrumbs().automatic()
                 )
+        ),
+                "diagnostics", Map.of(
+                "supported", diagnostics.supported(),
+                "defaultEnabled", diagnostics.enabled()
         ),
                 "performance", Map.of(
                 "supported", performance.supported(),
@@ -302,6 +361,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
                 packagePrefixes,
                 new CaptureOptions(false, false, false, false, false, false),
                 EventOptions.defaults(),
+                new DiagnosticOptions(false, false),
                 new PerformanceOptions(false, false, 1.0d, 100, Map.of()),
                 new UsageOptions(false, false, List.of(), Map.of()),
                 stats,
@@ -445,6 +505,11 @@ public record TelemetryProjectDescriptor(int schemaVersion,
             return defaultEnabled;
         }
         return boolOrDefault(legacyEnabled, true);
+    }
+
+    private static boolean diagnosticDefaultEnabled(boolean supported,
+                                                    @Nullable Boolean defaultEnabled) {
+        return supported && boolOrDefault(defaultEnabled, false);
     }
 
     @Nullable
@@ -923,6 +988,12 @@ public record TelemetryProjectDescriptor(int schemaVersion,
     }
 
     /**
+     * Automatic diagnostic bundle defaults for one project.
+     */
+    public record DiagnosticOptions(boolean supported, boolean enabled) {
+    }
+
+    /**
      * Explicit controls for generic telemetry events.
      */
     public record EventOptions(@Nonnull EventTypeOptions errors,
@@ -1176,6 +1247,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private List<String> packagePrefixes;
         private TelemetryDocument telemetry;
         private CaptureDocument capture;
+        private DiagnosticDocument diagnostics;
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
@@ -1189,6 +1261,7 @@ public record TelemetryProjectDescriptor(int schemaVersion,
 
     private static final class TelemetryDocument {
         private CaptureDocument crash;
+        private DiagnosticDocument diagnostics;
         private EventsDocument events;
         private PerformanceDocument performance;
         private UsageDocument usage;
@@ -1204,6 +1277,11 @@ public record TelemetryProjectDescriptor(int schemaVersion,
         private Boolean setupFailures;
         private Boolean startFailures;
         private Boolean exceptionalWorldRemovals;
+    }
+
+    private static final class DiagnosticDocument {
+        private Boolean supported;
+        private Boolean defaultEnabled;
     }
 
     private static final class DefaultsDocument {

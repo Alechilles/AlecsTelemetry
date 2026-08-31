@@ -244,6 +244,73 @@ class TelemetryProjectRegistrationTest {
     }
 
     @Test
+    void diagnosticsConsentIsIndependentAndOrderedAfterErrors() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "independent-consent",
+                  "displayName": "Independent Consent",
+                  "events": {
+                    "errors": { "supported": true, "defaultEnabled": false }
+                  },
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """,
+                null
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Independent Consent",
+                "1.0.0",
+                null
+        );
+
+        TelemetryConsentSnapshot snapshot = registration.consentSnapshot();
+
+        assertFalse(snapshot.errorEnabled());
+        assertTrue(snapshot.diagnosticsEnabled());
+        assertEquals(List.of("error", "diagnostics"),
+                TelemetryConsentCapabilities.supportedCategoryNames(registration));
+    }
+
+    @Test
+    void diagnosticsOverrideChangesOnlyDiagnosticsConsent() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "override-consent",
+                  "displayName": "Override Consent",
+                  "events": {
+                    "errors": { "supported": true, "defaultEnabled": true }
+                  },
+                  "diagnostics": { "supported": true, "defaultEnabled": false }
+                }
+                """,
+                null
+        );
+        TelemetryProjectOverride override = TelemetryProjectOverride.fromJson(
+                """
+                {
+                  "events": { "errors": { "enabled": false } },
+                  "diagnostics": { "enabled": true }
+                }
+                """
+        );
+        TelemetryProjectRegistration registration = new TelemetryProjectRegistration(
+                descriptor,
+                "Example:Override Consent",
+                "1.0.0",
+                null,
+                override
+        );
+
+        TelemetryConsentSnapshot snapshot = registration.consentSnapshot();
+
+        assertFalse(snapshot.errorEnabled());
+        assertTrue(snapshot.diagnosticsEnabled());
+    }
+
+    @Test
     void passiveDescriptorUsesLogicalVersionAndMasksExecutableCategories() {
         TelemetryProjectDescriptor declared = TelemetryProjectDescriptor.fromJson(
                 """

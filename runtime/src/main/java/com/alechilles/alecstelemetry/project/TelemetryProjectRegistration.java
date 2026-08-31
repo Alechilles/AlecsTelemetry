@@ -174,11 +174,25 @@ public record TelemetryProjectRegistration(@Nonnull TelemetryProjectDescriptor d
                 isEnabled(),
                 isCrashTelemetryEnabled(),
                 events().errors().enabled(),
+                diagnostics().enabled(),
                 events().lifecycle().enabled(),
                 performance().enabled(),
                 usage().enabled(),
                 stats().enabled(),
                 events().breadcrumbs().enabled()
+        );
+    }
+
+    @Nonnull
+    public TelemetryProjectDescriptor.DiagnosticOptions diagnostics() {
+        if (override == null || override.diagnostics() == null) {
+            return descriptor.diagnostics();
+        }
+        TelemetryProjectDescriptor.DiagnosticOptions defaults = descriptor.diagnostics();
+        Boolean enabled = override.diagnostics().enabled();
+        return new TelemetryProjectDescriptor.DiagnosticOptions(
+                defaults.supported(),
+                enabled == null ? defaults.enabled() : enabled
         );
     }
 
