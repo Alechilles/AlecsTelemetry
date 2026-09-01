@@ -43,14 +43,17 @@ class TelemetryConsentAssetPackTest {
         assertTrue(consentPage.contains("#TelemetryConsentProjectIconPlaceholder"));
         assertTrue(consentPage.contains("#TelemetryConsentGridHeader"));
         assertTrue(consentPage.contains("#TelemetryConsentCaptureAllEnabled"));
+        assertTrue(consentPage.contains("#TelemetryConsentDiagnosticsAllEnabled"));
         assertTrue(consentPage.contains("#TelemetryConsentStatsAllEnabled"));
         assertTrue(consentPage.contains("#TelemetryConsentBreadcrumbsAllEnabled"));
         assertTrue(consentPage.contains("@TelemetryConsentUnsupportedCellLabel"));
         assertTrue(consentPage.contains("#TelemetryConsentCaptureUnsupported"));
         assertTrue(consentPage.contains("#TelemetryConsentCaptureAllUnsupported"));
         assertTrue(consentPage.contains("TooltipText: \"Crash reports, uncaught exceptions"));
+        assertTrue(consentPage.contains("Text: \"Diag\""));
+        assertTrue(consentPage.contains("TooltipText: \"Automatic diagnostic bundles with technical metadata and optional redacted attachments.\""));
         assertTrue(consentPage.contains("TextTooltipStyle: @TelemetryConsentHintStyle"));
-        assertTrue(consentPage.contains("Anchor: (Left: 0, Width: 728, Height: 64)"));
+        assertTrue(consentPage.contains("Anchor: (Left: 0, Width: 783, Height: 64)"));
         assertTrue(consentPage.contains("Background: #28415f"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentAllToggleButton"));
         assertTrue(consentPage.contains("TextButton #TelemetryConsentUsageAllToggleButton"));
@@ -65,6 +68,7 @@ class TelemetryConsentAssetPackTest {
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentProjectEnabled"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentCaptureAllEnabled"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentCaptureEnabled"));
+        assertTrue(consentPage.contains("CheckBox #TelemetryConsentDiagnosticsEnabled"));
         assertTrue(!consentPage.contains("TelemetryConsentCrash"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentStatsEnabled"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled"));
@@ -86,12 +90,14 @@ class TelemetryConsentAssetPackTest {
         assertTrue(viewportDefinition.contains("LayoutMode: TopScrolling"));
         assertTrue(viewportDefinition.contains("KeepScrollPosition: true"));
         assertTrue(viewportDefinition.contains("ScrollbarStyle: $C.@DefaultScrollbarStyle"));
-        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentGridHeader {\n          Anchor: (Left: 0, Width: 728, Height: 64);"));
-        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentRows {\n            LayoutMode: Top;\n            Anchor: (Width: 728, Bottom: 0);"));
+        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentGridHeader {\n          Anchor: (Left: 0, Width: 783, Height: 64);"));
+        assertTrue(normalizedConsentPage.contains("Group #TelemetryConsentRows {\n            LayoutMode: Top;\n            Anchor: (Width: 783, Bottom: 0);"));
         assertTrue(consentPage.contains("Anchor: (Left: 8, Width: 280, Top: 5, Height: 24);"));
         assertTrue(consentPage.contains("Anchor: (Left: 288, Width: 55, Top: 5, Height: 24);"));
-        assertTrue(consentPage.contains("Anchor: (Left: 673, Width: 55, Top: 5, Height: 24);"));
-        assertTrue(consentPage.contains("Anchor: (Top: 34, Left: 689, Width: 22, Height: 22);"));
+        assertTrue(consentPage.contains("Anchor: (Left: 453, Width: 55, Top: 5, Height: 24);"));
+        assertTrue(consentPage.contains("Anchor: (Left: 728, Width: 55, Top: 5, Height: 24);"));
+        assertTrue(consentPage.contains("Anchor: (Top: 34, Left: 744, Width: 22, Height: 22);"));
+        assertTrue(consentPage.contains("Anchor: (Width: 783, Bottom: 0);"));
         assertTrue(!consentPage.contains("Anchor: (Width: 740, Height: 56)"));
         assertFalse(consentPage.contains("Left: 685"));
         assertFalse(consentPage.contains("Left: 701"));
@@ -108,12 +114,19 @@ class TelemetryConsentAssetPackTest {
         assertEquals("show_privacy_disclaimer", TelemetryConsentUiContract.ACTION_SHOW_PRIVACY_DISCLAIMER);
         assertEquals("hide_privacy_disclaimer", TelemetryConsentUiContract.ACTION_HIDE_PRIVACY_DISCLAIMER);
         assertEquals("Capture", TelemetryConsentUiContract.selectorToken("crash"));
+        assertEquals("Diagnostics", TelemetryConsentUiContract.selectorToken("diagnostics"));
         assertEquals("#TelemetryConsentCaptureAllToggleButton", TelemetryConsentUiContract.globalCategoryToggleSelector("crash"));
         assertEquals("#TelemetryConsentCaptureAllEnabled", TelemetryConsentUiContract.globalCategoryCheckSelector("crash"));
+        assertEquals("#TelemetryConsentDiagnosticsAllToggleButton", TelemetryConsentUiContract.globalCategoryToggleSelector("diagnostics"));
+        assertEquals("#TelemetryConsentDiagnosticsAllEnabled", TelemetryConsentUiContract.globalCategoryCheckSelector("diagnostics"));
         assertEquals("#TelemetryConsentRows[0] #TelemetryConsentCaptureToggleButton",
                 TelemetryConsentUiContract.categoryToggleSelector(0, "crash"));
         assertEquals("#TelemetryConsentRows[0] #TelemetryConsentCaptureEnabled",
                 TelemetryConsentUiContract.categoryCheckSelector(0, "crash"));
+        assertEquals("#TelemetryConsentRows[0] #TelemetryConsentDiagnosticsToggleButton",
+                TelemetryConsentUiContract.categoryToggleSelector(0, "diagnostics"));
+        assertEquals("#TelemetryConsentRows[0] #TelemetryConsentDiagnosticsEnabled",
+                TelemetryConsentUiContract.categoryCheckSelector(0, "diagnostics"));
     }
 
     private String resourceText(String path) throws IOException {

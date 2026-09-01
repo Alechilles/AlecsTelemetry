@@ -14,6 +14,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TelemetryConsentPageRenderingTest {
 
     @Test
+    void rendersAndBindsDiagnosticsCategory() {
+        TelemetryConsentSnapshot consent = new TelemetryConsentSnapshot(
+                true, true, true, true, true, true, true, true, true
+        );
+        TelemetryConsentViewModel.ProjectRow project = new TelemetryConsentViewModel.ProjectRow(
+                "diagnostics-project",
+                "Diagnostics Project",
+                false,
+                "hosted",
+                0,
+                "Example:diagnostics-project",
+                "1.0.0",
+                null,
+                null,
+                "embedded",
+                consent,
+                consent
+        );
+        UICommandBuilder commands = new UICommandBuilder();
+        UIEventBuilder events = new UIEventBuilder();
+
+        TelemetryConsentPage.renderProjectRows(commands, events, List.of(project));
+
+        String diagnosticsSelector = "#TelemetryConsentRows[0] #TelemetryConsentDiagnosticsEnabled";
+        String diagnosticsToggleSelector = "#TelemetryConsentRows[0] #TelemetryConsentDiagnosticsToggleButton";
+        assertTrue(java.util.Arrays.stream(commands.getCommands())
+                .anyMatch(command -> (diagnosticsSelector + ".Value").equals(command.selector)));
+        assertTrue(java.util.Arrays.stream(events.getEvents())
+                .anyMatch(event -> diagnosticsSelector.equals(event.selector)
+                        && event.data != null
+                        && event.data.contains("diagnostics")));
+        assertTrue(java.util.Arrays.stream(events.getEvents())
+                .anyMatch(event -> diagnosticsToggleSelector.equals(event.selector)
+                        && event.data != null
+                        && event.data.contains("diagnostics")));
+    }
+
+    @Test
     void rendersAndBindsProjectsBeyondTheFormerEightRowLimit() {
         List<TelemetryConsentViewModel.ProjectRow> projects = new ArrayList<>();
         for (int index = 0; index < 11; index++) {

@@ -50,6 +50,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     private static final String[] CATEGORIES = {
             "crash",
             "error",
+            "diagnostics",
             "lifecycle",
             "performance",
             "usage",
@@ -298,6 +299,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                     enabled,
                     enabled && supported.crashEnabled(),
                     enabled && supported.errorEnabled(),
+                    enabled && supported.diagnosticsEnabled(),
                     enabled && supported.lifecycleEnabled(),
                     enabled && supported.performanceEnabled(),
                     enabled && supported.usageEnabled(),
@@ -319,6 +321,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                         enabled,
                         current.crashEnabled(),
                         current.errorEnabled(),
+                        current.diagnosticsEnabled(),
                         current.lifecycleEnabled(),
                         current.performanceEnabled(),
                         current.usageEnabled(),
@@ -370,6 +373,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 project.enabled(),
                 project.crashEnabled(),
                 project.errorEnabled(),
+                project.diagnosticsEnabled(),
                 project.lifecycleEnabled(),
                 project.performanceEnabled(),
                 project.usageEnabled(),
@@ -385,6 +389,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             return consent.projectEnabled()
                     && (!supported.crashEnabled() || consent.crashEnabled())
                     && (!supported.errorEnabled() || consent.errorEnabled())
+                    && (!supported.diagnosticsEnabled() || consent.diagnosticsEnabled())
                     && (!supported.lifecycleEnabled() || consent.lifecycleEnabled())
                     && (!supported.performanceEnabled() || consent.performanceEnabled())
                     && (!supported.usageEnabled() || consent.usageEnabled())

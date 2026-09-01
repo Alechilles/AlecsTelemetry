@@ -26,6 +26,7 @@ public final class TelemetryConsentMetricReporter {
     private static final String[] CATEGORIES = {
             "crash",
             "error",
+            "diagnostics",
             "lifecycle",
             "performance",
             "usage",
