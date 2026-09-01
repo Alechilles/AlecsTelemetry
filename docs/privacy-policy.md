@@ -185,7 +185,7 @@ it does not load or instantiate an executable class named by that resource. The
 passive registration is Stats-only and can deliver one aggregate heartbeat per
 logical project when project and Stats consent, heartbeat allowlisting, and the
 configured destination all permit it. Declared crash, error, lifecycle,
-performance, usage, breadcrumbs, and manual-report categories remain masked
+performance, usage, diagnostics, breadcrumbs, and manual-report categories remain masked
 until matching executable integration registers them.
 
 Contribution ABI 1 and coordinator protocol 3 make this routing explicit. A

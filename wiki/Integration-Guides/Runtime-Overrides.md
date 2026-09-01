@@ -71,6 +71,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
     "lifecycle": { "enabled": false },
     "breadcrumbs": { "enabled": false }
   },
+  "diagnostics": { "enabled": false },
   "performance": { "enabled": false },
   "usage": { "enabled": false },
   "stats": { "enabled": false }
@@ -99,6 +100,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 - `events.breadcrumbs.enabled`
 - `events.errors.enabled`
 - `events.lifecycle.enabled`
+- `diagnostics.enabled`
 - `hosted.endpoint`
 - `hosted.eventEndpoint`
 - `hosted.projectKey`

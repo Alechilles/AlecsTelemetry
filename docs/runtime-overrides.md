@@ -70,6 +70,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
     "lifecycle": { "enabled": false },
     "breadcrumbs": { "enabled": false }
   },
+  "diagnostics": { "enabled": false },
   "performance": { "enabled": false },
   "usage": { "enabled": false },
   "stats": { "enabled": false }
@@ -145,6 +146,7 @@ contact fields, and disable resolution updates. Log attachments are clipped to
 - `events.breadcrumbs.enabled`
 - `events.errors.enabled`
 - `events.lifecycle.enabled`
+- `diagnostics.enabled`
 - `hosted.endpoint`
 - `hosted.eventEndpoint`
 - `hosted.projectKey`

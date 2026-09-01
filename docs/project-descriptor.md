@@ -24,7 +24,7 @@ embedded Alec's Telemetry runtime must still be present to discover and process
 it; without a runtime the resource is inert and the host continues normally.
 Passive discovery only exposes the standard Stats `heartbeat` capability. It
 does not execute contributor code or activate crash, error, lifecycle,
-performance, usage, breadcrumbs, or manual-report categories declared for a
+performance, usage, diagnostics, breadcrumbs, or manual-report categories declared for a
 future active integration.
 
 The passive form requires an explicit logical identity, build-stamped logical
