@@ -45,7 +45,7 @@ hytaleTools {
     modDescription = 'Beacon — The developer platform behind ModStats.io.'
     modUrl = 'https://beacon.modstats.io'
     modCredits = 'Alec (Alechilles)||https://www.curseforge.com/members/alechilles/projects'
-    mainClass = 'com.alechilles.alecstelemetry.AlecsTelemetry'
+    mainClass = 'com.alechilles.beacon.Beacon'
     includesPack = true
     bundleAssetEditorRuntime = false
 }

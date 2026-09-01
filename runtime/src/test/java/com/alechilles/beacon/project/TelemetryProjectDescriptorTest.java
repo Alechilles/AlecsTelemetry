@@ -1,0 +1,642 @@
+package com.alechilles.beacon.project;
+
+import com.alechilles.beacon.runtime.TelemetryRuntimeSettings;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+
+class TelemetryProjectDescriptorTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void parsesHostedDefaultsAndFallbacks() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "schemaVersion": 1,
+                  "packagePrefixes": ["com.example.telemetry"],
+                  "hosted": {
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                new TelemetryProjectDescriptor.Fallbacks(
+                        "example-mod",
+                        "Example Mod",
+                        "Example:Example Mod",
+                        java.util.List.of("com.example.telemetry")
+                )
+        );
+
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(tempDir.resolve("runtime.json"), null);
+        assertEquals("example-mod", descriptor.projectId());
+        assertEquals("Example Mod", descriptor.displayName());
+        assertEquals(TelemetryProjectDescriptor.RUNTIME_MODE_DEPENDENCY, descriptor.runtimeMode());
+        assertTrue(descriptor.isDependencyMode());
+        assertEquals("Example:Example Mod", descriptor.ownerPluginIdentifiers().getFirst());
+        assertEquals("com.example.telemetry", descriptor.packagePrefixes().getFirst());
+        assertEquals("hosted", descriptor.defaults().destinationMode());
+        assertNotNull(descriptor.resolveDeliveryTarget(settings));
+    }
+
+    @Test
+    void disablesAllTelemetryCategoriesWhenOmitted() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "schemaVersion": 1,
+                  "hosted": {
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                new TelemetryProjectDescriptor.Fallbacks(
+                        "example-mod",
+                        "Example Mod",
+                        "Example:Example Mod",
+                        java.util.List.of("com.example.telemetry")
+                )
+        );
+
+        assertFalse(descriptor.capture().uncaughtExceptions());
+        assertFalse(descriptor.capture().setupFailures());
+        assertFalse(descriptor.capture().startFailures());
+        assertFalse(descriptor.capture().exceptionalWorldRemovals());
+        assertFalse(descriptor.capture().capturesSource("uncaught_exception"));
+        assertFalse(descriptor.capture().supportsAnySource());
+        assertFalse(descriptor.capture().capturesSource("unknown_source"));
+        assertFalse(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertFalse(descriptor.events().lifecycle().supported());
+        assertFalse(descriptor.events().lifecycle().enabled());
+        assertFalse(descriptor.events().breadcrumbs().supported());
+        assertFalse(descriptor.events().breadcrumbs().enabled());
+        assertFalse(descriptor.events().breadcrumbs().automatic());
+        assertFalse(descriptor.performance().supported());
+        assertFalse(descriptor.performance().enabled());
+        assertFalse(descriptor.usage().supported());
+        assertFalse(descriptor.usage().enabled());
+        assertFalse(descriptor.stats().supported());
+        assertFalse(descriptor.stats().enabled());
+        assertFalse(descriptor.reports().supported());
+        assertFalse(descriptor.reports().enabled());
+    }
+
+    @Test
+    void presentTelemetrySectionsAreSupportedAndDefaultEnabledWhenUnspecified() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "partial-mod",
+                  "displayName": "Partial Mod",
+                  "capture": {},
+                  "events": {
+                    "errors": {
+                      "details": {
+                        "needs_seek_failed": {
+                          "allowedFields": {
+                            "reason": { "type": "string", "maxLength": 120 }
+                          }
+                        }
+                      }
+                    },
+                    "lifecycle": {},
+                    "breadcrumbs": {}
+                  }
+                }
+                """,
+                null
+        );
+
+        assertFalse(descriptor.capture().uncaughtExceptions());
+        assertFalse(descriptor.capture().setupFailures());
+        assertFalse(descriptor.capture().startFailures());
+        assertFalse(descriptor.capture().exceptionalWorldRemovals());
+        assertTrue(descriptor.capture().supported());
+        assertTrue(descriptor.capture().enabled());
+        assertFalse(descriptor.capture().supportsAnySource());
+        assertTrue(descriptor.events().errors().supported());
+        assertTrue(descriptor.events().errors().enabled());
+        assertTrue(descriptor.events().lifecycle().supported());
+        assertTrue(descriptor.events().lifecycle().enabled());
+        assertTrue(descriptor.events().breadcrumbs().supported());
+        assertTrue(descriptor.events().breadcrumbs().enabled());
+        assertFalse(descriptor.events().breadcrumbs().automatic());
+        assertEquals("missing_resource", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("reason", "missing_resource")
+        ).get("reason"));
+    }
+
+    @Test
+    void separatesSupportedCategoriesFromDefaultEnabledState() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "opt-in-mod",
+                  "displayName": "Opt In Mod",
+                  "telemetry": {
+                    "crash": {
+                      "supported": true,
+                      "defaultEnabled": false,
+                      "uncaughtExceptions": true,
+                      "setupFailures": true
+                    },
+                    "events": {
+                      "errors": {
+                        "supported": true,
+                        "defaultEnabled": false
+                      }
+                    },
+                    "stats": {
+                      "supported": true
+                    },
+                    "usage": {
+                      "supported": false,
+                      "defaultEnabled": true,
+                      "allowedEvents": ["settings_page_opened"]
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.capture().supported());
+        assertFalse(descriptor.capture().enabled());
+        assertTrue(descriptor.capture().supportsSource("uncaught_exception"));
+        assertFalse(descriptor.capture().capturesSource("uncaught_exception"));
+        assertTrue(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertTrue(descriptor.stats().supported());
+        assertTrue(descriptor.stats().enabled());
+        assertFalse(descriptor.usage().supported());
+        assertFalse(descriptor.usage().enabled());
+    }
+
+    @Test
+    void parsesDiagnosticsDefaultsWithoutCouplingThemToErrors() {
+        TelemetryProjectDescriptor enabled = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "diag-on",
+                  "displayName": "Diag On",
+                  "telemetry": {
+                    "diagnostics": {
+                      "supported": true,
+                      "defaultEnabled": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectDescriptor defaultOff = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "diag-off",
+                  "displayName": "Diag Off",
+                  "telemetry": {
+                    "diagnostics": {
+                      "supported": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+        TelemetryProjectDescriptor omitted = TelemetryProjectDescriptor.fromJson(
+                "{\"projectId\":\"none\",\"displayName\":\"None\"}",
+                null
+        );
+
+        assertTrue(enabled.diagnostics().supported());
+        assertTrue(enabled.diagnostics().enabled());
+        assertTrue(defaultOff.diagnostics().supported());
+        assertFalse(defaultOff.diagnostics().enabled());
+        assertFalse(omitted.diagnostics().supported());
+        assertFalse(omitted.diagnostics().enabled());
+
+        TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(defaultOff.toJson(), null);
+        assertTrue(roundTripped.diagnostics().supported());
+        assertFalse(roundTripped.diagnostics().enabled());
+    }
+
+    @Test
+    void parsesLegacyTopLevelDiagnosticsSection() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "legacy-diagnostics",
+                  "displayName": "Legacy Diagnostics",
+                  "diagnostics": {
+                    "supported": true,
+                    "defaultEnabled": true
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.diagnostics().supported());
+        assertTrue(descriptor.diagnostics().enabled());
+    }
+
+    @Test
+    void acceptsLegacyEnabledAsDefaultEnabledAlias() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "legacy-mod",
+                  "displayName": "Legacy Mod",
+                  "events": {
+                    "errors": { "enabled": false }
+                  },
+                  "stats": { "enabled": true }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.events().errors().supported());
+        assertFalse(descriptor.events().errors().enabled());
+        assertTrue(descriptor.stats().supported());
+        assertTrue(descriptor.stats().enabled());
+    }
+
+    @Test
+    void parsesCustomDestinationMode() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ownerPluginIdentifiers": ["Example:Custom Mod"],
+                  "packagePrefixes": ["com.example.custom"],
+                  "defaults": {
+                    "destinationMode": "custom"
+                  },
+                  "customEndpoint": {
+                    "url": "https://example.com/telemetry",
+                    "headers": {
+                      "Authorization": "Bearer token"
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertEquals("custom", descriptor.defaults().destinationMode());
+        assertEquals("https://example.com/telemetry", descriptor.customEndpoint().url());
+        assertEquals("Bearer token", descriptor.customEndpoint().headers().get("Authorization"));
+    }
+
+    @Test
+    void parsesPerformanceAndEventDestinationOptions() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ownerPluginIdentifiers": ["Example:Custom Mod"],
+                  "packagePrefixes": ["com.example.custom"],
+                  "performance": {
+                    "enabled": true,
+                    "sampleRate": 0.5,
+                    "thresholdMs": 250
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_page_opened", "reload_config_command_used"]
+                  },
+                  "hosted": {
+                    "projectKey": "public-key",
+                    "eventEndpoint": "https://example.com/ingest/event"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.performance().enabled());
+        assertEquals(0.5d, descriptor.performance().sampleRate());
+        assertEquals(250, descriptor.performance().thresholdMs());
+        assertTrue(descriptor.usage().enabled());
+        assertTrue(descriptor.usage().allows("settings_page_opened"));
+        assertEquals("https://example.com/ingest/event", descriptor.hosted().eventEndpoint());
+    }
+
+    @Test
+    void statsEnabledAllowsStandardHeartbeatWithoutCustomEvents() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "stats-mod",
+                  "displayName": "Stats Mod",
+                  "usage": {
+                    "enabled": false,
+                    "allowedEvents": ["settings_page_opened"]
+                  },
+                  "stats": {
+                    "enabled": true,
+                    "details": {
+                      "heartbeat": {
+                        "allowedFields": {
+                          "playersOnline": { "type": "number" },
+                          "hytaleVersion": { "type": "string", "maxLength": 24 }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.usage().enabled());
+        assertTrue(!descriptor.usage().allows("settings_page_opened"));
+        assertTrue(descriptor.stats().enabled());
+        assertTrue(descriptor.stats().allows("heartbeat"));
+        assertTrue(!descriptor.stats().allows("chart_sample"));
+        assertEquals(4, descriptor.stats().sanitizeDetails(
+                "heartbeat",
+                java.util.Map.of("playersOnline", 4, "hytaleVersion", "update-6", "ignored", true)
+        ).get("playersOnline"));
+        assertEquals("update-6", descriptor.stats().sanitizeDetails(
+                "heartbeat",
+                java.util.Map.of("hytaleVersion", "update-6")
+        ).get("hytaleVersion"));
+    }
+
+    @Test
+    void parsesUiIconTexturePath() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ui": {
+                    "iconTexturePath": "Tamework/Telemetry/TameworkConsentIcon.png"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertEquals("Tamework/Telemetry/TameworkConsentIcon.png", descriptor.ui().iconTexturePath());
+    }
+
+    @Test
+    void dropsUnsafeUiIconTexturePath() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "custom-mod",
+                  "displayName": "Custom Mod",
+                  "ui": {
+                    "iconTexturePath": "../icon-256.png"
+                  }
+                }
+                """,
+                null
+        );
+
+        assertNull(descriptor.ui().iconTexturePath());
+    }
+
+    @Test
+    void parsesExplicitEventControlsAndDetailAllowlists() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "context-mod",
+                  "displayName": "Context Mod",
+                  "events": {
+                    "errors": {
+                      "enabled": false,
+                      "details": {
+                        "needs_seek_failed": {
+                          "allowedFields": {
+                            "reason": { "type": "string", "maxLength": 120 },
+                            "resource": { "type": "enum", "values": ["food", "water", "unknown"] }
+                          }
+                        }
+                      }
+                    },
+                    "lifecycle": { "enabled": true },
+                    "breadcrumbs": { "enabled": true, "automatic": false }
+                  },
+                  "usage": {
+                    "enabled": true,
+                    "allowedEvents": ["settings_opened"],
+                    "details": {
+                      "settings_opened": {
+                        "allowedFields": {
+                          "source": { "type": "enum", "values": ["command", "settings_ui"] },
+                          "changedSettingCount": { "type": "number" },
+                          "configArea": { "type": "string", "maxLength": 24 }
+                        }
+                      }
+                    }
+                  },
+                  "performance": {
+                    "enabled": true,
+                    "details": {
+                      "reload_config_duration": {
+                        "allowedFields": {
+                          "configFileCount": { "type": "number" }
+                        }
+                      }
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.events().errors().enabled());
+        assertTrue(descriptor.events().lifecycle().enabled());
+        assertTrue(descriptor.events().breadcrumbs().enabled());
+        assertTrue(!descriptor.events().breadcrumbs().automatic());
+        assertEquals("no_water_target", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("reason", "no_water_target", "resource", "water", "ignored", "drop me")
+        ).get("reason"));
+        assertEquals("water", descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("resource", "water")
+        ).get("resource"));
+        assertTrue(descriptor.events().errors().sanitizeDetails(
+                "needs_seek_failed",
+                java.util.Map.of("resource", "lava")
+        ).isEmpty());
+        assertEquals("settings_ui", descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of(
+                        "source", "settings_ui",
+                        "changedSettingCount", 3,
+                        "configArea", "companions-and-too-long-for-max",
+                        "ignored", "drop me"
+                )
+        ).get("source"));
+        assertEquals(3, descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of("changedSettingCount", 3)
+        ).get("changedSettingCount"));
+        assertEquals("companions-and-too-long-", descriptor.usage().sanitizeDetails(
+                "settings_opened",
+                java.util.Map.of("configArea", "companions-and-too-long-for-max")
+        ).get("configArea"));
+        assertTrue(descriptor.usage().sanitizeDetails("settings_opened", java.util.Map.of("source", "unknown")).isEmpty());
+        assertEquals(7, descriptor.performance().sanitizeDetails(
+                "reload_config_duration",
+                java.util.Map.of("configFileCount", 7, "ignored", true)
+        ).get("configFileCount"));
+    }
+
+    @Test
+    void parsesManualReportSchema() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "report-mod",
+                  "displayName": "Report Mod",
+                  "reports": {
+                    "enabled": true,
+                    "issue": {
+                      "enabled": true,
+                      "fields": {
+                        "severity": {
+                          "type": "enum",
+                          "label": "Severity",
+                          "required": true,
+                          "values": ["minor", "moderate", "major", "blocking"]
+                        },
+                        "steps": {
+                          "type": "text",
+                          "label": "Steps to reproduce",
+                          "required": false,
+                          "maxLength": 2000
+                        }
+                      }
+                    },
+                    "suggestion": {
+                      "enabled": true,
+                      "fields": {
+                        "category": {
+                          "type": "enum",
+                          "label": "Category",
+                          "required": false,
+                          "values": ["balance", "content", "quality_of_life", "other"]
+                        }
+                      }
+                    },
+                    "attachments": {
+                      "currentServerLog": true,
+                      "previousServerLog": true,
+                      "maxBytes": 262144
+                    },
+                    "contact": {
+                      "enabled": true,
+                      "maxLength": 160
+                    },
+                    "resolutionUpdates": {
+                      "enabled": true
+                    }
+                  }
+                }
+                """,
+                null
+        );
+
+        assertTrue(descriptor.reports().enabled());
+        assertTrue(descriptor.reports().issue().enabled());
+        assertTrue(descriptor.reports().suggestion().enabled());
+        assertEquals("severity", descriptor.reports().issue().fields().getFirst().key());
+        assertEquals("enum", descriptor.reports().issue().fields().getFirst().type().key());
+        assertTrue(descriptor.reports().issue().fields().getFirst().required());
+        assertEquals("steps", descriptor.reports().issue().fields().get(1).key());
+        assertEquals("text", descriptor.reports().issue().fields().get(1).type().key());
+        assertEquals(2000, descriptor.reports().issue().fields().get(1).maxLength());
+        assertEquals("category", descriptor.reports().suggestion().fields().getFirst().key());
+        assertTrue(descriptor.reports().attachments().currentServerLog());
+        assertTrue(descriptor.reports().attachments().previousServerLog());
+        assertEquals(262144, descriptor.reports().attachments().maxBytes());
+        assertTrue(descriptor.reports().contact().enabled());
+        assertEquals(160, descriptor.reports().contact().maxLength());
+        assertTrue(descriptor.reports().resolutionUpdates().enabled());
+    }
+
+    @Test
+    void disablesManualReportsWhenOmitted() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "no-reports-mod",
+                  "displayName": "No Reports Mod"
+                }
+                """,
+                null
+        );
+
+        assertTrue(!descriptor.reports().enabled());
+        assertTrue(!descriptor.reports().issue().enabled());
+        assertTrue(!descriptor.reports().suggestion().enabled());
+        assertTrue(descriptor.reports().issue().fields().isEmpty());
+        assertTrue(descriptor.reports().suggestion().fields().isEmpty());
+    }
+
+    @Test
+    void parsesExplicitEmbeddedRuntimeMode() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "embedded-mod",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "hosted": {
+                    "projectKey": "public-key"
+                  }
+                }
+                """,
+                new TelemetryProjectDescriptor.Fallbacks(
+                        "embedded-mod",
+                        "Embedded Mod",
+                        "Example:Embedded Mod",
+                        List.of("com.example.embedded")
+                )
+        );
+
+        assertEquals(TelemetryProjectDescriptor.RUNTIME_MODE_EMBEDDED, descriptor.runtimeMode());
+        assertTrue(descriptor.isEmbeddedMode());
+    }
+
+    @Test
+    void parsesAndRoundTripsProjectVersion() {
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson(
+                """
+                {
+                  "projectId": "versioned-mod",
+                  "projectVersion": "1.4.0",
+                  "displayName": "Versioned Mod"
+                }
+                """,
+                null
+        );
+
+        assertEquals("1.4.0", descriptor.projectVersion());
+        TelemetryProjectDescriptor roundTripped = TelemetryProjectDescriptor.fromJson(descriptor.toJson(), null);
+        assertEquals("1.4.0", roundTripped.projectVersion());
+    }
+}

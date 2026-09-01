@@ -1,8 +1,8 @@
 package com.example.embedded;
 
-import com.alechilles.alecstelemetry.api.TelemetryEventContext;
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryBootstrap;
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
+import com.alechilles.beacon.api.TelemetryEventContext;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryBootstrap;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryService;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 

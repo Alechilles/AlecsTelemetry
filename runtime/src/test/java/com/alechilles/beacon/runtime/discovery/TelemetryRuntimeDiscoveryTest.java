@@ -1,0 +1,666 @@
+package com.alechilles.beacon.runtime.discovery;
+
+import com.alechilles.beacon.consent.TelemetryConsentStateStore;
+import com.alechilles.beacon.crash.CrashReportEnvelope;
+import com.alechilles.beacon.project.TelemetryProjectDescriptor;
+import com.alechilles.beacon.project.TelemetryProjectOverride;
+import com.alechilles.beacon.project.TelemetryProjectDiscovery;
+import com.alechilles.beacon.project.TelemetryProjectRegistration;
+import com.alechilles.beacon.runtime.TelemetryDataPaths;
+import com.alechilles.beacon.runtime.TelemetryProjectOverrideStore;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class TelemetryRuntimeDiscoveryTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void filtersDescriptorsToLoadedEnabledMods() {
+        List<TelemetryProjectRegistration> filtered = TelemetryRuntimeDiscovery.filterRegistrationsToLoadedMods(
+                List.of(
+                        registration("active-project", "Example:Active Mod", "Active Mod"),
+                        registration("inactive-project", "Example:Inactive Mod", "Inactive Mod")
+                ),
+                List.of(new CrashReportEnvelope.LoadedModMetadata("Example:Active Mod", "1.0.0"))
+        );
+
+        assertEquals(1, filtered.size());
+        assertEquals("active-project", filtered.getFirst().projectId());
+    }
+
+    @Test
+    void discoverActiveAppliesCentralOverrideToActiveProject() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Active Mod",
+                "Example",
+                "Active Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "active-project",
+                  "displayName": "Active Mod",
+                  "packagePrefixes": ["example.active"]
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("active-project"),
+                """
+                {
+                  "enabled": false
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Active Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.projects().size());
+        assertFalse(result.projects().getFirst().isEnabled());
+        assertFalse(result.consentProjects().getFirst().isEnabled());
+    }
+
+    @Test
+    void discoverActiveProtectsDiagnosticsWhenReviewedProjectGainsSupport() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Diagnostics Mod",
+                "Example",
+                "Diagnostics Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "diagnostics-project",
+                  "displayName": "Diagnostics Mod",
+                  "packagePrefixes": ["example.diagnostics"]
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        TelemetryProjectRegistration oldRegistration = registration(
+                "diagnostics-project",
+                "Example:Diagnostics Mod",
+                "Diagnostics Mod"
+        );
+        assertTrue(new TelemetryConsentStateStore(null).markReviewed(
+                dataPaths.consentStateFile(),
+                oldRegistration
+        ));
+
+        Files.writeString(
+                modsDirectory.resolve("Diagnostics Mod")
+                        .resolve("Server")
+                        .resolve("Telemetry")
+                        .resolve("project.json"),
+                """
+                {
+                  "projectId": "diagnostics-project",
+                  "displayName": "Diagnostics Mod",
+                  "packagePrefixes": ["example.diagnostics"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Diagnostics Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.projects().size());
+        assertFalse(result.projects().getFirst().diagnostics().enabled());
+        assertFalse(result.consentProjects().getFirst().diagnostics().enabled());
+        TelemetryProjectOverride savedOverride = new TelemetryProjectOverrideStore(null)
+                .load(dataPaths.projectOverrideFile("diagnostics-project"));
+        assertNotNull(savedOverride);
+        assertEquals(Boolean.FALSE, savedOverride.diagnostics().enabled());
+    }
+
+    @Test
+    void discoverActiveKeepsFreshDiagnosticsDefaultEnabled() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Fresh Diagnostics Mod",
+                "Example",
+                "Fresh Diagnostics Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "fresh-diagnostics-project",
+                  "displayName": "Fresh Diagnostics Mod",
+                  "packagePrefixes": ["example.freshdiagnostics"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Fresh Diagnostics Mod", "1.0.0")
+                ))
+        );
+
+        assertTrue(result.projects().getFirst().diagnostics().enabled());
+        assertTrue(result.consentProjects().getFirst().diagnostics().enabled());
+        assertFalse(Files.exists(dataPaths.projectOverrideFile("fresh-diagnostics-project")));
+    }
+
+    @Test
+    void discoverActiveProtectsDiagnosticsWhenConsentStateIsMalformed() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Malformed Consent Mod",
+                "Example",
+                "Malformed Consent Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "malformed-consent-project",
+                  "displayName": "Malformed Consent Mod",
+                  "packagePrefixes": ["example.malformedconsent"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.consentStateFile().getParent());
+        Files.writeString(dataPaths.consentStateFile(), "{ malformed consent state");
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Malformed Consent Mod", "1.0.0")
+                ))
+        );
+
+        assertFalse(result.projects().getFirst().diagnostics().enabled());
+        TelemetryProjectOverride savedOverride = new TelemetryProjectOverrideStore(null)
+                .load(dataPaths.projectOverrideFile("malformed-consent-project"));
+        assertNotNull(savedOverride);
+        assertEquals(Boolean.FALSE, savedOverride.diagnostics().enabled());
+    }
+
+    @Test
+    void discoverActiveRemovesUnsupportedCentralConsentOverrides() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Stats Mod",
+                "Example",
+                "Stats Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "stats-project",
+                  "displayName": "Stats Mod",
+                  "packagePrefixes": ["example.stats"],
+                  "telemetry": {
+                    "stats": {
+                      "supported": true
+                    }
+                  }
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("stats-project"),
+                """
+                {
+                  "enabled": true,
+                  "capture": {
+                    "uncaughtExceptions": false,
+                    "setupFailures": false,
+                    "startFailures": false,
+                    "exceptionalWorldRemovals": false
+                  },
+                  "events": {
+                    "errors": { "enabled": false },
+                    "lifecycle": { "enabled": false },
+                    "breadcrumbs": { "enabled": false }
+                  },
+                  "diagnostics": { "enabled": false },
+                  "performance": { "enabled": false },
+                  "usage": { "enabled": false },
+                  "stats": { "enabled": false }
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Stats Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.consentProjects().size());
+        assertFalse(result.consentProjects().getFirst().stats().enabled());
+        String cleaned = Files.readString(dataPaths.projectOverrideFile("stats-project"));
+        assertFalse(cleaned.contains("\"capture\""));
+        assertFalse(cleaned.contains("\"events\""));
+        assertFalse(cleaned.contains("\"diagnostics\""));
+        assertFalse(cleaned.contains("\"performance\""));
+        assertFalse(cleaned.contains("\"usage\""));
+        assertTrue(cleaned.contains("\"stats\""));
+    }
+
+    @Test
+    void discoverActiveFallsBackToEmbeddedOverrideWhenCentralOverrideIsAbsent() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Embedded Mod",
+                "Example",
+                "Embedded Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "embedded-project",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "packagePrefixes": ["example.embedded"]
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Path embeddedOverride = modsDirectory.resolve("Example_Embedded Mod")
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve("embedded-project.json");
+        Files.createDirectories(embeddedOverride.getParent());
+        Files.writeString(
+                embeddedOverride,
+                """
+                {
+                  "enabled": false
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.projects().size());
+        assertTrue(result.projects().getFirst().isEnabled());
+        assertEquals(1, result.consentProjects().size());
+        assertFalse(result.consentProjects().getFirst().isEnabled());
+    }
+
+    @Test
+    void centralOverrideTakesPrecedenceOverEmbeddedOverride() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Embedded Mod",
+                "Example",
+                "Embedded Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "embedded-project",
+                  "displayName": "Embedded Mod",
+                  "runtimeMode": "embedded",
+                  "packagePrefixes": ["example.embedded"]
+                }
+                """
+        );
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("embedded-project"),
+                """
+                {
+                  "enabled": false
+                }
+                """
+        );
+        Path embeddedOverride = modsDirectory.resolve("Example_Embedded Mod")
+                .resolve("Telemetry")
+                .resolve("Settings")
+                .resolve("projects")
+                .resolve("embedded-project.json");
+        Files.createDirectories(embeddedOverride.getParent());
+        Files.writeString(
+                embeddedOverride,
+                """
+                {
+                  "enabled": true
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Embedded Mod", "1.0.0")
+                ))
+        );
+
+        assertFalse(result.projects().getFirst().isEnabled());
+        assertFalse(result.consentProjects().getFirst().isEnabled());
+    }
+
+    @Test
+    void discoverActiveAggregatesCollisionWarnings() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "First Mod",
+                "Example",
+                "First Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "first-project",
+                  "displayName": "First Mod",
+                  "packagePrefixes": ["example.shared"]
+                }
+                """
+        );
+        writeModFolder(
+                modsDirectory,
+                "Second Mod",
+                "Example",
+                "Second Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "second-project",
+                  "displayName": "Second Mod",
+                  "packagePrefixes": ["example.shared.feature"]
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:First Mod", "1.0.0"),
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Second Mod", "1.0.0")
+                ))
+        );
+
+        assertEquals(1, result.collisions().size());
+        assertEquals(1, result.registrationWarnings().size());
+        assertTrue(result.registrationWarnings().getFirst().contains("first-project <-> second-project"));
+    }
+
+    @Test
+    void discoveryResultListsAreImmutable() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Active Mod",
+                "Example",
+                "Active Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "active-project",
+                  "displayName": "Active Mod",
+                  "packagePrefixes": ["example.active"]
+                }
+                """
+        );
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Active Mod", "1.0.0")
+                ))
+        );
+
+        assertThrows(UnsupportedOperationException.class, () -> result.projects().add(result.projects().getFirst()));
+        assertThrows(UnsupportedOperationException.class, () -> result.consentProjects().clear());
+        assertThrows(UnsupportedOperationException.class, () -> result.loadedMods().clear());
+        assertThrows(UnsupportedOperationException.class, () -> result.collisions().clear());
+        assertThrows(UnsupportedOperationException.class, () -> result.registrationWarnings().add("mutated"));
+    }
+
+    @Test
+    void discoverActiveCanUseDiscoveredLoadedModsAsFallbackSnapshot() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Discovered Mod",
+                "Example",
+                "Discovered Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "discovered-project",
+                  "displayName": "Discovered Mod",
+                  "packagePrefixes": ["example.discovered"]
+                }
+                """
+        );
+        TelemetryProjectDiscovery.DiscoveryResult discoveryResult = new TelemetryProjectDiscovery(null).discover(modsDirectory);
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null)
+                .discoverActive(dataPaths(modsDirectory), discoveryResult);
+
+        assertEquals(1, result.loadedMods().size());
+        assertEquals("Example:Discovered Mod", result.loadedMods().getFirst().identifier());
+        assertEquals(1, result.projects().size());
+        assertEquals("discovered-project", result.projects().getFirst().projectId());
+    }
+
+    @Test
+    void discoverActiveKeepsPassiveProjectWhenOnlyPhysicalHostIsLoaded() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "Tamework", "Example", "Tamework", "3.0.0");
+        TelemetryProjectDiscovery.DiscoveryResult discovered = new TelemetryProjectDiscovery(null)
+                .discover(modsDirectory);
+
+        TelemetryRuntimeDiscoveryResult active = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                discovered,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Tamework", "3.0.0")
+                ))
+        );
+
+        assertEquals(List.of("creditor"), active.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+    }
+
+    @Test
+    void preservesNonStatsCentralOverridesForPassiveProject() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "Tamework", "Example", "Tamework", "3.0.0");
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.projectSettingsDirectory());
+        Files.writeString(
+                dataPaths.projectOverrideFile("creditor"),
+                """
+                {
+                  "enabled": true,
+                  "capture": { "uncaughtExceptions": false },
+                  "events": { "errors": { "enabled": false } },
+                  "performance": { "enabled": false },
+                  "usage": { "enabled": false },
+                  "stats": { "enabled": false }
+                }
+                """
+        );
+
+        new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Tamework", "3.0.0")
+                ))
+        );
+
+        String persisted = Files.readString(dataPaths.projectOverrideFile("creditor"));
+        assertTrue(persisted.contains("\"capture\""));
+        assertTrue(persisted.contains("\"events\""));
+        assertTrue(persisted.contains("\"performance\""));
+        assertTrue(persisted.contains("\"usage\""));
+        assertTrue(persisted.contains("\"stats\""));
+    }
+
+    @Test
+    void electsLoadedLowerVersionWhenHigherVersionHostIsInactive() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writePassiveModFolder(modsDirectory, "High Host", "Example", "High Host", "3.0.0", "2.0.0");
+        writePassiveModFolder(modsDirectory, "Low Host", "Example", "Low Host", "3.0.0", "1.0.0");
+        TelemetryProjectDiscovery.DiscoveryResult discovered = new TelemetryProjectDiscovery(null)
+                .discover(modsDirectory);
+
+        TelemetryRuntimeDiscoveryResult active = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                discovered,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Low Host", "3.0.0")
+                ))
+        );
+
+        assertEquals(1, active.projects().size());
+        assertEquals("1.0.0", active.projects().getFirst().descriptor().projectVersion());
+        assertEquals("Example:Low Host", active.projects().getFirst().hostPluginIdentifier());
+    }
+
+    private TelemetryDataPaths dataPaths(Path modsDirectory) {
+        Path runtimeRoot = tempDir.resolve("runtime");
+        Path settingsRoot = runtimeRoot.resolve("Settings");
+        Path telemetryRoot = runtimeRoot.resolve("Telemetry");
+        return new TelemetryDataPaths(
+                runtimeRoot,
+                settingsRoot.resolve("runtime.json"),
+                settingsRoot.resolve("projects"),
+                telemetryRoot,
+                telemetryRoot.resolve("crash-reports"),
+                telemetryRoot.resolve("events"),
+                modsDirectory
+        );
+    }
+
+    private static void writeModFolder(Path modsDirectory,
+                                       String folderName,
+                                       String group,
+                                       String name,
+                                       String version,
+                                       String descriptorJson) throws Exception {
+        Path modFolder = modsDirectory.resolve(folderName);
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "%s",
+                  "Name": "%s",
+                  "Version": "%s",
+                  "Main": "example.%s.Mod"
+                }
+                """.formatted(group, name, version, slug(name))
+        );
+        Files.writeString(modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"), descriptorJson);
+    }
+
+    private static void writePassiveModFolder(Path modsDirectory,
+                                              String folderName,
+                                              String group,
+                                              String name,
+                                              String version) throws Exception {
+        writePassiveModFolder(modsDirectory, folderName, group, name, version, "1.4.0");
+    }
+
+    private static void writePassiveModFolder(Path modsDirectory,
+                                              String folderName,
+                                              String group,
+                                              String name,
+                                              String version,
+                                              String projectVersion) throws Exception {
+        Path modFolder = modsDirectory.resolve(folderName);
+        Files.createDirectories(modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "%s",
+                  "Name": "%s",
+                  "Version": "%s",
+                  "Main": "example.host.Host"
+                }
+                """.formatted(group, name, version)
+        );
+        Files.writeString(
+                modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects").resolve("creditor.json"),
+                """
+                {
+                  "schemaVersion": 1,
+                  "projectId": "creditor",
+                  "projectVersion": "%s",
+                  "displayName": "Creditor",
+                  "ownerPluginIdentifiers": ["Example:Library"],
+                  "telemetry": {
+                    "stats": {
+                      "supported": true,
+                      "allowedEvents": ["heartbeat"]
+                    }
+                  }
+                }
+                """.formatted(projectVersion)
+        );
+    }
+
+    private static TelemetryProjectRegistration registration(String projectId,
+                                                            String pluginIdentifier,
+                                                            String displayName) {
+        String descriptorJson = """
+                {
+                  "schemaVersion": 1,
+                  "projectId": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["%s"],
+                  "packagePrefixes": ["example.mod"]
+                }
+                """.formatted(projectId, displayName, pluginIdentifier);
+        return new TelemetryProjectRegistration(
+                TelemetryProjectDescriptor.fromJson(descriptorJson, null),
+                pluginIdentifier,
+                "1.0.0",
+                null
+        );
+    }
+
+    private static String slug(String value) {
+        return value.toLowerCase(java.util.Locale.ROOT).replace(" ", "");
+    }
+}
