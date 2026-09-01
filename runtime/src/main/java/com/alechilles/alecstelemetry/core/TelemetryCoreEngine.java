@@ -1342,7 +1342,7 @@ public final class TelemetryCoreEngine {
                         } else {
                             for (CrashReportStore.PendingReport pending : pendingReports) {
                                 attempted++;
-                                CrashReportClient.UploadResult uploadResult = client.upload(target, pending.payload());
+                                CrashReportClient.UploadResult uploadResult = uploadSafely(target, pending.payload());
                                 applyUploadHints(uploadResult);
                                 if (uploadResult.success()) {
                                     clearUploadRetryCooldown(target);
@@ -1372,7 +1372,7 @@ public final class TelemetryCoreEngine {
                         } else {
                             for (TelemetryEventStore.PendingEvent pending : pendingEvents) {
                                 attempted++;
-                                CrashReportClient.UploadResult uploadResult = client.upload(eventTarget, pending.payload());
+                                CrashReportClient.UploadResult uploadResult = uploadSafely(eventTarget, pending.payload());
                                 applyUploadHints(uploadResult);
                                 if (uploadResult.success()) {
                                     clearUploadRetryCooldown(eventTarget);
@@ -1405,7 +1405,7 @@ public final class TelemetryCoreEngine {
                             for (ManualReportStore.PendingReport pending : pendingReports) {
                                 attempted++;
                                 ManualReportEnvelope envelope = parseManualReport(pending.payload());
-                                CrashReportClient.UploadResult uploadResult = client.upload(reportTarget, pending.payload());
+                                CrashReportClient.UploadResult uploadResult = uploadSafely(reportTarget, pending.payload());
                                 applyUploadHints(uploadResult);
                                 if (uploadResult.success()) {
                                     clearUploadRetryCooldown(reportTarget);
@@ -1435,6 +1435,16 @@ public final class TelemetryCoreEngine {
             updateFlushStatus(reason, summary, ex.getMessage());
             logWarning("Crash telemetry flush pass failed.", ex);
             return summary;
+        }
+    }
+
+    @Nonnull
+    private CrashReportClient.UploadResult uploadSafely(@Nonnull CrashReportClient.DeliveryTarget target,
+                                                        @Nonnull String payload) {
+        try {
+            return client.upload(target, payload);
+        } catch (LinkageError | OutOfMemoryError ignored) {
+            return CrashReportClient.UploadResult.failure(0, "Upload failed due to a JVM error.");
         }
     }
 
