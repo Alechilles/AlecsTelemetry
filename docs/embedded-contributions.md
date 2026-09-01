@@ -66,8 +66,9 @@ registration reuses the existing consent row and destination. When a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 newly exposed categories stay disabled until an eligible operator reviews them
 through `/telemetry consent`; eligible operators are notified. Legacy reviewed
-records without that snapshot remain honored and cannot be compared
-retrospectively.
+records without that snapshot remain honored for older categories and cannot be
+compared retrospectively. If Diagnostics is currently supported, it is treated
+as newly supported, remains disabled, and requires Save and Close.
 
 ## Register a logical project
 

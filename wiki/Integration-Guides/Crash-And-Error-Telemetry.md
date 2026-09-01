@@ -50,7 +50,11 @@ Add this block for hosted crash capture, non-fatal error events, and breadcrumbs
 }
 ```
 
-Supported categories default on. Add `defaultEnabled: false` to any supported category that should be opt-in.
+Crash, error, and breadcrumb categories default on. Add `defaultEnabled: false`
+to any of those supported categories that should be opt-in. Automatic diagnostic
+bundles use the separate `diagnostics` category, shown as `Diag` in consent, and
+are off by default unless `defaultEnabled: true` is explicit. Error and
+Diagnostics consent choices are independent.
 
 ## Explicit Error Events
 

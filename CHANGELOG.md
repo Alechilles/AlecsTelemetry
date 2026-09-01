@@ -10,8 +10,11 @@
 ### Changed
 - Diagnostic bundles use the normal hosted event route and local event queue.
   They remain separate from player-written manual reports and review workflows.
-- Diagnostic bundles honor Error events consent and reject attributes that are
-  nested or exceed the bounded scalar limits.
+- Diagnostic bundles use the independent `diagnostics` consent category, shown
+  as `Diag`. Diagnostics is off by default unless a descriptor explicitly sets
+  `defaultEnabled: true`; Error events consent does not enable or disable it.
+  Bundles still reject attributes that are nested or exceed the bounded scalar
+  limits.
 
 ## 1.2.3 - Runtime Version Stamp Hotfix - 2026-08-30
 

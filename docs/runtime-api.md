@@ -55,7 +55,11 @@ defaults, runtime overrides, sampling, or descriptor allowlists.
 Use `submitDiagnosticBundle` when a mod detects a technical failure and owns a
 safe, bounded evidence package. Diagnostic bundles use event telemetry. They do
 not open the manual report UI and do not include player contact or follow-up
-fields. Project telemetry and Error events consent must both be enabled.
+fields. Project-level telemetry consent and the independent `diagnostics`
+category must both be enabled. Error events consent does not enable or disable
+diagnostic bundles. The consent UI shows Diagnostics as `Diag` with the tooltip
+"Automatic diagnostic bundles with technical metadata and optional redacted
+attachments."
 
 ```java
 TelemetryDiagnosticAttachment attachment = TelemetryDiagnosticAttachment.binary(
@@ -85,6 +89,10 @@ TelemetryDiagnosticBundleResult result = project.submitDiagnosticBundle(
 The producer owns capture policy, redaction, and attachment contents. The
 runtime validates the envelope and queues it through the normal event path.
 See [Diagnostic Bundles](diagnostic-bundles.md) for limits and privacy rules.
+
+Embedded runtimes bridge consent state across class loaders. An older bridge or
+a bridge payload with a missing `diagnosticsEnabled` field maps Diagnostics to
+`false`; bridge compatibility fails closed.
 
 ## Event Context
 

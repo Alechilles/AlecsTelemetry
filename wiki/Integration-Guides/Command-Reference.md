@@ -27,9 +27,17 @@ Use these to inspect runtime enablement, active coordinator ownership, registere
 /telemetry consent
 ```
 
-This opens the shared consent UI. It can change project-level enablement, crash capture, errors, lifecycle, performance, usage, anonymous public stats, and breadcrumbs.
+This opens the shared consent UI. It can change project-level enablement, crash
+capture, errors, automatic diagnostics (`Diag`), lifecycle, performance, usage,
+anonymous public stats, and breadcrumbs.
 
 The first-run notice uses the same consent runtime. Descriptor defaults provide the initial state until a server owner reviews or changes a project.
+
+Diagnostics is off by default unless a descriptor explicitly sets
+`telemetry.diagnostics.defaultEnabled` to `true`. Error events and Diagnostics
+are independent. A previously reviewed project, including a legacy reviewed
+record without a supported-category snapshot, keeps newly added Diagnostics
+disabled until an operator runs this command and selects Save and Close.
 
 ## Flush And Test
 

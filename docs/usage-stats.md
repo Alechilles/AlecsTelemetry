@@ -88,7 +88,9 @@ logical project rather than adding another heartbeat project. When a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 newly exposed categories remain disabled until an operator reviews them through
 `/telemetry consent`; eligible operators are notified. Legacy reviewed records
-without that snapshot remain honored and cannot be compared retrospectively.
+without that snapshot remain honored for older categories and cannot be compared
+retrospectively. If Diagnostics is currently supported, it is treated as newly
+supported, remains disabled, and requires Save and Close.
 
 Passive descriptors may select either the hosted destination or an author-
 selected custom endpoint. A custom destination receives the same standard

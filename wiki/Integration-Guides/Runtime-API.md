@@ -31,9 +31,25 @@ Embedded mods normally keep the `EmbeddedTelemetryService` returned by `Embedded
 
 ## Project Operations
 
-`TelemetryProjectHandle` exposes breadcrumbs, setup and start failure capture, error events, lifecycle events, performance timings, usage events, stats events, manual report UI opening, and project-scoped flush requests.
+`TelemetryProjectHandle` exposes breadcrumbs, setup and start failure capture,
+error events, diagnostic bundles, lifecycle events, performance timings, usage
+events, stats events, manual report UI opening, and project-scoped flush requests.
 
 The runtime ignores events that are disabled by project consent, descriptor defaults, runtime overrides, sampling, or descriptor allowlists.
+
+## Diagnostic Bundles
+
+Use `submitDiagnosticBundle(...)` for safe, bounded technical evidence. Project
+telemetry and the independent `diagnostics` category must be enabled. Error
+events consent does not enable or disable diagnostic bundles. The consent UI
+shows Diagnostics as `Diag` with the tooltip "Automatic diagnostic bundles with
+technical metadata and optional redacted attachments." The hosted payload,
+redaction, queue, size, retention, portal, and MCP rules are documented in the
+[canonical Diagnostic Bundles guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/diagnostic-bundles.md).
+
+Embedded runtime bridges fail closed for this category: an older bridge or a
+bridge payload with a missing `diagnosticsEnabled` field maps Diagnostics to
+`false`.
 
 ## Event Context
 

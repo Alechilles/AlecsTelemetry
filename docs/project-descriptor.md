@@ -64,8 +64,9 @@ descriptor. A matching contribution upgrades the existing passive row rather
 than creating a duplicate. When a persisted supported-category snapshot exists
 for the previously reviewed logical project, newly exposed categories remain
 disabled until an operator reviews them with `/telemetry consent`; eligible
-operators are notified. Legacy reviewed records without that snapshot remain
-honored and cannot be compared retrospectively.
+operators are notified. Legacy reviewed records without that snapshot keep their
+older category approvals, but newly supported Diagnostics remains disabled until
+an operator saves new consent choices.
 
 An embedded component that owns a separate logical project can use
 `EmbeddedTelemetryBootstrap.contribute(...)` instead of the conventional
@@ -103,9 +104,15 @@ Telemetry category descriptors separate capability from initial consent:
 
 - omitted category: unsupported and hidden from consent
 - `"supported": true`: the category is available and shown in consent
-- omitted `defaultEnabled`: defaults to `true` for supported categories
+- omitted `defaultEnabled`: defaults to `true` for supported categories other
+  than Diagnostics
 - `"defaultEnabled": false`: supported but initially off, so server owners can opt in
 - legacy descriptor `"enabled"` is still accepted as a compatibility alias for `defaultEnabled`, but new descriptors should use `defaultEnabled`
+- Diagnostics is the exception: it is initially off unless the descriptor
+  explicitly sets `"defaultEnabled": true`. Its key is `diagnostics`, and the
+  consent UI shows it as `Diag` with the tooltip "Automatic diagnostic bundles
+  with technical metadata and optional redacted attachments." The legacy
+  `"enabled"` alias does not enable Diagnostics.
 
 Runtime override files still use `enabled`; that is a saved consent state, not the packaged descriptor schema.
 
@@ -116,8 +123,37 @@ matching active contribution exposes new categories, and a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 those additions remain disabled until an operator saves reviewed choices.
 Eligible operators receive a permission-scoped chat reminder to run
-`/telemetry consent`. Legacy reviewed records without a snapshot remain honored
-and cannot be compared retrospectively.
+`/telemetry consent`. A legacy reviewed record without a snapshot keeps its
+older category approvals, but a currently supported Diagnostics category is
+disabled and due for review until the operator saves new choices.
+
+## Diagnostics Available But Off By Default
+
+Automatic diagnostic bundles use the independent `diagnostics` category. This
+descriptor makes the category available while keeping it off for a fresh or
+unreviewed project:
+
+```json
+{
+  "hosted": {
+    "projectKey": "your_public_project_key"
+  },
+  "telemetry": {
+    "diagnostics": {
+      "supported": true,
+      "defaultEnabled": false
+    }
+  }
+}
+```
+
+Set `"defaultEnabled": true` only when the producing mod wants Diagnostics on
+for a fresh or unreviewed project. Tamework uses that explicit value. Existing
+projects that already saved a consent review keep Diagnostics off when it is
+newly added. They must run `/telemetry consent` and select Save and Close before
+the category can send. This also applies to legacy reviewed records that do not
+have a supported-category snapshot. Error and Diagnostics are independent; one
+choice does not change the other.
 
 ## Stats-Only Example
 
@@ -188,6 +224,10 @@ and cannot be compared retrospectively.
       },
       "lifecycle": { "supported": true },
       "breadcrumbs": { "supported": true, "automatic": true }
+    },
+    "diagnostics": {
+      "supported": true,
+      "defaultEnabled": false
     },
     "performance": {
       "supported": true,
@@ -282,6 +322,11 @@ Events:
 - `events.breadcrumbs.defaultEnabled`
 - `events.breadcrumbs.automatic`
 
+Diagnostics:
+
+- `supported`
+- `defaultEnabled`
+
 Performance:
 
 - `supported`
@@ -312,6 +357,13 @@ Manual reports:
 - `attachments`
 - `contact`
 - `resolutionUpdates`
+
+For Diagnostics, `defaultEnabled` must be explicitly `true` to enable the
+category for a fresh or unreviewed project. Diagnostics is independent from
+`events.errors`. A previously reviewed project keeps Diagnostics disabled when
+the category is newly added until an operator runs `/telemetry consent` and
+selects Save and Close. This rule also applies to legacy reviewed records that
+do not have a supported-category snapshot.
 
 ## Details Allowlists
 
@@ -375,7 +427,7 @@ endpoint and its data practices.
 
 ## Legacy Fields
 
-Top-level `capture`, `events`, `performance`, `usage`, `stats`, and `reports` are still accepted for compatibility. New descriptors should put categories under `telemetry`.
+Top-level `capture`, `events`, `diagnostics`, `performance`, `usage`, `stats`, and `reports` are still accepted for compatibility. New descriptors should put categories under `telemetry`.
 
 `runtimeMode` is legacy optional metadata. New descriptors should omit it.
 
@@ -388,8 +440,9 @@ row and exposes its additional supported categories. It does not create a
 second project or heartbeat. When a persisted supported-category snapshot
 exists for the previously reviewed logical project, newly exposed categories
 remain disabled until an operator reviews them through `/telemetry consent`.
-Legacy reviewed records without that snapshot remain honored and cannot be
-compared retrospectively.
+Legacy reviewed records without that snapshot keep their older category
+approvals, but newly supported Diagnostics remains disabled until an operator
+saves new consent choices.
 
 A valid elected contribution appears as an independent project in consent and
 command diagnostics. An invalid or protocol-ineligible candidate stays passive

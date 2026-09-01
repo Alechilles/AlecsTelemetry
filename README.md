@@ -6,9 +6,9 @@ Alec's Telemetry is the all-in-one telemetry solution for Hytale mods: a runtime
 runs in-game, a [web portal](https://telemetry.alecsmods.com/portal) for mod authors, a [public mod stats](https://www.modstats.io/stats) list, and a [server browser](https://www.modstats.io/servers) that helps players find verified servers by mod.
 
 It started as crash reporting, but it now covers the broader support loop around
-a mod: attributed crashes, structured errors, lifecycle and performance events,
-anonymous usage stats, manual player issue reports, project access, ingest keys,
-and portal-based triage.
+a mod: attributed crashes, structured errors, automatic diagnostic bundles,
+lifecycle and performance events, anonymous usage stats, manual player issue
+reports, project access, ingest keys, and portal-based triage.
 
 [Open Telemetry Portal](https://telemetry.alecsmods.com/portal) | [Runtime Downloads](https://telemetry.alecsmods.com/downloads) | [View Public Stats](https://www.modstats.io/stats/alecs-telemetry) | [Browse Servers](https://www.modstats.io/servers) | [Join Discord](https://discord.gg/E8n8RgTTdq)
 
@@ -35,7 +35,8 @@ backend, the same runtime can target custom endpoints instead.
 - Structured runtime events: explicit errors, lifecycle timings, performance
   measurements, feature usage events, and descriptor-validated Event Context.
 - Diagnostic bundles: bounded automatic technical evidence with opaque
-  attachments and project-scoped issue grouping.
+  attachments and project-scoped issue grouping. Diagnostics has its own `Diag`
+  consent category and is independent from Error events.
 - Public usage stats: aggregate active servers, active players, environment
   breakdowns, versions, loaded mods, and public embed cards through ModStats.io.
 - Server browser: server owners can publish verified public server listings,
@@ -57,9 +58,11 @@ repeatable integration: ship a descriptor, add a portal project key, and let the
 runtime and portal handle the plumbing.
 
 For server owners, it keeps telemetry visible and controllable. Crash capture,
-usage events, performance telemetry, stats, breadcrumbs, and reports are
-separate categories with runtime-level controls. Server owners can also list a
-public server after installing Alec's Telemetry, without creating a mod project.
+usage events, performance telemetry, stats, breadcrumbs, reports, and automatic
+diagnostics are separate categories with runtime-level controls. Diagnostics is
+off by default unless a descriptor explicitly sets `defaultEnabled: true`.
+Server owners can also list a public server after installing Alec's Telemetry,
+without creating a mod project.
 
 For players and communities, it shortens the path from "something broke" to a
 real fix, while public stats can show whether a mod is actively used without
@@ -166,16 +169,17 @@ deterministic host/path/hash tie-breakers), so consent and Stats contain one row
 and one heartbeat project rather than one per host. Invalid descriptors are
 skipped without blocking the host mod.
 
-If the library later needs crash, error, usage, performance, lifecycle,
-breadcrumbs, or report telemetry, add an explicit
+If the library later needs crash, error, diagnostics, usage, performance,
+lifecycle, breadcrumbs, or report telemetry, add an explicit
 `EmbeddedTelemetryBootstrap.contribute(...)` registration using the same
 descriptor resource, `projectId`, logical version, and declared owner. That
 active registration upgrades the existing passive row; it does not create a
 second project. If a persisted supported-category snapshot exists for the
 previously reviewed logical project, newly exposed categories remain disabled
 until an operator reviews them in `/telemetry consent`; eligible operators are
-notified. Legacy reviewed records without that snapshot remain honored and
-cannot be compared retrospectively.
+notified. For a legacy reviewed record without a supported-category snapshot,
+newly supported Diagnostics also remains disabled until the operator saves new
+consent choices; older category approvals remain honored.
 
 ## Quick Setup For Server Owners
 
@@ -323,7 +327,8 @@ https://www.modstats.io/servers
 ## Runtime API
 
 Mods can stay descriptor-only, but richer integrations can call the runtime API
-for explicit events and custom player-report entry points. A shaded library that
+for explicit events, diagnostic bundles, and custom player-report entry points.
+A shaded library that
 wants categories beyond passive Stats must register explicitly with
 `EmbeddedTelemetryBootstrap.contribute(...)`; use the same logical identity,
 version, and descriptor as the passive resource so the coordinator upgrades the
@@ -378,7 +383,8 @@ same stable `telemetry.command.telemetry.*` prefix.
 ## Privacy Model
 
 - Server owners control telemetry categories through consent and runtime
-  overrides.
+  overrides. Automatic diagnostics uses the independent `Diag` category and is
+  off by default unless the descriptor explicitly enables it.
 - Public stats expose aggregate counts and breakdowns, not raw server ids,
   session ids, IP addresses, player names, player UUIDs, chat, coordinates,
   secrets, or full config files.

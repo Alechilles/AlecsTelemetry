@@ -51,9 +51,13 @@ Alec's Telemetry is designed to avoid player identity data by default.
   descriptor-approved event context.
 - A producing mod can automatically send a diagnostic bundle with safe
   operator-facing metadata and opaque redacted attachments. Diagnostic bundles
-  are not manual player reports. The producing mod controls its local
-  enablement, review, redaction, and opt-out policy; the hosted platform does
-  not require a separate administrator opt-in.
+  are not manual player reports. The `diagnostics` category controls this path
+  and appears as `Diag` in the consent UI. Its tooltip is: "Automatic diagnostic
+  bundles with technical metadata and optional redacted attachments." Diagnostics
+  is independent from Error events; enabling or disabling one does not change
+  the other. Supported Diagnostics is off by default unless the descriptor
+  explicitly sets `defaultEnabled: true`. The hosted platform does not require a
+  separate portal opt-in.
 - Embedded contributors can register independent logical projects through an
   anchored descriptor. Their envelopes use the logical project/plugin identity
   and logical plugin version. Physical host identifiers, host versions, source
@@ -66,17 +70,20 @@ Alec's Telemetry is designed to avoid player identity data by default.
   class from the descriptor and does not initialize library code; richer
   categories require an explicit active contribution. When a prior persisted
   supported-category snapshot exists, newly added categories stay disabled until
-  operator review. Legacy reviewed records without a snapshot retain their
-  prior approvals and are not compared retrospectively. A passive descriptor
-  may route that standard Stats-only heartbeat to Alec's hosted platform or to
-  an author-selected custom endpoint; the custom endpoint operator controls
-  data, security, and retention.
+  operator review. For legacy reviewed records without a snapshot, a currently
+  supported Diagnostics category is also disabled and due for review; the other
+  prior approvals remain unchanged. A passive descriptor may route that
+  standard Stats-only heartbeat to Alec's hosted platform or to an author-selected
+  custom endpoint; the custom endpoint operator controls data, security, and
+  retention.
 - When an active contribution adds categories to a previously reviewed logical
   project and a persisted supported-category snapshot exists, those categories
-  remain disabled until an operator saves new consent choices. A review reminder
-  is sent only to players with `telemetry.command.telemetry` or the local
-  singleplayer owner. Legacy reviewed records without a supported-category
-  snapshot remain honored and cannot be compared retrospectively.
+  remain disabled until an operator saves new consent choices. This includes a
+  newly supported Diagnostics category. For a legacy reviewed record without a
+  supported-category snapshot, Diagnostics remains disabled until the operator
+  saves new consent choices; the older category approvals remain honored. A
+  review reminder is sent only to players with `telemetry.command.telemetry` or
+  the local singleplayer owner.
 - Anchored contributions in the 1.1.0 MVP can upload only to Alec's hosted
   destination. Conventional projects may still opt into a custom endpoint; that
   endpoint operator, not Alec, controls its data and retention.
@@ -190,9 +197,11 @@ consent, allowlist, sampling, and destination gates.
 
 ### Automatic Diagnostic Bundles
 
-When project telemetry and Error events consent are enabled, a mod can send a
-general diagnostic bundle through the hosted event endpoint. This package is
-separate from a manual player report. It can include:
+When project-level telemetry consent and the Diagnostics category are enabled, a
+mod can send a general diagnostic bundle through the hosted event endpoint. The
+consent UI labels this category `Diag`. Error events consent is independent and
+does not enable or disable diagnostic bundles. This package is separate from a
+manual player report. It can include:
 
 - project and diagnostic IDs, capture and receive times, source, diagnostic
   kind, title, summary, severity, plugin ID, and plugin version
@@ -213,6 +222,11 @@ not keep Base64 attachment content in normalized metadata and does not preview
 or extract attachment contents in the portal. Attachments must not contain
 player names, raw UUIDs, chat, coordinates, tokens, inventory contents, raw
 saves, raw databases, or unrestricted logs.
+
+The runtime places accepted bundles in the existing local event queue and uses
+the normal retry, queue-limit, and retention rules. Queueing is best effort and
+does not change the producing operation. For Tamework persistence failures, the
+redacted debug database export attached to the bundle is limited to 512 KiB.
 
 An informational bundle appears in the authorized project's Diagnostics area
 without creating an issue. An issue-producing bundle creates or joins an issue
@@ -488,10 +502,10 @@ Retention depends on the data type and operational need.
 - Routine lifecycle/performance raw diagnostics are retained for 7 days on Free
   by default after daily rollups exist. Routine usage raw diagnostics are
   retained for 14 days on Free by default after daily rollups exist.
-  Error/warning diagnostics keep the longer investigation window, starting at 90
-  days on Free. Aggregate daily event and issue-context rollups are retained
-  while the project exists. Repeated diagnostics may be summarized after a
-  raw-sample cap while aggregate counts remain available.
+  Error and warning event diagnostics keep the longer investigation window,
+  starting at 90 days on Free. Aggregate daily event and issue-context rollups
+  are retained while the project exists. Repeated diagnostics may be summarized
+  after a raw-sample cap while aggregate counts remain available.
 - Indexed incident, trace, and operation IDs follow the retention of the raw
   diagnostic occurrence that supplied them and are deleted with that occurrence.
 - Crash report metadata and raw JSON, manual report metadata, and manual report
@@ -540,13 +554,15 @@ Server owners can:
 
 - use `/telemetry consent` to review and change project/category telemetry
   choices
+- review the `Diag` category for automatic diagnostic bundles; Diagnostics and
+  Error events are independent consent choices
 - review every passively discovered logical project in the scrollable consent
   list; passive projects expose Stats only until an active integration is
   explicitly registered
-- review newly added categories after a permission-scoped reminder when a
-  persisted supported-category snapshot exists; those additions remain disabled
-  unless the operator saves them as enabled. Legacy reviewed records without a
-  snapshot remain honored and cannot be compared retrospectively
+- review newly added categories after a permission-scoped reminder; those
+  additions remain disabled unless the operator saves them as enabled. A legacy
+  reviewed record without a supported-category snapshot also keeps Diagnostics
+  disabled until the operator saves new choices.
 - review each embedded logical contribution as its own consent project, even
   when several contributions share one physical runtime provider
 - use runtime override files to disable telemetry categories or change endpoints

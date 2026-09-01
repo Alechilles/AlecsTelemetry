@@ -18,6 +18,7 @@ The consent UI can control:
 - project enabled state
 - crash capture
 - error events
+- automatic diagnostics (`Diag`)
 - lifecycle events
 - performance events
 - usage events
@@ -42,13 +43,24 @@ Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Con
 
 Telemetry opt-in/out options are automatically determined by the categories supported in the project descriptor.
 
-Omitted telemetry categories are unsupported and hidden from consent. A supported category defaults on unless it sets `defaultEnabled: false`. Add only the categories your project actually uses:
+Omitted telemetry categories are unsupported and hidden from consent. A
+supported category defaults on unless it sets `defaultEnabled: false`, except
+Diagnostics, which is off unless `defaultEnabled: true` is explicit. Add only
+the categories your project actually uses:
 
 - use [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup) for crash capture defaults
 - use [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) for stats-only defaults
-- use the specific integration guide for error events, lifecycle events, performance telemetry, usage events, breadcrumbs, or manual reports
+- use the specific integration guide for error events, lifecycle events, performance telemetry, usage events, breadcrumbs, manual reports, or diagnostic bundles
 
 For opt-in category behavior, keep the category supported and set `defaultEnabled: false`.
+
+Diagnostics uses the descriptor key `diagnostics` and appears as `Diag` in the
+consent UI. Its tooltip is "Automatic diagnostic bundles with technical metadata
+and optional redacted attachments." Diagnostics is independent from Error
+events. A fresh or unreviewed project follows the descriptor default. A project
+that already completed a consent review keeps newly added Diagnostics disabled
+until an operator runs `/telemetry consent` and selects Save and Close. This also
+applies to legacy reviewed records without a supported-category snapshot.
 
 ## Stored Settings
 

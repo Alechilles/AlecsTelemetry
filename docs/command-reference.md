@@ -46,6 +46,7 @@ This opens the shared consent UI. It can change:
 - project-level enabled state
 - crash capture
 - error events
+- automatic diagnostics (`Diag`)
 - lifecycle events
 - performance events
 - usage events
@@ -54,6 +55,13 @@ This opens the shared consent UI. It can change:
 
 The first-run notice uses the same consent runtime. Descriptor defaults provide
 the initial state until a server owner reviews or changes a project.
+
+Diagnostics is off by default unless a descriptor explicitly sets
+`telemetry.diagnostics.defaultEnabled` to `true`. The `Diag` choice is
+independent from Error events. A project that already completed a consent
+review, including a legacy reviewed project without a supported-category
+snapshot, keeps newly added Diagnostics disabled until an operator runs this
+command and selects Save and Close.
 
 `/telemetry consent` opens an in-game UI and must be run by a player.
 

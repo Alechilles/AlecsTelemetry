@@ -26,9 +26,12 @@ wire contract.
 
 ## Limits
 
-Diagnostic bundles require both project telemetry and the Error events category
-to be enabled. A consent or runtime override change applies before a bundle can
-enter the local queue.
+Diagnostic bundles require project telemetry and the `diagnostics` category to
+be enabled. The consent UI labels this category `Diag` and describes it as
+"Automatic diagnostic bundles with technical metadata and optional redacted
+attachments." Error events use a separate consent category. Enabling or
+disabling Error does not enable or disable Diagnostics. A consent or runtime
+override change applies before a bundle can enter the local queue.
 
 Attributes are limited to 32 entries. Keys use safe identifier characters and
 are at most 128 characters. Values must be booleans, finite numbers, or strings
@@ -39,15 +42,21 @@ The runtime accepts at most 16 attachments. Each decoded attachment must be at
 most 1 MiB. The serialized diagnostic payload must be at most 2 MiB. A hosted
 project can impose a smaller request limit.
 
-Submission is best effort. A `QUEUED` result means the local event queue accepted
-the envelope. It does not guarantee that the hosted service stored it. Reusing a
+Tamework automatic persistence reports attach a redacted debug database export
+of at most 512 KiB. The producing mod creates this package in memory; it does
+not write a local export file for the automatic report.
+
+Submission is best effort. A `QUEUED` result means the existing local event
+queue accepted the envelope. It does not guarantee that the hosted service
+stored it. Queueing does not block or change the producing operation. Reusing a
 diagnostic ID lets the hosted service treat retries as the same diagnostic.
 
 ## Producer Responsibilities
 
 The producing mod must:
 
-- capture diagnostics only under its documented telemetry policy
+- capture diagnostics only when its documented telemetry policy and the
+  project's Diagnostics consent allow it
 - redact secrets and personal or save-specific data before submission
 - keep titles, summaries, attributes, and fingerprints low-cardinality
 - limit queues and prevent recursive reporting loops
