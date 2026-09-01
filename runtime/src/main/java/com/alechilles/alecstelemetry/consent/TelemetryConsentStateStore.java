@@ -48,12 +48,15 @@ public final class TelemetryConsentStateStore {
     @Nonnull
     public List<String> addedSupportedCategories(@Nonnull Path file,
                                                   @Nonnull TelemetryProjectRegistration project) {
-        StateDocument document = read(file);
+        StateReadResult state = readWithStatus(file);
+        StateDocument document = state.document();
         ReviewedProjectDocument baseline = reviewedBaseline(document, project);
-        if (baseline == null) {
-            return List.of();
-        }
         List<String> current = TelemetryConsentCapabilities.supportedCategoryNames(project);
+        if (baseline == null) {
+            return state.invalid() && current.contains("diagnostics")
+                    ? List.of("diagnostics")
+                    : List.of();
+        }
         if (baseline.supportedCategories == null) {
             return current.contains("diagnostics") ? List.of("diagnostics") : List.of();
         }
@@ -227,19 +230,33 @@ public final class TelemetryConsentStateStore {
 
     @Nonnull
     private StateDocument read(@Nonnull Path file) {
+        return readWithStatus(file).document();
+    }
+
+    @Nonnull
+    private StateReadResult readWithStatus(@Nonnull Path file) {
         try {
+            if (Files.notExists(file)) {
+                return new StateReadResult(new StateDocument(), false);
+            }
             if (!Files.isRegularFile(file)) {
-                return new StateDocument();
+                warn("Failed to read telemetry consent state from " + file + ": path is not a regular file.", null);
+                return new StateReadResult(new StateDocument(), true);
             }
             String raw = Files.readString(file, StandardCharsets.UTF_8);
             if (raw.isBlank()) {
-                return new StateDocument();
+                warn("Failed to read telemetry consent state from " + file + ": file is blank.", null);
+                return new StateReadResult(new StateDocument(), true);
             }
             StateDocument parsed = GSON.fromJson(raw, StateDocument.class);
-            return parsed == null ? new StateDocument() : parsed;
+            if (parsed == null) {
+                warn("Failed to read telemetry consent state from " + file + ": document is empty.", null);
+                return new StateReadResult(new StateDocument(), true);
+            }
+            return new StateReadResult(parsed, false);
         } catch (Exception ex) {
             warn("Failed to read telemetry consent state from " + file, ex);
-            return new StateDocument();
+            return new StateReadResult(new StateDocument(), true);
         }
     }
 
@@ -344,6 +361,9 @@ public final class TelemetryConsentStateStore {
         private List<ReviewedProjectDocument> reviewedProjects;
         private List<NoticeDocument> shownNotices;
         private List<FunnelEventDocument> funnelEvents;
+    }
+
+    private record StateReadResult(@Nonnull StateDocument document, boolean invalid) {
     }
 
     private static final class ReviewedProjectDocument {

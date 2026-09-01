@@ -129,6 +129,25 @@ class TelemetryConsentStateStoreTest {
     }
 
     @Test
+    void requiresDiagnosticsReviewWhenExistingConsentStateIsMalformed() throws Exception {
+        Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
+        Files.createDirectories(stateFile.getParent());
+        Files.writeString(stateFile, "{ malformed consent state");
+        TelemetryConsentStateStore store = new TelemetryConsentStateStore(null);
+        TelemetryProjectRegistration project = registrationWithCapabilitiesAndDiagnostics(
+                "1.0.0",
+                false,
+                false,
+                true,
+                true
+        );
+
+        assertEquals(List.of("diagnostics"), store.addedSupportedCategories(stateFile, project));
+        assertFalse(store.isReviewed(stateFile, project));
+        assertEquals(List.of(project), store.unreviewedProjects(stateFile, List.of(project)));
+    }
+
+    @Test
     void requiresDiagnosticsReviewForLegacyReviewedEntriesButKeepsOtherLegacyCategoriesCompatible() throws Exception {
         Path stateFile = tempDir.resolve("Settings").resolve("consent-reviewed-projects.json");
         Files.createDirectories(stateFile.getParent());

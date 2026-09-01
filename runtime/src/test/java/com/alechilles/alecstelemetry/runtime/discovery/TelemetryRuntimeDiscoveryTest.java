@@ -172,6 +172,43 @@ class TelemetryRuntimeDiscoveryTest {
     }
 
     @Test
+    void discoverActiveProtectsDiagnosticsWhenConsentStateIsMalformed() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        writeModFolder(
+                modsDirectory,
+                "Malformed Consent Mod",
+                "Example",
+                "Malformed Consent Mod",
+                "1.0.0",
+                """
+                {
+                  "projectId": "malformed-consent-project",
+                  "displayName": "Malformed Consent Mod",
+                  "packagePrefixes": ["example.malformedconsent"],
+                  "diagnostics": { "supported": true, "defaultEnabled": true }
+                }
+                """
+        );
+
+        TelemetryDataPaths dataPaths = dataPaths(modsDirectory);
+        Files.createDirectories(dataPaths.consentStateFile().getParent());
+        Files.writeString(dataPaths.consentStateFile(), "{ malformed consent state");
+
+        TelemetryRuntimeDiscoveryResult result = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Malformed Consent Mod", "1.0.0")
+                ))
+        );
+
+        assertFalse(result.projects().getFirst().diagnostics().enabled());
+        TelemetryProjectOverride savedOverride = new TelemetryProjectOverrideStore(null)
+                .load(dataPaths.projectOverrideFile("malformed-consent-project"));
+        assertNotNull(savedOverride);
+        assertEquals(Boolean.FALSE, savedOverride.diagnostics().enabled());
+    }
+
+    @Test
     void discoverActiveRemovesUnsupportedCentralConsentOverrides() throws Exception {
         Path modsDirectory = tempDir.resolve("mods");
         writeModFolder(
