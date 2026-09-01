@@ -146,23 +146,7 @@ public final class TelemetryRuntimeDiscovery {
             @Nonnull List<TelemetryProjectRegistration> projects,
             @Nonnull Map<String, TelemetryProjectOverride> centralOverrides,
             @Nonnull TelemetryDataPaths dataPaths) {
-        LinkedHashMap<String, TelemetryProjectOverride> resolved = new LinkedHashMap<>(centralOverrides);
-        TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
-        for (TelemetryProjectRegistration project : projects) {
-            String projectIdKey = project.projectId().toLowerCase(Locale.ROOT);
-            if (resolved.containsKey(projectIdKey)) {
-                continue;
-            }
-            java.nio.file.Path embeddedOverrideFile = embeddedProjectOverrideFile(dataPaths, project);
-            if (embeddedOverrideFile == null) {
-                continue;
-            }
-            TelemetryProjectOverride override = store.load(embeddedOverrideFile);
-            if (override != null) {
-                resolved.put(projectIdKey, override);
-            }
-        }
-        return Map.copyOf(resolved);
+        return Map.copyOf(centralOverrides);
     }
 
     @Nonnull
@@ -362,13 +346,6 @@ public final class TelemetryRuntimeDiscovery {
         if (separator >= 0 && separator + 1 < normalized.length()) {
             identifiers.put(normalized.substring(separator + 1).trim().toLowerCase(Locale.ROOT), true);
         }
-    }
-
-    @Nullable
-    private static java.nio.file.Path embeddedProjectOverrideFile(
-            @Nonnull TelemetryDataPaths dataPaths,
-            @Nonnull TelemetryProjectRegistration project) {
-        return dataPaths.legacyEmbeddedProjectOverrideFile(project.pluginIdentifier(), project.projectId());
     }
 
     @Nonnull

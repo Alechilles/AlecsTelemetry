@@ -4,13 +4,14 @@ import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Runtime-owned filesystem layout for Alec's Telemetry.
+ * Runtime-owned filesystem layout for Beacon.
  */
 public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                                   @Nonnull Path settingsFile,
@@ -19,34 +20,28 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
                                   @Nonnull Path crashReportsRoot,
                                   @Nonnull Path eventReportsRoot,
                                   @Nullable Path modsDirectory) {
-    private static final String TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry!";
+    private static final String BEACON_PLUGIN_DATA_DIRECTORY = "Alechilles_Beacon";
+    private static final String CURRENT_LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry!";
     private static final String LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY = "Alechilles_Alec's Telemetry";
 
     @Nonnull
     public static TelemetryDataPaths from(@Nonnull JavaPlugin plugin) {
         Path dataDirectory = plugin.getDataDirectory().toAbsolutePath().normalize();
-        return fromRuntimeRoot(dataDirectory, resolveModsDirectory(dataDirectory));
+        TelemetryDataPaths paths = fromRuntimeRoot(dataDirectory, resolveModsDirectory(dataDirectory));
+        TelemetryDataMigrator.migrate(paths, plugin.getLogger());
+        return paths;
     }
 
     @Nonnull
     public static TelemetryDataPaths forEmbeddedOwner(@Nonnull JavaPlugin plugin) {
-        Path dataDirectory = plugin.getDataDirectory().toAbsolutePath().normalize();
-        Path telemetryRoot = dataDirectory.resolve("Telemetry");
-        Path settingsRoot = telemetryRoot.resolve("Settings");
-        return new TelemetryDataPaths(
-                telemetryRoot,
-                settingsRoot.resolve("runtime.json"),
-                settingsRoot.resolve("projects"),
-                telemetryRoot,
-                telemetryRoot.resolve("crash-reports"),
-                telemetryRoot.resolve("events"),
-                null
-        );
+        return forSharedCoordinator(plugin);
     }
 
     @Nonnull
     public static TelemetryDataPaths forSharedCoordinator(@Nonnull JavaPlugin plugin) {
-        return forSharedCoordinatorDataDirectory(plugin.getDataDirectory());
+        TelemetryDataPaths paths = forSharedCoordinatorDataDirectory(plugin.getDataDirectory());
+        TelemetryDataMigrator.migrate(paths, plugin.getLogger());
+        return paths;
     }
 
     @Nonnull
@@ -55,7 +50,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
         Path modsDirectory = resolveModsDirectory(normalizedDataDirectory);
         Path runtimeRoot = modsDirectory == null
                 ? normalizedDataDirectory.resolve("TelemetryCoordinator").toAbsolutePath().normalize()
-                : modsDirectory.resolve(TELEMETRY_PLUGIN_DATA_DIRECTORY).toAbsolutePath().normalize();
+                : modsDirectory.resolve(BEACON_PLUGIN_DATA_DIRECTORY).toAbsolutePath().normalize();
         return fromRuntimeRoot(runtimeRoot, modsDirectory);
     }
 
@@ -144,6 +139,7 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
         if (ownerRoot == null) {
             return List.of();
         }
+        addLegacyRuntimeRoot(roots, modsDirectory.resolve(CURRENT_LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY));
         addLegacyRuntimeRoot(roots, modsDirectory.resolve(LEGACY_TELEMETRY_PLUGIN_DATA_DIRECTORY));
         addLegacyRuntimeRoot(roots, ownerRoot.resolve("telemetry"));
         addLegacyRuntimeRoot(roots, ownerRoot.resolve("Telemetry"));
@@ -224,14 +220,28 @@ public record TelemetryDataPaths(@Nonnull Path runtimeRoot,
             return;
         }
         Path normalized = root.toAbsolutePath().normalize();
-        if (normalized.toString().equals(runtimeRoot.toString())) {
+        if (sameFilesystemPath(normalized, runtimeRoot.toAbsolutePath().normalize())) {
             return;
         }
         for (Path existing : roots) {
-            if (existing.toString().equals(normalized.toString())) {
+            if (sameFilesystemPath(existing, normalized)) {
                 return;
             }
         }
         roots.add(normalized);
+    }
+
+    private static boolean sameFilesystemPath(@Nonnull Path first, @Nonnull Path second) {
+        if (first.equals(second)) {
+            return true;
+        }
+        try {
+            if (!Files.exists(first) || !Files.exists(second)) {
+                return false;
+            }
+            return Files.isSameFile(first, second);
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
     }
 }

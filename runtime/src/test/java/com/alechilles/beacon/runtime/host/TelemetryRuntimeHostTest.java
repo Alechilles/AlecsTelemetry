@@ -150,7 +150,7 @@ class TelemetryRuntimeHostTest {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path legacyRoot = saveRoot.resolve("Telemetry");
-        Path canonicalRoot = modsDir.resolve("Alechilles_Alec's Telemetry!");
+        Path canonicalRoot = modsDir.resolve("Alechilles_Beacon");
         Files.createDirectories(legacyRoot.resolve("Settings"));
         Files.writeString(legacyRoot.resolve("Settings").resolve("runtime.json"), """
                 {
@@ -170,7 +170,7 @@ class TelemetryRuntimeHostTest {
                   "flushIntervalSeconds": 99
                 }
                 """, Files.readString(dataPaths.settingsFile()));
-        assertFalse(Files.exists(legacyRoot.resolve("Settings")));
+        assertTrue(Files.isRegularFile(legacyRoot.resolve("Settings").resolve("runtime.json")));
     }
 
     @Test
@@ -233,6 +233,43 @@ class TelemetryRuntimeHostTest {
         assertEquals("0.2.5", self.pluginVersion());
         assertTrue(self.stats().enabled());
         assertTrue(self.stats().allows("heartbeat"));
+    }
+
+    @Test
+    void embeddedProviderDoesNotReadLegacyOwnerOverrideWhenBeaconOverrideIsAbsent() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("embedded-owner-override"), modsDirectory);
+        TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson("""
+                {
+                  "projectId": "embedded-provider",
+                  "displayName": "Embedded Provider",
+                  "ownerPluginIdentifiers": ["Example:Embedded Provider"],
+                  "packagePrefixes": ["com.example.embedded"],
+                  "stats": { "enabled": true, "allowedEvents": ["heartbeat"] }
+                }
+                """, null);
+        Path legacyOverride = modsDirectory.resolve("Example_Embedded Provider")
+                .resolve("Telemetry").resolve("Settings").resolve("projects")
+                .resolve("embedded-provider.json");
+        Files.createDirectories(legacyOverride.getParent());
+        Files.writeString(legacyOverride, "{\"enabled\":false}");
+        TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
+                null,
+                TelemetryRuntimeOrigin.EMBEDDED,
+                "Example:Embedded Provider",
+                "1.2.3",
+                "2.0.0",
+                tempDir.resolve("Embedded Provider.jar"),
+                descriptor
+        );
+
+        List<TelemetryProjectRegistration> registrations = TelemetryRuntimeProviderHandle.providerRegistrations(
+                request,
+                dataPaths,
+                null
+        );
+
+        assertTrue(registrations.getFirst().isEnabled());
     }
 
     @Test

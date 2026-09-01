@@ -19,7 +19,7 @@ class TelemetryDataPathsTest {
     @Test
     void descriptorDirectoriesIncludeSaveAndInstalledModsDirectories() throws Exception {
         Path runtimeRoot = tempDir.resolve("UserData").resolve("Saves")
-                .resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry!");
+                .resolve("Demo World").resolve("mods").resolve("Alechilles_Beacon");
         Files.createDirectories(runtimeRoot);
         Path saveModsDirectory = runtimeRoot.getParent();
         Path globalModsDirectory = tempDir.resolve("UserData").resolve("Mods");
@@ -46,7 +46,7 @@ class TelemetryDataPathsTest {
     }
 
     @Test
-    void sharedCoordinatorRootUsesTelemetryPluginDataDirectoryInsideSaveMods() throws Exception {
+    void sharedCoordinatorRootUsesBeaconPluginDataDirectoryInsideSaveMods() throws Exception {
         Path hytaleRoot = tempDir.resolve("Hytale");
         Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
                 .resolve("Demo World")
@@ -61,7 +61,7 @@ class TelemetryDataPathsTest {
                 .resolve("mods")
                 .toAbsolutePath()
                 .normalize();
-        Path expectedRoot = saveModsDirectory.resolve("Alechilles_Alec's Telemetry!").toAbsolutePath().normalize();
+        Path expectedRoot = saveModsDirectory.resolve("Alechilles_Beacon").toAbsolutePath().normalize();
         assertEquals(expectedRoot, paths.runtimeRoot());
         assertEquals(expectedRoot.resolve("Settings").resolve("runtime.json"), paths.settingsFile());
         assertEquals(expectedRoot.resolve("Settings").resolve("projects"), paths.projectSettingsDirectory());
@@ -70,22 +70,32 @@ class TelemetryDataPathsTest {
     }
 
     @Test
-    void sharedCoordinatorExposesLegacyCentralRootsForMigration() throws Exception {
+    void sharedCoordinatorExposesAllKnownLegacyCentralRootsForMigration() throws Exception {
         Path hytaleRoot = tempDir.resolve("Hytale");
         Path pluginDataDirectory = hytaleRoot.resolve("UserData").resolve("Saves")
                 .resolve("Demo World")
                 .resolve("mods")
                 .resolve("Alechilles_Alec's Tamework!");
         Files.createDirectories(pluginDataDirectory);
+        Path lowerSaveRoot = pluginDataDirectory.getParent().getParent().resolve("telemetry");
+        Path upperSaveRoot = pluginDataDirectory.getParent().getParent().resolve("Telemetry");
+        Files.createDirectories(lowerSaveRoot);
+        Files.createDirectories(upperSaveRoot);
 
         TelemetryDataPaths paths = TelemetryDataPaths.forSharedCoordinatorDataDirectory(pluginDataDirectory);
 
+        List<Path> expectedRoots = new java.util.ArrayList<>(List.of(
+                hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry!").toAbsolutePath().normalize(),
+                hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry").toAbsolutePath().normalize(),
+                lowerSaveRoot.toAbsolutePath().normalize(),
+                upperSaveRoot.toAbsolutePath().normalize()
+        ));
+        if (Files.isSameFile(lowerSaveRoot, upperSaveRoot)) {
+            expectedRoots.remove(upperSaveRoot.toAbsolutePath().normalize());
+        }
+
         assertEquals(
-                List.of(
-                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("mods").resolve("Alechilles_Alec's Telemetry").toAbsolutePath().normalize(),
-                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("telemetry").toAbsolutePath().normalize(),
-                        hytaleRoot.resolve("UserData").resolve("Saves").resolve("Demo World").resolve("Telemetry").toAbsolutePath().normalize()
-                ),
+                expectedRoots,
                 paths.legacyRuntimeRoots()
         );
     }
@@ -137,4 +147,5 @@ class TelemetryDataPathsTest {
                 paths.manualReportReceiptsFile()
         );
     }
+
 }

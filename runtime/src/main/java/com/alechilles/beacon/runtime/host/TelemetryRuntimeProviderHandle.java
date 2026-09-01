@@ -195,15 +195,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
                                                                      @Nullable HytaleLogger logger,
                                                                      @Nonnull String projectId) {
         TelemetryProjectOverrideStore store = new TelemetryProjectOverrideStore(logger);
-        TelemetryProjectOverride sharedOverride = store.load(dataPaths.projectOverrideFile(projectId));
-        if (sharedOverride != null) {
-            return sharedOverride;
-        }
-        Path legacyOverrideFile = dataPaths.legacyEmbeddedProjectOverrideFile(
-                request.providerPluginIdentifier(),
-                projectId
-        );
-        return legacyOverrideFile == null ? null : store.load(legacyOverrideFile);
+        return store.load(dataPaths.projectOverrideFile(projectId));
     }
 
     TelemetryRuntimeProviderHandle(@Nonnull TelemetryRuntimeBootstrapRequest request,

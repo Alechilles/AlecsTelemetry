@@ -275,7 +275,7 @@ class TelemetryRuntimeDiscoveryTest {
     }
 
     @Test
-    void discoverActiveFallsBackToEmbeddedOverrideWhenCentralOverrideIsAbsent() throws Exception {
+    void discoverActiveDoesNotReadEmbeddedOverrideWhenCentralOverrideIsAbsent() throws Exception {
         Path modsDirectory = tempDir.resolve("mods");
         writeModFolder(
                 modsDirectory,
@@ -318,7 +318,7 @@ class TelemetryRuntimeDiscoveryTest {
         assertEquals(1, result.projects().size());
         assertTrue(result.projects().getFirst().isEnabled());
         assertEquals(1, result.consentProjects().size());
-        assertFalse(result.consentProjects().getFirst().isEnabled());
+        assertTrue(result.consentProjects().getFirst().isEnabled());
     }
 
     @Test
