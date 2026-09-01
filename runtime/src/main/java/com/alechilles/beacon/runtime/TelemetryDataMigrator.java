@@ -1,15 +1,22 @@
 package com.alechilles.beacon.runtime;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.hypixel.hytale.logger.HytaleLogger;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -19,6 +26,14 @@ import java.util.logging.Level;
  */
 public final class TelemetryDataMigrator {
     private static final int MAX_WARNINGS = 32;
+    private static final String LEGACY_SELF_PROJECT_ID = "alecs-telemetry";
+    private static final String BEACON_SELF_PROJECT_ID = "beacon";
+    private static final String BEACON_SELF_PLUGIN_IDENTIFIER = "Alechilles:Beacon";
+    private static final Set<String> LEGACY_SELF_PLUGIN_IDENTIFIERS = Set.of(
+            "alechilles:alec's telemetry!",
+            "alechilles:alec's telemetry"
+    );
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
     private static final Set<Path> ATTEMPTED_ROOTS = ConcurrentHashMap.newKeySet();
 
     private TelemetryDataMigrator() {
@@ -54,7 +69,7 @@ public final class TelemetryDataMigrator {
         }
 
         copyFile(source.resolve("runtime.json"), destination.resolve("runtime.json"), "Settings/runtime.json", context);
-        copyFile(source.resolve("consent-reviewed-projects.json"),
+        copyConsentState(source.resolve("consent-reviewed-projects.json"),
                 destination.resolve("consent-reviewed-projects.json"),
                 "Settings/consent-reviewed-projects.json",
                 context);
@@ -63,7 +78,12 @@ public final class TelemetryDataMigrator {
                 "Settings/server-identity.json",
                 context);
         copyFile(source.resolve("server-id.txt"), destination.resolve("server-id.txt"), "Settings/server-id.txt", context);
-        copyKnownDirectory(source.resolve("projects"), destination.resolve("projects"), "Settings/projects", context);
+        copyKnownProjectOverrides(
+                source.resolve("projects"),
+                destination.resolve("projects"),
+                "Settings/projects",
+                context
+        );
     }
 
     private static void copyKnownTelemetry(@Nonnull Path source,
@@ -111,7 +131,7 @@ public final class TelemetryDataMigrator {
                         || centralRoots.contains(normalizedModRoot)) {
                     continue;
                 }
-                copyKnownDirectory(
+                copyKnownProjectOverrides(
                         modRoot.resolve("Telemetry").resolve("Settings").resolve("projects"),
                         canonicalRoot.resolve("Settings").resolve("projects"),
                         "Settings/projects",
@@ -163,6 +183,172 @@ public final class TelemetryDataMigrator {
         } catch (Exception ex) {
             context.failure(relativePath, ex);
         }
+    }
+
+    private static void copyKnownProjectOverrides(@Nonnull Path source,
+                                                  @Nonnull Path destination,
+                                                  @Nonnull String relativePath,
+                                                  @Nonnull MigrationContext context) {
+        if (!Files.exists(source) || Files.isSymbolicLink(source)) {
+            return;
+        }
+        if (!Files.isDirectory(source)) {
+            context.failure(relativePath, wrongType(source));
+            return;
+        }
+        if (!destinationIsSafe(destination, relativePath, context)) {
+            return;
+        }
+        if (Files.exists(destination) && !Files.isDirectory(destination)) {
+            context.conflict(relativePath);
+            return;
+        }
+        try {
+            Files.createDirectories(destination);
+        } catch (Exception ex) {
+            context.failure(relativePath, ex);
+            return;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(source)) {
+            for (Path child : stream) {
+                if (Files.isSymbolicLink(child)) {
+                    continue;
+                }
+                String sourceName = child.getFileName() == null ? "" : child.getFileName().toString();
+                String destinationName = isLegacySelfOverride(sourceName)
+                        ? BEACON_SELF_PROJECT_ID + ".json"
+                        : sourceName;
+                String childRelativePath = relativePath + "/" + destinationName;
+                Path childDestination = destination.resolve(destinationName);
+                if (Files.isRegularFile(child)) {
+                    copyFile(child, childDestination, childRelativePath, context);
+                } else if (Files.isDirectory(child)) {
+                    context.failure(
+                            childRelativePath,
+                            new IOException("Expected a project override file at legacy path " + child)
+                    );
+                } else {
+                    context.failure(childRelativePath, new IOException("Unsupported legacy project override path " + child));
+                }
+            }
+        } catch (Exception ex) {
+            context.failure(relativePath, ex);
+        }
+    }
+
+    private static void copyConsentState(@Nonnull Path source,
+                                         @Nonnull Path destination,
+                                         @Nonnull String relativePath,
+                                         @Nonnull MigrationContext context) {
+        if (!Files.exists(source) || Files.isSymbolicLink(source)) {
+            return;
+        }
+        if (!Files.isRegularFile(source)) {
+            context.failure(relativePath, new IOException("Expected a consent state file at legacy path " + source));
+            return;
+        }
+        if (!destinationIsSafe(destination, relativePath, context)) {
+            return;
+        }
+        if (Files.exists(destination)) {
+            context.conflict(relativePath);
+            return;
+        }
+        try {
+            String raw = Files.readString(source, StandardCharsets.UTF_8);
+            String migrated = migrateConsentState(raw);
+            Path parent = destination.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            Files.writeString(destination, migrated, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            context.failure(relativePath, ex);
+        }
+    }
+
+    @Nonnull
+    private static String migrateConsentState(@Nonnull String raw) throws IOException {
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(raw);
+        } catch (RuntimeException ex) {
+            throw new IOException("Unable to parse legacy consent state", ex);
+        }
+        if (parsed == null || !parsed.isJsonObject()) {
+            throw new IOException("Legacy consent state must be a JSON object");
+        }
+        JsonObject root = parsed.getAsJsonObject();
+        boolean changed = migrateIdentityArray(root.get("reviewedProjects"));
+        changed |= migrateIdentityArray(root.get("projects"));
+        JsonElement notices = root.get("shownNotices");
+        if (notices != null && notices.isJsonArray()) {
+            for (JsonElement notice : notices.getAsJsonArray()) {
+                if (notice == null || !notice.isJsonObject()) {
+                    continue;
+                }
+                JsonObject noticeObject = notice.getAsJsonObject();
+                changed |= migrateIdentityArray(noticeObject.get("projects"));
+                changed |= migratePromptKey(noticeObject);
+            }
+        }
+        changed |= migrateIdentityArray(root.get("funnelEvents"));
+        return changed ? GSON.toJson(root) + System.lineSeparator() : raw;
+    }
+
+    private static boolean migrateIdentityArray(@Nullable JsonElement value) {
+        if (value == null || !value.isJsonArray()) {
+            return false;
+        }
+        boolean changed = false;
+        for (JsonElement entry : value.getAsJsonArray()) {
+            if (entry != null && entry.isJsonObject()) {
+                changed |= migrateIdentity(entry.getAsJsonObject());
+            }
+        }
+        return changed;
+    }
+
+    private static boolean migrateIdentity(@Nonnull JsonObject object) {
+        boolean changed = false;
+        JsonElement projectId = object.get("projectId");
+        if (isString(projectId) && LEGACY_SELF_PROJECT_ID.equalsIgnoreCase(projectId.getAsString().trim())) {
+            object.addProperty("projectId", BEACON_SELF_PROJECT_ID);
+            changed = true;
+        }
+        JsonElement pluginIdentifier = object.get("pluginIdentifier");
+        if (isString(pluginIdentifier)
+                && LEGACY_SELF_PLUGIN_IDENTIFIERS.contains(pluginIdentifier.getAsString().trim().toLowerCase(Locale.ROOT))) {
+            object.addProperty("pluginIdentifier", BEACON_SELF_PLUGIN_IDENTIFIER);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static boolean migratePromptKey(@Nonnull JsonObject notice) {
+        JsonElement promptKey = notice.get("promptKey");
+        if (!isString(promptKey)) {
+            return false;
+        }
+        String migrated = promptKey.getAsString();
+        for (String legacyPluginIdentifier : LEGACY_SELF_PLUGIN_IDENTIFIERS) {
+            String legacyPrefix = LEGACY_SELF_PROJECT_ID + "|" + legacyPluginIdentifier + "|";
+            String beaconPrefix = BEACON_SELF_PROJECT_ID + "|" + BEACON_SELF_PLUGIN_IDENTIFIER.toLowerCase(Locale.ROOT) + "|";
+            migrated = migrated.replace(legacyPrefix, beaconPrefix);
+        }
+        if (migrated.equals(promptKey.getAsString())) {
+            return false;
+        }
+        notice.addProperty("promptKey", migrated);
+        return true;
+    }
+
+    private static boolean isLegacySelfOverride(@Nonnull String fileName) {
+        return (LEGACY_SELF_PROJECT_ID + ".json").equalsIgnoreCase(fileName);
+    }
+
+    private static boolean isString(@Nullable JsonElement value) {
+        return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString();
     }
 
     private static void copyFile(@Nonnull Path source,

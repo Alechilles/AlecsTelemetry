@@ -164,6 +164,12 @@ class TelemetryRuntimeHostTest {
 
         assertFalse(settings.enabled());
         assertEquals(99, settings.flushIntervalSeconds());
+        assertEquals("https://beacon.modstats.io/ingest/crash", settings.hostedIngestEndpoint());
+        assertEquals("https://beacon.modstats.io/ingest/event", settings.hostedEventIngestEndpoint());
+        assertEquals(
+                "https://beacon.modstats.io/ingest/report",
+                settings.manualReports().hostedReportIngestEndpoint()
+        );
         assertEquals("""
                 {
                   "enabled": false,
@@ -179,10 +185,10 @@ class TelemetryRuntimeHostTest {
         TelemetryRuntimeBootstrapRequest request = new TelemetryRuntimeBootstrapRequest(
                 null,
                 TelemetryRuntimeOrigin.STANDALONE,
-                "Alechilles:Alec's Telemetry!",
-                "0.2.5",
-                "0.2.5",
-                tempDir.resolve("Alec's Telemetry.jar"),
+                "Alechilles:Beacon",
+                "2.0.0",
+                "2.0.0",
+                tempDir.resolve("Beacon.jar"),
                 null
         );
 
@@ -193,7 +199,10 @@ class TelemetryRuntimeHostTest {
         );
 
         assertNotNull(registration);
-        assertEquals("alecs-telemetry", registration.projectId());
+        assertEquals("beacon", registration.projectId());
+        assertEquals("Beacon", registration.displayName());
+        assertEquals("Alechilles:Beacon", registration.pluginIdentifier());
+        assertEquals("Alechilles:Beacon", registration.ownerPluginIdentifiers().getFirst());
         assertTrue(registration.stats().enabled());
     }
 
@@ -225,11 +234,12 @@ class TelemetryRuntimeHostTest {
                 null
         );
 
-        assertEquals(List.of("embedded-provider", "alecs-telemetry"), registrations.stream()
+        assertEquals(List.of("embedded-provider", "beacon"), registrations.stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         TelemetryProjectRegistration self = registrations.get(1);
-        assertEquals("Alechilles:Alec's Telemetry!", self.pluginIdentifier());
+        assertEquals("Alechilles:Beacon", self.pluginIdentifier());
+        assertEquals("Alechilles:Beacon", self.ownerPluginIdentifiers().getFirst());
         assertEquals("0.2.5", self.pluginVersion());
         assertTrue(self.stats().enabled());
         assertTrue(self.stats().allows("heartbeat"));
@@ -277,16 +287,16 @@ class TelemetryRuntimeHostTest {
         TelemetryDataPaths dataPaths = dataPaths(tempDir.resolve("standalone-self-errors"));
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(dataPaths.settingsFile(), null);
         TelemetryProjectRegistration providerProject = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry!",
-                "0.2.5",
-                tempDir.resolve("Alec's Telemetry.jar"),
+                "Alechilles:Beacon",
+                "2.0.0",
+                tempDir.resolve("Beacon.jar"),
                 null
         );
         CapturingCrashReportClient client = new CapturingCrashReportClient();
         ProviderFixture fixture = providerFixture(
-                "standalone:Alechilles:Alec's Telemetry!",
+                "standalone:Alechilles:Beacon",
                 TelemetryRuntimeOrigin.STANDALONE,
-                "0.2.5",
+                "2.0.0",
                 settings,
                 dataPaths,
                 List.of(providerProject),
@@ -306,7 +316,7 @@ class TelemetryRuntimeHostTest {
 
         assertEquals(1, client.payloads.size());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
-        assertEquals("alecs-telemetry", payload.get("projectId").getAsString());
+        assertEquals("beacon", payload.get("projectId").getAsString());
         assertEquals("error", payload.get("eventType").getAsString());
         assertEquals("runtime_command_register_failed", payload.get("eventName").getAsString());
         assertEquals("command_register", payload.get("operation").getAsString());

@@ -29,11 +29,11 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                                        @Nonnull String hostedEventIngestEndpoint) {
 
     public static final String DEFAULT_HOSTED_INGEST_ENDPOINT =
-            "https://telemetry.alecsmods.com/ingest/crash";
+            "https://beacon.modstats.io/ingest/crash";
     public static final String DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT =
-            "https://telemetry.alecsmods.com/ingest/event";
+            "https://beacon.modstats.io/ingest/event";
     public static final String DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT =
-            "https://telemetry.alecsmods.com/ingest/report";
+            "https://beacon.modstats.io/ingest/report";
 
     private static final int CURRENT_VERSION = 1;
     private static final boolean DEFAULT_ENABLED = true;
@@ -55,6 +55,12 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     private static final int DEFAULT_MAX_LOG_ATTACHMENT_BYTES = 262144;
     private static final int DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT = 200;
     private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
+    private static final String LEGACY_HOSTED_INGEST_ENDPOINT =
+            "https://telemetry.alecsmods.com/ingest/crash";
+    private static final String LEGACY_HOSTED_EVENT_INGEST_ENDPOINT =
+            "https://telemetry.alecsmods.com/ingest/event";
+    private static final String LEGACY_HOSTED_REPORT_INGEST_ENDPOINT =
+            "https://telemetry.alecsmods.com/ingest/report";
 
     @Nonnull
     public static TelemetryRuntimeSettings load(@Nonnull Path filePath, @Nullable HytaleLogger logger) {
@@ -71,12 +77,16 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(parsed.maxUploadsPerFlush, DEFAULT_MAX_UPLOADS_PER_FLUSH, 1, 500),
                 clamp(parsed.maxBreadcrumbsPerProject, DEFAULT_MAX_BREADCRUMBS_PER_PROJECT, 1, 200),
                 normalizeManualReportSettings(parsed.manualReports),
-                parsed.hostedIngestEndpoint == null || parsed.hostedIngestEndpoint.isBlank()
-                        ? DEFAULT_HOSTED_INGEST_ENDPOINT
-                        : parsed.hostedIngestEndpoint.trim(),
-                parsed.hostedEventIngestEndpoint == null || parsed.hostedEventIngestEndpoint.isBlank()
-                        ? DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT
-                        : parsed.hostedEventIngestEndpoint.trim()
+                normalizeEndpoint(
+                        parsed.hostedIngestEndpoint,
+                        LEGACY_HOSTED_INGEST_ENDPOINT,
+                        DEFAULT_HOSTED_INGEST_ENDPOINT
+                ),
+                normalizeEndpoint(
+                        parsed.hostedEventIngestEndpoint,
+                        LEGACY_HOSTED_EVENT_INGEST_ENDPOINT,
+                        DEFAULT_HOSTED_EVENT_INGEST_ENDPOINT
+                )
         );
     }
 
@@ -152,9 +162,11 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
     @Nonnull
     private static ManualReportSettings normalizeManualReportSettings(@Nullable ManualReportSettingsDocument document) {
         ManualReportSettingsDocument safe = document == null ? new ManualReportSettingsDocument() : document;
-        String endpoint = safe.hostedReportIngestEndpoint == null || safe.hostedReportIngestEndpoint.isBlank()
-                ? DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT
-                : safe.hostedReportIngestEndpoint.trim();
+        String endpoint = normalizeEndpoint(
+                safe.hostedReportIngestEndpoint,
+                LEGACY_HOSTED_REPORT_INGEST_ENDPOINT,
+                DEFAULT_HOSTED_REPORT_INGEST_ENDPOINT
+        );
         return new ManualReportSettings(
                 safe.enabled == null ? DEFAULT_MANUAL_REPORTS_ENABLED : safe.enabled,
                 safe.manualReviewRequired == null ? DEFAULT_MANUAL_REVIEW_REQUIRED : safe.manualReviewRequired,
@@ -168,6 +180,17 @@ public record TelemetryRuntimeSettings(@Nonnull Path filePath,
                 clamp(safe.maxPendingManualReportsPerProject, DEFAULT_MAX_PENDING_MANUAL_REPORTS_PER_PROJECT, 1, 5000),
                 endpoint
         );
+    }
+
+    @Nonnull
+    private static String normalizeEndpoint(@Nullable String configured,
+                                            @Nonnull String legacyDefault,
+                                            @Nonnull String currentDefault) {
+        if (configured == null || configured.isBlank()) {
+            return currentDefault;
+        }
+        String trimmed = configured.trim();
+        return legacyDefault.equals(trimmed) ? currentDefault : trimmed;
     }
 
     public record ManualReportSettings(boolean enabled,

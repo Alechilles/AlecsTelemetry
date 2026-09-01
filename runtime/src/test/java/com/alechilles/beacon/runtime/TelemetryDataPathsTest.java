@@ -114,7 +114,58 @@ class TelemetryDataPathsTest {
         assertTrue(settings.manualReports().allowDiagnostics());
         assertEquals(262144, settings.manualReports().maxLogAttachmentBytes());
         assertEquals(200, settings.manualReports().maxPendingManualReportsPerProject());
-        assertEquals("https://telemetry.alecsmods.com/ingest/report", settings.manualReports().hostedReportIngestEndpoint());
+        assertEquals("https://beacon.modstats.io/ingest/report", settings.manualReports().hostedReportIngestEndpoint());
+    }
+
+    @Test
+    void normalizesLegacyGeneratedEndpointDefaultsWhenLoadingVersionOneSettings() throws Exception {
+        Path settingsFile = tempDir.resolve("legacy-defaults").resolve("runtime.json");
+        Files.createDirectories(settingsFile.getParent());
+        Files.writeString(settingsFile, """
+                {
+                  "version": 1,
+                  "enabled": true,
+                  "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
+                  "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event",
+                  "manualReports": {
+                    "hostedReportIngestEndpoint": "https://telemetry.alecsmods.com/ingest/report"
+                  }
+                }
+                """);
+
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+
+        assertEquals("https://beacon.modstats.io/ingest/crash", settings.hostedIngestEndpoint());
+        assertEquals("https://beacon.modstats.io/ingest/event", settings.hostedEventIngestEndpoint());
+        assertEquals(
+                "https://beacon.modstats.io/ingest/report",
+                settings.manualReports().hostedReportIngestEndpoint()
+        );
+    }
+
+    @Test
+    void preservesCustomEndpointUrlsWhenLoadingVersionOneSettings() throws Exception {
+        Path settingsFile = tempDir.resolve("legacy-custom").resolve("runtime.json");
+        Files.createDirectories(settingsFile.getParent());
+        Files.writeString(settingsFile, """
+                {
+                  "version": 1,
+                  "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash?custom=true",
+                  "hostedEventIngestEndpoint": "https://custom.example/ingest/event",
+                  "manualReports": {
+                    "hostedReportIngestEndpoint": "https://custom.example/ingest/report"
+                  }
+                }
+                """);
+
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(settingsFile, null);
+
+        assertEquals(
+                "https://telemetry.alecsmods.com/ingest/crash?custom=true",
+                settings.hostedIngestEndpoint()
+        );
+        assertEquals("https://custom.example/ingest/event", settings.hostedEventIngestEndpoint());
+        assertEquals("https://custom.example/ingest/report", settings.manualReports().hostedReportIngestEndpoint());
     }
 
     @Test

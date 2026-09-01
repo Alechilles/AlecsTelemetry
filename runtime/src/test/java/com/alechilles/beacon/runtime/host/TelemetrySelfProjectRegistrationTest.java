@@ -5,6 +5,7 @@ import com.alechilles.beacon.project.TelemetryProjectRegistration;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -16,18 +17,20 @@ class TelemetrySelfProjectRegistrationTest {
     @Test
     void standaloneSelfProjectReportsCrashErrorsAndStatsByDefault() {
         TelemetryProjectRegistration registration = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry!",
-                "0.2.5",
-                Path.of("Alec's Telemetry.jar"),
+                "Alechilles:Beacon",
+                "2.0.0",
+                Path.of("Beacon.jar"),
                 null
         );
 
-        assertEquals("alecs-telemetry", registration.projectId());
-        assertEquals("Alec's Telemetry", registration.displayName());
+        assertEquals("beacon", registration.projectId());
+        assertEquals("Beacon", registration.displayName());
         assertEquals("dependency", registration.runtimeMode());
-        assertEquals("Alechilles:Alec's Telemetry!", registration.pluginIdentifier());
-        assertEquals("0.2.5", registration.pluginVersion());
-        assertEquals(Path.of("Alec's Telemetry.jar"), registration.sourcePath());
+        assertEquals("Alechilles:Beacon", registration.pluginIdentifier());
+        assertEquals("2.0.0", registration.pluginVersion());
+        assertEquals(Path.of("Beacon.jar"), registration.sourcePath());
+        assertEquals(List.of("Alechilles:Beacon"), registration.ownerPluginIdentifiers());
+        assertEquals(List.of("com.alechilles.beacon"), registration.packagePrefixes());
         assertEquals("hosted", registration.destinationMode());
         assertEquals("proj_aqocXOn4Gw3unr0p22QoNd3k", registration.descriptor().hosted().projectKey());
         assertEquals("icon-256.png", registration.descriptor().ui().iconTexturePath());
@@ -65,9 +68,9 @@ class TelemetrySelfProjectRegistrationTest {
                 """);
 
         TelemetryProjectRegistration registration = TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry!",
-                "0.2.5",
-                Path.of("Alec's Telemetry.jar"),
+                "Alechilles:Beacon",
+                "2.0.0",
+                Path.of("Beacon.jar"),
                 override
         );
 

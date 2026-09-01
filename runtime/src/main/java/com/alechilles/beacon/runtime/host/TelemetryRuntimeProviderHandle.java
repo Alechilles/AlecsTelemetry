@@ -163,7 +163,7 @@ final class TelemetryRuntimeProviderHandle implements TelemetryRuntimeHostHandle
         TelemetryProjectOverride override = new TelemetryProjectOverrideStore(logger)
                 .load(dataPaths.projectOverrideFile(TelemetrySelfProjectRegistration.PROJECT_ID));
         registrations.add(TelemetrySelfProjectRegistration.create(
-                "Alechilles:Alec's Telemetry!",
+                "Alechilles:Beacon",
                 request.runtimeVersion(),
                 request.sourcePath(),
                 override

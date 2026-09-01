@@ -29,7 +29,7 @@ public final class TelemetryRuntimeHost {
         return bootstrap(new TelemetryRuntimeBootstrapRequest(
                 plugin,
                 TelemetryRuntimeOrigin.STANDALONE,
-                resolvePluginIdentifier(plugin, "Alechilles:Alec's Telemetry!"),
+                resolvePluginIdentifier(plugin, "Alechilles:Beacon"),
                 resolvePluginVersion(plugin),
                 resolveRuntimeVersion(),
                 resolvePluginSourcePath(plugin),
