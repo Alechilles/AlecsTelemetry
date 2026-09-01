@@ -50,8 +50,7 @@ public final class EmbeddedTelemetryBootstrap {
                     slugify(displayName),
                     displayName,
                     logger,
-                    "No Server/Telemetry/project.json descriptor was found in the owning mod."
-                            + " Legacy telemetry/project.json was also absent."
+                    "No Server/Beacon/project.json descriptor was found in the owning mod."
             );
         }
         return bootstrapFromDescriptorBytes(
@@ -63,8 +62,7 @@ public final class EmbeddedTelemetryBootstrap {
                 buildFallbacks(plugin),
                 false,
                 logger,
-                "No Server/Telemetry/project.json descriptor was found in the owning mod."
-                        + " Legacy telemetry/project.json was also absent."
+                "No Server/Beacon/project.json descriptor was found in the owning mod."
         );
     }
 
@@ -157,26 +155,17 @@ public final class EmbeddedTelemetryBootstrap {
                                                                         @Nullable HytaleLogger logger) {
         try {
             if (Files.isDirectory(sourcePath)) {
-                for (String descriptorResource : List.of(
-                        TelemetryProjectDiscovery.DESCRIPTOR_PATH,
-                        TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH
-                )) {
-                    Path descriptorPath = sourcePath.resolve(descriptorResource);
-                    if (Files.isRegularFile(descriptorPath)) {
-                        return new DescriptorBytes(descriptorResource, Files.readAllBytes(descriptorPath));
-                    }
+                String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
+                Path descriptorPath = sourcePath.resolve(descriptorResource);
+                if (Files.isRegularFile(descriptorPath)) {
+                    return new DescriptorBytes(descriptorResource, Files.readAllBytes(descriptorPath));
                 }
                 return null;
             }
             try (ZipFile archive = new ZipFile(sourcePath.toFile())) {
-                for (String descriptorResource : List.of(
-                        TelemetryProjectDiscovery.DESCRIPTOR_PATH,
-                        TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH
-                )) {
-                    ZipEntry descriptorEntry = archive.getEntry(descriptorResource);
-                    if (descriptorEntry == null) {
-                        continue;
-                    }
+                String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
+                ZipEntry descriptorEntry = archive.getEntry(descriptorResource);
+                if (descriptorEntry != null) {
                     try (InputStream stream = archive.getInputStream(descriptorEntry)) {
                         return new DescriptorBytes(descriptorResource, stream.readAllBytes());
                     }
@@ -197,10 +186,6 @@ public final class EmbeddedTelemetryBootstrap {
                                                                               @Nullable HytaleLogger logger) {
         String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
         InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
-        if (rawStream == null) {
-            descriptorResource = TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH;
-            rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
-        }
         try (InputStream stream = rawStream) {
             if (stream == null) {
                 return null;

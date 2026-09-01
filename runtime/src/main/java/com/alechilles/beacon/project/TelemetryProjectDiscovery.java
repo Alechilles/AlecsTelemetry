@@ -34,9 +34,8 @@ import java.util.zip.ZipFile;
  */
 public final class TelemetryProjectDiscovery {
 
-    public static final String DESCRIPTOR_PATH = "Server/Telemetry/project.json";
-    public static final String LEGACY_DESCRIPTOR_PATH = "telemetry/project.json";
-    public static final String NAMESPACED_DESCRIPTOR_DIRECTORY = "META-INF/alecs-telemetry/projects/";
+    public static final String DESCRIPTOR_PATH = "Server/Beacon/project.json";
+    public static final String NAMESPACED_DESCRIPTOR_DIRECTORY = "META-INF/beacon/projects/";
     private static final String MANIFEST_PATH = "manifest.json";
     private static final int MAX_SKIPPED_REGISTRATION_WARNINGS = 64;
 
@@ -305,17 +304,12 @@ public final class TelemetryProjectDiscovery {
 
     @Nonnull
     private static Path descriptorPath(@Nonnull Path folder) {
-        Path descriptorPath = folder.resolve("Server").resolve("Telemetry").resolve("project.json");
-        if (Files.isRegularFile(descriptorPath)) {
-            return descriptorPath;
-        }
-        return folder.resolve("telemetry").resolve("project.json");
+        return folder.resolve(DESCRIPTOR_PATH);
     }
 
     @Nullable
     private static ZipEntry descriptorEntry(@Nonnull ZipFile zipFile) {
-        ZipEntry entry = zipFile.getEntry(DESCRIPTOR_PATH);
-        return entry == null ? zipFile.getEntry(LEGACY_DESCRIPTOR_PATH) : entry;
+        return zipFile.getEntry(DESCRIPTOR_PATH);
     }
 
     private static boolean hasJsonSuffix(@Nonnull String resourceName) {

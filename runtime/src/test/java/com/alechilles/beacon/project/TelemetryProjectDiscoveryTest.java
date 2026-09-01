@@ -23,7 +23,7 @@ class TelemetryProjectDiscoveryTest {
     @Test
     void discoversProjectDescriptorFromFolder() throws Exception {
         Path modFolder = tempDir.resolve("Example Mod");
-        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Beacon"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -36,7 +36,7 @@ class TelemetryProjectDiscoveryTest {
                 """
         );
         Files.writeString(
-                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
+                modFolder.resolve("Server").resolve("Beacon").resolve("project.json"),
                 """
                 {
                   "projectId": "example-mod"
@@ -57,8 +57,9 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void discoversLegacyProjectDescriptorFromFolder() throws Exception {
+    void ignoresLegacyProjectDescriptorsFromFolder() throws Exception {
         Path modFolder = tempDir.resolve("Legacy Mod");
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
         Files.createDirectories(modFolder.resolve("telemetry"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
@@ -68,6 +69,14 @@ class TelemetryProjectDiscoveryTest {
                   "Name": "Legacy Mod",
                   "Version": "1.2.3",
                   "Main": "com.example.telemetry.LegacyMod"
+                }
+                """
+        );
+        Files.writeString(
+                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
+                """
+                {
+                  "projectId": "server-telemetry-legacy"
                 }
                 """
         );
@@ -82,14 +91,16 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertEquals(1, result.projects().size());
-        assertEquals("legacy-mod", result.projects().getFirst().projectId());
+        assertTrue(result.projects().isEmpty());
+        assertTrue(result.consentProjects().isEmpty());
+        assertEquals(1, result.loadedMods().size());
+        assertTrue(result.skippedRegistrationWarnings().isEmpty());
     }
 
     @Test
     void registersEmbeddedDescriptorsForCoordinatorRuntime() throws Exception {
         Path modFolder = tempDir.resolve("Embedded Mod");
-        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Beacon"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -102,7 +113,7 @@ class TelemetryProjectDiscoveryTest {
                 """
         );
         Files.writeString(
-                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
+                modFolder.resolve("Server").resolve("Beacon").resolve("project.json"),
                 """
                 {
                   "projectId": "embedded-mod",
@@ -173,7 +184,7 @@ class TelemetryProjectDiscoveryTest {
                 }
                 """,
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.4.0", "Creditor")
                 )
         );
@@ -197,12 +208,31 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
+    void ignoresLegacyNamespacedDescriptorFromArchive() throws Exception {
+        writeJar(
+                tempDir.resolve("legacy-passive-host.jar"),
+                hostManifest("Example", "Legacy Passive Host", "3.0.0"),
+                Map.of(
+                        "META-INF/alecs-telemetry/projects/legacy.json",
+                        passiveDescriptor("legacy-passive", "1.0.0", "Legacy Passive")
+                )
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertTrue(result.projects().isEmpty());
+        assertTrue(result.consentProjects().isEmpty());
+        assertEquals(1, result.loadedMods().size());
+        assertTrue(result.skippedRegistrationWarnings().isEmpty());
+    }
+
+    @Test
     void electsHighestPassiveLogicalVersion() throws Exception {
         writeJar(
                 tempDir.resolve("host-old.jar"),
                 hostManifest("Example", "Old Host", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.3.0", "Creditor")
                 )
         );
@@ -210,7 +240,7 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("host-new.jar"),
                 hostManifest("Example", "New Host", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.4.0", "Creditor")
                 )
         );
@@ -228,7 +258,7 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("host-a.jar"),
                 hostManifest("Example", "Host A", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.4.0+shade-a", "Creditor")
                 )
         );
@@ -236,7 +266,7 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("host-b.jar"),
                 hostManifest("Example", "Host B", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.4.0+shade-b", "Creditor")
                 )
         );
@@ -255,7 +285,7 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("owner-a.jar"),
                 hostManifest("Example", "Owner A", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "1.4.0", "Creditor", "Example:Owner A")
                 )
         );
@@ -263,7 +293,7 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("owner-b.jar"),
                 hostManifest("Example", "Owner B", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        "META-INF/beacon/projects/creditor.json",
                         passiveDescriptor("creditor", "2.0.0", "Creditor", "Example:Owner B")
                 )
         );
@@ -282,9 +312,9 @@ class TelemetryProjectDiscoveryTest {
                 tempDir.resolve("host.jar"),
                 hostManifest("Example", "Host", "3.0.0"),
                 Map.of(
-                        "META-INF/alecs-telemetry/projects/valid.json",
+                        "META-INF/beacon/projects/valid.json",
                         passiveDescriptor("valid", "1.0.0", "Valid"),
-                        "META-INF/alecs-telemetry/projects/incomplete.json",
+                        "META-INF/beacon/projects/incomplete.json",
                         """
                         {
                           "projectId": "incomplete",
@@ -305,7 +335,7 @@ class TelemetryProjectDiscoveryTest {
     }
 
     private static void writeJar(@Nonnull Path jarPath, @Nonnull String manifest, @Nonnull String descriptor) throws Exception {
-        writeJar(jarPath, manifest, Map.of("Server/Telemetry/project.json", descriptor));
+        writeJar(jarPath, manifest, Map.of("Server/Beacon/project.json", descriptor));
     }
 
     private static void writeJar(@Nonnull Path jarPath,

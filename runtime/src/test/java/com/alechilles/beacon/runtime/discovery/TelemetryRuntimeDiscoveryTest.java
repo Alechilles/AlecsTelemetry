@@ -111,7 +111,7 @@ class TelemetryRuntimeDiscoveryTest {
         Files.writeString(
                 modsDirectory.resolve("Diagnostics Mod")
                         .resolve("Server")
-                        .resolve("Telemetry")
+                        .resolve("Beacon")
                         .resolve("project.json"),
                 """
                 {
@@ -578,7 +578,7 @@ class TelemetryRuntimeDiscoveryTest {
                                        String version,
                                        String descriptorJson) throws Exception {
         Path modFolder = modsDirectory.resolve(folderName);
-        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Beacon"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -590,7 +590,7 @@ class TelemetryRuntimeDiscoveryTest {
                 }
                 """.formatted(group, name, version, slug(name))
         );
-        Files.writeString(modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"), descriptorJson);
+        Files.writeString(modFolder.resolve("Server").resolve("Beacon").resolve("project.json"), descriptorJson);
     }
 
     private static void writePassiveModFolder(Path modsDirectory,
@@ -608,7 +608,7 @@ class TelemetryRuntimeDiscoveryTest {
                                               String version,
                                               String projectVersion) throws Exception {
         Path modFolder = modsDirectory.resolve(folderName);
-        Files.createDirectories(modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects"));
+        Files.createDirectories(modFolder.resolve("META-INF").resolve("beacon").resolve("projects"));
         Files.writeString(
                 modFolder.resolve("manifest.json"),
                 """
@@ -621,7 +621,7 @@ class TelemetryRuntimeDiscoveryTest {
                 """.formatted(group, name, version)
         );
         Files.writeString(
-                modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects").resolve("creditor.json"),
+                modFolder.resolve("META-INF").resolve("beacon").resolve("projects").resolve("creditor.json"),
                 """
                 {
                   "schemaVersion": 1,

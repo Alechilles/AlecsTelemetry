@@ -270,7 +270,7 @@ class EmbeddedTelemetryServiceTest {
     void conventionalBootstrapLoadsDescriptorFromHostClassLoader() throws Exception {
         JavaPlugin plugin = conventionalPlugin(
                 tempDir.resolve("conventional-success"),
-                "Server/Telemetry/project.json",
+                "Server/Beacon/project.json",
                 fixtureBytes("fixtures/conventional-project.json")
         );
 
@@ -287,12 +287,12 @@ class EmbeddedTelemetryServiceTest {
         Path ownerJar = tempDir.resolve("owner-archive").resolve("Host.jar");
         writeDescriptorArchive(
                 ownerJar,
-                "telemetry/project.json",
+                "Server/Beacon/project.json",
                 fixtureBytes("fixtures/conventional-project.json")
         );
         JavaPlugin plugin = conventionalPlugin(
                 tempDir.resolve("owner-archive"),
-                "Server/Telemetry/project.json",
+                "Server/Beacon/project.json",
                 fixtureBytes("fixtures/contributed-hosted-project.json"),
                 ownerJar
         );
@@ -306,19 +306,18 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
-    void conventionalBootstrapMissingDescriptorKeepsDisabledFallback() throws Exception {
+    void conventionalBootstrapIgnoresLegacyDescriptorPath() throws Exception {
         JavaPlugin plugin = conventionalPlugin(
                 tempDir.resolve("conventional-missing"),
-                null,
-                null
+                "telemetry/project.json",
+                fixtureBytes("fixtures/conventional-project.json")
         );
 
         EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
 
         assertEquals("host", service.projectId());
         assertEquals(
-                "No Server/Telemetry/project.json descriptor was found in the owning mod."
-                        + " Legacy telemetry/project.json was also absent.",
+                "No Server/Beacon/project.json descriptor was found in the owning mod.",
                 service.disabledReason()
         );
     }
