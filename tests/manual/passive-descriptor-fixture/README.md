@@ -6,19 +6,21 @@ telemetry:
 1. `embeddedDescriptorLibraryJar` builds a small Java library containing a
    marker class and one namespaced descriptor.
 2. The Hytale host plugin merges that library JAR into its final archive. It
-   has no Alec's Telemetry dependency and does not call any Telemetry API.
+   has no Beacon dependency and does not call any Telemetry API.
 
 The final host JAR therefore contains both:
 
 ```text
 com/alechilles/passivedescriptorlibrary/EmbeddedDescriptorLibrary.class
-META-INF/alecs-telemetry/projects/telemetry-demo.json
+META-INF/beacon/projects/telemetry-demo.json
 ```
 
-The descriptor is intentionally wired to the publishable `telemetry-demo`
-project key on `https://telemetry-dev.alecsmods.com`. It sends only the
-standard Stats `heartbeat` event. Do not install the intermediate library JAR;
-only install the final host JAR.
+The descriptor is intentionally wired to the separately provisioned
+`telemetry-demo` development project. Its checked-in endpoint is a development
+fixture and is not the Beacon production origin. The platform migration must
+provision the matching Beacon development route before this fixture is used as
+a release gate. It sends only the standard Stats `heartbeat` event. Do not
+install the intermediate library JAR; only install the final host JAR.
 
 ## Build and stage
 
@@ -34,7 +36,7 @@ Then copy:
 build/libs/Passive Telemetry Descriptor Host Fixture v1.0.0.jar
 ```
 
-to the server's `mods` directory that already runs an Alec's Telemetry runtime
+to the server's `mods` directory that already runs a Beacon runtime
 (standalone or embedded). For the shared local workspace, use
 `C:\Users\22ale\AppData\Roaming\Hytale\Modding\run\mods`.
 

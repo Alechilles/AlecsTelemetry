@@ -7,19 +7,19 @@ draft: false
 
 # Project Descriptor
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
-Consumer mods opt into Alec's Telemetry by shipping:
+Consumer mods opt into Beacon by shipping:
 
 ```text
-Server/Telemetry/project.json
+Server/Beacon/project.json
 ```
 
 The same descriptor works for standalone dependency mode and embedded mode.
 
 ## Minimal Portal Descriptor
 
-If your `manifest.json` has `Group`, `Name`, and `Main`, Alec's Telemetry can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
+If your `manifest.json` has `Group`, `Name`, and `Main`, Beacon can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
 
 ```json
 {
@@ -49,7 +49,7 @@ Telemetry category descriptors separate capability from initial consent:
 Runtime override files still use `enabled`; those files store saved consent choices.
 
 For a previously reviewed project, newly added Diagnostics remains disabled until
-an operator runs `/telemetry consent` and selects Save and Close. This applies to
+an operator runs `/beacon consent` and selects Save and Close. This applies to
 modern reviewed records with a supported-category snapshot and to legacy reviewed
 records without one. Error and Diagnostics are independent categories.
 

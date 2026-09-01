@@ -1,6 +1,6 @@
-# Alec's Telemetry Hosted Service
+# Beacon Hosted Service
 
-This package contains the hosted ingest service for Alec's Telemetry.
+This package contains the hosted ingest service for Beacon.
 
 ## Status
 

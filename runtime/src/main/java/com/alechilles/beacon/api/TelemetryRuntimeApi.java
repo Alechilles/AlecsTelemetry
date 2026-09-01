@@ -5,7 +5,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 /**
- * Public entrypoint for consumer mods that want to interact with Alec's Telemetry at runtime.
+ * Public entrypoint for consumer mods that want to interact with Beacon at runtime.
  */
 public interface TelemetryRuntimeApi {
 

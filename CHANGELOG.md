@@ -1,5 +1,37 @@
 # Changelog
 
+## 2.0.0 - Beacon Rename - 2026-09-01
+
+### Breaking
+
+- Renamed the runtime, standalone mod, and hosted product to Beacon. The
+  namespace changed from `com.alechilles.alecstelemetry` to
+  `com.alechilles.beacon`; there is no namespace compatibility layer.
+- Renamed Maven and Gradle coordinates to `beacon-parent`, `beacon-runtime`,
+  and `beacon`. The Maven repository is now
+  `https://beacon.modstats.io/maven/releases`.
+- Renamed the Hytale dependency from `Alechilles:Alec's Telemetry!` to
+  `Alechilles:Beacon`.
+- Renamed conventional descriptors from `Server/Telemetry/project.json` to
+  `Server/Beacon/project.json`, and namespaced descriptors from
+  `META-INF/alecs-telemetry/projects/` to `META-INF/beacon/projects/`.
+- Updated embedded bootstrap imports and packaging to the Beacon namespace.
+  Embedded consumers must still publish the runtime `Common/**` asset pack.
+- Renamed `/telemetry` to `/beacon` and its permission prefix to
+  `beacon.command.beacon`. There is no command alias.
+- Changed the hosted origin to `https://beacon.modstats.io`. The
+  `/ingest/crash`, `/ingest/event`, and `/ingest/report` route names remain.
+- Renamed the self project and public stats slug from `alecs-telemetry` to
+  `beacon`; the existing project history remains attached to the renamed
+  identity.
+- Changed the canonical local data root to
+  `mods/Alechilles_Beacon/`. The first Beacon startup performs a copy-only
+  migration from known Alec-created roots, keeps old sources, and uses Beacon
+  destinations when both copies exist.
+
+See the [Beacon 2.0 migration guide](README.md#migrate-from-alecs-telemetry-1x)
+before upgrading a consumer or embedded mod.
+
 ## 1.3.0 - Diagnostic Bundles - 2026-08-30
 
 ### Added

@@ -1,12 +1,12 @@
-# Alec's Telemetry Privacy Policy
+# Beacon Privacy Policy
 
-Effective date: August 30, 2026
+Effective date: September 1, 2026
 
-This policy explains how Alec's Telemetry, Alec's hosted telemetry platform, and
+This policy explains how Beacon, the Beacon hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
 
-- the Alec's Telemetry runtime that can run on Hytale servers or local worlds
-- telemetry sent to Alec's hosted platform at `telemetry.alecsmods.com` or
+- the Beacon runtime that can run on Hytale servers or local worlds
+- telemetry sent to the Beacon hosted platform at `beacon.modstats.io` or
   related development hosts
 - the hosted portal used by mod authors and project members, including its
   optional Model Context Protocol (MCP) agent access feature
@@ -14,29 +14,50 @@ ModStats.io collect and use information. It covers:
 
 This policy is written for players, server owners, and mod authors. It is not a
 substitute for legal advice. If you operate a public server, ship a mod that uses
-Alec's Telemetry, or configure a custom telemetry endpoint, you are responsible
+Beacon, or configure a custom telemetry endpoint, you are responsible
 for making sure your own setup follows the laws and platform rules that apply to
 you.
 
 ## Who Controls The Data
 
-For telemetry sent to Alec's hosted platform, Apex Web Solutions LLC operates the
+For telemetry sent to the Beacon hosted platform, Apex Web Solutions LLC operates the
 service and controls the hosted data. Mod authors and server owners control what
 their projects and servers send by choosing telemetry descriptors, consent
 defaults, runtime settings, and manual report settings.
 
-If a mod or server points Alec's Telemetry at a custom endpoint instead of Alec's
+If a mod or server points Beacon at a custom endpoint instead of the Beacon
 hosted platform, that endpoint operator controls the data sent there. This policy
 does not cover custom endpoints.
 
+## Beacon 2.0 Origin Transition
+
+Beacon 2.0 uses `https://beacon.modstats.io` for hosted telemetry and portal
+traffic. For 90 days after the Beacon 2.0 launch, the former
+`https://telemetry.alecsmods.com` host remains available for the transition:
+
+- human-facing routes redirect to the matching Beacon URL
+- ingest and API `POST` routes use a reverse proxy and do not redirect the
+  request body
+- this transition does not add new telemetry fields or data uses
+
+After the 90-day grace period, the old ingest and API routes return `410 Gone`
+with a link to the Beacon migration guide. Users must update their clients and
+descriptors before the grace period ends.
+
+Historical Maven artifacts remain available indefinitely at their old
+coordinates as a read-only archive. They do not provide Beacon 2.x. This
+rename changes product names, namespaces, paths, and hosts only; it does not
+change the telemetry categories, payload privacy rules, or retention practices
+described in this policy.
+
 ## The Short Version
 
-Alec's Telemetry is designed to avoid player identity data by default.
+Beacon is designed to avoid player identity data by default.
 
 - Server owners can review and change telemetry categories with
-  `/telemetry consent`.
+  `/beacon consent`.
 - The runtime automatically enumerates valid direct JSON descriptors under
-  `META-INF/alecs-telemetry/projects/` in installed mod archives and folders.
+  `META-INF/beacon/projects/` in installed mod archives and folders.
   Resource presence is treated as the library's installation signal; it does
   not prove that the library code executed.
 - Public stats show aggregate counts and breakdowns, not raw server IDs, session
@@ -73,7 +94,7 @@ Alec's Telemetry is designed to avoid player identity data by default.
   operator review. For legacy reviewed records without a snapshot, a currently
   supported Diagnostics category is also disabled and due for review; the other
   prior approvals remain unchanged. A passive descriptor may route that
-  standard Stats-only heartbeat to Alec's hosted platform or to an author-selected
+  standard Stats-only heartbeat to the Beacon hosted platform or to an author-selected
   custom endpoint; the custom endpoint operator controls data, security, and
   retention.
 - When an active contribution adds categories to a previously reviewed logical
@@ -82,11 +103,11 @@ Alec's Telemetry is designed to avoid player identity data by default.
   newly supported Diagnostics category. For a legacy reviewed record without a
   supported-category snapshot, Diagnostics remains disabled until the operator
   saves new consent choices; the older category approvals remain honored. A
-  review reminder is sent only to players with `telemetry.command.telemetry` or
+  review reminder is sent only to players with `beacon.command.beacon` or
   the local singleplayer owner.
-- Anchored contributions in the 1.1.0 MVP can upload only to Alec's hosted
+- Anchored contributions in the 1.1.0 MVP can upload only to the Beacon hosted
   destination. Conventional projects may still opt into a custom endpoint; that
-  endpoint operator, not Alec, controls its data and retention.
+  endpoint operator, not Beacon, controls its data and retention.
 - A same-ID contribution winner is not automatically hot-replaced or failed
   over. Retirement fences the old token and leaves already registered fallbacks
   passive until server restart. Re-registering the same project ID in the same
@@ -104,15 +125,24 @@ Alec's Telemetry is designed to avoid player identity data by default.
 - The hosted platform may use IP addresses and request metadata for rate
   limiting, abuse prevention, server-country derivation, security logging, and
   normal hosting operations.
-- Alec's Telemetry policy does not allow mod authors to collect non-optional
+- Beacon policy does not allow mod authors to collect non-optional
   personally identifiable information through telemetry payloads. Third-party
   mods are configurable, so report any suspected abuse through the support link
   below.
 
 ## What The Runtime Stores Locally
 
-The runtime may store local files under the server or save's Alec's Telemetry data
-directory. These files can include:
+The runtime stores local files under the server or save's canonical Beacon data
+directory, normally `mods/Alechilles_Beacon/`. These files can include:
+
+On the first Beacon startup after the rename, known runtime-owned files from
+old Alec-created roots, such as `mods/Alechilles_Alec's Telemetry!/`,
+`mods/Alechilles_Alec's Telemetry/`, `Telemetry/`, and `telemetry/`, can be
+copied into this directory when the Beacon destination is absent. The migration
+keeps every old source, uses the Beacon file when both files exist, and does not
+read legacy owner override paths after the migration attempt. This is a
+storage-name transition only; it does not change what the runtime collects or
+uploads.
 
 - project descriptors discovered from installed mods
 - passive descriptor capability snapshots and consent-review state
@@ -260,13 +290,13 @@ release became public on ModStats. The service does not infer release times from
 telemetry first-seen data.
 
 An embeddable library can contribute to this flow with only a direct
-`META-INF/alecs-telemetry/projects/<stable-project-id>.json` descriptor in the
+`META-INF/beacon/projects/<stable-project-id>.json` descriptor in the
 final host artifact. Presence is the installation signal, not evidence that the
 library executed. If several physical hosts carry the same logical
 `projectId`/`projectVersion`, local election deduplicates them into one logical
 Stats heartbeat project. The containing host identifier/version and source path
 are local election provenance, not new uploaded stats fields. The descriptor may
-route this standard Stats-only heartbeat to Alec's hosted platform or to an
+route this standard Stats-only heartbeat to Beacon hosted platform or to an
 author-selected custom endpoint; custom endpoint operators, rather than Alec,
 control the received data, security, and retention.
 
@@ -380,7 +410,7 @@ can require portal approval before an agent changes an issue, creates a linked
 GitHub issue, or provisions an ingest credential.
 
 For Hytale sign-in, we store the stable per-application Hytale subject
-identifier returned to Alec's Telemetry and, when you grant the profile scope,
+identifier returned to Beacon and, when you grant the profile scope,
 the selected Hytale profile username and UUID. Hytale does not provide us your
 email address through this sign-in flow.
 
@@ -389,8 +419,8 @@ policies when you use those integrations.
 
 ## Website Analytics
 
-The public website may load Google Tag Manager on ModStats.io and Alec's
-Telemetry landing hosts. This is separate from in-game telemetry. Browser
+The public website may load Google Tag Manager on ModStats.io and Beacon
+landing hosts. This is separate from in-game telemetry. Browser
 analytics can include normal web analytics information such as page views,
 referrers, device/browser details, approximate location, and cookie or similar
 identifiers depending on the active tag configuration and browser settings.
@@ -431,7 +461,7 @@ Data is used to:
 - operate billing and project guardrails
 - rate-limit requests, prevent abuse, investigate service issues, and protect
   the platform
-- improve the reliability and privacy posture of Alec's Telemetry
+- improve the reliability and privacy posture of Beacon
 
 Telemetry payloads are not sold. Player report contents and raw telemetry
 payloads are not used for targeted advertising.
@@ -552,7 +582,7 @@ primary database.
 
 Server owners can:
 
-- use `/telemetry consent` to review and change project/category telemetry
+- use `/beacon consent` to review and change project/category telemetry
   choices
 - review the `Diag` category for automatic diagnostic bundles; Diagnostics and
   Error events are independent consent choices
@@ -571,8 +601,8 @@ Server owners can:
 - disable manual reports or require local review before upload
 - disable optional report contact fields, resolution updates, log attachments,
   loaded mod lists, diagnostics, and other report extras
-- use a custom endpoint instead of Alec's hosted platform
-- remove Alec's Telemetry or remove telemetry-enabled project descriptors
+- use a custom endpoint instead of the Beacon hosted platform
+- remove Beacon or remove telemetry-enabled project descriptors
 
 Players can:
 
@@ -597,11 +627,11 @@ Mod authors can:
 - enable only the telemetry categories their project actually needs
 - avoid collecting player names, UUIDs, chat, exact coordinates, secrets, tokens,
   or other personally identifying values
-- document any project-specific fields they add through Alec's Telemetry
+- document any project-specific fields they add through Beacon
 
 ## Children
 
-Alec's Telemetry is not intended to collect personal information from children.
+Beacon is not intended to collect personal information from children.
 Telemetry categories are unavailable unless a project descriptor explicitly
 supports them, and supported categories can be made opt-in with
 `defaultEnabled: false` or disabled by a server-owner setting. Enabled telemetry
@@ -623,13 +653,13 @@ or attachment.
 
 ## Third-Party Mods And Custom Fields
 
-Alec's Telemetry is configurable. Third-party mod authors can define descriptors,
+Beacon is configurable. Third-party mod authors can define descriptors,
 choose defaults, add report fields, and send descriptor-approved Event Context.
-Alec's Telemetry policy forbids non-optional collection of personally
+Beacon policy forbids non-optional collection of personally
 identifiable information through telemetry payloads, but Alec cannot guarantee
 that every third-party mod author follows the intended privacy standards.
 
-If you believe a mod is using Alec's Telemetry to collect identifiable user
+If you believe a mod is using Beacon to collect identifiable user
 information without a clear optional choice, report it through the support
 contact below.
 
@@ -665,7 +695,7 @@ the incident.
 
 ## Changes
 
-This policy may be updated as Alec's Telemetry and the hosted platform change.
+This policy may be updated as Beacon and the hosted platform change.
 The effective date at the top shows when this version was published.
 
 ## Contact

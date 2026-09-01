@@ -6,17 +6,27 @@ descriptor inside another mod.
 This is optional. Hosted telemetry is expected to work from the shipped
 descriptor alone when the mod bakes in a publishable ingest key.
 
-Override files live under the canonical Alec's Telemetry data root:
+Override files live under the canonical Beacon data root:
 
 ```text
-<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json
+<ServerOrSaveRoot>/mods/Alechilles_Beacon/Settings/projects/<project-id>.json
 ```
 
 Runtime settings, server identity, queues, and project overrides share this same
-root. Older files under `<ServerOrSaveRoot>/telemetry`,
+root. Older files under `<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/`,
+`<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/`,
+`<ServerOrSaveRoot>/telemetry`,
 `<ServerOrSaveRoot>/Telemetry`, or embedded owner
 `<ConsumerModDataDir>/Telemetry/Settings/projects` folders are migrated into the
-canonical root on startup when the canonical destination is missing.
+canonical root on startup when the canonical destination is missing. The old
+files and directories remain. Beacon uses the canonical file on a conflict and
+does not read legacy owner override paths after the migration attempt.
+
+When Beacon loads a complete 1.x settings document, it changes only the three
+generated default URLs from `https://telemetry.alecsmods.com` to the Beacon
+origin: the crash, event, and report endpoints. A custom endpoint URL is kept
+unchanged. This prevents a server owner's explicit routing choice from being
+rewritten during the rename.
 
 ## Example: switch hosted to custom endpoint
 
@@ -54,7 +64,7 @@ canonical root on startup when the canonical destination is missing.
 
 ## Example: disable telemetry categories
 
-These fields are also written by the first-run consent UI and by `/telemetry consent`.
+These fields are also written by the first-run consent UI and by `/beacon consent`.
 
 ```json
 {
@@ -91,7 +101,7 @@ These fields are also written by the first-run consent UI and by `/telemetry con
 ## Example: server-owner manual report controls
 
 Global runtime settings live in
-`<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/Settings/runtime.json`, not
+`<ServerOrSaveRoot>/mods/Alechilles_Beacon/Settings/runtime.json`, not
 per-project override files. The runtime creates this file with defaults the first
 time it starts.
 
@@ -105,8 +115,8 @@ time it starts.
   "maxPendingEventsPerProject": 500,
   "maxUploadsPerFlush": 10,
   "maxBreadcrumbsPerProject": 30,
-  "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
-  "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
+  "hostedIngestEndpoint": "https://beacon.modstats.io/ingest/crash",
+  "hostedEventIngestEndpoint": "https://beacon.modstats.io/ingest/event"
 }
 ```
 
@@ -125,7 +135,7 @@ Manual report controls also live in the canonical `Settings/runtime.json`:
     "allowDiagnostics": true,
     "maxLogAttachmentBytes": 262144,
     "maxPendingManualReportsPerProject": 200,
-    "hostedReportIngestEndpoint": "https://telemetry.alecsmods.com/ingest/report"
+    "hostedReportIngestEndpoint": "https://beacon.modstats.io/ingest/report"
   }
 }
 ```

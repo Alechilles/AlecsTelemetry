@@ -7,13 +7,13 @@ draft: false
 
 # Anonymous Usage Stats
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 Anonymous usage stats publish aggregate server, player, version, and environment information. They are separate from feature usage events and have their own consent category.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. If this is an asset pack or descriptor-only project, make sure the inferred `projectId` matches the portal project ID. Add an explicit `projectId` only when inference would not match.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once. If this is an asset pack or descriptor-only project, make sure the inferred `projectId` matches the portal project ID. Add an explicit `projectId` only when inference would not match.
 
 ## Descriptor Block
 
@@ -48,7 +48,7 @@ Public stats do not expose raw server IDs, session IDs, IP addresses, player nam
 
 ## Verify
 
-1. Run `/telemetry project <project-id>`.
+1. Run `/beacon project <project-id>`.
 2. Wait for the first heartbeat window.
 3. Open the portal Stats page.
 4. If public, open the public stats page on ModStats.
@@ -58,4 +58,4 @@ Public stats do not expose raw server IDs, session IDs, IP addresses, player nam
 - Stats are not immediate; wait for the first heartbeat.
 - The project is collecting stats but is not public; update portal visibility.
 - Ingest is rejected with a project mismatch; make the descriptor `projectId` match the portal project ID.
-- Server owner disabled stats; check `/telemetry consent` or the project override file.
+- Server owner disabled stats; check `/beacon consent` or the project override file.

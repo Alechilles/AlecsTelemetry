@@ -1,7 +1,7 @@
 # Runtime API
 
-Consumer mods can use Alec's Telemetry as an optional runtime integration after
-they ship `Server/Telemetry/project.json`.
+Consumer mods can use Beacon as an optional runtime integration after
+they ship `Server/Beacon/project.json`.
 
 Use the public API when a mod wants to add breadcrumbs, explicit non-crash
 events, performance timings, usage events, stats events, bounded diagnostic

@@ -7,17 +7,17 @@ draft: false
 
 # Web Portal Overview
 
-Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
+Parent: [Start Here](/mod/beacon/start-here) | [Home](/mod/beacon/home)
 
-The Alec's Telemetry web portal is the project dashboard for mod authors. It is where you create telemetry projects, manage ingest keys, review issues, explore raw signals, configure public stats and server listings, and connect Discord or GitHub workflows.
+The Beacon web portal is the project dashboard for mod authors. It is where you create telemetry projects, manage ingest keys, review issues, explore raw signals, configure public stats and server listings, and connect Discord or GitHub workflows.
 
 Portal URL:
 
 ```text
-https://telemetry.alecsmods.com/portal
+https://beacon.modstats.io/portal
 ```
 
-The portal is not only a crash inbox. It is the operations surface for everything the runtime can upload to Alec's portal backend.
+The portal is not only a crash inbox. It is the operations surface for everything the runtime can upload to Beacon portal backend.
 
 ## What It Handles
 
@@ -43,7 +43,7 @@ That means the web portal owns the project record, team access, display name, ke
 After setup, use the portal to confirm:
 
 - recent ingest reached the expected project
-- `/telemetry test <project-id>` created an issue or occurrence
+- `/beacon test <project-id>` created an issue or occurrence
 - stats appear after the first heartbeat when `telemetry.stats.supported` is true and stats consent is enabled
 - verified server listings appear only for server owners who publish and verify a server profile
 - Discord routing and GitHub sync are configured only when your team wants them
@@ -51,4 +51,4 @@ After setup, use the portal to confirm:
 
 ## When To Use Something Else
 
-Use a custom endpoint if you want telemetry to go somewhere other than Alec's portal backend. Use embedded mode if your plugin needs to bundle telemetry bootstrap logic directly instead of requiring the standalone dependency.
+Use a custom endpoint if you want telemetry to go somewhere other than Beacon portal backend. Use embedded mode if your plugin needs to bundle telemetry bootstrap logic directly instead of requiring the standalone dependency.

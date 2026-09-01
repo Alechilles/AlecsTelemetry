@@ -7,17 +7,17 @@ draft: false
 
 # Portal And Ingest
 
-Parent: [Alec's Telemetry Wiki](/mod/alecs-telemetry/home)
+Parent: [Beacon Wiki](/mod/beacon/home)
 
 These pages cover portal project management, project keys, public stats, verified server listings, Discord routing, GitHub issue sync, ingest contracts, and the local reference ingest service.
 
 ## Child Pages
 
-- [Portal Project Management](/mod/alecs-telemetry/portal-project-management)
-- [Project Key Operations](/mod/alecs-telemetry/project-key-operations)
-- [Discord Routing](/mod/alecs-telemetry/discord-routing)
-- [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync)
-- [Public Stats And ModStats](/mod/alecs-telemetry/public-stats-and-modstats)
-- [Server Browser](/mod/alecs-telemetry/server-browser)
-- [Ingest Contract](/mod/alecs-telemetry/ingest-contract)
-- [Reference Ingest Service](/mod/alecs-telemetry/reference-ingest-service)
+- [Portal Project Management](/mod/beacon/portal-project-management)
+- [Project Key Operations](/mod/beacon/project-key-operations)
+- [Discord Routing](/mod/beacon/discord-routing)
+- [GitHub Issue Sync](/mod/beacon/github-issue-sync)
+- [Public Stats And ModStats](/mod/beacon/public-stats-and-modstats)
+- [Server Browser](/mod/beacon/server-browser)
+- [Ingest Contract](/mod/beacon/ingest-contract)
+- [Reference Ingest Service](/mod/beacon/reference-ingest-service)

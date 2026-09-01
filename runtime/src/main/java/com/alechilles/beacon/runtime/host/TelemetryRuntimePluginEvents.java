@@ -48,7 +48,7 @@ final class TelemetryRuntimePluginEvents {
             removeWorldRegistration = plugin.getEventRegistry().registerGlobal(RemoveWorldEvent.class, this::onWorldRemoved);
         } catch (RuntimeException ex) {
             unregister();
-            logWarning("Alec's Telemetry could not register shared runtime events.", ex);
+            logWarning("Beacon could not register shared runtime events.", ex);
             handle.recordSelfError(
                     "runtime_event_register_failed",
                     ex,
@@ -83,7 +83,7 @@ final class TelemetryRuntimePluginEvents {
         try {
             registration.unregister();
         } catch (RuntimeException ex) {
-            logWarning("Alec's Telemetry could not unregister shared runtime " + eventName + " event.", ex);
+            logWarning("Beacon could not unregister shared runtime " + eventName + " event.", ex);
             handle.recordSelfError(
                     "runtime_event_unregister_failed",
                     ex,

@@ -7,17 +7,24 @@ draft: false
 
 # Runtime Overrides
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 Server owners can override destination settings without editing the packaged descriptor inside another mod.
 
 This is optional. Portal uploads are expected to work from the shipped descriptor alone when the mod bakes in a publishable ingest key.
 
-Override files live under Alec's Telemetry data directory:
+Override files live under the canonical Beacon data directory:
 
 ```text
-Settings/projects/<project-id>.json
+<ServerOrSaveRoot>/mods/Alechilles_Beacon/Settings/projects/<project-id>.json
 ```
+
+At first startup, Beacon copies known runtime-owned files from old Alec-created
+roots only when this destination is absent. It keeps old sources, uses the
+Beacon file on a conflict, and does not read legacy owner override paths after
+the migration attempt. When Beacon loads a complete 1.x settings document, it
+changes only the three generated old-host crash, event, and report URLs. Custom
+endpoint URLs stay unchanged.
 
 ## Switch Portal Uploads To A Custom Endpoint
 
@@ -55,7 +62,7 @@ Settings/projects/<project-id>.json
 
 ## Disable Telemetry Categories
 
-These fields are also written by the first-run consent UI and by `/telemetry consent`.
+These fields are also written by the first-run consent UI and by `/beacon consent`.
 
 ```json
 {
@@ -120,7 +127,10 @@ Descriptor-declared `usage.details`, `stats.details`, and `performance.details` 
 
 ## Global Runtime Settings
 
-Global runtime settings live in `Settings/runtime.json`, not per-project override files. The runtime creates this file with defaults the first time it starts.
+Global runtime settings live in
+`<ServerOrSaveRoot>/mods/Alechilles_Beacon/Settings/runtime.json`, not
+per-project override files. The runtime creates this file with defaults the
+first time it starts.
 
 ```json
 {
@@ -132,8 +142,8 @@ Global runtime settings live in `Settings/runtime.json`, not per-project overrid
   "maxPendingEventsPerProject": 500,
   "maxUploadsPerFlush": 10,
   "maxBreadcrumbsPerProject": 30,
-  "hostedIngestEndpoint": "https://telemetry.alecsmods.com/ingest/crash",
-  "hostedEventIngestEndpoint": "https://telemetry.alecsmods.com/ingest/event"
+  "hostedIngestEndpoint": "https://beacon.modstats.io/ingest/crash",
+  "hostedEventIngestEndpoint": "https://beacon.modstats.io/ingest/event"
 }
 ```
 

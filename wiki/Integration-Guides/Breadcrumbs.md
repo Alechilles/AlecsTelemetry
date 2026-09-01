@@ -7,13 +7,13 @@ draft: false
 
 # Breadcrumbs
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 Breadcrumbs are short recent notes attached to crash and error reports. They help explain what the plugin was doing before a failure.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once.
 
 ## Descriptor Block
 
@@ -74,7 +74,7 @@ randomized or hashed; do not send raw player, NPC, world, or save identifiers.
 ## Verify
 
 1. Record a breadcrumb before a test report or real error.
-2. Run `/telemetry test <project-id> breadcrumb-check`.
+2. Run `/beacon test <project-id> breadcrumb-check`.
 3. Flush the project.
 4. Open the issue in the portal and inspect attached breadcrumbs.
 

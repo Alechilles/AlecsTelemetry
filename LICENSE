@@ -1,22 +1,22 @@
-Alec's Telemetry Runtime License 1.0
+Beacon Runtime License 1.0
 
 Copyright (c) Alec (Alechilles). All rights reserved except as expressly granted
 in this license.
 
 This license is not an open source license. The source code is made available so
-modders can inspect, integrate, and understand Alec's Telemetry, but the Licensed
+modders can inspect, integrate, and understand Beacon, but the Licensed
 Work may be used only under the terms below.
 
 1. Definitions
 
 "Licensor" means Alec (Alechilles).
 
-"Licensed Work" means Alec's Telemetry, including its source code, object code,
+"Licensed Work" means Beacon, including its source code, object code,
 build files, examples, documentation, and repository contents, except for
 third-party dependencies or assets that state their own license.
 
 "Hytale Project" means a Hytale mod, modpack, server, development tool, or
-community project that uses Alec's Telemetry to collect or forward telemetry for
+community project that uses Beacon to collect or forward telemetry for
 that project.
 
 "Unmodified Copy" means a copy of the Licensed Work, or a compiled artifact built
@@ -35,16 +35,16 @@ Subject to this license, Licensor grants you a worldwide, royalty-free,
 non-exclusive, non-transferable license to:
 
 - read and evaluate the Licensed Work;
-- use Alec's Telemetry in source or object form for your own development and
+- use Beacon in source or object form for your own development and
   testing;
-- run Alec's Telemetry in production as part of a Hytale Project;
-- integrate with Alec's Telemetry through its documented descriptors,
+- run Beacon in production as part of a Hytale Project;
+- integrate with Beacon through its documented descriptors,
   configuration files, command surfaces, and public APIs;
-- distribute Unmodified Copies of Alec's Telemetry as a dependency of a Hytale
+- distribute Unmodified Copies of Beacon as a dependency of a Hytale
   Project;
-- bundle an Unmodified Copy of Alec's Telemetry with a Hytale Project, including
+- bundle an Unmodified Copy of Beacon with a Hytale Project, including
   documented embedded-mode packaging; and
-- use Alec's Telemetry with Alec's hosted telemetry platform or with a custom
+- use Beacon with Beacon's hosted telemetry platform or with a custom
   endpoint that serves only your own Hytale Project.
 
 These rights apply to free, paid, commercial, and non-commercial Hytale Projects,
@@ -52,11 +52,11 @@ as long as your use stays within the scope of this license.
 
 3. Conditions
 
-When you distribute Alec's Telemetry with a Hytale Project, you must:
+When you distribute Beacon with a Hytale Project, you must:
 
 - include this license or a clear link to it;
 - preserve copyright, license, and attribution notices in the Licensed Work;
-- identify Alec's Telemetry as Alec's software when attribution is shown; and
+- identify Beacon as Alec's software when attribution is shown; and
 - avoid implying that Licensor endorses your project unless Licensor has given
   separate written permission.
 

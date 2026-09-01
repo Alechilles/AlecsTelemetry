@@ -1,21 +1,21 @@
 ---
-title: "What Is Alec's Telemetry"
+title: "What Is Beacon"
 order: 2
 published: true
 draft: false
 ---
 
-# What Is Alec's Telemetry
+# What Is Beacon
 
-Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
+Parent: [Start Here](/mod/beacon/start-here) | [Home](/mod/beacon/home)
 
-Alec's Telemetry is a telemetry runtime and web portal workflow for Hytale plugins and asset packs. It helps mod authors collect structured operational signals from installed projects without building their own ingest service, issue workspace, stats dashboard, consent UI, or upload queue.
+Beacon is a telemetry runtime and web portal workflow for Hytale plugins and asset packs. It helps mod authors collect structured operational signals from installed projects without building their own ingest service, issue workspace, stats dashboard, consent UI, or upload queue.
 
-For most modders, the destination is Alec's web portal. The runtime discovers packaged project descriptors, applies consent and server-owner overrides, queues telemetry locally, and uploads accepted data to the portal project identified by the portal project key.
+For most modders, the destination is the Beacon web portal. The runtime discovers packaged project descriptors, applies consent and server-owner overrides, queues telemetry locally, and uploads accepted data to the portal project identified by the portal project key.
 
 ## What It Can Collect
 
-Alec's Telemetry can support several different telemetry routes:
+Beacon can support several different telemetry routes:
 
 - crash reports, setup failures, start failures, and manual test reports
 - explicit non-fatal error events recorded by plugin code
@@ -31,7 +31,7 @@ Not every project needs every category. A stats-only asset pack can stay descrip
 
 ## What The Portal Adds
 
-The web portal is the normal destination for Alec's Telemetry data. It gives project owners:
+The web portal is the normal destination for Beacon data. It gives project owners:
 
 - project creation and portal project-key management
 - issue and occurrence views for crashes and issue-worthy events
@@ -64,9 +64,9 @@ The web portal is the normal destination for Alec's Telemetry data. It gives pro
 
 ## Integration Modes
 
-- standalone dependency mode: the recommended default. Alec's Telemetry is installed as its own runtime package and discovers participating plugins or asset packs.
+- standalone dependency mode: the recommended default. Beacon is installed as its own runtime package and discovers participating plugins or asset packs.
 - embedded mode: an advanced plugin-only option where the owning plugin bundles the runtime and calls telemetry bootstrap code directly.
 
-Both modes use the same portal project, project key, `Server/Telemetry/project.json`, consent UI, local overrides, queues, and portal workflows.
+Both modes use the same portal project, project key, `Server/Beacon/project.json`, consent UI, local overrides, queues, and portal workflows.
 
-Start with [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) for the full first-time route, then use [Quick Setup](/mod/alecs-telemetry/quick-setup) to choose crash, stats, standalone, or embedded follow-up guides.
+Start with [Portal First Setup](/mod/beacon/portal-first-setup) for the full first-time route, then use [Quick Setup](/mod/beacon/quick-setup) to choose crash, stats, standalone, or embedded follow-up guides.

@@ -7,13 +7,13 @@ draft: false
 
 # Performance Telemetry
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 Performance telemetry records timing or numeric measurements for operations your plugin controls.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once.
 
 ## Descriptor Block
 
@@ -62,7 +62,7 @@ Use stable event names and low-cardinality details so the portal can group data 
 ## Verify
 
 1. Trigger the measured operation.
-2. Run `/telemetry flush <project-id>`.
+2. Run `/beacon flush <project-id>`.
 3. Check Explore in the portal.
 4. Confirm events above the threshold appear.
 

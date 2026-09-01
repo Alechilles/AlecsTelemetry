@@ -7,7 +7,7 @@ import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 /**
  * Physical host for the manual passive-descriptor fixture.
  *
- * <p>It intentionally has no Alec's Telemetry dependency or API calls. The
+ * <p>It intentionally has no Beacon dependency or API calls. The
  * embedded library marker proves that its classes and descriptor were merged
  * into this final plugin archive.</p>
  */

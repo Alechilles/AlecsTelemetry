@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Runtime override loaded from Alec's Telemetry settings for one project.
+ * Runtime override loaded from Beacon settings for one project.
  */
 public record TelemetryProjectOverride(@Nullable Boolean enabled,
                                         @Nullable CaptureOverride capture,

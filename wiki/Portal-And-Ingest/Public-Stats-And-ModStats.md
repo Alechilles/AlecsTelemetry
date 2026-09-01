@@ -7,13 +7,13 @@ draft: false
 
 # Public Stats And ModStats
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
 Public stats turn anonymous heartbeat data into a public project page. ModStats is the public stats host for browsing public Hytale mod stats.
 
 ## Before This Page
 
-Use [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup) or [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats) to enable runtime stats in the shared descriptor. Then install the project and wait for the first heartbeat.
+Use [Quick Stats Setup](/mod/beacon/quick-stats-setup) or [Anonymous Usage Stats](/mod/beacon/anonymous-usage-stats) to enable runtime stats in the shared descriptor. Then install the project and wait for the first heartbeat.
 
 ## Make Stats Public
 

@@ -7,24 +7,24 @@ draft: false
 
 # Quick Setup
 
-Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
+Parent: [Start Here](/mod/beacon/start-here) | [Home](/mod/beacon/home)
 
-Use this page as a route map. If you are setting up Alec's Telemetry for the first time, start with [Portal First Setup](/mod/alecs-telemetry/portal-first-setup), then pick the quick guide that matches what you want to collect first.
+Use this page as a route map. If you are setting up Beacon for the first time, start with [Portal First Setup](/mod/beacon/portal-first-setup), then pick the quick guide that matches what you want to collect first.
 
 ## Fastest Routes
 
-- [Quick Crash Setup](/mod/alecs-telemetry/quick-crash-setup): collect crash reports, setup failures, and start failures.
-- [Quick Stats Setup](/mod/alecs-telemetry/quick-stats-setup): publish anonymous public server/player/environment stats.
-- [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode): require Alec's Telemetry as an external dependency and ship only a descriptor with your plugin or asset pack.
-- [Embedded Mode](/mod/alecs-telemetry/embedded-mode): bundle and bootstrap telemetry from your own plugin when you want one distributable package.
+- [Quick Crash Setup](/mod/beacon/quick-crash-setup): collect crash reports, setup failures, and start failures.
+- [Quick Stats Setup](/mod/beacon/quick-stats-setup): publish anonymous public server/player/environment stats.
+- [Standalone Dependency Mode](/mod/beacon/standalone-dependency-mode): require Beacon as an external dependency and ship only a descriptor with your plugin or asset pack.
+- [Embedded Mode](/mod/beacon/embedded-mode): bundle and bootstrap telemetry from your own plugin when you want one distributable package.
 
 ## Shared Setup Pieces
 
-Do these once in [Portal First Setup](/mod/alecs-telemetry/portal-first-setup):
+Do these once in [Portal First Setup](/mod/beacon/portal-first-setup):
 
 - create the portal project
 - copy the portal project key
-- create `Server/Telemetry/project.json`
+- create `Server/Beacon/project.json`
 - confirm the inferred `projectId` matches the portal project ID, or add an explicit `projectId` override
 - optionally add `ui.iconTexturePath` for the consent UI icon
 - package the descriptor and icon into your final release file
@@ -33,20 +33,20 @@ After that, the quick crash and stats guides only add the telemetry-specific set
 
 ## Full First-Time Flow
 
-1. Open the [official portal](https://telemetry.alecsmods.com/portal).
+1. Open the [official portal](https://beacon.modstats.io/portal).
 2. Sign in with Discord or GitHub.
 3. Create a telemetry project.
 4. Copy the new project key while it is visible.
-5. Choose [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) or [Embedded Mode](/mod/alecs-telemetry/embedded-mode).
-6. Add the shared descriptor from [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) to your plugin or asset pack.
+5. Choose [Standalone Dependency Mode](/mod/beacon/standalone-dependency-mode) or [Embedded Mode](/mod/beacon/embedded-mode).
+6. Add the shared descriptor from [Portal First Setup](/mod/beacon/portal-first-setup) to your plugin or asset pack.
 7. Package and install your project.
 8. Start a local server or test world.
-9. Use `/telemetry status`, `/telemetry projects`, and `/telemetry project <project-id>` to confirm discovery.
+9. Use `/beacon status`, `/beacon projects`, and `/beacon project <project-id>` to confirm discovery.
 10. Continue to a category guide, then verify that category in the portal.
 
 ## What Can Be Inferred
 
-If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Alec's Telemetry can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a portal project key.
+If your plugin manifest already has a correct `Group`, `Name`, and `Main`, Beacon can infer `projectId`, `displayName`, `ownerPluginIdentifiers`, and `packagePrefixes`. That means many plugins only need destination settings plus a portal project key.
 
 For asset packs or descriptor-only packages, `Name` can still infer `projectId` and `displayName`, while `Group:Name` provides the owner plugin identifier. `packagePrefixes` is only inferred from `Main`, so content-only packages usually leave it empty unless Java crash attribution is relevant.
 
@@ -54,10 +54,10 @@ The portal project key chooses the portal project. The descriptor `projectId` mu
 
 ## Descriptor Reference
 
-If you need a deeper descriptor reference, see [Project Descriptor](/mod/alecs-telemetry/project-descriptor).
+If you need a deeper descriptor reference, see [Project Descriptor](/mod/beacon/project-descriptor).
 
 ## Verification Commands
 
-The standalone runtime exposes `/telemetry status`, `/telemetry projects`, `/telemetry project <project-id>`, `/telemetry flush [project-id]`, and `/telemetry test <project-id> [detail]`.
+The standalone runtime exposes `/beacon status`, `/beacon projects`, `/beacon project <project-id>`, `/beacon flush [project-id]`, and `/beacon test <project-id> [detail]`.
 
-The root command permission is `telemetry.command.telemetry`; subcommands use the same stable `telemetry.command.telemetry.*` prefix.
+The root command permission is `beacon.command.beacon`; subcommands use the same stable `beacon.command.beacon.*` prefix.

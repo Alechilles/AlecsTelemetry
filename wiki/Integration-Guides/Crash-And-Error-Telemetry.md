@@ -7,9 +7,9 @@ draft: false
 
 # Crash And Error Telemetry
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
-Crash and error telemetry is the core Alec's Telemetry workflow. It sends structured failures to the web portal so mod authors can group recurring issues, inspect context, and route alerts.
+Crash and error telemetry is the core Beacon workflow. It sends structured failures to the web portal so mod authors can group recurring issues, inspect context, and route alerts.
 
 ## What Gets Captured
 
@@ -22,7 +22,7 @@ Crash and error telemetry is the core Alec's Telemetry workflow. It sends struct
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Configure [Discord Routing](/mod/alecs-telemetry/discord-routing) or [GitHub Issue Sync](/mod/alecs-telemetry/github-issue-sync) only if your project needs those portal integrations.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once. Configure [Discord Routing](/mod/beacon/discord-routing) or [GitHub Issue Sync](/mod/beacon/github-issue-sync) only if your project needs those portal integrations.
 
 ## Descriptor Block
 
@@ -98,15 +98,15 @@ Declare custom detail fields in the descriptor before expecting them to upload:
 Run:
 
 ```text
-/telemetry test <project-id> crash-guide
-/telemetry flush <project-id>
+/beacon test <project-id> crash-guide
+/beacon flush <project-id>
 ```
 
 Then open the portal project and check Issues.
 
 ## Troubleshooting
 
-- No issue appears: check the project key and run `/telemetry project <project-id>`.
+- No issue appears: check the project key and run `/beacon project <project-id>`.
 - Details are missing: add descriptor allowlists for custom fields.
 - Errors are disabled: check the consent UI and project override file.
 - Attribution is wrong: add `ownerPluginIdentifiers` and `packagePrefixes`.

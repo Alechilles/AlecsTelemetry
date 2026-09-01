@@ -11,7 +11,7 @@ import javax.annotation.Nullable;
 import java.util.logging.Level;
 
 /**
- * Standalone telemetry runtime mod entrypoint.
+ * Standalone Beacon runtime mod entrypoint.
  */
 public final class Beacon extends JavaPlugin {
     private static Beacon instance;
@@ -36,7 +36,7 @@ public final class Beacon extends JavaPlugin {
             host = TelemetryRuntimeHost.bootstrapStandalone(this);
         } catch (Exception ex) {
             getLogger().at(Level.WARNING).withCause(ex).log(
-                    "Failed to initialize Alec's Telemetry runtime; continuing without telemetry."
+                    "Failed to initialize Beacon runtime; continuing without telemetry."
             );
             host = null;
         }
@@ -54,14 +54,14 @@ public final class Beacon extends JavaPlugin {
         if (host != null) {
             host.start();
             getLogger().at(Level.INFO).log(
-                    "Alec's Telemetry enabled. Active coordinator="
+                    "Beacon enabled. Active coordinator="
                             + (host.activeCoordinatorProviderId() == null ? "<none>" : host.activeCoordinatorProviderId())
                             + ", standaloneOwnsRuntime=" + host.ownsActiveCoordinator()
                             + ", registered projects=" + host.registeredProjectCount()
             );
             return;
         }
-        getLogger().at(Level.INFO).log("Alec's Telemetry enabled without an active runtime host.");
+        getLogger().at(Level.INFO).log("Beacon enabled without an active runtime host.");
     }
 
     @Override
@@ -71,7 +71,7 @@ public final class Beacon extends JavaPlugin {
             host = null;
         }
         instance = null;
-        getLogger().at(Level.INFO).log("Alec's Telemetry disabled.");
+        getLogger().at(Level.INFO).log("Beacon disabled.");
     }
 
     @Nullable

@@ -7,9 +7,9 @@ draft: false
 
 # Embedded Mode
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
-Embedded mode lets a plugin bundle the telemetry runtime inside its own package instead of requiring the standalone Alec's Telemetry dependency.
+Embedded mode lets a plugin bundle the telemetry runtime inside its own package instead of requiring the standalone Beacon dependency.
 
 ## Use This Mode When
 
@@ -18,28 +18,28 @@ Embedded mode lets a plugin bundle the telemetry runtime inside its own package 
 - You want to capture setup and start failures around your own startup logic.
 - You are comfortable validating the packaged runtime.
 
-Asset packs normally use [Standalone Dependency Mode](/mod/alecs-telemetry/standalone-dependency-mode) because embedded mode requires plugin lifecycle code.
+Asset packs normally use [Standalone Dependency Mode](/mod/beacon/standalone-dependency-mode) because embedded mode requires plugin lifecycle code.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. Embedded mode uses the same portal project, portal project key, `Server/Telemetry/project.json`, optional identity overrides, and optional consent icon as standalone mode.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once. Embedded mode uses the same portal project, portal project key, `Server/Beacon/project.json`, optional identity overrides, and optional consent icon as standalone mode.
 
 Do not add a descriptor flag to choose embedded mode. New descriptors should omit `runtimeMode`; embedded behavior comes from packaging the runtime and calling `EmbeddedTelemetryBootstrap`.
 
 ## Step 1: Add The Runtime Artifact
 
-Open the Alec's Telemetry downloads page:
+Open the Beacon downloads page:
 
 ```text
-https://telemetry.alecsmods.com/downloads
+https://beacon.modstats.io/downloads
 ```
 
 For Maven builds, add the public repository:
 
 ```xml
 <repository>
-  <id>alecs-telemetry</id>
-  <url>https://telemetry.alecsmods.com/maven/releases</url>
+  <id>beacon</id>
+  <url>https://beacon.modstats.io/maven/releases</url>
 </repository>
 ```
 
@@ -48,8 +48,8 @@ Then add the embeddable runtime dependency:
 ```xml
 <dependency>
   <groupId>com.alechilles</groupId>
-  <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.2.3</version>
+  <artifactId>beacon-runtime</artifactId>
+  <version>2.0.0</version>
 </dependency>
 ```
 
@@ -58,12 +58,12 @@ For Gradle Kotlin DSL builds, use the same Maven-format repository:
 ```kotlin
 repositories {
     maven {
-        url = uri("https://telemetry.alecsmods.com/maven/releases")
+        url = uri("https://beacon.modstats.io/maven/releases")
     }
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.3.0")
+    implementation("com.alechilles:beacon-runtime:2.0.0")
 }
 ```
 
@@ -72,7 +72,7 @@ Package that runtime jar inside your plugin. Server owners should not need to do
 ## Step 2: Publish The Client UI Asset Pack
 
 An embedded host must set `IncludesAssetPack` to `true` and merge every
-`Common/**` resource from `alecstelemetry-runtime` into its asset-pack source.
+`Common/**` resource from `beacon-runtime` into its asset-pack source.
 Shading the Java classes is not sufficient. If your build already prepares an
 asset pack, add the runtime `Common/**` tree to that source.
 
@@ -82,9 +82,9 @@ Before release, confirm that the final mod contains:
 Common/UI/Custom/TelemetryConsentPage.ui
 ```
 
-If this file is not published to the client, `/telemetry consent` disconnects
+If this file is not published to the client, `/beacon consent` disconnects
 the client because Hytale cannot find the UI document. See the repository
-[`docs/embedded-mode.md`](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/embedded-mode.md)
+[`docs/embedded-mode.md`](https://github.com/Alechilles/Beacon/blob/main/docs/embedded-mode.md)
 page for a Gradle merge example.
 
 Descriptor-only libraries do not publish this UI. Their installed standalone or
@@ -95,8 +95,8 @@ embedded runtime host supplies it.
 The owning plugin boots telemetry directly:
 
 ```java
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryBootstrap;
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryBootstrap;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryService;
 
 private EmbeddedTelemetryService telemetry;
 
@@ -144,10 +144,10 @@ The active coordinator handles descriptors from all installed enabled projects. 
 
 ## Storage Layout
 
-Standalone and embedded runtimes use the same Alec's Telemetry data root:
+Standalone and embedded runtimes use the same Beacon data root:
 
 ```text
-<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
+<ServerOrSaveRoot>/mods/Alechilles_Beacon/
   Settings/
     runtime.json
     projects/<project-id>.json
@@ -165,17 +165,17 @@ Standalone and embedded runtimes use the same Alec's Telemetry data root:
 2. Confirm the package contains `Common/UI/Custom/TelemetryConsentPage.ui`.
 3. Install the plugin.
 4. Start a local server.
-5. Run `/telemetry status` and confirm the active coordinator.
-6. Run `/telemetry consent` and confirm the consent page opens.
-7. Run `/telemetry project <project-id>` and confirm your project source path.
-8. Run `/telemetry test <project-id> embedded-check`.
+5. Run `/beacon status` and confirm the active coordinator.
+6. Run `/beacon consent` and confirm the consent page opens.
+7. Run `/beacon project <project-id>` and confirm your project source path.
+8. Run `/beacon test <project-id> embedded-check`.
 9. Confirm the test report appears in the portal.
 
 ## Important Rule
 
 Pick one primary packaging strategy per plugin:
 
-- depend on standalone Alec's Telemetry
+- depend on standalone Beacon
 - embed and bootstrap the runtime yourself
 
 Runtime election handles coexistence when multiple providers are installed, but your project docs and packaging should clearly tell server owners which setup you expect.
