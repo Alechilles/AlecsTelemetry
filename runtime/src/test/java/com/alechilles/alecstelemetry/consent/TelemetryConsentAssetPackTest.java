@@ -42,6 +42,7 @@ class TelemetryConsentAssetPackTest {
         assertTrue(consentPage.contains("#TelemetryConsentProjectIconImage"));
         assertTrue(consentPage.contains("#TelemetryConsentProjectIconPlaceholder"));
         assertTrue(consentPage.contains("#TelemetryConsentGridHeader"));
+        assertTrue(consentPage.contains("Anchor: (Width: 835, Height: 710);"));
         assertTrue(consentPage.contains("#TelemetryConsentCaptureAllEnabled"));
         assertTrue(consentPage.contains("#TelemetryConsentDiagnosticsAllEnabled"));
         assertTrue(consentPage.contains("#TelemetryConsentStatsAllEnabled"));

@@ -44,7 +44,7 @@ $C.@PageOverlay {
   $C.@DecoratedContainer #TelemetryConsentRoot {
     @TitleHeight = 128;
 
-    Anchor: (Width: 780, Height: 710);
+    Anchor: (Width: 835, Height: 710);
 
     #Title {
       Anchor: (Height: 128, Top: 0);
