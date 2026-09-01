@@ -50,6 +50,13 @@ class TelemetryConsentCoordinatorTest {
         assertTrue(notice.contains("Errors and Usage"));
         assertTrue(notice.contains("remain disabled"));
         assertTrue(notice.contains("`/telemetry consent`"));
+
+        String diagnosticsNotice = TelemetryConsentCoordinator.reviewNotice(
+                List.of(creditor),
+                Map.of("creditor", List.of("diagnostics"))
+        );
+        assertTrue(diagnosticsNotice.contains("Diagnostics"));
+        assertTrue(diagnosticsNotice.contains("remain disabled"));
     }
 
     @Test

@@ -150,6 +150,7 @@ public final class TelemetryConsentCoordinator {
         return switch (category.trim().toLowerCase(Locale.ROOT)) {
             case "crash" -> "Crash";
             case "error" -> "Errors";
+            case "diagnostics" -> "Diagnostics";
             case "lifecycle" -> "Lifecycle";
             case "performance" -> "Performance";
             case "usage" -> "Usage";
