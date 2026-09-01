@@ -17,7 +17,7 @@ public final class TelemetryServerVerifyCommand extends CommandBase {
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryServerVerifyCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("verify", "Send a server claim token to ModStats. Usage: /telemetry server verify [key]");
+        super("verify", "Send a server claim token to ModStats. Usage: /beacon server verify [key]");
         this.runtime = runtime;
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
@@ -26,7 +26,7 @@ public final class TelemetryServerVerifyCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
         TelemetryServerVerificationResult result = runtime.requestServerVerification(claimTokenArgument(commandContext.getInputString()));
@@ -34,15 +34,15 @@ public final class TelemetryServerVerifyCommand extends CommandBase {
             case QUEUED -> TelemetryCommandSupport.send(commandContext, verificationQueuedMessage(result));
             case MISSING_CLAIM_TOKEN -> TelemetryCommandSupport.send(
                     commandContext,
-                    "No server claim token is configured. Create or rotate a server profile in the ModStats portal, then run /telemetry server verify <key>."
+                    "No server claim token is configured. Create or rotate a server profile in the ModStats portal, then run /beacon server verify <key>."
             );
             case NO_STATS_PROJECTS -> TelemetryCommandSupport.send(
                     commandContext,
-                    "No stats-enabled telemetry projects are available to verify this server."
+                    "No stats-enabled Beacon projects are available to verify this server."
             );
             case UNAVAILABLE -> TelemetryCommandSupport.send(
                     commandContext,
-                    "Server verification is unavailable from this telemetry runtime."
+                    "Server verification is unavailable from this Beacon runtime."
             );
         }
     }

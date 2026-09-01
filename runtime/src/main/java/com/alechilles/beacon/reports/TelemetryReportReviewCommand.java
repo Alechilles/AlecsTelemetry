@@ -28,7 +28,7 @@ public final class TelemetryReportReviewCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
         String action = TelemetryCommandSupport.token(commandContext, 2);
@@ -69,7 +69,7 @@ public final class TelemetryReportReviewCommand extends CommandBase {
                                 @Nonnull TelemetryCommandRuntime runtime) {
         String reportId = TelemetryCommandSupport.token(commandContext, 3);
         if (reportId == null) {
-            TelemetryCommandSupport.send(commandContext, "Usage: /telemetry reports approve <report-id>");
+            TelemetryCommandSupport.send(commandContext, "Usage: /beacon reports approve <report-id>");
             return;
         }
         if (runtime.approveManualReport(reportId)) {
@@ -83,7 +83,7 @@ public final class TelemetryReportReviewCommand extends CommandBase {
                                @Nonnull TelemetryCommandRuntime runtime) {
         String reportId = TelemetryCommandSupport.token(commandContext, 3);
         if (reportId == null) {
-            TelemetryCommandSupport.send(commandContext, "Usage: /telemetry reports reject <report-id>");
+            TelemetryCommandSupport.send(commandContext, "Usage: /beacon reports reject <report-id>");
             return;
         }
         if (runtime.rejectManualReport(reportId)) {
@@ -106,6 +106,6 @@ public final class TelemetryReportReviewCommand extends CommandBase {
     }
 
     private static void sendUsage(@Nonnull CommandContext commandContext) {
-        TelemetryCommandSupport.send(commandContext, "Usage: /telemetry reports <pending|approve|reject|submitted> [report-id]");
+        TelemetryCommandSupport.send(commandContext, "Usage: /beacon reports <pending|approve|reject|submitted> [report-id]");
     }
 }

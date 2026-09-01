@@ -11,7 +11,7 @@ import javax.annotation.Nonnull;
 public final class TelemetryServerCommand extends AbstractCommandCollection {
 
     public TelemetryServerCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("server", "Manage Alec's Telemetry server profile verification.");
+        super("server", "Manage Beacon server profile verification.");
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         addSubCommand(new TelemetryServerVerifyCommand(runtime));
     }

@@ -24,7 +24,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryReportCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("report", "Open a telemetry issue or suggestion report.");
+        super("report", "Open a Beacon issue or suggestion report.");
         this.runtime = runtime;
         setPermissionGroups("Player", "hytale:Admin", "OP", "Admin", "Operator");
         setAllowsExtraArguments(true);
@@ -37,7 +37,7 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
 
@@ -99,6 +99,6 @@ public final class TelemetryReportCommand extends AbstractPlayerCommand {
     }
 
     private static void sendUsage(@Nonnull CommandContext commandContext) {
-        TelemetryCommandSupport.send(commandContext, "Usage: /telemetry report [project-id] [issue|suggestion]");
+        TelemetryCommandSupport.send(commandContext, "Usage: /beacon report [project-id] [issue|suggestion]");
     }
 }

@@ -25,12 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
- * Opens the telemetry consent page for operators when newly discovered telemetry projects need review.
+ * Opens the Beacon consent page for operators when newly discovered telemetry projects need review.
  */
 public final class TelemetryConsentCoordinator {
 
-    public static final String ROOT_PERMISSION = "telemetry.command.telemetry";
-    public static final String FIRST_RUN_NOTICE = "One or more mods are using Alec's Telemetry to report anonymous statistics and/or crash, error, performance diagnostics. You may change your telemetry consent settings at any time using `/telemetry consent`.";
+    public static final String ROOT_PERMISSION = "beacon.command.beacon";
+    public static final String FIRST_RUN_NOTICE = "One or more mods are using Beacon to report anonymous statistics and/or crash, error, performance diagnostics. You may change your Beacon consent settings at any time using `/beacon consent`.";
     static final String FIRST_RUN_NOTICE_COLOR = "#f0a33a";
 
     private final TelemetryConsentRuntime runtimeService;
@@ -142,7 +142,7 @@ public final class TelemetryConsentCoordinator {
             return FIRST_RUN_NOTICE;
         }
         return String.join(" ", projectNotices)
-                + " These remain disabled until reviewed. Run `/telemetry consent`.";
+                + " These remain disabled until reviewed. Run `/beacon consent`.";
     }
 
     @Nullable

@@ -27,9 +27,9 @@ public record TelemetryConsentViewModel(boolean allEnabled,
                 allEnabled,
                 rows,
                 List.of(
-                        "Alec's Telemetry helps mod authors diagnose crashes, errors, performance issues, and feature usage.",
+                        "Beacon helps mod authors diagnose crashes, errors, performance issues, and feature usage.",
                         "Each mod controls its suggested defaults, and you can override them here.",
-                        "No player names, IDs, chat, or any other personally identifiable information will be sent by Alec's Telemetry."
+                        "No player names, IDs, chat, or any other personally identifiable information will be sent by Beacon."
                 )
         );
     }

@@ -38,9 +38,9 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
     static final String ACTION_CLOSE = TelemetryConsentUiContract.ACTION_CLOSE;
 
     private static final String PRIVACY_DISCLAIMER_TEXT = String.join("\n\n",
-            "Alec's Telemetry is designed to report anonymous usage data. Under its default configuration, and in officially sanctioned mods such as other mods in the Alec's mod line, it does not report personally identifiable information.",
-            "However, Alec's Telemetry includes highly customizable reporting systems. Because third-party mod authors can configure those systems themselves, Alec cannot guarantee that every mod using Alec's Telemetry follows the intended privacy standards.",
-            "Reporting non-optional personally identifiable information through Alec's Telemetry is against Alec's Telemetry policy. If you believe a mod author is using Alec's Telemetry to collect identifiable user information without a clear, optional choice, please report it directly to Alec at discord.gg/uP5bNTVSze and it will be promptly investigated."
+            "Beacon is designed to report anonymous usage data. Under its default configuration, and in officially sanctioned mods such as other mods in the Alec's mod line, it does not report personally identifiable information.",
+            "However, Beacon includes highly customizable reporting systems. Because third-party mod authors can configure those systems themselves, Alec cannot guarantee that every mod using Beacon follows the intended privacy standards.",
+            "Reporting non-optional personally identifiable information through Beacon is against Beacon policy. If you believe a mod author is using Beacon to collect identifiable user information without a clear, optional choice, please report it directly to Alec at discord.gg/uP5bNTVSze and it will be promptly investigated."
     );
     private static final String KEY_ACTION = "Action";
     private static final String KEY_PROJECT_ID = "ProjectId";

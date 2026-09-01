@@ -44,19 +44,19 @@ final class TelemetryRuntimeCommandRegistrar {
                 registered.set(false);
                 if (logger != null) {
                     logger.at(Level.WARNING).log(
-                            "Telemetry runtime command registration was rejected; /telemetry is unavailable."
+                            "Beacon runtime command registration was rejected; /beacon is unavailable."
                     );
                 }
                 return;
             }
             if (logger != null) {
-                logger.at(Level.INFO).log("Telemetry runtime registered /telemetry commands.");
+                logger.at(Level.INFO).log("Beacon runtime registered /beacon commands.");
             }
         } catch (RuntimeException ex) {
             registered.set(false);
             if (logger != null) {
                 logger.at(Level.WARNING).withCause(ex).log(
-                        "Telemetry runtime commands could not register. Another runtime may already own /telemetry."
+                        "Beacon runtime commands could not register. Another runtime may already own /beacon."
                 );
             }
             handle.recordSelfError(

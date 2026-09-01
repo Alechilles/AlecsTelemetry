@@ -8,14 +8,14 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import javax.annotation.Nonnull;
 
 /**
- * Shows detailed diagnostics for one telemetry project.
+ * Shows detailed diagnostics for one Beacon project.
  */
 public final class TelemetryProjectCommand extends CommandBase {
 
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryProjectCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("project", "Show diagnostics for one telemetry project.");
+        super("project", "Show diagnostics for one Beacon project.");
         this.runtime = runtime;
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
@@ -24,18 +24,18 @@ public final class TelemetryProjectCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
         String projectId = TelemetryCommandSupport.token(commandContext, 2);
         if (projectId == null) {
-            TelemetryCommandSupport.send(commandContext, "Usage: /telemetry project <project-id>");
+            TelemetryCommandSupport.send(commandContext, "Usage: /beacon project <project-id>");
             return;
         }
 
         TelemetryRuntimeDiagnostics.ProjectDiagnostics diagnostics = runtime.projectDiagnostics(projectId);
         if (diagnostics == null) {
-            TelemetryCommandSupport.send(commandContext, "Unknown telemetry project: " + projectId);
+            TelemetryCommandSupport.send(commandContext, "Unknown Beacon project: " + projectId);
             return;
         }
 

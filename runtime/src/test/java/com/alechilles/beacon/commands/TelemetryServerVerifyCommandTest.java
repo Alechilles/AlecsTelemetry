@@ -32,7 +32,7 @@ class TelemetryServerVerifyCommandTest {
         CommandContext context = new CommandContext(
                 command,
                 sender,
-                "/telemetry server verify ms_claim_from_console"
+                "/beacon server verify ms_claim_from_console"
         );
 
         executeCommand(command, context);
@@ -72,7 +72,7 @@ class TelemetryServerVerifyCommandTest {
     @Test
     void claimTokenArgumentReadsVerifyKey() {
         assertEquals("ms_claim_from_command", TelemetryServerVerifyCommand.claimTokenArgument(
-                "/telemetry server verify ms_claim_from_command"
+                "/beacon server verify ms_claim_from_command"
         ));
     }
 

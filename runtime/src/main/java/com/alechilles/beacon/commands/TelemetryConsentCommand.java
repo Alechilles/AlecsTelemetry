@@ -12,14 +12,14 @@ import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import javax.annotation.Nonnull;
 
 /**
- * Opens the telemetry consent settings page.
+ * Opens the Beacon consent settings page.
  */
 public final class TelemetryConsentCommand extends AbstractPlayerCommand {
 
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryConsentCommand(TelemetryCommandRuntime runtime) {
-        super("consent", "Open telemetry consent settings.");
+        super("consent", "Open Beacon consent settings.");
         this.runtime = runtime;
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(false);
@@ -32,11 +32,11 @@ public final class TelemetryConsentCommand extends AbstractPlayerCommand {
                            @Nonnull PlayerRef playerRef,
                            @Nonnull World world) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry consent UI is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon consent UI is unavailable.");
             return;
         }
         if (!runtime.openConsentPage(ref, store, playerRef, false)) {
-            TelemetryCommandSupport.send(commandContext, "Unable to open telemetry consent UI.");
+            TelemetryCommandSupport.send(commandContext, "Unable to open Beacon consent UI.");
         }
     }
 }

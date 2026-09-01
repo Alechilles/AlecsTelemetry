@@ -14,7 +14,7 @@ public final class TelemetryTestCommand extends CommandBase {
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryTestCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("test", "Capture a manual telemetry test report. Usage: /telemetry test <project-id> [detail]");
+        super("test", "Capture a manual Beacon test report. Usage: /beacon test <project-id> [detail]");
         this.runtime = runtime;
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
@@ -23,12 +23,12 @@ public final class TelemetryTestCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
         String projectId = TelemetryCommandSupport.token(commandContext, 2);
         if (projectId == null) {
-            TelemetryCommandSupport.send(commandContext, "Usage: /telemetry test <project-id> [detail]");
+            TelemetryCommandSupport.send(commandContext, "Usage: /beacon test <project-id> [detail]");
             return;
         }
 
@@ -36,8 +36,8 @@ public final class TelemetryTestCommand extends CommandBase {
         TelemetryCommandSupport.send(
                 commandContext,
                 captured
-                        ? "Telemetry test report queued for " + projectId + "."
-                        : "Unable to queue telemetry test report for " + projectId + "."
+                        ? "Beacon test report queued for " + projectId + "."
+                        : "Unable to queue Beacon test report for " + projectId + "."
         );
     }
 }

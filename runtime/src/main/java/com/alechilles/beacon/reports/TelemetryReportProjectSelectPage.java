@@ -21,7 +21,7 @@ import javax.annotation.Nonnull;
 import java.util.List;
 
 /**
- * Small project picker shown by `/telemetry report` before opening a report form.
+ * Small project picker shown by `/beacon report` before opening a report form.
  */
 public final class TelemetryReportProjectSelectPage
         extends InteractiveCustomUIPage<TelemetryReportProjectSelectPage.SelectEventData> {

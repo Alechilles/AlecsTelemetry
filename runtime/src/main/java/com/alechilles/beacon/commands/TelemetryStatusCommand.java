@@ -15,7 +15,7 @@ public final class TelemetryStatusCommand extends CommandBase {
     private final TelemetryCommandRuntime runtime;
 
     public TelemetryStatusCommand(@Nonnull TelemetryCommandRuntime runtime) {
-        super("status", "Show Alec's Telemetry runtime status.");
+        super("status", "Show Beacon runtime status.");
         this.runtime = runtime;
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         setAllowsExtraArguments(true);
@@ -24,14 +24,14 @@ public final class TelemetryStatusCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
 
         TelemetryRuntimeDiagnostics diagnostics = runtime.diagnostics();
         TelemetryCommandSupport.send(
                 commandContext,
-                "Telemetry: enabled=" + diagnostics.enabled()
+                "Beacon: enabled=" + diagnostics.enabled()
                         + ", projects=" + diagnostics.registeredProjects()
                         + ", loadedMods=" + diagnostics.loadedMods()
                         + ", pending=" + diagnostics.totalPendingReports()
@@ -41,15 +41,15 @@ public final class TelemetryStatusCommand extends CommandBase {
                         : runtime.activeCoordinatorProviderId())
                         + ", standaloneOwnsRuntime=" + runtime.ownsActiveCoordinator()
         );
-        TelemetryCommandSupport.send(commandContext, "Telemetry last flush: " + diagnostics.lastFlushResult());
+        TelemetryCommandSupport.send(commandContext, "Beacon last flush: " + diagnostics.lastFlushResult());
         if (diagnostics.modsDirectory() != null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry mods directory: " + diagnostics.modsDirectory());
+            TelemetryCommandSupport.send(commandContext, "Beacon mods directory: " + diagnostics.modsDirectory());
         }
         if (!diagnostics.registrationWarnings().isEmpty()) {
             TelemetryCommandSupport.send(
                     commandContext,
-                    "Telemetry registration warnings=" + diagnostics.registrationWarnings().size()
-                            + ". Use /telemetry projects or /telemetry project <id> for details."
+                    "Beacon registration warnings=" + diagnostics.registrationWarnings().size()
+                            + ". Use /beacon projects or /beacon project <id> for details."
             );
         }
     }

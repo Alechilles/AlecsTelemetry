@@ -7,7 +7,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 /**
- * Shared parsing and messaging helpers for `/telemetry` subcommands.
+ * Shared parsing and messaging helpers for `/beacon` subcommands.
  */
 public final class TelemetryCommandSupport {
 

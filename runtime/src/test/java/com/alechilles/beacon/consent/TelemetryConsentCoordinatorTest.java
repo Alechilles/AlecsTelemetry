@@ -16,11 +16,12 @@ class TelemetryConsentCoordinatorTest {
 
     @Test
     void firstRunConsentNoticeUsesOperatorFacingChatCopy() {
-        assertEquals("telemetry.command.telemetry", TelemetryConsentCoordinator.ROOT_PERMISSION);
+        assertEquals("beacon.command.beacon", TelemetryConsentCoordinator.ROOT_PERMISSION);
         assertEquals("#f0a33a", TelemetryConsentCoordinator.FIRST_RUN_NOTICE_COLOR);
         assertTrue(TelemetryConsentCoordinator.FIRST_RUN_NOTICE.contains("anonymous statistics"));
         assertTrue(TelemetryConsentCoordinator.FIRST_RUN_NOTICE.contains("crash, error, performance diagnostics"));
-        assertTrue(TelemetryConsentCoordinator.FIRST_RUN_NOTICE.contains("`/telemetry consent`"));
+        assertTrue(TelemetryConsentCoordinator.FIRST_RUN_NOTICE.contains("Beacon"));
+        assertTrue(TelemetryConsentCoordinator.FIRST_RUN_NOTICE.contains("`/beacon consent`"));
     }
 
     @Test
@@ -49,7 +50,7 @@ class TelemetryConsentCoordinatorTest {
         assertTrue(notice.contains("Creditor"));
         assertTrue(notice.contains("Errors and Usage"));
         assertTrue(notice.contains("remain disabled"));
-        assertTrue(notice.contains("`/telemetry consent`"));
+        assertTrue(notice.contains("`/beacon consent`"));
 
         String diagnosticsNotice = TelemetryConsentCoordinator.reviewNotice(
                 List.of(creditor),

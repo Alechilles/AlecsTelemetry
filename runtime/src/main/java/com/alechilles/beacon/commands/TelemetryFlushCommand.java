@@ -7,7 +7,7 @@ import com.hypixel.hytale.server.core.command.system.basecommands.CommandBase;
 import javax.annotation.Nonnull;
 
 /**
- * Schedules a telemetry flush for all projects or one specific project.
+ * Schedules a Beacon flush for all projects or one specific project.
  */
 public final class TelemetryFlushCommand extends CommandBase {
 
@@ -23,12 +23,12 @@ public final class TelemetryFlushCommand extends CommandBase {
     @Override
     protected void executeSync(@Nonnull CommandContext commandContext) {
         if (runtime == null) {
-            TelemetryCommandSupport.send(commandContext, "Telemetry runtime service is unavailable.");
+            TelemetryCommandSupport.send(commandContext, "Beacon runtime service is unavailable.");
             return;
         }
         String projectId = TelemetryCommandSupport.token(commandContext, 2);
         if (projectId != null && runtime.findProject(projectId) == null) {
-            TelemetryCommandSupport.send(commandContext, "Unknown telemetry project: " + projectId);
+            TelemetryCommandSupport.send(commandContext, "Unknown Beacon project: " + projectId);
             return;
         }
 
@@ -38,8 +38,8 @@ public final class TelemetryFlushCommand extends CommandBase {
         TelemetryCommandSupport.send(
                 commandContext,
                 scheduled
-                        ? "Telemetry flush scheduled" + (projectId == null ? "." : " for " + projectId + ".")
-                        : "Telemetry flush was not scheduled."
+                        ? "Beacon flush scheduled" + (projectId == null ? "." : " for " + projectId + ".")
+                        : "Beacon flush was not scheduled."
         );
     }
 }

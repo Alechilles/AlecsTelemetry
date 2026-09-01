@@ -7,13 +7,13 @@ import com.hypixel.hytale.server.core.command.system.basecommands.AbstractComman
 import javax.annotation.Nonnull;
 
 /**
- * Root `/telemetry` command dispatcher.
+ * Root `/beacon` command dispatcher.
  */
 public final class TelemetryCommandRoot extends AbstractCommandCollection {
-    public static final String ROOT_PERMISSION = "telemetry.command.telemetry";
+    public static final String ROOT_PERMISSION = "beacon.command.beacon";
 
     public TelemetryCommandRoot(@Nonnull TelemetryCommandRuntime runtime) {
-        super("telemetry", "Alec's Telemetry commands.");
+        super("beacon", "Beacon commands.");
         requirePermission(ROOT_PERMISSION);
         setPermissionGroups(TelemetryCommandPermissions.adminGroups());
         addSubCommand(new TelemetryStatusCommand(runtime));
