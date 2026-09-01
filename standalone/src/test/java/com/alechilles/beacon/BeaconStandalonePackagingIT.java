@@ -1,5 +1,6 @@
 package com.alechilles.beacon;
 
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import javax.imageio.ImageIO;
@@ -14,8 +15,6 @@ import java.util.Properties;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -48,6 +47,9 @@ class BeaconStandalonePackagingIT {
             assertMavenProperties(jar, "META-INF/maven/com.alechilles/beacon-runtime/pom.properties",
                     "com.alechilles", "beacon-runtime", "2.0.0");
 
+            String beaconLicense = entryText(jar, "META-INF/LICENSES/LICENSE");
+            assertTrue(beaconLicense.startsWith("Beacon Runtime License 1.0"));
+
             String credits = entryText(jar, "Server/Credits/Beacon.json");
             assertTrue(credits.contains("\"Plugin\": \"Alechilles:Beacon\""));
             assertTrue(credits.contains("\"RawText\": \"Beacon — The developer platform behind ModStats.io.\""));
@@ -76,7 +78,9 @@ class BeaconStandalonePackagingIT {
                 .getCodeSource()
                 .getLocation()
                 .toURI());
-        return testClasses.getParent().resolve("Beacon v2.0.0.jar");
+        Path mavenJar = testClasses.getParent().resolve("Beacon v2.0.0.jar");
+        Path gradleJar = testClasses.resolve("../../..").normalize().resolve("libs/Beacon v2.0.0.jar");
+        return Files.isRegularFile(mavenJar) ? mavenJar : gradleJar;
     }
 
     private static String entryText(JarFile jar, String path) throws IOException {
@@ -88,10 +92,9 @@ class BeaconStandalonePackagingIT {
     }
 
     private static String jsonString(String json, String key) {
-        Matcher matcher = Pattern.compile("\\\"" + Pattern.quote(key) + "\\\"\\s*:\\s*\\\"([^\\\"]*)\\\"")
-                .matcher(json);
-        assertTrue(matcher.find(), "manifest must contain a string property named " + key);
-        return matcher.group(1);
+        var value = JsonParser.parseString(json).getAsJsonObject().get(key);
+        assertNotNull(value, "manifest must contain a property named " + key);
+        return value.getAsString();
     }
 
     private static void assertMavenProperties(JarFile jar, String path, String groupId, String artifactId,

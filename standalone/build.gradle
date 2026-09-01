@@ -12,6 +12,7 @@ def localProperty = { String name -> providers.gradleProperty(name).getOrElse(lo
 
 group = 'com.alechilles'
 version = localProperty('mod_version')
+def standaloneVersion = version.toString()
 
 java {
     toolchain {
@@ -57,10 +58,19 @@ tasks.named('jar') {
 tasks.named('shadowJar', ShadowJar) {
     archiveFileName = "Beacon v${project.version}.jar"
     archiveClassifier = ''
-    exclude 'Common/UI/Custom/BeaconLogo.png'
     exclude 'META-INF/MANIFEST.MF', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
     manifest {
-        attributes('Plugin-Group': project.group, 'Plugin-Name': project.name, 'Plugin-Version': project.version)
+        attributes('Plugin-Group': project.group, 'Plugin-Name': 'beacon', 'Plugin-Version': project.version)
+    }
+}
+
+tasks.named('processResources') {
+    inputs.property('standaloneVersion', standaloneVersion)
+    filesMatching('META-INF/maven/com.alechilles/beacon/pom.properties') {
+        expand(standaloneVersion: standaloneVersion)
+    }
+    from(new File(project.projectDir.parentFile, 'LICENSE')) {
+        into 'META-INF/LICENSES'
     }
 }
 

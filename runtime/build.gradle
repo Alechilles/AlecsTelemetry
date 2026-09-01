@@ -10,6 +10,10 @@ group = 'com.alechilles'
 version = localProperty('mod_version')
 def runtimeVersion = version.toString()
 
+base {
+    archivesName = 'beacon-runtime'
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)
