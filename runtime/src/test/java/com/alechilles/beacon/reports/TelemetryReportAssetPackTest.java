@@ -47,8 +47,8 @@ class TelemetryReportAssetPackTest {
                 "TelemetryReportPage.ui must not use the old single schema field value control"
         );
         assertTrue(
-                reportPage.contains("Background: \"AlecsTelemetryLogo.png\""),
-                "TelemetryReportPage.ui must show the Alec's Telemetry logo in the header"
+                reportPage.contains("Background: \"BeaconLogo.png\""),
+                "TelemetryReportPage.ui must show the Beacon logo in the header"
         );
         assertTrue(
                 reportPage.contains("Background: \"TelemetryConsentHeader.png\""),
@@ -69,8 +69,8 @@ class TelemetryReportAssetPackTest {
                 "TelemetryReportProjectSelectPage.ui must be packaged for the client custom UI document index"
         );
         assertTrue(
-                selectorPage.contains("Background: \"AlecsTelemetryLogo.png\""),
-                "TelemetryReportProjectSelectPage.ui must show the Alec's Telemetry logo in the header"
+                selectorPage.contains("Background: \"BeaconLogo.png\""),
+                "TelemetryReportProjectSelectPage.ui must show the Beacon logo in the header"
         );
         assertTrue(
                 selectorPage.contains("#TelemetryReportProjectSelectIconFrame"),

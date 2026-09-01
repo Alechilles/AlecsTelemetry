@@ -1,0 +1,9 @@
+{
+  "Plugin": "Alechilles:Beacon",
+  "Description": {
+    "RawText": "Beacon — The developer platform behind ModStats.io."
+  },
+  "License": {
+    "RawText": "Beacon is distributed under a source-available dual license. See the bundled LICENSE files for terms."
+  }
+}

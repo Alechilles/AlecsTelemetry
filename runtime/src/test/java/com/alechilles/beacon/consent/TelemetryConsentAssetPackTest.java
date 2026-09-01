@@ -23,8 +23,8 @@ class TelemetryConsentAssetPackTest {
                 "TelemetryConsentPage.ui must be packaged for the client custom UI document index"
         );
         assertNotNull(
-                getClass().getClassLoader().getResource("Common/UI/Custom/AlecsTelemetryLogo.png"),
-                "AlecsTelemetryLogo.png must be packaged for the consent page header"
+                getClass().getClassLoader().getResource("Common/UI/Custom/BeaconLogo.png"),
+                "BeaconLogo.png must be packaged for the consent page header"
         );
         assertNotNull(
                 getClass().getClassLoader().getResource("Common/UI/Custom/icon-256.png"),
@@ -34,7 +34,7 @@ class TelemetryConsentAssetPackTest {
                 getClass().getClassLoader().getResource("Common/UI/Custom/TelemetryConsentHeader.png"),
                 "TelemetryConsentHeader.png must be packaged for the enlarged consent page title bar"
         );
-        assertTrue(consentPage.contains("Background: \"AlecsTelemetryLogo.png\""));
+        assertTrue(consentPage.contains("Background: \"BeaconLogo.png\""));
         assertTrue(consentPage.contains("Anchor: (Height: 128, Top: 0)"));
         assertTrue(consentPage.contains("Background: \"TelemetryConsentHeader.png\""));
         assertTrue(consentPage.contains("Anchor: (Top: 128)"));
@@ -73,7 +73,7 @@ class TelemetryConsentAssetPackTest {
         assertTrue(!consentPage.contains("TelemetryConsentCrash"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentStatsEnabled"));
         assertTrue(consentPage.contains("CheckBox #TelemetryConsentBreadcrumbsEnabled"));
-        assertTrue(!consentPage.contains("Common/UI/Custom/AlecsTelemetryLogo.png"));
+        assertTrue(!consentPage.contains("Common/UI/Custom/BeaconLogo.png"));
         assertTrue(!consentPage.contains("Background: #203b5a"));
     }
 

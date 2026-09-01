@@ -15,7 +15,7 @@ $C.@PageOverlay {
 
       Group #TelemetryReportProjectSelectLogo {
         Anchor: (Width: 221, Height: 80);
-        Background: "AlecsTelemetryLogo.png";
+        Background: "BeaconLogo.png";
       }
     }
 

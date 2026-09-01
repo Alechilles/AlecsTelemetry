@@ -19,7 +19,7 @@ class RuntimeArtifactBoundaryTest {
         assertContainsRuntimeClass("com/alechilles/beacon/core/TelemetryCoreEngine.class");
         assertContainsRuntimeClass("com/alechilles/beacon/consent/TelemetryConsentPage.class");
         assertContainsRuntimeClass("Common/UI/Custom/TelemetryConsentPage.ui");
-        assertContainsRuntimeClass("Common/UI/Custom/AlecsTelemetryLogo.png");
+        assertContainsRuntimeClass("Common/UI/Custom/BeaconLogo.png");
         assertContainsRuntimeClass("Common/UI/Custom/TelemetryConsentHeader.png");
 
         assertDoesNotContainRuntimeClass("com/alechilles/beacon/Beacon.class");

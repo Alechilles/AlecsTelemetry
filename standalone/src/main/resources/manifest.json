@@ -1,16 +1,16 @@
 {
     "Group": "Alechilles",
-    "Name": "Alec's Telemetry!",
-    "Version": "1.3.0",
-    "Description": "Standalone telemetry runtime mod for Hytale mods.",
+    "Name": "Beacon",
+    "Version": "2.0.0",
+    "Description": "Beacon — The developer platform behind ModStats.io.",
     "Authors": [
         {
             "Name": "Alec (Alechilles)",
             "Url": "https://www.curseforge.com/members/alechilles/projects"
         }
     ],
-    "Website": "https://telemetry.alecsmods.com",
-    "Main": "com.alechilles.alecstelemetry.AlecsTelemetry",
+    "Website": "https://beacon.modstats.io",
+    "Main": "com.alechilles.beacon.Beacon",
     "ServerVersion": ">=0.5.0 <0.7.0",
     "Dependencies": {
         "Hytale:AssetModule": "*"

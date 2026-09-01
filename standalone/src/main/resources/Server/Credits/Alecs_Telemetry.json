@@ -1,9 +1,0 @@
-{
-  "Plugin": "Alechilles:Alec's Telemetry",
-  "Description": {
-    "RawText": "Alec's Telemetry provides opt-in crash, error, report, and anonymous usage telemetry for Hytale mods."
-  },
-  "License": {
-    "RawText": "Alec's Telemetry is distributed under a source-available dual license. See the bundled LICENSE files for terms."
-  }
-}
