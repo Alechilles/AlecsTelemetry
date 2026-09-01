@@ -1281,7 +1281,8 @@ public final class TelemetryCoreEngine {
 
     private boolean isDiagnosticsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {
         AtomicBoolean override = diagnosticsEnabledOverrides.get(normalizeProjectId(project.projectId()));
-        return override == null ? project.diagnostics().enabled() : override.get();
+        return project.diagnostics().supported()
+                && (override == null ? project.diagnostics().enabled() : override.get());
     }
 
     private boolean areLifecycleEventsRuntimeEnabled(@Nonnull TelemetryProjectRegistration project) {

@@ -128,6 +128,28 @@ class TelemetryCoreEngineMvpTest {
     }
 
     @Test
+    void diagnosticBundleRejectsUnsupportedDiagnosticsEvenWhenOverrideIsEnabled() {
+        TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
+                tempDir.resolve("Settings").resolve("runtime.json"), null
+        );
+        TelemetryProjectRegistration project = registration(false);
+        TelemetryCoreEngine engine = new TelemetryCoreEngine(
+                settings, dataPaths(settings), List.of(project), List.of(),
+                new RecordingClient(), null, null
+        );
+        engine.setDiagnosticsEnabled(project.projectId(), true);
+
+        TelemetryDiagnosticBundleResult result = engine.submitDiagnosticBundle(
+                project.projectId(),
+                diagnosticBundle(TelemetryDiagnosticDisposition.informational())
+        );
+
+        assertEquals(TelemetryDiagnosticBundleResult.Status.DISABLED, result.status());
+        assertEquals("diagnostic_telemetry_disabled", result.detail());
+        assertEquals(0, engine.pendingReports(project.projectId()));
+    }
+
+    @Test
     void diagnosticBundleRejectsIssueDispositionWithoutFingerprint() {
         TelemetryRuntimeSettings settings = TelemetryRuntimeSettings.load(
                 tempDir.resolve("Settings").resolve("runtime.json"),
@@ -494,6 +516,10 @@ class TelemetryCoreEngineMvpTest {
     }
 
     private static TelemetryProjectRegistration registration() {
+        return registration(true);
+    }
+
+    private static TelemetryProjectRegistration registration(boolean diagnosticsSupported) {
         TelemetryProjectDescriptor descriptor = TelemetryProjectDescriptor.fromJson("""
                 {
                   "projectId": "retired-report",
@@ -522,7 +548,7 @@ class TelemetryCoreEngineMvpTest {
                     }
                   },
                   "diagnostics": {
-                    "supported": true,
+                    "supported": %s,
                     "defaultEnabled": true
                   },
                   "defaults": {
@@ -533,7 +559,7 @@ class TelemetryCoreEngineMvpTest {
                     "eventUrl": "https://example.invalid/telemetry/event"
                   }
                 }
-                """, null);
+                """.formatted(diagnosticsSupported), null);
         return new TelemetryProjectRegistration(
                 descriptor,
                 "Example:Retired Report",
