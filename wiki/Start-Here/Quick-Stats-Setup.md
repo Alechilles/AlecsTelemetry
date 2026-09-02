@@ -7,13 +7,13 @@ draft: false
 
 # Quick Stats Setup
 
-Parent: [Start Here](/mod/alecs-telemetry/start-here) | [Home](/mod/alecs-telemetry/home)
+Parent: [Start Here](/mod/beacon/start-here) | [Home](/mod/beacon/home)
 
 Use this route when you only want anonymous public usage stats, similar in spirit to common mod stats services.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once. That page owns project creation, key setup, descriptor placement, optional icon setup, and package checks.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once. That page owns project creation, key setup, descriptor placement, optional icon setup, and package checks.
 
 This page only covers the stats-specific descriptor block and public stats portal settings.
 
@@ -45,18 +45,18 @@ Stats ingest and public visibility are separate. A project can receive stats pri
 
 ## Install And Wait For Heartbeat
 
-1. Install Alec's Telemetry as a standalone dependency, unless your plugin embeds it.
+1. Install Beacon as a standalone dependency, unless your plugin embeds it.
 2. Start the server.
-3. Confirm the project appears in `/telemetry projects`.
+3. Confirm the project appears in `/beacon projects`.
 4. Wait for the first stats heartbeat. New runtimes emit the first standard heartbeat 2-5 minutes after startup, then roughly every 30 minutes with some randomization afterwards.
-5. Use `/telemetry flush <project-id>` if you want to ask the runtime to upload pending data now.
+5. Use `/beacon flush <project-id>` if you want to ask the runtime to upload pending data now.
 
 ## Verify
 
 Run:
 
 ```text
-/telemetry project <project-id>
+/beacon project <project-id>
 ```
 
 Then check the portal stats page. If public stats are enabled, also check the public stats page for your slug on the public stats host.
@@ -65,4 +65,4 @@ Then check the portal stats page. If public stats are enabled, also check the pu
 
 Public stats are aggregate only. They should not expose raw server IDs, session IDs, IP addresses, player names, player UUIDs, chat, coordinates, world data, secrets, or full config files.
 
-For the full stats guide, see [Anonymous Usage Stats](/mod/alecs-telemetry/anonymous-usage-stats).
+For the full stats guide, see [Anonymous Usage Stats](/mod/beacon/anonymous-usage-stats).

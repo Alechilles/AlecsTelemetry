@@ -1,15 +1,15 @@
 # Embedded Consumer Mod
 
 This example shows how a modder can embed telemetry bootstrap logic directly in
-their own mod instead of requiring the standalone `Alec's Telemetry` dependency.
+their own mod instead of requiring the standalone `Beacon` dependency.
 
 Key pieces:
 
-- `Server/Telemetry/project.json` declares the hosted project settings
+- `Server/Beacon/project.json` declares the hosted project settings
 - the mod boots telemetry in its own lifecycle
 - `manifest.json` sets `IncludesAssetPack` to `true`
 - the build must merge every `Common/**` resource from
-  `alecstelemetry-runtime` into the host asset-pack source
+  `beacon-runtime` into the host asset-pack source
 
 Shading the runtime classes is not sufficient. Confirm that the final mod
 contains `Common/UI/Custom/TelemetryConsentPage.ui` before release. The full

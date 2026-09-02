@@ -4,3 +4,4 @@ def localProperty = { String name -> providers.gradleProperty(name).getOrElse(lo
 
 group = 'com.alechilles'
 version = localProperty('mod_version')
+description = 'Beacon — The developer platform behind ModStats.io.'

@@ -7,13 +7,13 @@ draft: false
 
 # Usage Events
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 Usage events track how players or server operators use specific plugin features. They are not the same as anonymous public stats.
 
 ## Before This Page
 
-Complete [Portal First Setup](/mod/alecs-telemetry/portal-first-setup) once.
+Complete [Portal First Setup](/mod/beacon/portal-first-setup) once.
 
 ## Descriptor Block
 
@@ -58,7 +58,7 @@ project.recordUsageWithContext(
 ## Verify
 
 1. Trigger the feature locally.
-2. Run `/telemetry flush <project-id>`.
+2. Run `/beacon flush <project-id>`.
 3. Open Explore in the portal.
 4. Filter for the usage event name.
 
@@ -66,5 +66,5 @@ project.recordUsageWithContext(
 
 - Event missing: add it to `usage.allowedEvents`.
 - Detail missing: add it to `usage.details`.
-- Server owner opted out: check `/telemetry consent`.
+- Server owner opted out: check `/beacon consent`.
 - Event names are hard to analyze: rename future events to stable action names.

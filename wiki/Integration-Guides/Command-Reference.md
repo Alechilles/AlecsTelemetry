@@ -7,16 +7,16 @@ draft: false
 
 # Command Reference
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
-The root command is `/telemetry`. The root permission is `telemetry.command.telemetry`.
+The root command is `/beacon`. The root permission is `beacon.command.beacon`.
 
 ## Runtime Diagnostics
 
 ```text
-/telemetry status
-/telemetry projects
-/telemetry project <project-id>
+/beacon status
+/beacon projects
+/beacon project <project-id>
 ```
 
 Use these to inspect runtime enablement, active coordinator ownership, registered projects, endpoints, pending queues, overrides, source paths, and registration warnings.
@@ -24,7 +24,7 @@ Use these to inspect runtime enablement, active coordinator ownership, registere
 ## Consent
 
 ```text
-/telemetry consent
+/beacon consent
 ```
 
 This opens the shared consent UI. It can change project-level enablement, crash
@@ -42,9 +42,9 @@ disabled until an operator runs this command and selects Save and Close.
 ## Flush And Test
 
 ```text
-/telemetry flush
-/telemetry flush <project-id>
-/telemetry test <project-id> [detail]
+/beacon flush
+/beacon flush <project-id>
+/beacon test <project-id> [detail]
 ```
 
 `flush` schedules uploads for all projects or one project. `test` queues a manual telemetry test report without crashing the server.
@@ -52,21 +52,21 @@ disabled until an operator runs this command and selects Save and Close.
 ## Manual Player Reports
 
 ```text
-/telemetry report
-/telemetry report issue
-/telemetry report suggestion
-/telemetry report <project-id> [issue|suggestion]
+/beacon report
+/beacon report issue
+/beacon report suggestion
+/beacon report <project-id> [issue|suggestion]
 ```
 
-`/telemetry report` is player-facing and available to `Player`, `OP`, `Admin`, and `Operator` groups.
+`/beacon report` is player-facing and available to `Player`, `OP`, `Admin`, and `Operator` groups.
 
 Operator review commands:
 
 ```text
-/telemetry reports pending
-/telemetry reports approve <report-id>
-/telemetry reports reject <report-id>
-/telemetry reports submitted
+/beacon reports pending
+/beacon reports approve <report-id>
+/beacon reports reject <report-id>
+/beacon reports submitted
 ```
 
 These review commands matter when `manualReports.manualReviewRequired` is true in `Settings/runtime.json`.

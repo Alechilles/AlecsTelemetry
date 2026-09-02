@@ -7,7 +7,7 @@ draft: false
 
 # GitHub Issue Sync
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
 GitHub issue sync lets project members create linked GitHub issues from portal issues and optionally mirror recurring issue activity.
 

@@ -7,23 +7,23 @@ draft: false
 
 # Example Mods
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
 The repository includes example consumer mods that show both integration modes.
 
 ## Example Consumer Mod
 
-The standard example shows the minimum files another mod would ship to integrate with Alec's Telemetry.
+The standard example shows the minimum files another mod would ship to integrate with Beacon.
 
 In many cases, the only telemetry-specific file needed is:
 
 ```text
-Server/Telemetry/project.json
+Server/Beacon/project.json
 ```
 
 The runtime can infer the rest from `manifest.json` when the manifest has correct `Group`, `Name`, and `Main` values.
 
-Use this example when you want dependency mode and a standalone Alec's Telemetry dependency.
+Use this example when you want dependency mode and a standalone Beacon dependency.
 
 ## Embedded Consumer Mod
 
@@ -31,7 +31,7 @@ The embedded example shows how a modder can bootstrap telemetry directly in thei
 
 Key pieces:
 
-- `Server/Telemetry/project.json` declares the same hosted project settings as dependency mode.
+- `Server/Beacon/project.json` declares the same hosted project settings as dependency mode.
 - The mod boots telemetry in its own lifecycle.
 - `manifest.json` publishes an asset pack, and the build merges the runtime's
   `Common/**` UI resources into that pack.

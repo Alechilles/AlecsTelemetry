@@ -1,12 +1,12 @@
 {
-  "modName": "Alec's Telemetry!",
-  "repository": "Alechilles/AlecsTelemetry",
+  "modName": "Beacon",
+  "repository": "Alechilles/Beacon",
   "packaging": "jar",
-  "artifactNameTemplate": "Alec's Telemetry v{version}.jar",
+  "artifactNameTemplate": "Beacon v{version}.jar",
   "versionSource": "pom",
   "versionFile": "pom.xml",
   "modifold": {
-    "projectSlug": "alecs-telemetry",
+    "projectSlug": "beacon",
     "releaseChannel": "release",
     "versionPrefix": "v",
     "gameVersions": ["0.5.7", "0.5.6", "0.5.5", "0.5.4", "0.5.3", "0.5.2", "0.5.1", "0.5.0"],

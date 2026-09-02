@@ -7,7 +7,7 @@ draft: false
 
 # Discord Routing
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
 Discord routing sends portal alerts to configured Discord channels. Use it for crash, event, and manual-report notifications when a project team wants alerts outside the portal.
 
@@ -35,8 +35,8 @@ Discord routing can use:
 1. Send a test telemetry report:
 
 ```text
-/telemetry test <project-id> discord-routing
-/telemetry flush <project-id>
+/beacon test <project-id> discord-routing
+/beacon flush <project-id>
 ```
 
 2. Confirm the portal receives the issue.

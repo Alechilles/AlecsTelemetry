@@ -1,6 +1,6 @@
 # Manual Player Reports
 
-Alec's Telemetry supports player-submitted issue and suggestion reports in addition
+Beacon supports player-submitted issue and suggestion reports in addition
 to automated crash reports and generic telemetry events.
 
 Consumer mods can open the report page from their own UI:
@@ -13,14 +13,14 @@ if (project != null) {
 }
 ```
 
-Players with the `telemetry.command.telemetry.report` permission can also open the
+Players with the `beacon.command.beacon.report` permission can also open the
 same UI directly:
 
 ```text
-/telemetry report
-/telemetry report issue
-/telemetry report suggestion
-/telemetry report <project-id> [issue|suggestion]
+/beacon report
+/beacon report issue
+/beacon report suggestion
+/beacon report <project-id> [issue|suggestion]
 ```
 
 When the project id is omitted, the command opens a compact project selector
@@ -32,7 +32,7 @@ checks.
 
 ## Server Controls
 
-The canonical Alec's Telemetry `Settings/runtime.json` controls what reports can
+The canonical Beacon `Settings/runtime.json` controls what reports can
 include:
 
 - `manualReports.enabled`
@@ -48,16 +48,16 @@ include:
 Review-required reports are stored under:
 
 ```text
-mods/Alechilles_Alec's Telemetry!/Telemetry/manual-reports/<projectId>/review/
+mods/Alechilles_Beacon/Telemetry/manual-reports/<projectId>/review/
 ```
 
 Operators can use:
 
 ```text
-/telemetry reports pending
-/telemetry reports approve <reportId>
-/telemetry reports reject <reportId>
-/telemetry reports submitted
+/beacon reports pending
+/beacon reports approve <reportId>
+/beacon reports reject <reportId>
+/beacon reports submitted
 ```
 
 Approved reports move to the pending upload queue. Rejected reports stay local and

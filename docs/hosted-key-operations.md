@@ -5,6 +5,8 @@ Hosted `projectKey` values are publishable ingest keys.
 They are intended to be baked into shipped mod descriptors so telemetry works out
 of the box for the mod author.
 
+Beacon hosted ingest uses `https://beacon.modstats.io` as its production origin.
+
 ## Security Model
 
 - publishable ingest keys can only write telemetry for one project
@@ -14,7 +16,7 @@ of the box for the mod author.
 
 ## Rotation Model
 
-Dual-key rotation is supported in Alec's Telemetry Platform deployments that
+Dual-key rotation is supported in Beacon Platform deployments that
 include the grace-key feature.
 
 The lightweight reference hosted backend that lives in this repository still
@@ -29,7 +31,7 @@ ingesting as soon as that backend key changes.
 ## Recommended Rotation Flow
 
 1. rotate the key in the portal
-2. update the shipped `Server/Telemetry/project.json` with the new `projectKey`
+2. update the shipped `Server/Beacon/project.json` with the new `projectKey`
 3. publish the updated mod build
 4. wait for the grace period to expire
 5. verify old versions are no longer using the grace key

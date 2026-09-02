@@ -7,7 +7,7 @@ draft: false
 
 # Project Key Operations
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
 Portal `projectKey` values are publishable ingest keys. They are intended to be baked into shipped mod descriptors so telemetry works out of the box for the mod author.
 
@@ -29,7 +29,7 @@ Rotate keys from the official portal project admin surface. The portal shows the
 ## Recommended Rotation Flow
 
 1. Rotate the key in the portal.
-2. Update the shipped `Server/Telemetry/project.json` with the new `projectKey`.
+2. Update the shipped `Server/Beacon/project.json` with the new `projectKey`.
 3. Publish the updated mod build.
 4. If a grace key is shown, wait for the grace period to expire.
 5. Verify old versions are no longer ingesting with the old key.

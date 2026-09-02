@@ -1,7 +1,7 @@
 # Embedded Mode
 
 Embedded mode lets a modder bundle the telemetry runtime inside their own mod instead
-of requiring the standalone `Alec's Telemetry!` dependency.
+of requiring the standalone `Beacon` dependency.
 
 ## When To Use It
 
@@ -13,24 +13,24 @@ Use embedded mode when a modder wants:
 
 ## Runtime Artifact
 
-Get the embeddable runtime from Alec's Telemetry downloads:
+Get the embeddable runtime from Beacon downloads:
 
 ```text
-https://telemetry.alecsmods.com/downloads
+https://beacon.modstats.io/downloads
 ```
 
 For Maven builds, add the public repository and depend on the runtime artifact:
 
 ```xml
 <repository>
-  <id>alecs-telemetry</id>
-  <url>https://telemetry.alecsmods.com/maven/releases</url>
+  <id>beacon</id>
+  <url>https://beacon.modstats.io/maven/releases</url>
 </repository>
 
 <dependency>
   <groupId>com.alechilles</groupId>
-  <artifactId>alecstelemetry-runtime</artifactId>
-  <version>1.3.0</version>
+  <artifactId>beacon-runtime</artifactId>
+  <version>2.0.0</version>
 </dependency>
 ```
 
@@ -39,12 +39,12 @@ For Gradle Kotlin DSL builds, use the same Maven-format repository:
 ```kotlin
 repositories {
     maven {
-        url = uri("https://telemetry.alecsmods.com/maven/releases")
+        url = uri("https://beacon.modstats.io/maven/releases")
     }
 }
 
 dependencies {
-    implementation("com.alechilles:alecstelemetry-runtime:1.3.0")
+    implementation("com.alechilles:beacon-runtime:2.0.0")
 }
 ```
 
@@ -57,20 +57,20 @@ An embedded host must publish the runtime's `Common/**` resources to Hytale
 clients. The final mod package must:
 
 - set `IncludesAssetPack` to `true` in `manifest.json`
-- contain every `Common/**` resource from `alecstelemetry-runtime`
+- contain every `Common/**` resource from `beacon-runtime`
 - expose the merged resources as the host's development asset-pack source
 
 Shading the runtime classes into the host jar is not sufficient. If the client
-cannot load `Common/UI/Custom/TelemetryConsentPage.ui`, `/telemetry consent`
+cannot load `Common/UI/Custom/TelemetryConsentPage.ui`, `/beacon consent`
 disconnects the client.
 
 This Gradle Groovy DSL example merges the host resources with the runtime UI.
 It uses the AzureDoom Hytale Gradle plugin names:
 
 ```groovy
-def telemetryVersion = '1.3.0'
+def telemetryVersion = '2.0.0'
 def telemetryCoordinates =
-        "com.alechilles:alecstelemetry-runtime:${telemetryVersion}"
+        "com.alechilles:beacon-runtime:${telemetryVersion}"
 def embeddedAssetPackDirectory =
         layout.buildDirectory.dir('generated/embeddedAssetPack')
 
@@ -122,9 +122,14 @@ the shared UI for descriptor-only projects.
 
 ## Descriptor Shape
 
-Embedded mode uses the same `Server/Telemetry/project.json` descriptor as the standalone dependency flow. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and bootstrapping it from the owning mod.
+Embedded mode uses the same `Server/Beacon/project.json` descriptor as the
+standalone dependency flow. For compatibility, conventional bootstrap also
+accepts `Server/Telemetry/project.json` and `telemetry/project.json` when the
+Beacon path is absent. The descriptor does not need a runtime-mode flag;
+embedded behavior comes from packaging the runtime and bootstrapping it from
+the owning mod.
 
-Every installed copy of Alec's Telemetry, standalone or embedded, registers as a
+Every installed copy of Beacon, standalone or embedded, registers as a
 runtime coordinator candidate. The latest compatible runtime version wins.
 Non-winning copies become passive clients and forward telemetry operations to
 the active coordinator. If standalone is installed but an embedded copy is
@@ -148,8 +153,8 @@ Runtime ownership is selected per server process:
 
 1. Only coordinator candidates with coordinator protocol 3 are eligible to own
    generic contributions. Protocol-2 providers are ineligible for contribution
-   ownership; existing conventional bootstrap callers remain source and binary
-   compatible.
+   ownership; conventional bootstrap callers within the Beacon namespace remain
+   source and binary compatible.
 2. The highest telemetry runtime version wins.
 3. If versions match, standalone wins over embedded.
 4. If versions and origin match, provider plugin identifier and source path provide a stable tie-breaker.
@@ -182,7 +187,7 @@ the owning mod from loading.
 The owning mod boots telemetry directly:
 
 ```java
-import com.alechilles.alecstelemetry.api.TelemetryEventContext;
+import com.alechilles.beacon.api.TelemetryEventContext;
 
 private EmbeddedTelemetryService telemetry;
 
@@ -247,11 +252,11 @@ upload.
 ## Storage Layout
 
 The elected active coordinator stores runtime settings, project overrides,
-server identity, queues, and upload state under one canonical Alec's Telemetry
+server identity, queues, and upload state under one canonical Beacon
 data root:
 
 ```text
-<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
+<ServerOrSaveRoot>/mods/Alechilles_Beacon/
   Settings/
     runtime.json
     projects/<project-id>.json
@@ -271,6 +276,8 @@ On startup, the runtime performs a one-time migration from older Alec-created
 locations into the canonical root when those files exist:
 
 ```text
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry!/
+<ServerOrSaveRoot>/mods/Alechilles_Alec's Telemetry/
 <ServerOrSaveRoot>/telemetry/Settings/
 <ServerOrSaveRoot>/telemetry/Telemetry/
 <ServerOrSaveRoot>/Telemetry/Settings/
@@ -278,10 +285,12 @@ locations into the canonical root when those files exist:
 <ConsumerModDataDir>/Telemetry/Settings/projects/
 ```
 
-The migration copies files only when the canonical destination is missing. It
-removes old Alec-created `Settings` and nested `Telemetry` directories once they
-are empty, while leaving unrelated files such as Hytale's lowercase
-`telemetry/*.jsonl.gz` session logs in place.
+The migration copies known runtime state files only when the canonical Beacon
+destination is missing. It never removes old files or directories. When both
+files exist, Beacon uses the canonical destination and keeps the old source.
+After the migration attempt, Beacon does not read legacy owner override paths.
+Unrelated Hytale files such as lowercase `telemetry/*.jsonl.gz` session logs
+remain in place.
 
 ## Important Rule
 

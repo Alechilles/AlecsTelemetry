@@ -6,21 +6,21 @@ feature module, or other embedded package owns its own project identity. The
 physical host gets one shared runtime provider, while each logical project keeps
 its own descriptor, consent, destination, attribution, and queue.
 
-This guide describes the Alec's Telemetry 1.1.0 contribution ABI (ABI 1) and
+This guide describes the Beacon contribution ABI (ABI 1) and
 coordinator protocol 3.
 
 ## Descriptor-only first, active integration when needed
 
-An embeddable library does not need to bundle or initialize Alec's Telemetry to
+An embeddable library does not need to bundle or initialize Beacon to
 identify its project. Ship a direct descriptor resource in the final host JAR
 or host mod folder:
 
 ```text
-META-INF/alecs-telemetry/projects/<stable-project-id>.json
+META-INF/beacon/projects/<stable-project-id>.json
 ```
 
 Presence of a valid resource is the accepted installation signal. Any
-standalone or embedded Alec's Telemetry runtime can discover it; if no runtime
+standalone or embedded Beacon runtime can discover it; if no runtime
 is installed, the resource is inert and the host remains operational. Passive
 discovery provides one independently consented aggregate Stats `heartbeat`
 project and never executes contributor code. It masks every richer category,
@@ -28,7 +28,7 @@ even if the descriptor declares those categories for a later active integration.
 
 Use the passive descriptor shape below. `projectVersion` is the logical
 library version and should be build-stamped; the physical host's manifest
-version is used only as local provenance. This example uses Alec's hosted
+version is used only as local provenance. This example uses the Beacon hosted
 destination and its publishable project key. Passive descriptors may instead
 select `defaults.destinationMode: "custom"` with `customEndpoint.url`; in that
 case the standard Stats-only heartbeat goes to the author-selected endpoint,
@@ -65,7 +65,7 @@ and a declared owner so it can upgrade the passive project. A matching active
 registration reuses the existing consent row and destination. When a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 newly exposed categories stay disabled until an eligible operator reviews them
-through `/telemetry consent`; eligible operators are notified. Legacy reviewed
+through `/beacon consent`; eligible operators are notified. Legacy reviewed
 records without that snapshot remain honored for older categories and cannot be
 compared retrospectively. If Diagnostics is currently supported, it is treated
 as newly supported, remains disabled, and requires Save and Close.
@@ -76,14 +76,14 @@ Put the contribution descriptor in the contributor's own jar and anchor the
 resource lookup to a class owned by that contributor:
 
 ```java
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryBootstrap;
-import com.alechilles.alecstelemetry.embedded.EmbeddedTelemetryService;
-import com.alechilles.alecstelemetry.embedded.TelemetryProjectContribution;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryBootstrap;
+import com.alechilles.beacon.embedded.EmbeddedTelemetryService;
+import com.alechilles.beacon.embedded.TelemetryProjectContribution;
 
 TelemetryProjectContribution contribution = TelemetryProjectContribution.builder()
         .descriptorResource(
                 MyContributorTelemetry.class,
-                "META-INF/alecs-telemetry/projects/my-contributor.json"
+                "META-INF/beacon/projects/my-contributor.json"
         )
         .logicalPluginIdentifier("Example:My Contributor")
         .logicalPluginVersion(MyContributorVersion.current())
@@ -136,14 +136,14 @@ is removed from the resource path before lookup.
 ## Use a unique descriptor resource
 
 The anchored API reads the descriptor from `resourceAnchor.getClassLoader()`;
-it does not search the host plugin's conventional `Server/Telemetry/project.json`.
+it does not search the host plugin's conventional `Server/Beacon/project.json`.
 That conventional path belongs to the physical host mod. The coordinator also
 scans direct JSON entries under the namespaced directory for passive
 descriptor-only projects, so give every logical contributor a stable unique path
 to prevent unrelated resources from colliding. A recommended layout is:
 
 ```text
-META-INF/alecs-telemetry/projects/<stable-contributor-name>.json
+META-INF/beacon/projects/<stable-contributor-name>.json
 ```
 
 The descriptor must explicitly declare `projectId` and `displayName`, and its
@@ -181,12 +181,15 @@ Example:
 }
 ```
 
-The conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)` API remains
-source and binary compatible. It still loads `Server/Telemetry/project.json`
-with the legacy `telemetry/project.json` fallback. Use `contribute(...)` for
-anchored logical projects; do not make a contribution depend on a host-owned
-conventional resource path. Passive namespaced discovery is performed by the
-coordinator independently of either bootstrap call.
+Beacon 2.x is not source or binary compatible with the 1.x Alec's Telemetry
+Java namespace. The conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)`
+API prefers `Server/Beacon/project.json`, then accepts
+`Server/Telemetry/project.json` or `telemetry/project.json` as deprecated
+fallbacks. The coordinator also accepts
+`META-INF/alecs-telemetry/projects/` for passive discovery when the canonical
+directory contains no direct JSON descriptors. The anchored `contribute(...)`
+API reads the exact resource path supplied by the caller and does not rewrite
+it.
 
 ## Election and protocol compatibility
 
@@ -210,9 +213,10 @@ allowlist, sampling, and destination gates.
 
 The active runtime coordinator must implement coordinator protocol 3, including
 contribution snapshot reconciliation and token-bound dispatch. Protocol-2
-providers are ineligible to own generic contribution projects. The conventional
-`EmbeddedTelemetryBootstrap.bootstrap(plugin)` caller remains source and binary
-compatible. When a newer provider takes
+providers are ineligible to own generic contribution projects. Within the Beacon
+namespace, the conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)`
+caller remains source and binary compatible across eligible Beacon providers.
+When a newer provider takes
 over, the complete contribution snapshot is reconciled before activation. A
 failed replay leaves the previous active provider and catalog in place.
 
@@ -280,14 +284,14 @@ restart.
 ## Hosted and custom destinations
 
 With `defaults.destinationMode` set to `hosted`, the descriptor's publishable
-`hosted.projectKey` routes envelopes to Alec's hosted platform. The hosted
+`hosted.projectKey` routes envelopes to the Beacon hosted platform. The hosted
 platform's validation, retention, portal, and public-stats rules apply there.
 
 With `defaults.destinationMode` set to `custom`, use `customEndpoint.url` (and,
 when needed, `eventUrl` and `headers`) for a conventional project or a passive
 descriptor-only Stats project. A custom endpoint operator controls the data
 received at that endpoint, including any descriptor-approved fields,
-attachments, or sensitive values supplied by a mod or player. Alec's hosted
+attachments, or sensitive values supplied by a mod or player. The Beacon hosted
 platform policy and retention commitments do not cover a custom endpoint; the
 mod author and server owner must document, secure, and retain that data under
 their own rules. Executable anchored contributions using custom mode are

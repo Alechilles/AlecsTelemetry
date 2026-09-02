@@ -7,9 +7,9 @@ draft: false
 
 # Reference Ingest Service
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
-The `hosted/` package in this repository is a local/dev prototype and reference implementation for Alec's Telemetry ingest behavior.
+The `hosted/` package in this repository is a local/dev prototype and reference implementation for Beacon ingest behavior.
 
 ## Purpose
 
@@ -44,4 +44,4 @@ Treat this package as a reference implementation, not the long-term production b
 - `GET /api/v1/projects/:projectId/summary`
 - `GET /api/v1/projects/:projectId/charts/:chartId`
 
-For the full payload contract, see [Ingest Contract](/mod/alecs-telemetry/ingest-contract).
+For the full payload contract, see [Ingest Contract](/mod/beacon/ingest-contract).

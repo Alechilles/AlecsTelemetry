@@ -7,11 +7,12 @@ plugins {
 }
 
 def localProperties = new Properties()
-rootProject.file('AlecsTelemetry/gradle.properties').withInputStream { localProperties.load(it) }
+new File(project.projectDir.parentFile, 'gradle.properties').withInputStream { localProperties.load(it) }
 def localProperty = { String name -> providers.gradleProperty(name).getOrElse(localProperties.getProperty(name)) }
 
 group = 'com.alechilles'
 version = localProperty('mod_version')
+def standaloneVersion = version.toString()
 
 java {
     toolchain {
@@ -25,6 +26,7 @@ repositories {
 }
 
 dependencies {
+    // Keep the shared workspace project path stable; Beacon is the public artifact namespace.
     implementation project(':alecstelemetry:runtime')
     implementation "curse.maven:creditor-1560961:${localProperty('creditor_file_id')}"
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
@@ -41,11 +43,11 @@ hytaleTools {
     patchline = localProperty('hytale_patchline')
     manifestServerVersion = '>=0.5.0 <0.7.0'
     manifestGroup = 'Alechilles'
-    modId = "Alec's Telemetry!"
-    modDescription = 'Standalone telemetry runtime mod for Hytale mods.'
-    modUrl = 'https://telemetry.alecsmods.com'
+    modId = 'Beacon'
+    modDescription = 'Beacon — The developer platform behind ModStats.io.'
+    modUrl = 'https://beacon.modstats.io'
     modCredits = 'Alec (Alechilles)||https://www.curseforge.com/members/alechilles/projects'
-    mainClass = 'com.alechilles.alecstelemetry.AlecsTelemetry'
+    mainClass = 'com.alechilles.beacon.Beacon'
     includesPack = true
     bundleAssetEditorRuntime = false
 }
@@ -55,12 +57,21 @@ tasks.named('jar') {
 }
 
 tasks.named('shadowJar', ShadowJar) {
-    archiveFileName = "Alec's Telemetry v${project.version}.jar"
+    archiveFileName = "Beacon v${project.version}.jar"
     archiveClassifier = ''
-    exclude 'Common/UI/Custom/AlecsTelemetryLogo.png'
     exclude 'META-INF/MANIFEST.MF', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
     manifest {
-        attributes('Plugin-Group': project.group, 'Plugin-Name': project.name, 'Plugin-Version': project.version)
+        attributes('Plugin-Group': project.group, 'Plugin-Name': 'beacon', 'Plugin-Version': project.version)
+    }
+}
+
+tasks.named('processResources') {
+    inputs.property('standaloneVersion', standaloneVersion)
+    filesMatching('META-INF/maven/com.alechilles/beacon/pom.properties') {
+        expand(standaloneVersion: standaloneVersion)
+    }
+    from(new File(project.projectDir.parentFile, 'LICENSE')) {
+        into 'META-INF/LICENSES'
     }
 }
 

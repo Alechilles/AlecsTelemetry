@@ -7,9 +7,9 @@ draft: false
 
 # Runtime API
 
-Parent: [Integration Guides](/mod/alecs-telemetry/integration-guides) | [Home](/mod/alecs-telemetry/home)
+Parent: [Integration Guides](/mod/beacon/integration-guides) | [Home](/mod/beacon/home)
 
-Consumer mods can use Alec's Telemetry as an optional runtime integration after they ship `Server/Telemetry/project.json`.
+Consumer mods can use Beacon as an optional runtime integration after they ship `Server/Beacon/project.json`.
 
 ## Locate The Runtime
 
@@ -45,7 +45,7 @@ events consent does not enable or disable diagnostic bundles. The consent UI
 shows Diagnostics as `Diag` with the tooltip "Automatic diagnostic bundles with
 technical metadata and optional redacted attachments." The hosted payload,
 redaction, queue, size, retention, portal, and MCP rules are documented in the
-[canonical Diagnostic Bundles guide](https://github.com/Alechilles/AlecsTelemetry/blob/main/docs/diagnostic-bundles.md).
+[canonical Diagnostic Bundles guide](https://github.com/Alechilles/Beacon/blob/main/docs/diagnostic-bundles.md).
 
 Embedded runtime bridges fail closed for this category: an older bridge or a
 bridge payload with a missing `diagnosticsEnabled` field maps Diagnostics to

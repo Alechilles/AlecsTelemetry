@@ -6,16 +6,16 @@
 
     <parent>
         <groupId>com.alechilles</groupId>
-        <artifactId>alecstelemetry-parent</artifactId>
-        <version>1.3.0</version>
+        <artifactId>beacon-parent</artifactId>
+        <version>2.0.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>alecstelemetry-runtime</artifactId>
+    <artifactId>beacon-runtime</artifactId>
     <packaging>jar</packaging>
 
-    <name>Alec's Telemetry Runtime</name>
-    <description>Embeddable Alec's Telemetry runtime library for Hytale mods.</description>
+    <name>Beacon Runtime</name>
+    <description>Embeddable Beacon runtime library for Hytale mods.</description>
 
     <dependencies>
         <dependency>
@@ -45,14 +45,14 @@
                 <directory>src/main/resources</directory>
                 <filtering>false</filtering>
                 <excludes>
-                    <exclude>META-INF/maven/com.alechilles/alecstelemetry-runtime/pom.properties</exclude>
+                    <exclude>META-INF/maven/com.alechilles/beacon-runtime/pom.properties</exclude>
                 </excludes>
             </resource>
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
                 <includes>
-                    <include>META-INF/maven/com.alechilles/alecstelemetry-runtime/pom.properties</include>
+                    <include>META-INF/maven/com.alechilles/beacon-runtime/pom.properties</include>
                 </includes>
             </resource>
         </resources>

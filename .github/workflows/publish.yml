@@ -83,7 +83,7 @@ jobs:
           }
 
           $version = "${{ steps.version.outputs.version }}"
-          $artifactPath = Join-Path $PWD "standalone\target\Alec's Telemetry v$version.jar"
+          $artifactPath = Join-Path $PWD "standalone\target\Beacon v$version.jar"
           if (-not (Test-Path -Path $artifactPath)) {
             throw "Expected standalone artifact was not found: '$artifactPath'."
           }

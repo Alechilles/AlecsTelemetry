@@ -7,9 +7,9 @@ draft: false
 
 # Ingest Contract
 
-Parent: [Portal And Ingest](/mod/alecs-telemetry/portal-and-ingest) | [Home](/mod/alecs-telemetry/home)
+Parent: [Portal And Ingest](/mod/beacon/portal-and-ingest) | [Home](/mod/beacon/home)
 
-This page describes the telemetry ingest contract used by the standalone runtime, embedded bootstrap consumers, and Alec's web portal backend.
+This page describes the telemetry ingest contract used by the standalone runtime, embedded bootstrap consumers, and Beacon web portal backend.
 
 ## Trust Model
 
@@ -20,7 +20,7 @@ This page describes the telemetry ingest contract used by the standalone runtime
 
 ## Canonical Backend
 
-The production backend is Alec's Telemetry Platform. The `hosted/` package in this repo is a reference/dev implementation and should not be treated as the long-term production backend.
+The production backend is Beacon Platform. The `hosted/` package in this repo is a reference/dev implementation and should not be treated as the long-term production backend.
 
 ## Endpoints
 

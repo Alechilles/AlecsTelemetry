@@ -1,6 +1,6 @@
 # Usage Stats
 
-Alec's Telemetry can publish anonymous Hytale mod usage statistics similar to
+Beacon can publish anonymous Hytale mod usage statistics similar to
 HStats and bStats.
 
 ## Default Stats
@@ -50,12 +50,12 @@ rollout, but new runtime clients target the 30-minute cadence.
 An embeddable library can ship only a direct descriptor resource under:
 
 ```text
-META-INF/alecs-telemetry/projects/<stable-project-id>.json
+META-INF/beacon/projects/<stable-project-id>.json
 ```
 
 Presence in the final host JAR is the installation signal. The descriptor must
 declare its logical `projectId`, build-stamped `projectVersion`, display name,
-owner identifier, and Stats `heartbeat` allowlist. No Alec's Telemetry dependency
+owner identifier, and Stats `heartbeat` allowlist. No Beacon dependency
 or Java initialization is required in the library; a standalone or embedded
 Telemetry runtime must be present to discover the resource. Without one, the
 descriptor is inert.
@@ -87,15 +87,15 @@ ID/version, and declared owner. A matching contribution upgrades that existing
 logical project rather than adding another heartbeat project. When a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 newly exposed categories remain disabled until an operator reviews them through
-`/telemetry consent`; eligible operators are notified. Legacy reviewed records
+`/beacon consent`; eligible operators are notified. Legacy reviewed records
 without that snapshot remain honored for older categories and cannot be compared
 retrospectively. If Diagnostics is currently supported, it is treated as newly
 supported, remains disabled, and requires Save and Close.
 
 Passive descriptors may select either the hosted destination or an author-
 selected custom endpoint. A custom destination receives the same standard
-Stats-only heartbeat metadata, while its endpoint operator—not Alec's hosted
-platform—controls the data, security, and retention.
+Stats-only heartbeat metadata, while its endpoint operator—not the Beacon
+hosted platform—controls the data, security, and retention.
 
 ## Heartbeat Eligibility And Retirement
 
@@ -127,7 +127,7 @@ Stats are a separate consent category from usage events. A server owner can allo
 anonymous public server/player/environment stats while still disabling
 feature-usage telemetry.
 
-In a conventional host descriptor (`Server/Telemetry/project.json`) or a
+In a conventional host descriptor (`Server/Beacon/project.json`) or a
 passive namespaced descriptor, opt in with:
 
 ```json

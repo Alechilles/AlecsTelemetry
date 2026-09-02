@@ -1,6 +1,6 @@
 # Hosted Ingest Contract
 
-This document defines the Alec-hosted crash telemetry ingest contract used by the
+This document defines the Beacon-hosted crash telemetry ingest contract used by the
 standalone runtime, embedded bootstrap consumers, and the hosted service.
 
 ## Trust Model
@@ -14,6 +14,9 @@ standalone runtime, embedded bootstrap consumers, and the hosted service.
 
 The payload contract in this document is intended to be implemented by the canonical
 hosted backend running with `HytaleModWikiBot` on the VPS.
+
+The Beacon production base origin is `https://beacon.modstats.io`. The paths below
+are relative to that origin.
 
 The `hosted/` package in this repo is a reference/dev implementation and should not
 be treated as the long-term production backend.
@@ -279,6 +282,6 @@ Key rotation is intentionally manual.
 To rotate:
 
 1. update `publicProjectKey` in the hosted project registry
-2. update the mod's `Server/Telemetry/project.json`
+2. update the mod's `Server/Beacon/project.json`
 3. redeploy the mod or descriptor update
 4. restart the hosted service if required by the deployment setup

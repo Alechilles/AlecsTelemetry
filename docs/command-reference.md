@@ -3,10 +3,10 @@
 The root command is:
 
 ```text
-/telemetry
+/beacon
 ```
 
-The root permission is `telemetry.command.telemetry`. Runtime inspection and
+The root permission is `beacon.command.beacon`. Runtime inspection and
 operator actions are intended for `OP`, `Admin`, or `Operator` groups unless
 noted otherwise. Text-based diagnostics and operator actions can be run by
 players with permission or directly from the server console. UI commands still
@@ -15,9 +15,9 @@ require an in-game player sender.
 ## Runtime Diagnostics
 
 ```text
-/telemetry status
-/telemetry projects
-/telemetry project <project-id>
+/beacon status
+/beacon projects
+/beacon project <project-id>
 ```
 
 - `status` shows runtime enablement, loaded-mod count, registered projects,
@@ -38,7 +38,7 @@ shown by local diagnostics is not added to uploaded envelopes.
 ## Consent
 
 ```text
-/telemetry consent
+/beacon consent
 ```
 
 This opens the shared consent UI. It can change:
@@ -63,19 +63,19 @@ review, including a legacy reviewed project without a supported-category
 snapshot, keeps newly added Diagnostics disabled until an operator runs this
 command and selects Save and Close.
 
-`/telemetry consent` opens an in-game UI and must be run by a player.
+`/beacon consent` opens an in-game UI and must be run by a player.
 
-Consent choices are persisted under the canonical Alec's Telemetry settings
+Consent choices are persisted under the canonical Beacon settings
 root. Project category choices are written to
-`mods/Alechilles_Alec's Telemetry!/Settings/projects/<project-id>.json`, and
+`mods/Alechilles_Beacon/Settings/projects/<project-id>.json`, and
 reviewed/notice state is kept in the runtime consent state file.
 
 ## Flush And Test
 
 ```text
-/telemetry flush
-/telemetry flush <project-id>
-/telemetry test <project-id> [detail]
+/beacon flush
+/beacon flush <project-id>
+/beacon test <project-id> [detail]
 ```
 
 - `flush` schedules uploads for all projects or one project.
@@ -84,8 +84,8 @@ reviewed/notice state is kept in the runtime consent state file.
 ## Server Verification
 
 ```text
-/telemetry server verify
-/telemetry server verify <key>
+/beacon server verify
+/beacon server verify <key>
 ```
 
 `server verify <key>` saves the ModStats server claim token to the canonical
@@ -98,23 +98,23 @@ with the already configured `serverClaimToken`.
 Players can open the report UI with:
 
 ```text
-/telemetry report
-/telemetry report issue
-/telemetry report suggestion
-/telemetry report <project-id> [issue|suggestion]
+/beacon report
+/beacon report issue
+/beacon report suggestion
+/beacon report <project-id> [issue|suggestion]
 ```
 
-`/telemetry report` is player-facing and is available to the `Player`, `OP`,
+`/beacon report` is player-facing and is available to the `Player`, `OP`,
 `Admin`, and `Operator` groups. It opens an in-game UI and must be run by a
 player.
 
 Operators can review locally held reports with:
 
 ```text
-/telemetry reports pending
-/telemetry reports approve <report-id>
-/telemetry reports reject <report-id>
-/telemetry reports submitted
+/beacon reports pending
+/beacon reports approve <report-id>
+/beacon reports reject <report-id>
+/beacon reports submitted
 ```
 
 These review commands matter when `manualReports.manualReviewRequired` is true

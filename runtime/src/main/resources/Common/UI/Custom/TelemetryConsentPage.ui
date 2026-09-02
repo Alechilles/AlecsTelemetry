@@ -53,7 +53,7 @@ $C.@PageOverlay {
 
       Group #TelemetryConsentLogo {
         Anchor: (Width: 299, Height: 108);
-        Background: "AlecsTelemetryLogo.png";
+        Background: "BeaconLogo.png";
       }
     }
 

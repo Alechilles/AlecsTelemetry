@@ -1,27 +1,34 @@
 # Project Descriptor
 
-Consumer mods opt into Alec's Telemetry by shipping:
+Consumer mods opt into Beacon by shipping:
 
 ```text
-Server/Telemetry/project.json
+Server/Beacon/project.json
 ```
 
 The same descriptor works for standalone dependency mode and embedded mode.
 Runtime ownership is decided by coordinator election at startup.
 
+Beacon 2.x also accepts `Server/Telemetry/project.json` and the older
+`telemetry/project.json` as deprecated fallbacks. It checks
+`Server/Beacon/project.json` first and ignores the old paths when the canonical
+descriptor is present.
+
 ## Passive descriptor-only libraries
 
 An embeddable library can report one aggregate Stats project without depending
-on Alec's Telemetry, loading a Telemetry class, or running Java initialization.
+on Beacon, loading a Telemetry class, or running Java initialization.
 Put a direct JSON resource in the final host JAR (or host mod folder) at:
 
 ```text
-META-INF/alecs-telemetry/projects/<stable-project-id>.json
+META-INF/beacon/projects/<stable-project-id>.json
 ```
 
 Presence of a valid resource is the installation signal. A standalone or
-embedded Alec's Telemetry runtime must still be present to discover and process
+embedded Beacon runtime must still be present to discover and process
 it; without a runtime the resource is inert and the host continues normally.
+Beacon also scans `META-INF/alecs-telemetry/projects/` as a deprecated fallback
+when the canonical directory contains no direct JSON descriptors.
 Passive discovery only exposes the standard Stats `heartbeat` capability. It
 does not execute contributor code or activate crash, error, lifecycle,
 performance, usage, diagnostics, breadcrumbs, or manual-report categories declared for a
@@ -63,7 +70,7 @@ descriptor resource, project ID, logical version, and an owner declared in the
 descriptor. A matching contribution upgrades the existing passive row rather
 than creating a duplicate. When a persisted supported-category snapshot exists
 for the previously reviewed logical project, newly exposed categories remain
-disabled until an operator reviews them with `/telemetry consent`; eligible
+disabled until an operator reviews them with `/beacon consent`; eligible
 operators are notified. Legacy reviewed records without that snapshot keep their
 older category approvals, but newly supported Diagnostics remains disabled until
 an operator saves new consent choices.
@@ -72,21 +79,21 @@ An embedded component that owns a separate logical project can use
 `EmbeddedTelemetryBootstrap.contribute(...)` instead of the conventional
 descriptor lookup. That API reads a namespaced descriptor resource from the
 contributor's anchored classloader (for example,
-`META-INF/alecs-telemetry/projects/component.json`), so it does not collide with
-the host mod's `Server/Telemetry/project.json`. The contribution descriptor must
+`META-INF/beacon/projects/component.json`), so it does not collide with
+the host mod's `Server/Beacon/project.json`. The contribution descriptor must
 declare an explicit `projectId` and `displayName`, and its
 `ownerPluginIdentifiers` must include the contribution's logical plugin
 identifier. See [Embedded Contributions](embedded-contributions.md) for the
 builder and election contract.
 
 The namespaced directory is intentionally discoverable for passive
-descriptor-only projects. `Server/Telemetry/project.json` remains the
+descriptor-only projects. `Server/Beacon/project.json` remains the
 conventional descriptor owned by the physical host mod; it is not a substitute
 for the library's namespaced resource.
 
 ## Minimal Hosted Example
 
-If your `manifest.json` has `Group`, `Name`, and `Main`, Alec's Telemetry can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
+If your `manifest.json` has `Group`, `Name`, and `Main`, Beacon can infer the project id, display name, plugin identifier, and Java package prefix. Asset-pack-only projects without `Main` can still infer the project id, display name, and plugin identifier.
 
 ```json
 {
@@ -123,7 +130,7 @@ matching active contribution exposes new categories, and a persisted
 supported-category snapshot exists for the previously reviewed logical project,
 those additions remain disabled until an operator saves reviewed choices.
 Eligible operators receive a permission-scoped chat reminder to run
-`/telemetry consent`. A legacy reviewed record without a snapshot keeps its
+`/beacon consent`. A legacy reviewed record without a snapshot keeps its
 older category approvals, but a currently supported Diagnostics category is
 disabled and due for review until the operator saves new choices.
 
@@ -150,7 +157,7 @@ unreviewed project:
 Set `"defaultEnabled": true` only when the producing mod wants Diagnostics on
 for a fresh or unreviewed project. Tamework uses that explicit value. Existing
 projects that already saved a consent review keep Diagnostics off when it is
-newly added. They must run `/telemetry consent` and select Save and Close before
+newly added. They must run `/beacon consent` and select Save and Close before
 the category can send. This also applies to legacy reviewed records that do not
 have a supported-category snapshot. Error and Diagnostics are independent; one
 choice does not change the other.
@@ -361,7 +368,7 @@ Manual reports:
 For Diagnostics, `defaultEnabled` must be explicitly `true` to enable the
 category for a fresh or unreviewed project. Diagnostics is independent from
 `events.errors`. A previously reviewed project keeps Diagnostics disabled when
-the category is newly added until an operator runs `/telemetry consent` and
+the category is newly added until an operator runs `/beacon consent` and
 selects Save and Close. This rule also applies to legacy reviewed records that
 do not have a supported-category snapshot.
 
@@ -408,8 +415,8 @@ does not change the endpoint's ownership or activate richer categories.
 - `eventUrl`
 - `headers`
 
-When `destinationMode` is `custom`, the configured endpoint operator—not Alec's
-hosted platform—controls the received data, security, retention, and response
+When `destinationMode` is `custom`, the configured endpoint operator—not the
+Beacon hosted platform—controls the received data, security, retention, and response
 handling. The mod author and server owner are responsible for documenting that
 endpoint and its data practices.
 
@@ -439,7 +446,7 @@ logical ID, version, owner, and descriptor hash upgrades that existing project
 row and exposes its additional supported categories. It does not create a
 second project or heartbeat. When a persisted supported-category snapshot
 exists for the previously reviewed logical project, newly exposed categories
-remain disabled until an operator reviews them through `/telemetry consent`.
+remain disabled until an operator reviews them through `/beacon consent`.
 Legacy reviewed records without that snapshot keep their older category
 approvals, but newly supported Diagnostics remains disabled until an operator
 saves new consent choices.

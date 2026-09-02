@@ -10,7 +10,7 @@ This FAQ is not legal advice.
 
 No.
 
-Alec's Telemetry is source-available under the Alec's Telemetry Runtime License.
+Beacon is source-available under the Beacon Runtime License.
 You can read the source, use the runtime in Hytale projects, and ship unmodified
 copies with your mod or modpack, but the license does not allow modified
 redistribution or general-purpose reuse.
@@ -19,31 +19,31 @@ redistribution or general-purpose reuse.
 
 Yes.
 
-You may use Alec's Telemetry in a Hytale mod, modpack, server, development tool,
+You may use Beacon in a Hytale mod, modpack, server, development tool,
 or similar Hytale project.
 
 ## Can I Use It In A Paid Mod, Paid Modpack, Or Monetized Server?
 
-Yes, as long as you are using Alec's Telemetry only as telemetry runtime for your
+Yes, as long as you are using Beacon only as telemetry runtime for your
 own Hytale project and you follow the license.
 
 Paid or commercial Hytale projects are allowed. Hosted telemetry services,
-white-label telemetry services, competing dashboards, and resale of Alec's
-Telemetry are not allowed without separate written permission.
+white-label telemetry services, competing dashboards, and resale of Beacon are
+not allowed without separate written permission.
 
-## Can I Add Alec's Telemetry As A Dependency?
+## Can I Add Beacon As A Dependency?
 
 Yes.
 
 Dependency mode is the recommended default. You may require users to install an
-unmodified copy of Alec's Telemetry alongside your mod.
+unmodified copy of Beacon alongside your mod.
 
-## Can I Bundle Alec's Telemetry Inside My Mod?
+## Can I Bundle Beacon Inside My Mod?
 
 Yes, if you bundle an unmodified copy and use the documented embedded-mode
 integration points.
 
-You may configure and call Alec's Telemetry through its documented descriptors,
+You may configure and call Beacon through its documented descriptors,
 settings, and public APIs. You may not edit its source, rebrand it, or publish a
 modified embedded copy.
 
@@ -51,7 +51,7 @@ modified embedded copy.
 
 Not under the public license.
 
-The intent is to let modders integrate Alec's Telemetry freely, not to create a
+The intent is to let modders integrate Beacon freely, not to create a
 network of modified runtime forks. If you need changes, open an issue, submit a
 pull request for upstream inclusion, or ask for separate permission.
 
@@ -66,7 +66,7 @@ give you permission to use, modify, or distribute a fork except where the root
 You may redistribute unmodified copies only when they are bundled with or
 required by your Hytale project.
 
-You may not publish Alec's Telemetry as a standalone mirror, alternate download,
+You may not publish Beacon as a standalone mirror, alternate download,
 renamed package, modified package, SDK, toolkit, or fork.
 
 ## Can I Use A Custom Endpoint?
@@ -74,7 +74,7 @@ renamed package, modified package, SDK, toolkit, or fork.
 Yes, for your own Hytale project.
 
 The runtime supports custom endpoints so modders and server operators can send
-their own telemetry somewhere other than Alec's hosted service. That does not
+their own telemetry somewhere other than Beacon's hosted service. That does not
 grant permission to run a hosted or managed telemetry service for third parties.
 
 ## Can I Run My Own Public Telemetry Platform With This?
@@ -93,7 +93,7 @@ permission.
 
 ## Can I Use Alec's Branding, Name, Or Logo?
 
-Only for accurate attribution, such as saying your mod uses Alec's Telemetry.
+Only for accurate attribution, such as saying your mod uses Beacon.
 
 Do not imply that your project is official, endorsed, sponsored, or maintained by
 Alec unless you have separate written permission.
