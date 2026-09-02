@@ -23,16 +23,15 @@
   `beacon.command.beacon`. There is no command alias.
 - Changed the hosted origin to `https://beacon.modstats.io`. The
   `/ingest/crash`, `/ingest/event`, and `/ingest/report` route names remain.
-- Kept the hosted/self project ID and public stats route `alecs-telemetry` so
-  existing project history and local consent state remain attached to the same
-  identity. The project display name is now `Beacon`.
+  Beacon uses the new URLs automatically when loading settings with the old
+  default URLs. Custom endpoint URLs stay unchanged.
 - Changed the canonical local data root to
   `mods/Alechilles_Beacon/`. The first Beacon startup performs a copy-only
   migration from known Alec-created roots, keeps old sources, and uses Beacon
   destinations when both copies exist.
 
-See the [Beacon 2.0 migration guide](README.md#migrate-from-alecs-telemetry-1x)
-before upgrading a consumer or embedded mod.
+See the [Beacon 2.0 migration guide](https://wiki.hytalemodding.dev/mod/beacon/migrate-to-beacon-2-0)
+for server-owner, mod-author, and custom integration instructions.
 
 ## 1.3.0 - Diagnostic Bundles - 2026-08-30
 

@@ -24,6 +24,9 @@ The production backend is Beacon Platform. The `hosted/` package in this repo is
 
 ## Endpoints
 
+The hosted base URL is `https://beacon.modstats.io`. The paths below are
+relative to that URL and are unchanged from Alec's Telemetry 1.x.
+
 ```text
 POST /ingest/crash
 POST /ingest/event
