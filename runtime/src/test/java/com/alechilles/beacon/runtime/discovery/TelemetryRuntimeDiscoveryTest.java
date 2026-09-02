@@ -556,6 +556,47 @@ class TelemetryRuntimeDiscoveryTest {
         assertEquals("Example:Low Host", active.projects().getFirst().hostPluginIdentifier());
     }
 
+    @Test
+    void discoverActivePrefersCanonicalPassiveDescriptorWithinLoadedHost() throws Exception {
+        Path modsDirectory = tempDir.resolve("mods");
+        Path modFolder = modsDirectory.resolve("Mixed Host");
+        Files.createDirectories(modFolder.resolve("META-INF").resolve("beacon").resolve("projects"));
+        Files.createDirectories(modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects"));
+        Files.writeString(
+                modFolder.resolve("manifest.json"),
+                """
+                {
+                  "Group": "Example",
+                  "Name": "Mixed Host",
+                  "Version": "3.0.0",
+                  "Main": "example.host.Host"
+                }
+                """
+        );
+        Files.writeString(
+                modFolder.resolve("META-INF").resolve("beacon").resolve("projects").resolve("creditor.json"),
+                passiveDescriptorJson("Canonical Creditor", "1.0.0")
+        );
+        Files.writeString(
+                modFolder.resolve("META-INF").resolve("alecs-telemetry").resolve("projects").resolve("creditor.json"),
+                passiveDescriptorJson("Legacy Creditor", "9.0.0")
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult discovered = new TelemetryProjectDiscovery(null)
+                .discover(modsDirectory);
+        TelemetryRuntimeDiscoveryResult active = new TelemetryRuntimeDiscovery(null).discoverActive(
+                dataPaths(modsDirectory),
+                discovered,
+                TelemetryLoadedModSnapshotProvider.fixed(List.of(
+                        new CrashReportEnvelope.LoadedModMetadata("Example:Mixed Host", "3.0.0")
+                ))
+        );
+
+        assertEquals(1, active.projects().size());
+        assertEquals("1.0.0", active.projects().getFirst().descriptor().projectVersion());
+        assertEquals("Canonical Creditor", active.projects().getFirst().displayName());
+    }
+
     private TelemetryDataPaths dataPaths(Path modsDirectory) {
         Path runtimeRoot = tempDir.resolve("runtime");
         Path settingsRoot = runtimeRoot.resolve("Settings");
@@ -638,6 +679,24 @@ class TelemetryRuntimeDiscoveryTest {
                 }
                 """.formatted(projectVersion)
         );
+    }
+
+    private static String passiveDescriptorJson(String displayName, String projectVersion) {
+        return """
+                {
+                  "schemaVersion": 1,
+                  "projectId": "creditor",
+                  "projectVersion": "%s",
+                  "displayName": "%s",
+                  "ownerPluginIdentifiers": ["Example:Library"],
+                  "telemetry": {
+                    "stats": {
+                      "supported": true,
+                      "allowedEvents": ["heartbeat"]
+                    }
+                  }
+                }
+                """.formatted(projectVersion, displayName);
     }
 
     private static TelemetryProjectRegistration registration(String projectId,

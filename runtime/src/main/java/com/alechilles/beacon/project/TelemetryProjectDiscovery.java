@@ -21,10 +21,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -110,6 +112,7 @@ public final class TelemetryProjectDiscovery {
                 );
                 continue;
             }
+            projectCandidates = discardSameHostLegacyDuplicates(projectCandidates);
             for (TelemetryProjectCandidate candidate : projectCandidates) {
                 electedCandidates.add(candidate.registration());
             }
@@ -624,6 +627,33 @@ public final class TelemetryProjectDiscovery {
             }
         }
         return List.copyOf(deduplicated.values());
+    }
+
+    @Nonnull
+    private static List<TelemetryProjectCandidate> discardSameHostLegacyDuplicates(
+            @Nonnull List<TelemetryProjectCandidate> candidates) {
+        if (candidates.size() < 2) {
+            return candidates;
+        }
+        Set<String> canonicalHosts = new HashSet<>();
+        for (TelemetryProjectCandidate candidate : candidates) {
+            if (candidate.registration().isPassiveDescriptor() && candidate.canonicalDescriptorPath()) {
+                canonicalHosts.add(candidate.sourcePath());
+            }
+        }
+        if (canonicalHosts.isEmpty()) {
+            return candidates;
+        }
+
+        ArrayList<TelemetryProjectCandidate> retained = new ArrayList<>(candidates.size());
+        for (TelemetryProjectCandidate candidate : candidates) {
+            if (!candidate.registration().isPassiveDescriptor()
+                    || candidate.canonicalDescriptorPath()
+                    || !canonicalHosts.contains(candidate.sourcePath())) {
+                retained.add(candidate);
+            }
+        }
+        return List.copyOf(retained);
     }
 
     private static boolean hasDescriptorDrift(@Nonnull List<TelemetryProjectCandidate> candidates) {
