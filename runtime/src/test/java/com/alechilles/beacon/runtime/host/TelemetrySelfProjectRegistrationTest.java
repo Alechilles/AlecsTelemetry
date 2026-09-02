@@ -23,7 +23,7 @@ class TelemetrySelfProjectRegistrationTest {
                 null
         );
 
-        assertEquals("beacon", registration.projectId());
+        assertEquals("alecs-telemetry", registration.projectId());
         assertEquals("Beacon", registration.displayName());
         assertEquals("dependency", registration.runtimeMode());
         assertEquals("Alechilles:Beacon", registration.pluginIdentifier());

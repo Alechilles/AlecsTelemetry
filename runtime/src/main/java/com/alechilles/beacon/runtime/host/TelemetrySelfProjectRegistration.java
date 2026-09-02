@@ -9,13 +9,13 @@ import javax.annotation.Nullable;
 import java.nio.file.Path;
 
 final class TelemetrySelfProjectRegistration {
-    static final String PROJECT_ID = "beacon";
+    static final String PROJECT_ID = "alecs-telemetry";
 
     private static final String PUBLIC_PROJECT_KEY = "proj_aqocXOn4Gw3unr0p22QoNd3k";
     private static final TelemetryProjectDescriptor DESCRIPTOR = TelemetryProjectDescriptor.fromJson(
             """
             {
-              "projectId": "beacon",
+              "projectId": "alecs-telemetry",
               "displayName": "Beacon",
               "runtimeMode": "dependency",
               "ownerPluginIdentifiers": ["Alechilles:Beacon"],

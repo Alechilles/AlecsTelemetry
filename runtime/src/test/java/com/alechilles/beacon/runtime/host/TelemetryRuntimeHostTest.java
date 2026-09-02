@@ -199,7 +199,7 @@ class TelemetryRuntimeHostTest {
         );
 
         assertNotNull(registration);
-        assertEquals("beacon", registration.projectId());
+        assertEquals("alecs-telemetry", registration.projectId());
         assertEquals("Beacon", registration.displayName());
         assertEquals("Alechilles:Beacon", registration.pluginIdentifier());
         assertEquals("Alechilles:Beacon", registration.ownerPluginIdentifiers().getFirst());
@@ -234,7 +234,7 @@ class TelemetryRuntimeHostTest {
                 null
         );
 
-        assertEquals(List.of("embedded-provider", "beacon"), registrations.stream()
+        assertEquals(List.of("embedded-provider", "alecs-telemetry"), registrations.stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         TelemetryProjectRegistration self = registrations.get(1);
@@ -316,7 +316,7 @@ class TelemetryRuntimeHostTest {
 
         assertEquals(1, client.payloads.size());
         JsonObject payload = JsonParser.parseString(client.payloads.getFirst()).getAsJsonObject();
-        assertEquals("beacon", payload.get("projectId").getAsString());
+        assertEquals("alecs-telemetry", payload.get("projectId").getAsString());
         assertEquals("error", payload.get("eventType").getAsString());
         assertEquals("runtime_command_register_failed", payload.get("eventName").getAsString());
         assertEquals("command_register", payload.get("operation").getAsString());
