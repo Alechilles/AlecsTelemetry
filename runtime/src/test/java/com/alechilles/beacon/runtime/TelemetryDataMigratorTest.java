@@ -3,6 +3,8 @@ package com.alechilles.beacon.runtime;
 import com.alechilles.beacon.consent.TelemetryConsentStateStore;
 import com.alechilles.beacon.project.TelemetryProjectDescriptor;
 import com.alechilles.beacon.project.TelemetryProjectRegistration;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -279,7 +281,7 @@ class TelemetryDataMigratorTest {
     }
 
     @Test
-    void renamesLegacySelfOverrideAndConsentIdentityIntoBeaconWithoutRemovingSources() throws Exception {
+    void preservesSelfProjectIdWhileMigratingLegacyPluginIdentityWithoutRemovingSources() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path canonicalRoot = modsDir.resolve("Alechilles_Beacon");
@@ -292,11 +294,34 @@ class TelemetryDataMigratorTest {
                 {
                   "version": 1,
                   "reviewedProjects": [
-                    {
+                   {
                       "projectId": "alecs-telemetry",
                       "pluginIdentifier": "Alechilles:Alec's Telemetry!",
                       "pluginVersion": "2.0.0",
                       "supportedCategories": []
+                    }
+                  ],
+                  "shownNotices": [
+                     {
+                      "viewerKey": "player-1",
+                      "promptKey": "alecs-telemetry|alechilles:alec's telemetry!|2.0.0|stats",
+                      "projects": [
+                        {
+                          "projectId": "alecs-telemetry",
+                          "pluginIdentifier": "Alechilles:Alec's Telemetry!",
+                          "pluginVersion": "2.0.0",
+                          "supportedCategories": ["stats"]
+                        }
+                      ]
+                    }
+                  ],
+                  "funnelEvents": [
+                    {
+                      "viewerKey": "player-1",
+                      "eventType": "prompt_shown",
+                      "projectId": "alecs-telemetry",
+                      "pluginIdentifier": "Alechilles:Alec's Telemetry!",
+                      "pluginVersion": "2.0.0"
                     }
                   ]
                 }
@@ -306,28 +331,44 @@ class TelemetryDataMigratorTest {
 
         TelemetryDataMigrator.migrate(paths, null);
 
-        Path beaconOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("beacon.json");
-        assertEquals("{\"enabled\":false}", Files.readString(beaconOverride));
-        assertFalse(Files.exists(canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-telemetry.json")));
+        Path migratedOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-telemetry.json");
+        assertEquals("{\"enabled\":false}", Files.readString(migratedOverride));
+        assertFalse(Files.exists(canonicalRoot.resolve("Settings").resolve("projects").resolve("beacon.json")));
         assertTrue(Files.isRegularFile(legacyOverride));
         assertTrue(Files.isRegularFile(legacyConsent));
 
-        TelemetryProjectRegistration beacon = registration("beacon", "Alechilles:Beacon", "2.0.0");
-        assertTrue(new TelemetryConsentStateStore(null).isReviewed(paths.consentStateFile(), beacon));
-        assertNotNull(new TelemetryProjectOverrideStore(null).load(beaconOverride));
+        JsonObject migratedConsent = JsonParser.parseString(Files.readString(paths.consentStateFile())).getAsJsonObject();
+        JsonObject reviewedProject = migratedConsent.getAsJsonArray("reviewedProjects").get(0).getAsJsonObject();
+        assertEquals("alecs-telemetry", reviewedProject.get("projectId").getAsString());
+        assertEquals("Alechilles:Beacon", reviewedProject.get("pluginIdentifier").getAsString());
+        JsonObject shownNotice = migratedConsent.getAsJsonArray("shownNotices").get(0).getAsJsonObject();
+        assertEquals(
+                "alecs-telemetry|alechilles:beacon|2.0.0|stats",
+                shownNotice.get("promptKey").getAsString()
+        );
+        JsonObject noticedProject = shownNotice.getAsJsonArray("projects").get(0).getAsJsonObject();
+        assertEquals("alecs-telemetry", noticedProject.get("projectId").getAsString());
+        assertEquals("Alechilles:Beacon", noticedProject.get("pluginIdentifier").getAsString());
+        JsonObject funnelEvent = migratedConsent.getAsJsonArray("funnelEvents").get(0).getAsJsonObject();
+        assertEquals("alecs-telemetry", funnelEvent.get("projectId").getAsString());
+        assertEquals("Alechilles:Beacon", funnelEvent.get("pluginIdentifier").getAsString());
+
+        TelemetryProjectRegistration selfProject = registration("alecs-telemetry", "Alechilles:Beacon", "2.0.0");
+        assertTrue(new TelemetryConsentStateStore(null).isReviewed(paths.consentStateFile(), selfProject));
+        assertNotNull(new TelemetryProjectOverrideStore(null).load(migratedOverride));
         assertEquals(
                 Boolean.FALSE,
-                new TelemetryProjectOverrideStore(null).load(beaconOverride).enabled()
+                new TelemetryProjectOverrideStore(null).load(migratedOverride).enabled()
         );
     }
 
     @Test
-    void keepsBeaconSelfOverrideWhenLegacySelfOverrideConflicts() throws Exception {
+    void keepsCanonicalSelfOverrideWhenLegacySelfOverrideConflicts() throws Exception {
         Path saveRoot = tempDir.resolve("Saves").resolve("Update5Test");
         Path modsDir = saveRoot.resolve("mods");
         Path canonicalRoot = modsDir.resolve("Alechilles_Beacon");
         Path legacyRoot = saveRoot.resolve("telemetry");
-        Path beaconOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("beacon.json");
+        Path beaconOverride = canonicalRoot.resolve("Settings").resolve("projects").resolve("alecs-telemetry.json");
         Path legacyOverride = legacyRoot.resolve("Settings").resolve("projects").resolve("alecs-telemetry.json");
         Files.createDirectories(beaconOverride.getParent());
         Files.createDirectories(legacyOverride.getParent());

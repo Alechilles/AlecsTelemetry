@@ -26,7 +26,8 @@ repositories {
 }
 
 dependencies {
-    implementation project(':beacon:runtime')
+    // Keep the shared workspace project path stable; Beacon is the public artifact namespace.
+    implementation project(':alecstelemetry:runtime')
     implementation "curse.maven:creditor-1560961:${localProperty('creditor_file_id')}"
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'

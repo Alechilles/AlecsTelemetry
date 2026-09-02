@@ -80,7 +80,7 @@ public final class TelemetryProjectDiscovery {
                                 new CrashReportEnvelope.LoadedModMetadata(manifestId, data.manifest().version())
                         );
                     }
-                    for (TelemetryProjectRegistration registration : data.registrations()) {
+                    for (DiscoveredRegistration registration : data.registrations()) {
                         candidates.add(new TelemetryProjectCandidate(registration));
                     }
                 } catch (Exception ex) {
@@ -183,49 +183,35 @@ public final class TelemetryProjectDiscovery {
     private EntryData readFolderEntry(@Nonnull Path folder,
                                       @Nonnull List<String> skippedRegistrationWarnings) {
         ModManifest manifest = readManifest(folder.resolve(MANIFEST_PATH));
-        ArrayList<TelemetryProjectRegistration> registrations = new ArrayList<>();
+        ArrayList<DiscoveredRegistration> registrations = new ArrayList<>();
         Path descriptorPath = descriptorPath(folder);
         if (Files.isRegularFile(descriptorPath)) {
             try {
                 String rawDescriptor = Files.readString(descriptorPath, StandardCharsets.UTF_8);
-                registrations.add(toRegistration(rawDescriptor, manifest, folder));
+                registrations.add(new DiscoveredRegistration(
+                        toRegistration(rawDescriptor, manifest, folder),
+                        isCanonicalDescriptorPath(folder, descriptorPath)
+                ));
             } catch (Exception ex) {
                 warn("Failed to read telemetry descriptor " + descriptorPath, ex);
             }
         }
-        ArrayList<Path> namespacedDescriptors = namespacedDescriptorPaths(
+        addPassiveFolderDescriptors(
                 folder,
-                NAMESPACED_DESCRIPTOR_DIRECTORY
+                manifest,
+                NAMESPACED_DESCRIPTOR_DIRECTORY,
+                true,
+                registrations,
+                skippedRegistrationWarnings
         );
-        if (namespacedDescriptors.isEmpty()) {
-            namespacedDescriptors = namespacedDescriptorPaths(
-                    folder,
-                    LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY
-            );
-        }
-        namespacedDescriptors.sort(Comparator.comparing(path -> path.getFileName() == null
-                ? ""
-                : path.getFileName().toString()));
-        for (Path namespacedDescriptor : namespacedDescriptors) {
-            try {
-                String rawDescriptor = Files.readString(namespacedDescriptor, StandardCharsets.UTF_8);
-                TelemetryProjectRegistration registration = toPassiveRegistration(
-                        rawDescriptor,
-                        manifest,
-                        folder,
-                        namespacedDescriptor.toString()
-                );
-                if (registration != null) {
-                    registrations.add(registration);
-                }
-            } catch (Exception ex) {
-                addSkippedWarning(
-                        skippedRegistrationWarnings,
-                        "Skipped passive telemetry descriptor " + namespacedDescriptor + "."
-                );
-                warn("Failed to read passive telemetry descriptor " + namespacedDescriptor, ex);
-            }
-        }
+        addPassiveFolderDescriptors(
+                folder,
+                manifest,
+                LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY,
+                false,
+                registrations,
+                skippedRegistrationWarnings
+        );
         if (manifest == null && registrations.isEmpty()) {
             return null;
         }
@@ -241,48 +227,38 @@ public final class TelemetryProjectDiscovery {
         }
         try (ZipFile zipFile = new ZipFile(archive.toFile())) {
             ModManifest manifest = readManifest(zipFile, MANIFEST_PATH);
-            ArrayList<TelemetryProjectRegistration> registrations = new ArrayList<>();
+            ArrayList<DiscoveredRegistration> registrations = new ArrayList<>();
             ZipEntry descriptorEntry = descriptorEntry(zipFile);
             if (descriptorEntry != null) {
                 try (InputStream stream = zipFile.getInputStream(descriptorEntry)) {
                     String rawDescriptor = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-                    registrations.add(toRegistration(rawDescriptor, manifest, archive));
+                    registrations.add(new DiscoveredRegistration(
+                            toRegistration(rawDescriptor, manifest, archive),
+                            isCanonicalDescriptorName(descriptorEntry.getName())
+                    ));
                 } catch (Exception ex) {
                     warn("Failed to read telemetry descriptor " + archive, ex);
                 }
             }
 
-            ArrayList<ZipEntry> namespacedDescriptors = namespacedDescriptorEntries(
+            addPassiveArchiveDescriptors(
                     zipFile,
-                    NAMESPACED_DESCRIPTOR_DIRECTORY
+                    archive,
+                    manifest,
+                    NAMESPACED_DESCRIPTOR_DIRECTORY,
+                    true,
+                    registrations,
+                    skippedRegistrationWarnings
             );
-            if (namespacedDescriptors.isEmpty()) {
-                namespacedDescriptors = namespacedDescriptorEntries(
-                        zipFile,
-                        LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY
-                );
-            }
-            namespacedDescriptors.sort(Comparator.comparing(ZipEntry::getName));
-            for (ZipEntry namespacedDescriptor : namespacedDescriptors) {
-                try (InputStream stream = zipFile.getInputStream(namespacedDescriptor)) {
-                    String rawDescriptor = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-                    TelemetryProjectRegistration registration = toPassiveRegistration(
-                            rawDescriptor,
-                            manifest,
-                            archive,
-                            namespacedDescriptor.getName()
-                    );
-                    if (registration != null) {
-                        registrations.add(registration);
-                    }
-                } catch (Exception ex) {
-                    addSkippedWarning(
-                            skippedRegistrationWarnings,
-                            "Skipped passive telemetry descriptor " + archive + "!" + namespacedDescriptor.getName() + "."
-                    );
-                    warn("Failed to read passive telemetry descriptor " + archive + "!" + namespacedDescriptor.getName(), ex);
-                }
-            }
+            addPassiveArchiveDescriptors(
+                    zipFile,
+                    archive,
+                    manifest,
+                    LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY,
+                    false,
+                    registrations,
+                    skippedRegistrationWarnings
+            );
             if (manifest == null && registrations.isEmpty()) {
                 return null;
             }
@@ -321,6 +297,78 @@ public final class TelemetryProjectDiscovery {
             }
         }
         return null;
+    }
+
+    private void addPassiveFolderDescriptors(@Nonnull Path folder,
+                                             @Nullable ModManifest manifest,
+                                             @Nonnull String resourceDirectory,
+                                             boolean canonicalDescriptorPath,
+                                             @Nonnull ArrayList<DiscoveredRegistration> registrations,
+                                             @Nonnull List<String> skippedRegistrationWarnings) {
+        ArrayList<Path> descriptors = namespacedDescriptorPaths(folder, resourceDirectory);
+        descriptors.sort(Comparator.comparing(path -> path.getFileName() == null
+                ? ""
+                : path.getFileName().toString()));
+        for (Path descriptorPath : descriptors) {
+            try {
+                String rawDescriptor = Files.readString(descriptorPath, StandardCharsets.UTF_8);
+                TelemetryProjectRegistration registration = toPassiveRegistration(
+                        rawDescriptor,
+                        manifest,
+                        folder,
+                        descriptorPath.toString()
+                );
+                if (registration != null) {
+                    registrations.add(new DiscoveredRegistration(registration, canonicalDescriptorPath));
+                }
+            } catch (Exception ex) {
+                addSkippedWarning(
+                        skippedRegistrationWarnings,
+                        "Skipped passive telemetry descriptor " + descriptorPath + "."
+                );
+                warn("Failed to read passive telemetry descriptor " + descriptorPath, ex);
+            }
+        }
+    }
+
+    private void addPassiveArchiveDescriptors(@Nonnull ZipFile zipFile,
+                                              @Nonnull Path archive,
+                                              @Nullable ModManifest manifest,
+                                              @Nonnull String resourceDirectory,
+                                              boolean canonicalDescriptorPath,
+                                              @Nonnull ArrayList<DiscoveredRegistration> registrations,
+                                              @Nonnull List<String> skippedRegistrationWarnings) {
+        ArrayList<ZipEntry> descriptors = namespacedDescriptorEntries(zipFile, resourceDirectory);
+        descriptors.sort(Comparator.comparing(ZipEntry::getName));
+        for (ZipEntry descriptorEntry : descriptors) {
+            try (InputStream stream = zipFile.getInputStream(descriptorEntry)) {
+                String rawDescriptor = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                TelemetryProjectRegistration registration = toPassiveRegistration(
+                        rawDescriptor,
+                        manifest,
+                        archive,
+                        descriptorEntry.getName()
+                );
+                if (registration != null) {
+                    registrations.add(new DiscoveredRegistration(registration, canonicalDescriptorPath));
+                }
+            } catch (Exception ex) {
+                addSkippedWarning(
+                        skippedRegistrationWarnings,
+                        "Skipped passive telemetry descriptor " + archive + "!" + descriptorEntry.getName() + "."
+                );
+                warn("Failed to read passive telemetry descriptor " + archive + "!" + descriptorEntry.getName(), ex);
+            }
+        }
+    }
+
+    private static boolean isCanonicalDescriptorPath(@Nonnull Path folder, @Nonnull Path descriptorPath) {
+        return folder.resolve(DESCRIPTOR_PATH).toAbsolutePath().normalize()
+                .equals(descriptorPath.toAbsolutePath().normalize());
+    }
+
+    private static boolean isCanonicalDescriptorName(@Nonnull String descriptorName) {
+        return DESCRIPTOR_PATH.equals(descriptorName);
     }
 
     @Nonnull
@@ -649,6 +697,12 @@ public final class TelemetryProjectDiscovery {
     /** A positive result means the left candidate wins the deterministic election. */
     private static int comparePriority(@Nonnull TelemetryProjectCandidate left,
                                        @Nonnull TelemetryProjectCandidate right) {
+        if (left.registration().isPassiveDescriptor() && right.registration().isPassiveDescriptor()) {
+            int comparison = Boolean.compare(left.canonicalDescriptorPath(), right.canonicalDescriptorPath());
+            if (comparison != 0) {
+                return comparison;
+            }
+        }
         int comparison = compareSemanticVersions(left.semanticVersion(), right.semanticVersion());
         if (comparison != 0) {
             return comparison;
@@ -727,20 +781,38 @@ public final class TelemetryProjectDiscovery {
         }
     }
 
-    private record EntryData(@Nonnull List<TelemetryProjectRegistration> registrations,
+    private record DiscoveredRegistration(@Nonnull TelemetryProjectRegistration registration,
+                                          boolean canonicalDescriptorPath) {
+    }
+
+    private record EntryData(@Nonnull List<DiscoveredRegistration> registrations,
                              @Nullable ModManifest manifest) {
     }
 
     private record TelemetryProjectCandidate(@Nonnull TelemetryProjectRegistration registration,
-                                             @Nonnull String logicalVersion,
+                                              boolean canonicalDescriptorPath,
+                                              @Nonnull String logicalVersion,
                                              @Nullable Semver semanticVersion,
                                              @Nonnull String hostIdentifier,
                                              @Nonnull String sourcePath,
                                              @Nonnull String descriptorHash) {
 
+        private TelemetryProjectCandidate(@Nonnull DiscoveredRegistration discovered) {
+            this(
+                    discovered.registration(),
+                    discovered.canonicalDescriptorPath()
+            );
+        }
+
         private TelemetryProjectCandidate(@Nonnull TelemetryProjectRegistration registration) {
+            this(registration, false);
+        }
+
+        private TelemetryProjectCandidate(@Nonnull TelemetryProjectRegistration registration,
+                                          boolean canonicalDescriptorPath) {
             this(
                     registration,
+                    canonicalDescriptorPath,
                     logicalVersion(registration),
                     parseSemanticVersion(logicalVersion(registration)),
                     hostIdentifier(registration),

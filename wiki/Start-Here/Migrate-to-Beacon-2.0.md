@@ -52,6 +52,10 @@ implementation("com.alechilles:beacon-runtime:2.0.0")
 Old Maven coordinates remain read-only historical artifacts. They do not
 provide Beacon 2.x.
 
+The hosted/self project ID and public stats route remain `alecs-telemetry`.
+Its display name is now Beacon. Keep `alecs-telemetry` in local consent records
+and project override filenames.
+
 ## Manifest And Java Names
 
 Replace the manifest dependency:
@@ -87,8 +91,10 @@ META-INF/alecs-telemetry/projects/ -> META-INF/beacon/projects/
 
 Change embedded bootstrap imports to `com.alechilles.beacon.embedded` and use
 `beacon-runtime`. Continue to publish the runtime `Common/**` asset pack,
-including `Common/UI/Custom/TelemetryConsentPage.ui`. Beacon 2.x does not
-search old descriptor or resource paths.
+including `Common/UI/Custom/TelemetryConsentPage.ui`. Beacon 2.x accepts the
+old `Server/Telemetry/project.json`, `telemetry/project.json`, and
+`META-INF/alecs-telemetry/projects/` paths as deprecated fallbacks. The new
+Beacon descriptor path wins when both forms declare the same project.
 
 ## Command And Origin
 

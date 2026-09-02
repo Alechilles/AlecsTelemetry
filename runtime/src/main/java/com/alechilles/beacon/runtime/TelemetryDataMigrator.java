@@ -27,7 +27,6 @@ import java.util.logging.Level;
 public final class TelemetryDataMigrator {
     private static final int MAX_WARNINGS = 32;
     private static final String LEGACY_SELF_PROJECT_ID = "alecs-telemetry";
-    private static final String BEACON_SELF_PROJECT_ID = "beacon";
     private static final String BEACON_SELF_PLUGIN_IDENTIFIER = "Alechilles:Beacon";
     private static final Set<String> LEGACY_SELF_PLUGIN_IDENTIFIERS = Set.of(
             "alechilles:alec's telemetry!",
@@ -216,7 +215,7 @@ public final class TelemetryDataMigrator {
                 }
                 String sourceName = child.getFileName() == null ? "" : child.getFileName().toString();
                 String destinationName = isLegacySelfOverride(sourceName)
-                        ? BEACON_SELF_PROJECT_ID + ".json"
+                        ? LEGACY_SELF_PROJECT_ID + ".json"
                         : sourceName;
                 String childRelativePath = relativePath + "/" + destinationName;
                 Path childDestination = destination.resolve(destinationName);
@@ -311,11 +310,6 @@ public final class TelemetryDataMigrator {
 
     private static boolean migrateIdentity(@Nonnull JsonObject object) {
         boolean changed = false;
-        JsonElement projectId = object.get("projectId");
-        if (isString(projectId) && LEGACY_SELF_PROJECT_ID.equalsIgnoreCase(projectId.getAsString().trim())) {
-            object.addProperty("projectId", BEACON_SELF_PROJECT_ID);
-            changed = true;
-        }
         JsonElement pluginIdentifier = object.get("pluginIdentifier");
         if (isString(pluginIdentifier)
                 && LEGACY_SELF_PLUGIN_IDENTIFIERS.contains(pluginIdentifier.getAsString().trim().toLowerCase(Locale.ROOT))) {
@@ -332,9 +326,14 @@ public final class TelemetryDataMigrator {
         }
         String migrated = promptKey.getAsString();
         for (String legacyPluginIdentifier : LEGACY_SELF_PLUGIN_IDENTIFIERS) {
+            String beaconPluginIdentifier = BEACON_SELF_PLUGIN_IDENTIFIER.toLowerCase(Locale.ROOT);
             String legacyPrefix = LEGACY_SELF_PROJECT_ID + "|" + legacyPluginIdentifier + "|";
-            String beaconPrefix = BEACON_SELF_PROJECT_ID + "|" + BEACON_SELF_PLUGIN_IDENTIFIER.toLowerCase(Locale.ROOT) + "|";
+            String beaconPrefix = LEGACY_SELF_PROJECT_ID + "|" + beaconPluginIdentifier + "|";
             migrated = migrated.replace(legacyPrefix, beaconPrefix);
+
+            String legacyAtPrefix = LEGACY_SELF_PROJECT_ID + "@" + legacyPluginIdentifier + "@";
+            String beaconAtPrefix = LEGACY_SELF_PROJECT_ID + "@" + beaconPluginIdentifier + "@";
+            migrated = migrated.replace(legacyAtPrefix, beaconAtPrefix);
         }
         if (migrated.equals(promptKey.getAsString())) {
             return false;

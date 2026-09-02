@@ -244,11 +244,13 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void discoversLegacyNamespacedDescriptorFromArchive() throws Exception {
+    void discoversCanonicalAndLegacyNamespacedDescriptorsFromArchive() throws Exception {
         writeJar(
                 tempDir.resolve("legacy-passive-host.jar"),
                 hostManifest("Example", "Legacy Passive Host", "3.0.0"),
                 Map.of(
+                        "META-INF/beacon/projects/current-passive.json",
+                        passiveDescriptor("current-passive", "2.0.0", "Current Passive"),
                         "META-INF/alecs-telemetry/projects/legacy.json",
                         passiveDescriptor("legacy-passive", "1.0.0", "Legacy Passive")
                 )
@@ -256,10 +258,10 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertEquals(List.of("legacy-passive"), result.projects().stream()
+        assertEquals(List.of("current-passive", "legacy-passive"), result.projects().stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
-        assertEquals(List.of("legacy-passive"), result.consentProjects().stream()
+        assertEquals(List.of("current-passive", "legacy-passive"), result.consentProjects().stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
         assertEquals(1, result.loadedMods().size());
@@ -289,7 +291,7 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void prefersBeaconNamespacedDescriptorsOverLegacyDirectory() throws Exception {
+    void discoversDifferentLegacyNamespacedProjectsAlongsideBeaconProjectsInArchive() throws Exception {
         writeJar(
                 tempDir.resolve("dual-passive-host.jar"),
                 hostManifest("Example", "Dual Passive Host", "3.0.0"),
@@ -303,9 +305,54 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertEquals(List.of("current-passive"), result.projects().stream()
+        assertEquals(List.of("current-passive", "legacy-passive"), result.projects().stream()
                 .map(TelemetryProjectRegistration::projectId)
                 .toList());
+    }
+
+    @Test
+    void discoversDifferentLegacyNamespacedProjectsAlongsideBeaconProjectsInFolder() throws Exception {
+        Path modFolder = tempDir.resolve("dual-passive-folder");
+        Path beaconDescriptors = modFolder.resolve("META-INF/beacon/projects");
+        Path legacyDescriptors = modFolder.resolve("META-INF/alecs-telemetry/projects");
+        Files.createDirectories(beaconDescriptors);
+        Files.createDirectories(legacyDescriptors);
+        Files.writeString(modFolder.resolve("manifest.json"), hostManifest("Example", "Dual Passive Folder", "3.0.0"));
+        Files.writeString(
+                beaconDescriptors.resolve("current-passive.json"),
+                passiveDescriptor("current-passive", "2.0.0", "Current Passive")
+        );
+        Files.writeString(
+                legacyDescriptors.resolve("legacy-passive.json"),
+                passiveDescriptor("legacy-passive", "1.0.0", "Legacy Passive")
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(List.of("current-passive", "legacy-passive"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+    }
+
+    @Test
+    void prefersCanonicalNamespacedDescriptorWhenBothDirectoriesDeclareSameProject() throws Exception {
+        writeJar(
+                tempDir.resolve("duplicate-passive-host.jar"),
+                hostManifest("Example", "Duplicate Passive Host", "3.0.0"),
+                Map.of(
+                        "META-INF/beacon/projects/creditor.json",
+                        passiveDescriptor("creditor", "1.0.0", "Canonical Creditor"),
+                        "META-INF/alecs-telemetry/projects/creditor.json",
+                        passiveDescriptor("creditor", "9.0.0", "Legacy Creditor")
+                )
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(1, result.projects().size());
+        assertEquals("creditor", result.projects().getFirst().projectId());
+        assertEquals("1.0.0", result.projects().getFirst().descriptor().projectVersion());
+        assertEquals("Canonical Creditor", result.projects().getFirst().displayName());
     }
 
     @Test

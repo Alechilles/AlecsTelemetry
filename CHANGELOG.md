@@ -23,9 +23,9 @@
   `beacon.command.beacon`. There is no command alias.
 - Changed the hosted origin to `https://beacon.modstats.io`. The
   `/ingest/crash`, `/ingest/event`, and `/ingest/report` route names remain.
-- Renamed the self project and public stats slug from `alecs-telemetry` to
-  `beacon`; the existing project history remains attached to the renamed
-  identity.
+- Kept the hosted/self project ID and public stats route `alecs-telemetry` so
+  existing project history and local consent state remain attached to the same
+  identity. The project display name is now `Beacon`.
 - Changed the canonical local data root to
   `mods/Alechilles_Beacon/`. The first Beacon startup performs a copy-only
   migration from known Alec-created roots, keeps old sources, and uses Beacon
