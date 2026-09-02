@@ -182,11 +182,14 @@ Example:
 ```
 
 Beacon 2.x is not source or binary compatible with the 1.x Alec's Telemetry
-namespace. The conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)` API
-loads only `Server/Beacon/project.json`; it has no legacy descriptor-path
-fallback. Use `contribute(...)` for anchored logical projects and place their
-resources under `META-INF/beacon/projects/`. Passive namespaced discovery is
-performed by the coordinator independently of either bootstrap call.
+Java namespace. The conventional `EmbeddedTelemetryBootstrap.bootstrap(plugin)`
+API prefers `Server/Beacon/project.json`, then accepts
+`Server/Telemetry/project.json` or `telemetry/project.json` as deprecated
+fallbacks. The coordinator also accepts
+`META-INF/alecs-telemetry/projects/` for passive discovery when the canonical
+directory contains no direct JSON descriptors. The anchored `contribute(...)`
+API reads the exact resource path supplied by the caller and does not rewrite
+it.
 
 ## Election and protocol compatibility
 

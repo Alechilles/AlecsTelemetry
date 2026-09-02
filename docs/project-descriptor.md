@@ -9,6 +9,11 @@ Server/Beacon/project.json
 The same descriptor works for standalone dependency mode and embedded mode.
 Runtime ownership is decided by coordinator election at startup.
 
+Beacon 2.x also accepts `Server/Telemetry/project.json` and the older
+`telemetry/project.json` as deprecated fallbacks. It checks
+`Server/Beacon/project.json` first and ignores the old paths when the canonical
+descriptor is present.
+
 ## Passive descriptor-only libraries
 
 An embeddable library can report one aggregate Stats project without depending
@@ -22,6 +27,8 @@ META-INF/beacon/projects/<stable-project-id>.json
 Presence of a valid resource is the installation signal. A standalone or
 embedded Beacon runtime must still be present to discover and process
 it; without a runtime the resource is inert and the host continues normally.
+Beacon also scans `META-INF/alecs-telemetry/projects/` as a deprecated fallback
+when the canonical directory contains no direct JSON descriptors.
 Passive discovery only exposes the standard Stats `heartbeat` capability. It
 does not execute contributor code or activate crash, error, lifecycle,
 performance, usage, diagnostics, breadcrumbs, or manual-report categories declared for a

@@ -57,7 +57,9 @@ Beacon is designed to avoid player identity data by default.
 - Server owners can review and change telemetry categories with
   `/beacon consent`.
 - The runtime automatically enumerates valid direct JSON descriptors under
-  `META-INF/beacon/projects/` in installed mod archives and folders.
+  `META-INF/beacon/projects/` in installed mod archives and folders. When that
+  directory contains no direct JSON descriptors, the runtime also checks the
+  deprecated `META-INF/alecs-telemetry/projects/` directory.
   Resource presence is treated as the library's installation signal; it does
   not prove that the library code executed.
 - Public stats show aggregate counts and breakdowns, not raw server IDs, session

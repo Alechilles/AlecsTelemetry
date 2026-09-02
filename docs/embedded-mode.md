@@ -122,7 +122,12 @@ the shared UI for descriptor-only projects.
 
 ## Descriptor Shape
 
-Embedded mode uses the same `Server/Beacon/project.json` descriptor as the standalone dependency flow. The descriptor does not need a runtime-mode flag; embedded behavior comes from packaging the runtime and bootstrapping it from the owning mod.
+Embedded mode uses the same `Server/Beacon/project.json` descriptor as the
+standalone dependency flow. For compatibility, conventional bootstrap also
+accepts `Server/Telemetry/project.json` and `telemetry/project.json` when the
+Beacon path is absent. The descriptor does not need a runtime-mode flag;
+embedded behavior comes from packaging the runtime and bootstrapping it from
+the owning mod.
 
 Every installed copy of Beacon, standalone or embedded, registers as a
 runtime coordinator candidate. The latest compatible runtime version wins.

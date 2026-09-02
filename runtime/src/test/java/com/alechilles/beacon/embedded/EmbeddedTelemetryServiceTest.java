@@ -306,20 +306,56 @@ class EmbeddedTelemetryServiceTest {
     }
 
     @Test
-    void conventionalBootstrapIgnoresLegacyDescriptorPath() throws Exception {
+    void conventionalBootstrapLoadsLegacyDescriptorPath() throws Exception {
         JavaPlugin plugin = conventionalPlugin(
-                tempDir.resolve("conventional-missing"),
+                tempDir.resolve("conventional-legacy"),
+                "Server/Telemetry/project.json",
+                fixtureBytes("fixtures/conventional-project.json")
+        );
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
+
+        assertEquals("conventional-project", service.projectId());
+        assertNull(service.disabledReason());
+    }
+
+    @Test
+    void conventionalBootstrapLoadsOlderLegacyDescriptorPath() throws Exception {
+        JavaPlugin plugin = conventionalPlugin(
+                tempDir.resolve("conventional-older-legacy"),
                 "telemetry/project.json",
                 fixtureBytes("fixtures/conventional-project.json")
         );
 
         EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
 
-        assertEquals("host", service.projectId());
-        assertEquals(
-                "No Server/Beacon/project.json descriptor was found in the owning mod.",
-                service.disabledReason()
+        assertEquals("conventional-project", service.projectId());
+        assertNull(service.disabledReason());
+    }
+
+    @Test
+    void conventionalBootstrapPrefersBeaconDescriptorPath() throws Exception {
+        Path ownerJar = tempDir.resolve("conventional-path-priority").resolve("Host.jar");
+        writeDescriptorArchive(
+                ownerJar,
+                Map.of(
+                        "Server/Beacon/project.json",
+                        fixtureBytes("fixtures/conventional-project.json"),
+                        "Server/Telemetry/project.json",
+                        fixtureBytes("fixtures/contributed-hosted-project.json")
+                )
         );
+        JavaPlugin plugin = conventionalPlugin(
+                tempDir.resolve("conventional-path-priority"),
+                null,
+                null,
+                ownerJar
+        );
+
+        EmbeddedTelemetryService service = EmbeddedTelemetryBootstrap.bootstrap(plugin);
+
+        assertEquals("conventional-project", service.projectId());
+        assertNull(service.disabledReason());
     }
 
     @Test
@@ -2176,11 +2212,18 @@ class EmbeddedTelemetryServiceTest {
     private static void writeDescriptorArchive(Path archive,
                                                String descriptorResource,
                                                byte[] descriptorBytes) throws IOException {
+        writeDescriptorArchive(archive, Map.of(descriptorResource, descriptorBytes));
+    }
+
+    private static void writeDescriptorArchive(Path archive,
+                                               Map<String, byte[]> descriptors) throws IOException {
         Files.createDirectories(archive.getParent());
         try (ZipOutputStream stream = new ZipOutputStream(Files.newOutputStream(archive))) {
-            stream.putNextEntry(new ZipEntry(descriptorResource));
-            stream.write(descriptorBytes);
-            stream.closeEntry();
+            for (Map.Entry<String, byte[]> descriptor : descriptors.entrySet()) {
+                stream.putNextEntry(new ZipEntry(descriptor.getKey()));
+                stream.write(descriptor.getValue());
+                stream.closeEntry();
+            }
         }
     }
 

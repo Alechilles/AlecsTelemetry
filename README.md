@@ -81,7 +81,10 @@ Change passive or contribution descriptor resources from
 Update embedded bootstrap imports to the `com.alechilles.beacon.embedded`
 package and use the Beacon runtime artifact. Keep publishing the runtime's
 `Common/**` asset pack, including `Common/UI/Custom/TelemetryConsentPage.ui`.
-Beacon 2.x does not search the old descriptor or resource paths.
+New integrations should use the Beacon paths. Beacon 2.x still accepts
+`Server/Telemetry/project.json`, the older `telemetry/project.json`, and
+`META-INF/alecs-telemetry/projects/` as deprecated fallbacks. If a mod contains
+both canonical and legacy descriptors, Beacon loads only the canonical path.
 
 ### Command And Hosted Origin
 

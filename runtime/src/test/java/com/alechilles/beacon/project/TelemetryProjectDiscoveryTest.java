@@ -57,7 +57,7 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void ignoresLegacyProjectDescriptorsFromFolder() throws Exception {
+    void discoversLegacyProjectDescriptorFromFolder() throws Exception {
         Path modFolder = tempDir.resolve("Legacy Mod");
         Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
         Files.createDirectories(modFolder.resolve("telemetry"));
@@ -91,10 +91,46 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertTrue(result.projects().isEmpty());
-        assertTrue(result.consentProjects().isEmpty());
+        assertEquals(List.of("server-telemetry-legacy"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertEquals(List.of("server-telemetry-legacy"), result.consentProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
         assertEquals(1, result.loadedMods().size());
         assertTrue(result.skippedRegistrationWarnings().isEmpty());
+    }
+
+    @Test
+    void discoversOlderLegacyProjectDescriptorFromFolder() throws Exception {
+        Path modFolder = tempDir.resolve("Older Legacy Mod");
+        Files.createDirectories(modFolder.resolve("telemetry"));
+        Files.writeString(modFolder.resolve("manifest.json"), hostManifest("Example", "Older Legacy Mod", "1.0.0"));
+        Files.writeString(
+                modFolder.resolve("telemetry").resolve("project.json"),
+                "{\"projectId\":\"older-legacy\"}"
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(List.of("older-legacy"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+    }
+
+    @Test
+    void discoversLegacyProjectDescriptorFromArchive() throws Exception {
+        writeJar(
+                tempDir.resolve("legacy-host.jar"),
+                hostManifest("Example", "Legacy Host", "1.2.3"),
+                Map.of("Server/Telemetry/project.json", "{\"projectId\":\"legacy-archive\"}")
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(List.of("legacy-archive"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
     }
 
     @Test
@@ -208,7 +244,7 @@ class TelemetryProjectDiscoveryTest {
     }
 
     @Test
-    void ignoresLegacyNamespacedDescriptorFromArchive() throws Exception {
+    void discoversLegacyNamespacedDescriptorFromArchive() throws Exception {
         writeJar(
                 tempDir.resolve("legacy-passive-host.jar"),
                 hostManifest("Example", "Legacy Passive Host", "3.0.0"),
@@ -220,10 +256,56 @@ class TelemetryProjectDiscoveryTest {
 
         TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
 
-        assertTrue(result.projects().isEmpty());
-        assertTrue(result.consentProjects().isEmpty());
+        assertEquals(List.of("legacy-passive"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+        assertEquals(List.of("legacy-passive"), result.consentProjects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
         assertEquals(1, result.loadedMods().size());
         assertTrue(result.skippedRegistrationWarnings().isEmpty());
+    }
+
+    @Test
+    void prefersBeaconProjectDescriptorOverLegacyPath() throws Exception {
+        Path modFolder = tempDir.resolve("Dual Descriptor Mod");
+        Files.createDirectories(modFolder.resolve("Server").resolve("Beacon"));
+        Files.createDirectories(modFolder.resolve("Server").resolve("Telemetry"));
+        Files.writeString(modFolder.resolve("manifest.json"), hostManifest("Example", "Dual Descriptor Mod", "2.0.0"));
+        Files.writeString(
+                modFolder.resolve("Server").resolve("Beacon").resolve("project.json"),
+                "{\"projectId\":\"beacon-path\"}"
+        );
+        Files.writeString(
+                modFolder.resolve("Server").resolve("Telemetry").resolve("project.json"),
+                "{\"projectId\":\"legacy-path\"}"
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(List.of("beacon-path"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
+    }
+
+    @Test
+    void prefersBeaconNamespacedDescriptorsOverLegacyDirectory() throws Exception {
+        writeJar(
+                tempDir.resolve("dual-passive-host.jar"),
+                hostManifest("Example", "Dual Passive Host", "3.0.0"),
+                Map.of(
+                        "META-INF/beacon/projects/current.json",
+                        passiveDescriptor("current-passive", "2.0.0", "Current Passive"),
+                        "META-INF/alecs-telemetry/projects/legacy.json",
+                        passiveDescriptor("legacy-passive", "1.0.0", "Legacy Passive")
+                )
+        );
+
+        TelemetryProjectDiscovery.DiscoveryResult result = new TelemetryProjectDiscovery(null).discover(tempDir);
+
+        assertEquals(List.of("current-passive"), result.projects().stream()
+                .map(TelemetryProjectRegistration::projectId)
+                .toList());
     }
 
     @Test

@@ -36,6 +36,9 @@ public final class TelemetryProjectDiscovery {
 
     public static final String DESCRIPTOR_PATH = "Server/Beacon/project.json";
     public static final String NAMESPACED_DESCRIPTOR_DIRECTORY = "META-INF/beacon/projects/";
+    public static final String LEGACY_DESCRIPTOR_PATH = "Server/Telemetry/project.json";
+    public static final String OLDER_LEGACY_DESCRIPTOR_PATH = "telemetry/project.json";
+    private static final String LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY = "META-INF/alecs-telemetry/projects/";
     private static final String MANIFEST_PATH = "manifest.json";
     private static final int MAX_SKIPPED_REGISTRATION_WARNINGS = 64;
 
@@ -190,20 +193,15 @@ public final class TelemetryProjectDiscovery {
                 warn("Failed to read telemetry descriptor " + descriptorPath, ex);
             }
         }
-        Path namespacedDirectory = folder.resolve(NAMESPACED_DESCRIPTOR_DIRECTORY);
-        ArrayList<Path> namespacedDescriptors = new ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(namespacedDirectory)) {
-            for (Path candidate : stream) {
-                if (Files.isRegularFile(candidate) && hasJsonSuffix(candidate.getFileName() == null
-                        ? ""
-                        : candidate.getFileName().toString())) {
-                    namespacedDescriptors.add(candidate);
-                }
-            }
-        } catch (java.nio.file.NoSuchFileException ignored) {
-            // A mod without the optional namespaced directory is expected.
-        } catch (Exception ex) {
-            warn("Failed to scan namespaced telemetry descriptors " + namespacedDirectory, ex);
+        ArrayList<Path> namespacedDescriptors = namespacedDescriptorPaths(
+                folder,
+                NAMESPACED_DESCRIPTOR_DIRECTORY
+        );
+        if (namespacedDescriptors.isEmpty()) {
+            namespacedDescriptors = namespacedDescriptorPaths(
+                    folder,
+                    LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY
+            );
         }
         namespacedDescriptors.sort(Comparator.comparing(path -> path.getFileName() == null
                 ? ""
@@ -254,22 +252,15 @@ public final class TelemetryProjectDiscovery {
                 }
             }
 
-            ArrayList<ZipEntry> namespacedDescriptors = new ArrayList<>();
-            var entries = zipFile.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry candidate = entries.nextElement();
-                if (candidate.isDirectory()) {
-                    continue;
-                }
-                String name = candidate.getName();
-                if (!name.startsWith(NAMESPACED_DESCRIPTOR_DIRECTORY)) {
-                    continue;
-                }
-                String remainder = name.substring(NAMESPACED_DESCRIPTOR_DIRECTORY.length());
-                if (remainder.isBlank() || remainder.indexOf('/') >= 0 || !hasJsonSuffix(remainder)) {
-                    continue;
-                }
-                namespacedDescriptors.add(candidate);
+            ArrayList<ZipEntry> namespacedDescriptors = namespacedDescriptorEntries(
+                    zipFile,
+                    NAMESPACED_DESCRIPTOR_DIRECTORY
+            );
+            if (namespacedDescriptors.isEmpty()) {
+                namespacedDescriptors = namespacedDescriptorEntries(
+                        zipFile,
+                        LEGACY_NAMESPACED_DESCRIPTOR_DIRECTORY
+                );
             }
             namespacedDescriptors.sort(Comparator.comparing(ZipEntry::getName));
             for (ZipEntry namespacedDescriptor : namespacedDescriptors) {
@@ -304,12 +295,76 @@ public final class TelemetryProjectDiscovery {
 
     @Nonnull
     private static Path descriptorPath(@Nonnull Path folder) {
+        for (String resourcePath : List.of(
+                DESCRIPTOR_PATH,
+                LEGACY_DESCRIPTOR_PATH,
+                OLDER_LEGACY_DESCRIPTOR_PATH
+        )) {
+            Path candidate = folder.resolve(resourcePath);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+        }
         return folder.resolve(DESCRIPTOR_PATH);
     }
 
     @Nullable
     private static ZipEntry descriptorEntry(@Nonnull ZipFile zipFile) {
-        return zipFile.getEntry(DESCRIPTOR_PATH);
+        for (String resourcePath : List.of(
+                DESCRIPTOR_PATH,
+                LEGACY_DESCRIPTOR_PATH,
+                OLDER_LEGACY_DESCRIPTOR_PATH
+        )) {
+            ZipEntry candidate = zipFile.getEntry(resourcePath);
+            if (candidate != null) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    @Nonnull
+    private ArrayList<Path> namespacedDescriptorPaths(@Nonnull Path folder,
+                                                      @Nonnull String resourceDirectory) {
+        Path namespacedDirectory = folder.resolve(resourceDirectory);
+        ArrayList<Path> descriptors = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(namespacedDirectory)) {
+            for (Path candidate : stream) {
+                if (Files.isRegularFile(candidate) && hasJsonSuffix(candidate.getFileName() == null
+                        ? ""
+                        : candidate.getFileName().toString())) {
+                    descriptors.add(candidate);
+                }
+            }
+        } catch (java.nio.file.NoSuchFileException ignored) {
+            // A mod without the optional namespaced directory is expected.
+        } catch (Exception ex) {
+            warn("Failed to scan namespaced telemetry descriptors " + namespacedDirectory, ex);
+        }
+        return descriptors;
+    }
+
+    @Nonnull
+    private static ArrayList<ZipEntry> namespacedDescriptorEntries(@Nonnull ZipFile zipFile,
+                                                                    @Nonnull String resourceDirectory) {
+        ArrayList<ZipEntry> descriptors = new ArrayList<>();
+        var entries = zipFile.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry candidate = entries.nextElement();
+            if (candidate.isDirectory()) {
+                continue;
+            }
+            String name = candidate.getName();
+            if (!name.startsWith(resourceDirectory)) {
+                continue;
+            }
+            String remainder = name.substring(resourceDirectory.length());
+            if (remainder.isBlank() || remainder.indexOf('/') >= 0 || !hasJsonSuffix(remainder)) {
+                continue;
+            }
+            descriptors.add(candidate);
+        }
+        return descriptors;
     }
 
     private static boolean hasJsonSuffix(@Nonnull String resourceName) {

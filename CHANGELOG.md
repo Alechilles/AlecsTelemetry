@@ -15,6 +15,8 @@
 - Renamed conventional descriptors from `Server/Telemetry/project.json` to
   `Server/Beacon/project.json`, and namespaced descriptors from
   `META-INF/alecs-telemetry/projects/` to `META-INF/beacon/projects/`.
+- Kept the old conventional and namespaced descriptor paths as deprecated
+  fallbacks. The Beacon path wins when both forms are present.
 - Updated embedded bootstrap imports and packaging to the Beacon namespace.
   Embedded consumers must still publish the runtime `Common/**` asset pack.
 - Renamed `/telemetry` to `/beacon` and its permission prefix to

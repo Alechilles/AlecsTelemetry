@@ -155,19 +155,21 @@ public final class EmbeddedTelemetryBootstrap {
                                                                         @Nullable HytaleLogger logger) {
         try {
             if (Files.isDirectory(sourcePath)) {
-                String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
-                Path descriptorPath = sourcePath.resolve(descriptorResource);
-                if (Files.isRegularFile(descriptorPath)) {
-                    return new DescriptorBytes(descriptorResource, Files.readAllBytes(descriptorPath));
+                for (String descriptorResource : conventionalDescriptorResources()) {
+                    Path descriptorPath = sourcePath.resolve(descriptorResource);
+                    if (Files.isRegularFile(descriptorPath)) {
+                        return new DescriptorBytes(descriptorResource, Files.readAllBytes(descriptorPath));
+                    }
                 }
                 return null;
             }
             try (ZipFile archive = new ZipFile(sourcePath.toFile())) {
-                String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
-                ZipEntry descriptorEntry = archive.getEntry(descriptorResource);
-                if (descriptorEntry != null) {
-                    try (InputStream stream = archive.getInputStream(descriptorEntry)) {
-                        return new DescriptorBytes(descriptorResource, stream.readAllBytes());
+                for (String descriptorResource : conventionalDescriptorResources()) {
+                    ZipEntry descriptorEntry = archive.getEntry(descriptorResource);
+                    if (descriptorEntry != null) {
+                        try (InputStream stream = archive.getInputStream(descriptorEntry)) {
+                            return new DescriptorBytes(descriptorResource, stream.readAllBytes());
+                        }
                     }
                 }
             }
@@ -184,19 +186,31 @@ public final class EmbeddedTelemetryBootstrap {
     @Nullable
     private static DescriptorBytes loadConventionalDescriptorFromClassLoader(@Nonnull JavaPlugin plugin,
                                                                               @Nullable HytaleLogger logger) {
-        String descriptorResource = TelemetryProjectDiscovery.DESCRIPTOR_PATH;
-        InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
-        try (InputStream stream = rawStream) {
-            if (stream == null) {
+        for (String descriptorResource : conventionalDescriptorResources()) {
+            InputStream rawStream = plugin.getClass().getClassLoader().getResourceAsStream(descriptorResource);
+            try (InputStream stream = rawStream) {
+                if (stream != null) {
+                    return new DescriptorBytes(descriptorResource, stream.readAllBytes());
+                }
+            } catch (Exception ex) {
+                if (logger != null) {
+                    logger.at(Level.WARNING).withCause(ex).log(
+                            "Failed to load embedded telemetry descriptor from " + descriptorResource + "."
+                    );
+                }
                 return null;
             }
-            return new DescriptorBytes(descriptorResource, stream.readAllBytes());
-        } catch (Exception ex) {
-            if (logger != null) {
-                logger.at(Level.WARNING).withCause(ex).log("Failed to load embedded telemetry descriptor from " + descriptorResource + ".");
-            }
-            return null;
         }
+        return null;
+    }
+
+    @Nonnull
+    private static List<String> conventionalDescriptorResources() {
+        return List.of(
+                TelemetryProjectDiscovery.DESCRIPTOR_PATH,
+                TelemetryProjectDiscovery.LEGACY_DESCRIPTOR_PATH,
+                TelemetryProjectDiscovery.OLDER_LEGACY_DESCRIPTOR_PATH
+        );
     }
 
     @Nullable
