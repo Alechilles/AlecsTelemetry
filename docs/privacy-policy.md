@@ -1,6 +1,6 @@
 # Beacon Privacy Policy
 
-Effective date: September 1, 2026
+Effective date: September 3, 2026
 
 This policy explains how Beacon, the Beacon hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -421,11 +421,18 @@ policies when you use those integrations.
 
 ## Website Analytics
 
-The public website may load Google Tag Manager on ModStats.io and Beacon
-landing hosts. This is separate from in-game telemetry. Browser
+The public website and signed-in portal may load Google Tag Manager on
+ModStats.io and Beacon hosts. This is separate from in-game telemetry. Browser
 analytics can include normal web analytics information such as page views,
-referrers, device/browser details, approximate location, and cookie or similar
-identifiers depending on the active tag configuration and browser settings.
+navigation sequences, referrers, device/browser details, approximate location,
+and cookie or similar identifiers depending on the active tag configuration and
+browser settings.
+
+Before a portal page location is sent for website analytics, query strings and
+URL fragments are removed. Project, user, server-profile, issue, diagnostic,
+report, event, group, fingerprint, and release identifiers in portal paths are
+replaced with route labels. This lets us measure navigation patterns without
+sending those portal record identifiers to Google Analytics.
 
 For visitors identified by trusted hosting headers as being in the EU, EEA, UK,
 or an unknown region, Google Tag Manager should not load until the visitor
