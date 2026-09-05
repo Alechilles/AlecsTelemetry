@@ -1,6 +1,6 @@
 # Beacon Privacy Policy
 
-Effective date: September 3, 2026
+Effective date: September 5, 2026
 
 This policy explains how Beacon, the Beacon hosted telemetry platform, and
 ModStats.io collect and use information. It covers:
@@ -396,6 +396,12 @@ When you sign in or are invited to a project, the portal may store:
   expiration/revocation and last-used information, OAuth client metadata,
   authorization/approval records, and security/audit events when a project
   enables agent access
+
+The credited contributor role provides aggregate project stats access and public
+mod credits, subject to the contributor's public profile visibility settings.
+It does not grant access to private issues, raw events, diagnostics, project
+settings, or MCP telemetry tools. Public credit titles, such as Artist or Tester,
+are separate from project access roles.
 
 MCP agent access is optional and is controlled by authorized project members.
 An agent receives only the project and scope access approved for its credential.
