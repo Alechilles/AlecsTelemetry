@@ -391,7 +391,9 @@ When you sign in or are invited to a project, the portal may store:
 - billing account, account-project links, Stripe Checkout, Billing Portal,
   webhook, customer, subscription, plan, entitlement, billing email, downgrade
   grace, public plan recognition opt-out setting, and quota/guardrail metadata
-  when billing features are used
+  when billing features are used. An author page's plan badge reflects that
+  author's own billing account and public badge visibility setting. Mod badges
+  reflect the billing account linked to each mod.
 - optional MCP access settings, selected projects, scopes, credential labels,
   expiration/revocation and last-used information, OAuth client metadata,
   authorization/approval records, and security/audit events when a project
