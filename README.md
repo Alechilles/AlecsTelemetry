@@ -247,7 +247,7 @@ https://beacon.modstats.io/maven/releases
 <dependency>
   <groupId>com.alechilles</groupId>
   <artifactId>beacon-runtime</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1</version>
 </dependency>
 ```
 
@@ -261,7 +261,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.alechilles:beacon-runtime:2.0.0")
+    implementation("com.alechilles:beacon-runtime:2.0.1")
 }
 ```
 

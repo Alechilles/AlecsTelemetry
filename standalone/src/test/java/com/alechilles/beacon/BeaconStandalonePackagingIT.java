@@ -32,20 +32,20 @@ class BeaconStandalonePackagingIT {
             assertNotNull(jarManifest, "the produced JAR must have a manifest");
             assertEquals("com.alechilles", jarManifest.getMainAttributes().getValue("Plugin-Group"));
             assertEquals("beacon", jarManifest.getMainAttributes().getValue("Plugin-Name"));
-            assertEquals("2.0.0", jarManifest.getMainAttributes().getValue("Plugin-Version"));
+            assertEquals("2.0.1", jarManifest.getMainAttributes().getValue("Plugin-Version"));
 
             String manifest = entryText(jar, "manifest.json");
             assertEquals("Alechilles", jsonString(manifest, "Group"));
             assertEquals("Beacon", jsonString(manifest, "Name"));
-            assertEquals("2.0.0", jsonString(manifest, "Version"));
+            assertEquals("2.0.1", jsonString(manifest, "Version"));
             assertEquals("Beacon — The developer platform behind ModStats.io.", jsonString(manifest, "Description"));
             assertEquals("https://beacon.modstats.io", jsonString(manifest, "Website"));
             assertEquals("com.alechilles.beacon.Beacon", jsonString(manifest, "Main"));
 
             assertMavenProperties(jar, "META-INF/maven/com.alechilles/beacon/pom.properties",
-                    "com.alechilles", "beacon", "2.0.0");
+                    "com.alechilles", "beacon", "2.0.1");
             assertMavenProperties(jar, "META-INF/maven/com.alechilles/beacon-runtime/pom.properties",
-                    "com.alechilles", "beacon-runtime", "2.0.0");
+                    "com.alechilles", "beacon-runtime", "2.0.1");
 
             String beaconLicense = entryText(jar, "META-INF/LICENSES/LICENSE");
             assertTrue(beaconLicense.startsWith("Beacon Runtime License 1.0"));
@@ -78,8 +78,8 @@ class BeaconStandalonePackagingIT {
                 .getCodeSource()
                 .getLocation()
                 .toURI());
-        Path mavenJar = testClasses.getParent().resolve("Beacon v2.0.0.jar");
-        Path gradleJar = testClasses.resolve("../../..").normalize().resolve("libs/Beacon v2.0.0.jar");
+        Path mavenJar = testClasses.getParent().resolve("Beacon v2.0.1.jar");
+        Path gradleJar = testClasses.resolve("../../..").normalize().resolve("libs/Beacon v2.0.1.jar");
         return Files.isRegularFile(mavenJar) ? mavenJar : gradleJar;
     }
 

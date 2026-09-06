@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.1 - Consent Menu Hotfix - 2026-09-05
+
+### Fixed
+- The consent menu's Enabled checkbox now switches all supported telemetry
+  types in its row on or off and stays checked while any type is selected.
+- Selecting a telemetry type re-enables a disabled project. Turning off the
+  final selected type disables the project, including changes made through
+  the column-wide controls.
+- Projects without telemetry types retain their project-level Enabled toggle.
+- Centered the Beacon icon artwork in the consent menu.
+
 ## 2.0.0 - Beacon Rename - 2026-09-01
 
 ### Breaking
