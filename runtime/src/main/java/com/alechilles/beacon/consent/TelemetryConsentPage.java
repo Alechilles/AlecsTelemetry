@@ -160,7 +160,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
             commands.set(rowSelector(index) + " #TelemetryConsentProjectIconImage.Background", "#203a5a");
             commands.set(rowSelector(index) + " #TelemetryConsentProjectIconPlaceholder.Visible", true);
         }
-        commands.set(projectCheckSelector(index) + ".Value", consent.projectEnabled());
+        commands.set(projectCheckSelector(index) + ".Value", projectAnyEnabled(project));
         for (String category : CATEGORIES) {
             setCategory(commands, index, category, project.supported().categoryEnabled(category), consent.categoryEnabled(category));
         }
@@ -263,7 +263,7 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
                 projectToggleSelector(index),
                 EventData.of(KEY_ACTION, ACTION_TOGGLE_PROJECT)
                         .append(KEY_PROJECT_ID, project.projectId())
-                        .append(KEY_ENABLED_LITERAL, Boolean.toString(!project.consent().projectEnabled())),
+                        .append(KEY_ENABLED_LITERAL, Boolean.toString(!projectAnyEnabled(project))),
                 false
         );
         for (String category : CATEGORIES) {
@@ -309,47 +309,65 @@ public final class TelemetryConsentPage extends InteractiveCustomUIPage<Telemetr
         }
     }
 
-    private void toggleProject(@Nullable String projectId, boolean enabled) {
+    void toggleProject(@Nullable String projectId, boolean enabled) {
         TelemetryRuntimeDiagnostics.ProjectDiagnostics project = diagnostics(projectId);
         if (project == null) {
             return;
         }
-        TelemetryConsentSnapshot current = snapshot(project);
-        runtimeService.applyConsent(
-                project.projectId(),
-                new TelemetryConsentSnapshot(
-                        enabled,
-                        current.crashEnabled(),
-                        current.errorEnabled(),
-                        current.diagnosticsEnabled(),
-                        current.lifecycleEnabled(),
-                        current.performanceEnabled(),
-                        current.usageEnabled(),
-                        current.statsEnabled(),
-                        current.breadcrumbsEnabled()
-                )
-        );
+        TelemetryConsentSnapshot supported = project.supportedSnapshot();
+        runtimeService.applyConsent(project.projectId(), new TelemetryConsentSnapshot(
+                enabled,
+                enabled && supported.crashEnabled(),
+                enabled && supported.errorEnabled(),
+                enabled && supported.diagnosticsEnabled(),
+                enabled && supported.lifecycleEnabled(),
+                enabled && supported.performanceEnabled(),
+                enabled && supported.usageEnabled(),
+                enabled && supported.statsEnabled(),
+                enabled && supported.breadcrumbsEnabled()
+        ));
     }
 
-    private void toggleGlobalCategory(@Nullable String category, boolean enabled) {
+    void toggleGlobalCategory(@Nullable String category, boolean enabled) {
         if (category == null || category.isBlank()) {
             return;
         }
-        TelemetryConsentViewModel viewModel = TelemetryConsentViewModel.from(runtimeService.consentDiagnostics());
-        if (!categoryAnySupported(viewModel.projects(), category)) {
-            return;
+        for (TelemetryRuntimeDiagnostics.ProjectDiagnostics project : runtimeService.consentDiagnostics().projects()) {
+            toggleCategory(project.projectId(), category, enabled);
         }
-        runtimeService.applyConsentCategoryToAll(category, enabled);
     }
 
-    private void toggleCategory(@Nullable String projectId, @Nullable String category, boolean enabled) {
+    void toggleCategory(@Nullable String projectId, @Nullable String category, boolean enabled) {
         TelemetryRuntimeDiagnostics.ProjectDiagnostics project = diagnostics(projectId);
         if (project == null || category == null || !project.supportedSnapshot().categoryEnabled(category)) {
             return;
         }
-        TelemetryConsentSnapshot current = snapshot(project);
-        TelemetryConsentSnapshot updated = current.withCategory(category, enabled);
-        runtimeService.applyConsent(project.projectId(), updated);
+        TelemetryConsentSnapshot updated = snapshot(project).withCategory(category, enabled);
+        boolean anyEnabled = anySupportedCategoryEnabled(updated, project.supportedSnapshot());
+        runtimeService.applyConsent(project.projectId(), new TelemetryConsentSnapshot(
+                anyEnabled,
+                updated.crashEnabled(), updated.errorEnabled(), updated.diagnosticsEnabled(),
+                updated.lifecycleEnabled(), updated.performanceEnabled(), updated.usageEnabled(),
+                updated.statsEnabled(), updated.breadcrumbsEnabled()
+        ));
+    }
+
+    private static boolean projectAnyEnabled(TelemetryConsentViewModel.ProjectRow project) {
+        // Manual-report-only projects have no telemetry category cells.
+        if (!anySupportedCategoryEnabled(project.supported(), project.supported())) {
+            return project.consent().projectEnabled();
+        }
+        return anySupportedCategoryEnabled(project.consent(), project.supported());
+    }
+
+    private static boolean anySupportedCategoryEnabled(TelemetryConsentSnapshot consent,
+                                                       TelemetryConsentSnapshot supported) {
+        for (String category : CATEGORIES) {
+            if (supported.categoryEnabled(category) && consent.categoryEnabled(category)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void saveAndClose() {

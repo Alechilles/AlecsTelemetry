@@ -55,7 +55,11 @@ described in this policy.
 Beacon is designed to avoid player identity data by default.
 
 - Server owners can review and change telemetry categories with
-  `/beacon consent`.
+  `/beacon consent`. Each row's Enabled checkbox switches all supported telemetry
+  types in that row on or off. It is checked when at least one supported type
+  is selected and unchecked when all are off. Selecting an individual type
+  also enables the project for that type. For projects without supported telemetry
+  types, Enabled controls the project setting directly.
 - The runtime automatically enumerates valid direct JSON descriptors under
   `META-INF/beacon/projects/` in installed mod archives and folders. When that
   directory contains no direct JSON descriptors, the runtime also checks the
