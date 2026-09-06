@@ -405,6 +405,14 @@ It does not grant access to private issues, raw events, diagnostics, project
 settings, or MCP telemetry tools. Public credit titles, such as Artist or Tester,
 are separate from project access roles.
 
+Diagnostic ingest allowances are shared across projects linked to a billing
+account. We use that account link and short-lived rate-limit state to enforce
+sustained request rates and refillable burst allowances. Rejection counters
+identify the project that submitted a request when its account allowance was
+exhausted. Standard ModStats reporting uses separate service-protection limits.
+Plans do not cap project count, and exceeding an ingest allowance does not
+automatically create an overage charge.
+
 MCP agent access is optional and is controlled by authorized project members.
 An agent receives only the project and scope access approved for its credential.
 Telemetry, report text, and diagnostic fields returned to an agent are treated
